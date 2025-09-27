@@ -1,42 +1,149 @@
 
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { 
+  FiHome, 
+  FiZap, 
+  FiUsers, 
+  FiBarChart, 
+  FiUser 
+} from 'react-icons/fi'
 
 function SL_navbar() {
   const location = useLocation()
 
   const navItems = [
-    { path: '/', label: 'Home' },
-    { path: '/dashboard', label: 'Dashboard' },
+    { 
+      path: '/', 
+      label: 'Home', 
+      icon: FiHome,
+      iconWithPower: true
+    },
+    { 
+      path: '/hot', 
+      label: 'Hot', 
+      icon: FiZap,
+      iconWithPower: false
+    },
+    { 
+      path: '/leads', 
+      label: 'Leads', 
+      icon: FiUsers,
+      iconWithPower: false
+    },
+    { 
+      path: '/converted', 
+      label: 'Converted', 
+      icon: FiBarChart,
+      iconWithPower: false
+    },
+    { 
+      path: '/profile', 
+      label: 'Profile', 
+      icon: FiUser,
+      iconWithPower: false
+    }
   ]
 
   return (
-    <nav className="bg-white shadow-sm border-b">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex">
-            <div className="flex-shrink-0 flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">Appzeto</h1>
+    <>
+      {/* Mobile Top Header */}
+      <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm lg:hidden z-50">
+        <div className="flex items-center h-12 px-4">
+          <h1 className="text-lg font-bold text-teal-900">Appzeto</h1>
+        </div>
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg lg:hidden z-50">
+        <div className="flex justify-around items-center h-16 px-2">
+          {navItems.map((item) => {
+            const IconComponent = item.icon
+            const isActive = location.pathname === item.path
+            
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className="flex flex-col items-center justify-center relative py-2 px-3 min-w-0 flex-1"
+                aria-label={item.label}
+              >
+                {/* Active state circular background */}
+                {isActive && (
+                  <div className="absolute -top-2 w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full shadow-lg flex items-center justify-center border-2 border-white">
+                    <div className="absolute inset-0 bg-gradient-to-br from-teal-400 to-teal-500 rounded-full animate-pulse opacity-20"></div>
+                  </div>
+                )}
+                
+                {/* Icon */}
+                <div className={`relative z-10 ${isActive ? 'text-white' : 'text-gray-600'}`}>
+                  {item.iconWithPower ? (
+                    <div className="relative">
+                      <IconComponent className="text-xl" />
+                      <FiZap className="absolute -top-1 -right-1 text-xs text-yellow-500" />
+                    </div>
+                  ) : (
+                    <IconComponent className="text-xl" />
+                  )}
+                </div>
+                
+                {/* Label */}
+                {item.path !== '/leads' && (
+                  <span className={`text-xs font-medium mt-1 ${isActive ? 'text-teal-600' : 'text-gray-500'}`}>
+                    {item.label}
+                  </span>
+                )}
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
+
+      {/* Desktop Top Navigation */}
+      <nav className="hidden lg:block fixed top-0 left-0 right-0 bg-white shadow-sm border-b border-gray-200 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <h1 className="text-xl font-bold text-teal-900">Appzeto</h1>
+              </div>
             </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              {navItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200 ${
-                    location.pathname === item.path
-                      ? 'border-blue-500 text-gray-900'
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
+            
+            <div className="flex items-center space-x-8">
+              {navItems.map((item) => {
+                const IconComponent = item.icon
+                const isActive = location.pathname === item.path
+                
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+                      isActive 
+                        ? 'bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-lg' 
+                        : 'text-gray-600 hover:text-teal-600 hover:bg-teal-50'
+                    }`}
+                    aria-label={item.label}
+                  >
+                    {item.iconWithPower ? (
+                      <div className="relative">
+                        <IconComponent className="text-lg" />
+                        <FiZap className="absolute -top-1 -right-1 text-xs text-yellow-500" />
+                      </div>
+                    ) : (
+                      <IconComponent className="text-lg" />
+                    )}
+                    {item.path !== '/leads' && (
+                      <span className="font-medium">{item.label}</span>
+                    )}
+                  </Link>
+                )
+              })}
             </div>
           </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+    </>
   )
 }
 
