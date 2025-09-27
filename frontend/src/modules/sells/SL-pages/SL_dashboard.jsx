@@ -36,7 +36,7 @@ const SL_dashboard = () => {
       <SL_navbar />
       <main className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
         {/* Mobile-first layout */}
-        <div className="space-y-6">
+        <div className="space-y-6 lg:hidden">
           {/* Main Dashboard Card */}
           <div className="relative bg-gradient-to-br from-brand-400 via-brand-500 to-brand-600 rounded-xl p-4 text-white shadow-2xl border border-white/10 overflow-hidden">
             {/* Sparkle Effects */}
@@ -383,86 +383,86 @@ const SL_dashboard = () => {
               </div>
             </div>
 
-             {/* Tiles take 4 columns on desktop */}
-             <div className="col-span-4 space-y-3">
-               <div className="bg-gradient-to-br from-brand-300 to-brand-400 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
-                 <div className="flex items-center space-x-3">
-                   <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
-                     <FaRupeeSign className="text-xl text-white" />
-                   </div>
-                   <div className="flex-1 min-w-0">
-                     <h3 className="font-semibold text-sm mb-1 leading-tight">Payment Recovery</h3>
-                     <div className="flex items-center space-x-2 mb-1">
-                       <div className="w-2 h-2 bg-white bg-opacity-60 rounded-full flex-shrink-0"></div>
-                       <p className="text-xs font-medium opacity-95 truncate">12 Pendings</p>
-                     </div>
-                     <div className="flex items-center space-x-1">
-                       <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
-                       <span className="text-xs opacity-75 font-medium">+2 this week</span>
-                     </div>
-                   </div>
-                 </div>
-               </div>
-
-               <div className="bg-gradient-to-br from-amber-400 to-yellow-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
+            {/* Tiles take 4 columns on desktop */}
+            <div className="col-span-4 space-y-3">
+              <div className="bg-gradient-to-br from-brand-300 to-brand-400 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
                 <div className="flex items-center space-x-3">
-                   <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
-                     <FaVideo className="text-xl text-white" />
+                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
+                    <FaRupeeSign className="text-xl text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                     <h3 className="font-semibold text-sm mb-1 leading-tight">Demo Requests</h3>
-                     <div className="flex items-center space-x-2 mb-1">
-                       <div className="w-2 h-2 bg-white rounded-full animate-pulse shadow-sm flex-shrink-0"></div>
-                       <p className="text-xs font-medium opacity-95 truncate">5 New</p>
-                     </div>
-                     <div className="flex items-center space-x-1">
-                       <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
-                       <span className="text-xs opacity-75 font-medium">+3 today</span>
-                     </div>
-                   </div>
+                    <h3 className="font-semibold text-sm mb-1 leading-tight">Payment Recovery</h3>
+                    <div className="flex items-center space-x-2 mb-1">
+                      <div className="w-2 h-2 bg-white bg-opacity-60 rounded-full flex-shrink-0"></div>
+                      <p className="text-xs font-medium opacity-95 truncate">12 Pendings</p>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
+                      <span className="text-xs opacity-75 font-medium">+2 this week</span>
+                    </div>
                   </div>
                 </div>
+              </div>
 
-               <div className="bg-gradient-to-br from-violet-400 to-purple-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
+              <div className="bg-gradient-to-br from-amber-400 to-yellow-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
                 <div className="flex items-center space-x-3">
-                   <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
-                     <FaCheckCircle className="text-xl text-white" />
+                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
+                    <FaVideo className="text-xl text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                     <h3 className="font-semibold text-sm mb-1 leading-tight">Tasks</h3>
-                     <div className="flex items-center space-x-2 mb-1">
-                       <div className="w-2 h-2 bg-yellow-200 rounded-full shadow-sm flex-shrink-0"></div>
-                       <p className="text-xs font-medium opacity-95 truncate">8 Pending</p>
-                     </div>
-                     <div className="flex items-center space-x-1">
-                       <FaArrowDown className="text-xs opacity-70 flex-shrink-0" />
-                       <span className="text-xs opacity-75 font-medium">-1 completed</span>
-                     </div>
-                   </div>
+                    <h3 className="font-semibold text-sm mb-1 leading-tight">Demo Requests</h3>
+                    <div className="flex items-center space-x-2 mb-1">
+                      <div className="w-2 h-2 bg-white rounded-full animate-pulse shadow-sm flex-shrink-0"></div>
+                      <p className="text-xs font-medium opacity-95 truncate">5 New</p>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
+                      <span className="text-xs opacity-75 font-medium">+3 today</span>
+                    </div>
                   </div>
                 </div>
+              </div>
 
-               <div className="bg-gradient-to-br from-rose-400 to-pink-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
+              <div className="bg-gradient-to-br from-violet-400 to-purple-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
                 <div className="flex items-center space-x-3">
-                   <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
-                     <FaUsers className="text-xl text-white" />
+                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
+                    <FaCheckCircle className="text-xl text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                     <h3 className="font-semibold text-sm mb-1 leading-tight">Meetings</h3>
-                     <div className="flex items-center space-x-2 mb-1">
-                       <div className="w-2 h-2 bg-green-200 rounded-full shadow-sm flex-shrink-0"></div>
-                       <p className="text-xs font-medium opacity-95 truncate">3 Today</p>
-                     </div>
-                     <div className="flex items-center space-x-1">
-                       <FaClock className="text-xs opacity-70 flex-shrink-0" />
-                       <span className="text-xs opacity-75 font-medium">2 upcoming</span>
+                    <h3 className="font-semibold text-sm mb-1 leading-tight">Tasks</h3>
+                    <div className="flex items-center space-x-2 mb-1">
+                      <div className="w-2 h-2 bg-yellow-200 rounded-full shadow-sm flex-shrink-0"></div>
+                      <p className="text-xs font-medium opacity-95 truncate">8 Pending</p>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <FaArrowDown className="text-xs opacity-70 flex-shrink-0" />
+                      <span className="text-xs opacity-75 font-medium">-1 completed</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-rose-400 to-pink-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
+                    <FaUsers className="text-xl text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-sm mb-1 leading-tight">Meetings</h3>
+                    <div className="flex items-center space-x-2 mb-1">
+                      <div className="w-2 h-2 bg-green-200 rounded-full shadow-sm flex-shrink-0"></div>
+                      <p className="text-xs font-medium opacity-95 truncate">3 Today</p>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <FaClock className="text-xs opacity-70 flex-shrink-0" />
+                      <span className="text-xs opacity-75 font-medium">2 upcoming</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-        
+
           {/* Desktop Chart */}
           <div className="mt-8 bg-white rounded-2xl p-8 shadow-lg">
             <h3 className="text-xl font-bold text-gray-900 mb-6 text-center">Sales Distribution</h3>
@@ -485,6 +485,7 @@ const SL_dashboard = () => {
             </div>
           </div>
         </div>
+
       </main>
     </div>
   )
