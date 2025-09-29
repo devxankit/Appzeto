@@ -24,7 +24,7 @@ function SL_navbar() {
       iconWithPower: true
     },
     { 
-      path: '/hot', 
+      path: '/hot-leads', 
       label: 'Hot', 
       icon: FiZap,
       iconWithPower: false

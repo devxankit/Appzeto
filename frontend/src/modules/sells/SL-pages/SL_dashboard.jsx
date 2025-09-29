@@ -331,17 +331,18 @@ const SL_dashboard = () => {
             className="grid grid-cols-2 gap-4"
           >
             {/* Payment Recovery */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30, scale: 0.9 }}
-              animate={tileCardsInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.9 }}
-              transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
-              whileHover={{ scale: 1.02, y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-emerald-50 rounded-xl p-4 text-emerald-800 transition-all duration-300 cursor-pointer border border-emerald-200/30"
-              style={{
-                boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
-              }}
-            >
+            <Link to="/payments-recovery">
+              <motion.div 
+                initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                animate={tileCardsInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.9 }}
+                transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
+                whileHover={{ scale: 1.02, y: -4 }}
+                whileTap={{ scale: 0.98 }}
+                className="bg-emerald-50 rounded-xl p-4 text-emerald-800 transition-all duration-300 cursor-pointer border border-emerald-200/30"
+                style={{
+                  boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                }}
+              >
               <div className="flex flex-col h-full">
                 {/* Enhanced Icon Section */}
                 <div className="flex justify-center mb-3">
@@ -371,10 +372,11 @@ const SL_dashboard = () => {
                   </div>
                 </div>
               </div>
-            </motion.div>
+              </motion.div>
+            </Link>
 
             {/* Demo Requests */}
-            <Link to="/new-leads">
+            <Link to="/demo-requests">
               <motion.div 
                 initial={{ opacity: 0, y: 30, scale: 0.9 }}
                 animate={tileCardsInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.9 }}
@@ -419,17 +421,18 @@ const SL_dashboard = () => {
             </Link>
 
             {/* Tasks */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30, scale: 0.9 }}
-              animate={tileCardsInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.9 }}
-              transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
-              whileHover={{ scale: 1.02, y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-purple-50 rounded-xl p-4 text-purple-800 transition-all duration-300 cursor-pointer border border-purple-200/30"
-              style={{
-                boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
-              }}
-            >
+            <Link to="/tasks">
+              <motion.div 
+                initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                animate={tileCardsInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.9 }}
+                transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
+                whileHover={{ scale: 1.02, y: -4 }}
+                whileTap={{ scale: 0.98 }}
+                className="bg-purple-50 rounded-xl p-4 text-purple-800 transition-all duration-300 cursor-pointer border border-purple-200/30"
+                style={{
+                  boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                }}
+              >
               <div className="flex flex-col h-full">
                 {/* Enhanced Icon Section */}
                 <div className="flex justify-center mb-3">
@@ -459,20 +462,22 @@ const SL_dashboard = () => {
                   </div>
                 </div>
               </div>
-            </motion.div>
+              </motion.div>
+            </Link>
 
             {/* Meetings */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30, scale: 0.9 }}
-              animate={tileCardsInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.9 }}
-              transition={{ duration: 0.6, delay: 0.4, ease: "easeOut" }}
-              whileHover={{ scale: 1.02, y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-orange-50 rounded-xl p-4 text-orange-800 transition-all duration-300 cursor-pointer border border-orange-200/30"
-              style={{
-                boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
-              }}
-            >
+            <Link to="/meetings">
+              <motion.div 
+                initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                animate={tileCardsInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.9 }}
+                transition={{ duration: 0.6, delay: 0.4, ease: "easeOut" }}
+                whileHover={{ scale: 1.02, y: -4 }}
+                whileTap={{ scale: 0.98 }}
+                className="bg-orange-50 rounded-xl p-4 text-orange-800 transition-all duration-300 cursor-pointer border border-orange-200/30"
+                style={{
+                  boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                }}
+              >
               <div className="flex flex-col h-full">
                 {/* Enhanced Icon Section */}
                 <div className="flex justify-center mb-3">
@@ -502,7 +507,8 @@ const SL_dashboard = () => {
                   </div>
                 </div>
               </div>
-            </motion.div>
+              </motion.div>
+            </Link>
           </motion.div>
 
           {/* Enhanced Sales Analytics Section */}
