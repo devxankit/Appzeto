@@ -81,15 +81,8 @@ function SL_navbar() {
                 className="flex flex-col items-center justify-center relative py-2 px-3 min-w-0 flex-1"
                 aria-label={item.label}
               >
-                {/* Active state circular background */}
-                {isActive && (
-                  <div className="absolute -top-2 w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full shadow-lg flex items-center justify-center border-2 border-white">
-                    <div className="absolute inset-0 bg-gradient-to-br from-teal-400 to-teal-500 rounded-full animate-pulse opacity-20"></div>
-                  </div>
-                )}
-                
                 {/* Icon */}
-                <div className={`relative z-10 ${isActive ? 'text-white' : 'text-gray-600'}`}>
+                <div className={`${isActive ? 'text-teal-600' : 'text-gray-600'}`}>
                   {item.iconWithPower ? (
                     <div className="relative">
                       <IconComponent className="text-xl" />
