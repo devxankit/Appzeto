@@ -15,6 +15,7 @@ import {
   FiArrowLeft,
   FiX
 } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import SL_navbar from '../SL-components/SL_navbar'
 
 const LeadDashboard = () => {
@@ -70,19 +71,14 @@ const LeadDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
       <SL_navbar />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20 lg:pt-20 lg:pb-4">
+      <main className="max-w-7xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8 lg:pt-20 lg:pb-4">
         {/* Mobile-first layout */}
         <div className="space-y-6 lg:hidden">
           {/* Add New Lead Button */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="w-full"
-          >
+            <div className="w-full">
             <button 
               onClick={openModal}
-              className="w-full bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700 text-white font-bold py-4 px-6 rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 flex items-center justify-center space-x-2 border border-teal-400/20"
+              className="w-full bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700 text-white font-bold py-3 px-4 rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center justify-center space-x-2 border border-teal-400/20 sm:py-4 sm:px-6 sm:hover:scale-105 sm:active:scale-95"
               style={{
                 boxShadow: '0 8px 25px -5px rgba(20, 184, 166, 0.3), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
               }}
@@ -90,37 +86,39 @@ const LeadDashboard = () => {
               role="button"
               tabIndex={0}
             >
-              <FiPlus className="text-xl" />
-              <span className="text-lg">Add New Lead</span>
+              <FiPlus className="text-lg sm:text-xl" />
+              <span className="text-base sm:text-lg">Add New Lead</span>
             </button>
-          </motion.div>
+          </div>
 
           {/* New Leads Card */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-            className="bg-teal-100 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 border border-teal-300/40"
-            style={{
-              boxShadow: '0 8px 25px -5px rgba(20, 184, 166, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h2 className="text-xl font-bold text-teal-900 mb-1">New Leads</h2>
-                <p className="text-sm text-teal-700">Leads requiring initial contact</p>
+          <Link to="/new-leads">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+              className="bg-teal-100 rounded-2xl p-4 shadow-xl hover:shadow-2xl transition-all duration-300 border border-teal-300/40 cursor-pointer sm:p-6"
+              style={{
+                boxShadow: '0 8px 25px -5px rgba(20, 184, 166, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h2 className="text-lg font-bold text-teal-900 mb-1 sm:text-xl">New Leads</h2>
+                  <p className="text-xs text-teal-700 sm:text-sm">Leads requiring initial contact</p>
+                </div>
+                <motion.div 
+                  whileHover={{ scale: 1.05 }}
+                  className="bg-teal-500 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg border border-teal-400/30 sm:w-12 sm:h-12"
+                  style={{
+                    boxShadow: '0 4px 12px -2px rgba(20, 184, 166, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                >
+                  <span className="text-sm font-bold sm:text-lg">24</span>
+                </motion.div>
               </div>
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="bg-teal-500 text-white rounded-full w-12 h-12 flex items-center justify-center shadow-lg border border-teal-400/30"
-                style={{
-                  boxShadow: '0 4px 12px -2px rgba(20, 184, 166, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.1)'
-                }}
-              >
-                <span className="text-lg font-bold">24</span>
-              </motion.div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </Link>
 
           {/* Status Tiles Grid */}
           <motion.div 
@@ -128,7 +126,7 @@ const LeadDashboard = () => {
             initial={{ opacity: 0, y: 50 }}
             animate={tilesInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="grid grid-cols-2 gap-4"
+            className="grid grid-cols-2 gap-3 sm:gap-4"
           >
             {tileData.map((tile, index) => {
               const IconComponent = tile.icon
@@ -141,7 +139,7 @@ const LeadDashboard = () => {
                   transition={{ duration: 0.6, delay: 0.1 + (index * 0.1), ease: "easeOut" }}
                   whileHover={{ scale: 1.02, y: -4 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`${tile.bgClass} rounded-xl p-4 ${tile.textClass} transition-all duration-300 cursor-pointer border ${tile.borderClass}`}
+                  className={`${tile.bgClass} rounded-xl p-3 ${tile.textClass} transition-all duration-300 cursor-pointer border ${tile.borderClass} sm:p-4`}
                   style={{
                     boxShadow: `0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)`
                   }}
@@ -151,28 +149,28 @@ const LeadDashboard = () => {
                 >
                   <div className="flex flex-col h-full">
                     {/* Enhanced Icon Section */}
-                    <div className="flex justify-center mb-3">
-                      <div className={`w-12 h-12 ${tile.iconBgClass} rounded-xl flex items-center justify-center border ${tile.borderClass}`}
+                    <div className="flex justify-center mb-2">
+                      <div className={`w-10 h-10 ${tile.iconBgClass} rounded-xl flex items-center justify-center border border-opacity-30 ${tile.borderClass} sm:w-12 sm:h-12 sm:mb-3`}
                         style={{
                           boxShadow: `0 6px 20px -4px rgba(0, 0, 0, 0.15), 0 3px 10px -2px rgba(0, 0, 0, 0.08), 0 1px 5px -1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.25)`
                         }}
                       >
-                        <IconComponent className={`text-xl ${tile.iconClass}`} />
+                        <IconComponent className={`text-lg ${tile.iconClass} sm:text-xl`} />
                       </div>
                     </div>
                     
                     {/* Enhanced Content Section */}
                     <div className="flex-1 flex flex-col justify-between text-center">
                       <div>
-                        <h3 className={`font-bold text-sm mb-1.5 leading-tight ${tile.textClass}`}>{tile.title}</h3>
-                        <div className="flex items-center justify-center space-x-2 mb-2.5">
-                          <div className={`w-2 h-2 ${tile.iconClass.replace('text-', 'bg-')} rounded-full animate-pulse shadow-sm`}></div>
+                        <h3 className={`font-bold text-xs mb-1 leading-tight ${tile.textClass} sm:text-sm sm:mb-1.5`}>{tile.title}</h3>
+                        <div className="flex items-center justify-center space-x-1 mb-1.5 sm:space-x-2 sm:mb-2.5">
+                          <div className={`w-1.5 h-1.5 ${tile.iconClass.replace('text-', 'bg-')} rounded-full animate-pulse shadow-sm sm:w-2 sm:h-2`}></div>
                           <p className={`text-xs font-semibold ${tile.textClass}/80`}>{tile.count} Leads</p>
                         </div>
                       </div>
                       
                       {/* Enhanced Trend Section */}
-                      <div className={`flex items-center justify-center space-x-1.5 mt-auto ${tile.iconBgClass} rounded-lg px-2.5 py-1.5`}>
+                      <div className={`flex items-center justify-center space-x-1 mt-auto ${tile.iconBgClass} rounded-lg px-2 py-1 sm:space-x-1.5 sm:px-2.5 sm:py-1.5`}>
                         <span className={`text-xs font-semibold ${tile.textClass}/70`}>View Details</span>
                       </div>
                     </div>
@@ -233,31 +231,33 @@ const LeadDashboard = () => {
               </motion.div>
 
               {/* New Leads Card */}
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-                className="bg-teal-100 rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all duration-300 mb-6 border border-teal-300/40"
-                style={{
-                  boxShadow: '0 8px 25px -5px rgba(20, 184, 166, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-teal-900 mb-2">New Leads</h2>
-                    <p className="text-base text-teal-700">Leads requiring initial contact</p>
+              <Link to="/new-leads">
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+                  className="bg-teal-100 rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all duration-300 mb-6 border border-teal-300/40 cursor-pointer"
+                  style={{
+                    boxShadow: '0 8px 25px -5px rgba(20, 184, 166, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h2 className="text-2xl font-bold text-teal-900 mb-2">New Leads</h2>
+                      <p className="text-base text-teal-700">Leads requiring initial contact</p>
+                    </div>
+                    <motion.div 
+                      whileHover={{ scale: 1.05 }}
+                      className="bg-teal-500 text-white rounded-full w-16 h-16 flex items-center justify-center shadow-lg border border-teal-400/30"
+                      style={{
+                        boxShadow: '0 4px 12px -2px rgba(20, 184, 166, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
+                    >
+                      <span className="text-2xl font-bold">24</span>
+                    </motion.div>
                   </div>
-                  <motion.div 
-                    whileHover={{ scale: 1.05 }}
-                    className="bg-teal-500 text-white rounded-full w-16 h-16 flex items-center justify-center shadow-lg border border-teal-400/30"
-                    style={{
-                      boxShadow: '0 4px 12px -2px rgba(20, 184, 166, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  >
-                    <span className="text-2xl font-bold">24</span>
-                  </motion.div>
-                </div>
-              </motion.div>
+                </motion.div>
+              </Link>
 
               {/* Status Tiles Grid */}
               <motion.div 

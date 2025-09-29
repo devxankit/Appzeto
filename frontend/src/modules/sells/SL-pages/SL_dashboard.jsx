@@ -36,6 +36,7 @@ import {
   Star
 } from 'lucide-react'
 import SL_navbar from '../SL-components/SL_navbar'
+import { Link } from 'react-router-dom'
 import { colors, gradients } from '../../../lib/colors'
 
 const SL_dashboard = () => {
@@ -373,17 +374,18 @@ const SL_dashboard = () => {
             </motion.div>
 
             {/* Demo Requests */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30, scale: 0.9 }}
-              animate={tileCardsInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.9 }}
-              transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-              whileHover={{ scale: 1.02, y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-blue-50 rounded-xl p-4 text-blue-800 transition-all duration-300 cursor-pointer border border-blue-200/30"
-              style={{
-                boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
-              }}
-            >
+            <Link to="/new-leads">
+              <motion.div 
+                initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                animate={tileCardsInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.9 }}
+                transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+                whileHover={{ scale: 1.02, y: -4 }}
+                whileTap={{ scale: 0.98 }}
+                className="bg-blue-50 rounded-xl p-4 text-blue-800 transition-all duration-300 cursor-pointer border border-blue-200/30"
+                style={{
+                  boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                }}
+              >
               <div className="flex flex-col h-full">
                 {/* Enhanced Icon Section */}
                 <div className="flex justify-center mb-3">
@@ -413,7 +415,8 @@ const SL_dashboard = () => {
                   </div>
                 </div>
               </div>
-            </motion.div>
+              </motion.div>
+            </Link>
 
             {/* Tasks */}
             <motion.div 
@@ -726,7 +729,8 @@ const SL_dashboard = () => {
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-amber-400 to-yellow-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
+              <Link to="/new-leads">
+                <div className="bg-gradient-to-br from-amber-400 to-yellow-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
                 <div className="flex items-center space-x-3">
                   <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
                     <FaVideo className="text-xl text-white" />
@@ -744,6 +748,7 @@ const SL_dashboard = () => {
                   </div>
                 </div>
               </div>
+            </Link>
 
               <div className="bg-gradient-to-br from-violet-400 to-purple-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
                 <div className="flex items-center space-x-3">

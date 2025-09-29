@@ -1,16 +1,20 @@
 
-import React from 'react'
+import React, { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { 
   FiHome, 
   FiZap, 
   FiUsers, 
   FiBarChart, 
-  FiUser 
+  FiUser,
+  FiCreditCard
 } from 'react-icons/fi'
 
 function SL_navbar() {
   const location = useLocation()
+  
+  // Mock wallet balance - Employee's current available balance
+  const [walletBalance] = useState(22750)
 
   const navItems = [
     { 
@@ -49,8 +53,17 @@ function SL_navbar() {
     <>
       {/* Mobile Top Header */}
       <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm lg:hidden z-50">
-        <div className="flex items-center h-12 px-4">
+        <div className="flex items-center justify-between h-12 px-4">
           <h1 className="text-lg font-bold text-teal-900">Appzeto</h1>
+          
+          {/* Wallet Balance Box */}
+          <Link
+            to="/wallet"
+            className="flex items-center space-x-1 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-3 py-1.5 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
+          >
+            <FiCreditCard className="text-teal-600 text-sm" />
+            <span className="text-sm font-semibold text-teal-700">₹{walletBalance.toLocaleString()}</span>
+          </Link>
         </div>
       </div>
 
@@ -109,7 +122,17 @@ function SL_navbar() {
               </div>
             </div>
             
-            <div className="flex items-center space-x-8">
+            <div className="flex items-center space-x-4">
+              {/* Desktop Wallet Balance */}
+              <Link
+                to="/wallet"
+                className="flex items-center space-x-2 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-4 py-2 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
+              >
+                <FiCreditCard className="text-teal-600 text-lg" />
+                <span className="text-sm font-semibold text-teal-700">₹{walletBalance.toLocaleString()}</span>
+              </Link>
+              
+              <div className="flex items-center space-x-8">
               {navItems.map((item) => {
                 const IconComponent = item.icon
                 const isActive = location.pathname === item.path
@@ -139,6 +162,7 @@ function SL_navbar() {
                   </Link>
                 )
               })}
+              </div>
             </div>
           </div>
         </div>
