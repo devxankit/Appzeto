@@ -15,6 +15,13 @@ import SL_tasks from './modules/sells/SL-pages/SL_tasks'
 import SL_meetings from './modules/sells/SL-pages/SL_meetings'
 import SL_hot_leads from './modules/sells/SL-pages/SL_hot_leads'
 import SL_converted from './modules/sells/SL-pages/SL_converted'
+import SL_not_picked from './modules/sells/SL-pages/SL_not_picked'
+import SL_today_followup from './modules/sells/SL-pages/SL_today_followup'
+import SL_quotation_sent from './modules/sells/SL-pages/SL_quotation_sent'
+import SL_dq_sent from './modules/sells/SL-pages/SL_dq_sent'
+import SL_app_client from './modules/sells/SL-pages/SL_app_client'
+import SL_web from './modules/sells/SL-pages/SL_web'
+import SL_lost from './modules/sells/SL-pages/SL_lost'
 function App() {
   return (
     <ErrorBoundary>
@@ -34,6 +41,13 @@ function App() {
           <Route path="/meetings" element={<SL_meetings />} />
           <Route path="/hot-leads" element={<SL_hot_leads />} />
           <Route path="/converted" element={<SL_converted />} />
+          <Route path="/not-picked" element={<SL_not_picked />} />
+          <Route path="/today-followup" element={<SL_today_followup />} />
+          <Route path="/quotation-sent" element={<SL_quotation_sent />} />
+          <Route path="/dq-sent" element={<SL_dq_sent />} />
+          <Route path="/app-client" element={<SL_app_client />} />
+          <Route path="/web" element={<SL_web />} />
+          <Route path="/lost" element={<SL_lost />} />
           <Route path="/profile" element={<SL_profile />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

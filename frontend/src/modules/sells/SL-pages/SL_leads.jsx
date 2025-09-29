@@ -127,7 +127,16 @@ const LeadDashboard = () => {
               return (
                 <Link
                   key={tile.title}
-                  to={tile.title === "Contacted" ? "/connected" : "#"}
+                  to={
+                    tile.title === "Contacted" ? "/connected" :
+                    tile.title === "Not Picked" ? "/not-picked" :
+                    tile.title === "Today Follow Up" ? "/today-followup" :
+                    tile.title === "Quotation Sent" ? "/quotation-sent" :
+                    tile.title === "D&Q Sent" ? "/dq-sent" :
+                    tile.title === "App Client" ? "/app-client" :
+                    tile.title === "Web" ? "/web" :
+                    tile.title === "Converted" ? "/converted" : "#"
+                  }
                   className={`${tile.bgClass} rounded-xl p-4 ${tile.textClass} transition-all duration-300 cursor-pointer border ${tile.borderClass} block`}
                   style={{
                     boxShadow: `0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)`
@@ -174,18 +183,20 @@ const LeadDashboard = () => {
             ref={lostBarRef}
             className="w-full px-2"
           >
-            <button 
-              className="w-full bg-rose-100 text-rose-800 font-bold py-4 px-6 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center justify-center space-x-2 border border-rose-300/40"
-              style={{
-                boxShadow: '0 8px 25px -5px rgba(244, 63, 94, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
-              }}
-              aria-label="Lost leads"
-              role="button"
-              tabIndex={0}
-            >
-              <FiAlertCircle className="text-xl text-rose-700" />
-              <span className="text-lg">Lost 23</span>
-            </button>
+            <Link to="/lost">
+              <button 
+                className="w-full bg-rose-100 text-rose-800 font-bold py-4 px-6 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center justify-center space-x-2 border border-rose-300/40"
+                style={{
+                  boxShadow: '0 8px 25px -5px rgba(244, 63, 94, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                }}
+                aria-label="Lost leads"
+                role="button"
+                tabIndex={0}
+              >
+                <FiAlertCircle className="text-xl text-rose-700" />
+                <span className="text-lg">Lost 23</span>
+              </button>
+            </Link>
           </div>
         </div>
 
@@ -258,7 +269,16 @@ const LeadDashboard = () => {
                   return (
                     <Link
                       key={tile.title}
-                      to={tile.title === "Contacted" ? "/connected" : "#"}
+                      to={
+                        tile.title === "Contacted" ? "/connected" :
+                        tile.title === "Not Picked" ? "/not-picked" :
+                        tile.title === "Today Follow Up" ? "/today-followup" :
+                        tile.title === "Quotation Sent" ? "/quotation-sent" :
+                        tile.title === "D&Q Sent" ? "/dq-sent" :
+                        tile.title === "App Client" ? "/app-client" :
+                        tile.title === "Web" ? "/web" :
+                        tile.title === "Converted" ? "/converted" : "#"
+                      }
                       className={`${tile.bgClass} rounded-xl p-6 ${tile.textClass} transition-all duration-300 cursor-pointer border ${tile.borderClass} block`}
                       style={{
                         boxShadow: `0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)`
@@ -307,18 +327,20 @@ const LeadDashboard = () => {
                 transition={{ duration: 0.8, delay: 1.2, ease: "easeOut" }}
                 className="mt-6"
               >
-                <button 
-                  className="w-full bg-rose-100 text-rose-800 font-bold py-4 px-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 flex items-center justify-center space-x-3 border border-rose-300/40"
-                  style={{
-                    boxShadow: '0 8px 25px -5px rgba(244, 63, 94, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
-                  }}
-                  aria-label="Lost leads"
-                  role="button"
-                  tabIndex={0}
-                >
-                  <FiAlertCircle className="text-2xl text-rose-700" />
-                  <span className="text-xl">Lost 23</span>
-                </button>
+                <Link to="/lost">
+                  <button 
+                    className="w-full bg-rose-100 text-rose-800 font-bold py-4 px-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 flex items-center justify-center space-x-3 border border-rose-300/40"
+                    style={{
+                      boxShadow: '0 8px 25px -5px rgba(244, 63, 94, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                    }}
+                    aria-label="Lost leads"
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <FiAlertCircle className="text-2xl text-rose-700" />
+                    <span className="text-xl">Lost 23</span>
+                  </button>
+                </Link>
               </motion.div>
             </div>
 
