@@ -63,7 +63,7 @@ function SL_navbar() {
             <img 
               src={logo} 
               alt="Appzeto" 
-              className="h-8 w-auto"
+              className="h-9 w-auto"
             />
           </Link>
           
