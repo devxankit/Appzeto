@@ -10,6 +10,7 @@ import {
   FiCreditCard,
   FiBell
 } from 'react-icons/fi'
+import logo from '../../../assets/images/logo.png'
 
 function SL_navbar() {
   const location = useLocation()
@@ -58,7 +59,13 @@ function SL_navbar() {
       {/* Mobile Top Header */}
       <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm lg:hidden z-50">
         <div className="flex items-center justify-between h-12 px-4">
-          <h1 className="text-lg font-bold text-teal-900">Appzeto</h1>
+          <Link to="/dashboard" className="flex items-center -ml-2">
+            <img 
+              src={logo} 
+              alt="Appzeto" 
+              className="h-8 w-auto"
+            />
+          </Link>
           
           <div className="flex items-center space-x-2">
             {/* Notification Icon */}
@@ -125,7 +132,13 @@ function SL_navbar() {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <h1 className="text-xl font-bold text-teal-900">Appzeto</h1>
+                <Link to="/dashboard" className="flex items-center -ml-2">
+                  <img 
+                    src={logo} 
+                    alt="Appzeto" 
+                    className="h-10 w-auto"
+                  />
+                </Link>
               </div>
             </div>
             

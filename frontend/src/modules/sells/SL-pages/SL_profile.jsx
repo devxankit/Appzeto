@@ -11,6 +11,7 @@ import {
   FaArrowRight
 } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
+import logo from '../../../assets/images/logo.png'
 
 const SL_profile = () => {
   return (
@@ -20,16 +21,25 @@ const SL_profile = () => {
       {/* Mobile Layout */}
       <main className="max-w-md mx-auto px-4 pt-16 pb-20 lg:hidden">
         {/* Profile Header Section */}
-        <div className="text-center mb-8">
+        <div className="relative text-center mb-8">
+          {/* Logo Banner Background */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-5">
+            <img 
+              src={logo} 
+              alt="Appzeto" 
+              className="w-96 h-auto"
+            />
+          </div>
+          
           {/* Profile Picture */}
-          <div className="mb-8">
-            <div className="w-32 h-32 mx-auto bg-gray-200 rounded-full flex items-center justify-center shadow-lg border border-gray-300">
+          <div className="relative mb-8">
+            <div className="w-32 h-32 mx-auto bg-gray-200 rounded-full flex items-center justify-center shadow-lg border border-gray-300 relative z-10">
               <FaUser className="text-gray-500 text-4xl" />
             </div>
           </div>
 
           {/* User Information */}
-          <div>
+          <div className="relative z-10">
             <h1 className="text-3xl font-bold text-gray-900 mb-3 tracking-tight">Abhishek Sen</h1>
             <p className="text-gray-600 text-lg font-medium">abhishek@appzeto.com</p>
           </div>
@@ -162,15 +172,24 @@ const SL_profile = () => {
           {/* Left Column - Profile Info */}
           <div className="col-span-4">
             {/* Profile Header */}
-            <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-200/50 mb-6"
+            <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-200/50 mb-6 relative overflow-hidden"
               style={{
                 boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.15), 0 6px 16px -4px rgba(0, 0, 0, 0.08), 0 3px 8px -2px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
               }}
             >
-              <div className="text-center">
+              {/* Logo Banner Background */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-5">
+                <img 
+                  src={logo} 
+                  alt="Appzeto" 
+                  className="w-80 h-auto"
+                />
+              </div>
+              
+              <div className="text-center relative z-10">
                 {/* Profile Picture */}
                 <div className="mb-6">
-                  <div className="w-24 h-24 mx-auto bg-gray-200 rounded-full flex items-center justify-center shadow-lg border border-gray-300">
+                  <div className="w-24 h-24 mx-auto bg-gray-200 rounded-full flex items-center justify-center shadow-lg border border-gray-300 relative z-10">
                     <FaUser className="text-gray-500 text-3xl" />
                   </div>
                 </div>
