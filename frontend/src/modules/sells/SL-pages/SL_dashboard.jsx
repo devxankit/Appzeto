@@ -38,7 +38,6 @@ import {
 import SL_navbar from '../SL-components/SL_navbar'
 import { Link } from 'react-router-dom'
 import { colors, gradients } from '../../../lib/colors'
-import { Particles } from '../../../components/ui/particles'
 
 const SL_dashboard = () => {
   // Refs for scroll-triggered animations
@@ -78,23 +77,20 @@ const SL_dashboard = () => {
                 boxShadow: '0 25px 50px -12px rgba(20, 184, 166, 0.2), 0 0 0 1px rgba(20, 184, 166, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
               }}
             >
-            {/* Particles Background */}
+            {/* Subtle Background Pattern */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <Particles
-                className="absolute inset-0"
-                quantity={80}
-                staticity={30}
-                ease={50}
-                size={0.6}
-                color="#14b8a6"
-                vx={0.1}
-                vy={0.1}
-              />
+              <div className="absolute top-4 right-8 w-2 h-2 bg-teal-200/30 rounded-full animate-pulse"></div>
+              <div className="absolute top-12 right-16 w-1.5 h-1.5 bg-teal-300/25 rounded-full animate-pulse delay-1000"></div>
+              <div className="absolute top-20 right-10 w-1 h-1 bg-teal-400/20 rounded-full animate-pulse delay-2000"></div>
+              <div className="absolute bottom-16 left-8 w-1.5 h-1.5 bg-teal-200/25 rounded-full animate-pulse delay-500"></div>
+              <div className="absolute bottom-8 left-16 w-2 h-2 bg-teal-300/15 rounded-full animate-pulse delay-1500"></div>
+              <div className="absolute top-32 right-24 w-1 h-1 bg-teal-400/15 rounded-full animate-pulse delay-3000"></div>
+              <div className="absolute bottom-24 left-24 w-1.5 h-1.5 bg-teal-200/20 rounded-full animate-pulse delay-4000"></div>
               
-              {/* Subtle grid pattern overlay */}
-              <div className="absolute inset-0 opacity-20">
+              {/* Subtle grid pattern */}
+              <div className="absolute inset-0 opacity-3">
                 <div className="w-full h-full" style={{
-                  backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(20, 184, 166, 0.15) 1px, transparent 0)',
+                  backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(20, 184, 166, 0.08) 1px, transparent 0)',
                   backgroundSize: '20px 20px'
                 }}></div>
               </div>
