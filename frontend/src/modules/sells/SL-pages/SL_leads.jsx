@@ -22,8 +22,7 @@ const LeadDashboard = () => {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formData, setFormData] = useState({
-    phoneNumber: '',
-    source: ''
+    phoneNumber: ''
   })
   
   // Refs for scroll-triggered animations
@@ -53,7 +52,7 @@ const LeadDashboard = () => {
     // Close modal after successful submission
     closeModal()
     // Reset form
-    setFormData({ phoneNumber: '', source: '' })
+    setFormData({ phoneNumber: '' })
   }
 
   // Sample data for tiles with monochromatic color scheme
@@ -443,44 +442,6 @@ const LeadDashboard = () => {
                   </div>
                 </div>
 
-                {/* Source Section */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-gray-900">Source</h3>
-                  <div className="space-y-3">
-                    {[
-                      { value: 'meta', label: 'Meta' },
-                      { value: 'linkedin', label: 'LinkedIn' },
-                      { value: 'referral', label: 'Referral' },
-                      { value: 'other', label: 'Other' },
-                      { value: 'agent', label: 'Agent' }
-                    ].map((option) => (
-                      <label
-                        key={option.value}
-                        className="flex items-center p-3 rounded-lg border border-teal-200 bg-white hover:bg-teal-50 transition-colors duration-200 cursor-pointer"
-                      >
-                        <input
-                          type="radio"
-                          name="source"
-                          value={option.value}
-                          checked={formData.source === option.value}
-                          onChange={handleInputChange}
-                          className="sr-only"
-                          required
-                        />
-                        <div className={`w-5 h-5 rounded-full border-2 mr-3 transition-all duration-200 ${
-                          formData.source === option.value 
-                            ? 'border-teal-500 bg-teal-500' 
-                            : 'border-gray-300'
-                        }`}>
-                          {formData.source === option.value && (
-                            <div className="w-full h-full rounded-full bg-white scale-50"></div>
-                          )}
-                        </div>
-                        <span className="text-gray-900 font-medium">{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
 
                 {/* Submit Button */}
                 <button

@@ -29,6 +29,7 @@ const SL_payments_recovery = () => {
   const [selectedClient, setSelectedClient] = useState(null)
   const [requestAmount, setRequestAmount] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [selectedPaymentType, setSelectedPaymentType] = useState('all')
 
   // Mock data for payments
   const paymentsData = [
@@ -41,6 +42,8 @@ const SL_payments_recovery = () => {
   ]
 
   const totalDues = paymentsData.reduce((sum, payment) => sum + payment.amount, 0)
+  const overduePayments = paymentsData.filter(payment => payment.amount > 10000)
+  const totalOverdue = overduePayments.reduce((sum, payment) => sum + payment.amount, 0)
 
   const filters = [
     { id: 'all', label: 'All' },
@@ -62,7 +65,12 @@ const SL_payments_recovery = () => {
       matchesFilter = payment.amount < 3000
     }
     
-    return matchesSearch && matchesFilter
+    let matchesPaymentType = true
+    if (selectedPaymentType === 'overdue') {
+      matchesPaymentType = payment.amount > 10000
+    }
+    
+    return matchesSearch && matchesFilter && matchesPaymentType
   })
 
   const handlePaymentAction = (payment) => {
@@ -185,6 +193,37 @@ Thank you!`
             }`}
           >
             <FiFilter className="text-base" />
+          </button>
+        </div>
+
+        {/* Payment Type Tiles */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          {/* All Payments Tile */}
+          <button
+            onClick={() => setSelectedPaymentType('all')}
+            className={`py-1.5 px-3 rounded-lg transition-all duration-200 ${
+              selectedPaymentType === 'all'
+                ? 'bg-teal-50 border-2 border-teal-500 text-teal-700'
+                : 'bg-gray-50 border-2 border-gray-200 text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <div className="text-center">
+              <p className="text-xs font-semibold">All: ₹{totalDues.toLocaleString()} ({paymentsData.length})</p>
+            </div>
+          </button>
+
+          {/* Overdue Payments Tile */}
+          <button
+            onClick={() => setSelectedPaymentType('overdue')}
+            className={`py-1.5 px-3 rounded-lg transition-all duration-200 ${
+              selectedPaymentType === 'overdue'
+                ? 'bg-red-50 border-2 border-red-500 text-red-700'
+                : 'bg-gray-50 border-2 border-gray-200 text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <div className="text-center">
+              <p className="text-xs font-semibold">Overdue: ₹{totalOverdue.toLocaleString()} ({overduePayments.length})</p>
+            </div>
           </button>
         </div>
 

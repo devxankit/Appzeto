@@ -7,7 +7,9 @@ import {
   FiUser,
   FiSearch,
   FiAlertCircle,
-  FiUserCheck
+  FiUserCheck,
+  FiFileText,
+  FiX
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 
@@ -17,6 +19,18 @@ const SL_newLeads = () => {
   const [selectedLeadId, setSelectedLeadId] = useState(null)
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [leadToDelete, setLeadToDelete] = useState(null)
+  const [showConnectedForm, setShowConnectedForm] = useState(false)
+  const [selectedLeadForForm, setSelectedLeadForForm] = useState(null)
+  const [connectedForm, setConnectedForm] = useState({
+    name: '',
+    description: '',
+    projectType: 'web',
+    estimatedPrice: '50000',
+    quotationSent: false,
+    demoSent: false
+  })
 
   // Mock leads data
   const leadsData = [
@@ -85,8 +99,71 @@ const SL_newLeads = () => {
   }
 
   const handleStatusChange = (leadId, newStatus) => {
-    console.log(`Lead ${leadId} status changed to: ${newStatus}`)
+    if (newStatus === 'contacted') {
+      setSelectedLeadForForm(leadId)
+      setShowConnectedForm(true)
+    } else {
+      console.log(`Lead ${leadId} status changed to: ${newStatus}`)
+    }
     setShowActionsMenu(null)
+  }
+
+  const handleNotInterested = (leadId) => {
+    setLeadToDelete(leadId)
+    setShowDeleteConfirm(true)
+    setShowActionsMenu(null)
+  }
+
+  const confirmDelete = () => {
+    if (leadToDelete) {
+      // Remove lead from the data array
+      const updatedLeads = leadsData.filter(lead => lead.id !== leadToDelete)
+      console.log(`Lead ${leadToDelete} permanently deleted`)
+      // In a real app, you would update the state or make an API call
+    }
+    setShowDeleteConfirm(false)
+    setLeadToDelete(null)
+  }
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false)
+    setLeadToDelete(null)
+  }
+
+  const handleConnectedFormChange = (field, value) => {
+    setConnectedForm(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleConnectedFormSubmit = (e) => {
+    e.preventDefault()
+    console.log('Connected form submitted:', connectedForm)
+    // Handle form submission logic here
+    setShowConnectedForm(false)
+    setSelectedLeadForForm(null)
+    setConnectedForm({
+      name: '',
+      description: '',
+      projectType: 'web',
+      estimatedPrice: '50000',
+      quotationSent: false,
+      demoSent: false
+    })
+  }
+
+  const closeConnectedForm = () => {
+    setShowConnectedForm(false)
+    setSelectedLeadForForm(null)
+    setConnectedForm({
+      name: '',
+      description: '',
+      projectType: 'web',
+      estimatedPrice: '50000',
+      quotationSent: false,
+      demoSent: false
+    })
   }
 
   // Mobile Lead Card Component - Simplified
@@ -95,12 +172,9 @@ const SL_newLeads = () => {
       {/* Left Section - Avatar & Phone */}
       <div className="flex items-center space-x-3 flex-1 min-w-0">
         {/* Avatar */}
-        <div className="relative flex-shrink-0">
+        <div className="flex-shrink-0">
           <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center">
             <FiUser className="text-white text-sm" />
-          </div>
-          <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center ${getPriorityColor(lead.priority)}`}>
-            <div className={`w-1.5 h-1.5 rounded-full ${getPriorityColor(lead.priority).replace('text', 'bg')}`}></div>
           </div>
         </div>
 
@@ -111,7 +185,7 @@ const SL_newLeads = () => {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-3">
         {/* Call Button */}
         <button
           onClick={() => handleCall(lead.phone)}
@@ -147,20 +221,26 @@ const SL_newLeads = () => {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
                 transition={{ duration: 0.2}}
-                className="absolute right-0 top-full mt-2 w-32 bg-white rounded-lg shadow-xl border border-gray-200 z-50"
+                className="absolute right-0 top-full mt-2 w-36 bg-white rounded-lg shadow-xl border border-gray-200 z-50"
               >
-                <div className="py-1">
+                <div className="py-1.5">
                   <button
                     onClick={() => handleStatusChange(lead.id, 'contacted')}
-                    className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
+                    className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                   >
                     Contacted
                   </button>
                   <button
                     onClick={() => handleStatusChange(lead.id, 'not_picked')}
-                    className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors duration-200"
+                    className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors duration-200"
                   >
                     Not Picked
+                  </button>
+                  <button
+                    onClick={() => handleNotInterested(lead.id)}
+                    className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
+                  >
+                    Not Interested
                   </button>
                 </div>
               </motion.div>
@@ -177,12 +257,9 @@ const SL_newLeads = () => {
       {/* Left Section - Avatar & Info */}
       <div className="flex-1 flex items-center space-x-4">
         {/* Avatar */}
-        <div className="relative flex-shrink-0">
+        <div className="flex-shrink-0">
           <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center">
             <FiUser className="text-white text-lg" />
-          </div>
-          <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center ${getPriorityColor(lead.priority)}`}>
-            <div className={`w-2 h-2 rounded-full ${getPriorityColor(lead.priority).replace('text', 'bg')}`}></div>
           </div>
         </div>
 
@@ -193,7 +270,7 @@ const SL_newLeads = () => {
       </div>
 
       {/* Actions Section */}
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-4">
         <button
           onClick={() => handleCall(lead.phone)}
           className="bg-white text-teal-600 border border-teal-200 px-4 py-2 rounded-lg hover:bg-teal-50 transition-all duration-200 text-sm font-medium"
@@ -227,20 +304,26 @@ const SL_newLeads = () => {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
                 transition={{ duration: 0.2}}
-                className="absolute right-0 top-full mt-2 w-40 bg-white rounded-xl shadow-xl border border-gray-200 z-50"
+                className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl border border-gray-200 z-50"
               >
-                <div className="py-2">
+                <div className="py-2.5">
                   <button
                     onClick={() => handleStatusChange(lead.id, 'contacted')}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
+                    className="w-full px-5 py-3 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                   >
                     Mark as Contacted
                   </button>
                   <button
                     onClick={() => handleStatusChange(lead.id, 'not_picked')}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors duration-200"
+                    className="w-full px-5 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors duration-200"
                   >
                     Mark as Not Picked
+                  </button>
+                  <button
+                    onClick={() => handleNotInterested(lead.id)}
+                    className="w-full px-5 py-3 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
+                  >
+                    Mark as Not Interested
                   </button>
                 </div>
               </motion.div>
@@ -264,25 +347,26 @@ const SL_newLeads = () => {
              initial={{ opacity: 0, y: 20 }}
              animate={{ opacity: 1, y: 0 }}
              transition={{ duration: 0.6 }}
-             className="mb-8"
+             className="mb-6"
            >
-             <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-2xl p-6 shadow-lg border border-teal-200/50">
-               <div className="flex items-start justify-between">
-                 <div className="flex-1">
-                   <div className="flex items-center space-x-3 mb-2">
-                     <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg">
-                       <FiUser className="text-white text-lg" />
-                     </div>
-                     <div>
-                       <h1 className="text-2xl font-bold text-teal-900">New Leads</h1>
-                       <p className="text-teal-700 text-sm font-medium">Manage and track your potential customers</p>
-                     </div>
+             <div className="bg-gradient-to-br from-teal-50 via-teal-100 to-teal-200 rounded-xl p-4 shadow-lg border border-teal-300/40">
+               <div className="flex items-center justify-between">
+                 {/* Left Section - Title and Description */}
+                 <div className="flex items-center space-x-3 flex-1">
+                   <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl flex items-center justify-center shadow-md">
+                     <FiUser className="text-white text-lg" />
+                   </div>
+                   <div>
+                     <h1 className="text-lg font-bold text-teal-900">New Leads</h1>
+                     <p className="text-teal-700 text-xs">Manage and track your potential customers</p>
                    </div>
                  </div>
-                 <div className="bg-white/80 backdrop-blur-sm rounded-xl px-4 py-3 shadow-lg border border-white/20">
+                 
+                 {/* Right Section - Total Count */}
+                 <div className="bg-white/70 backdrop-blur-sm rounded-lg px-3 py-2 shadow-sm border border-white/30">
                    <div className="text-center">
-                     <p className="text-xs text-teal-600 font-medium mb-1">Total</p>
-                     <p className="text-2xl font-bold text-teal-900">{leadsData.length}</p>
+                     <p className="text-xs text-teal-600 font-medium mb-0.5">Total</p>
+                     <p className="text-xl font-bold text-teal-900">{leadsData.length}</p>
                      <p className="text-xs text-teal-600 font-medium">Leads</p>
                    </div>
                  </div>
@@ -603,6 +687,256 @@ const SL_newLeads = () => {
           </div>
         </div>
       </main>
+
+      {/* Connected Form Dialog */}
+      <AnimatePresence>
+        {showConnectedForm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={closeConnectedForm}
+            />
+
+            {/* Dialog Content */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="relative w-full max-w-md bg-white rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-teal-500 to-teal-600 p-4 text-white rounded-t-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                      <FiUserCheck className="text-white text-lg" />
+                    </div>
+                    <h2 className="text-lg font-bold">Add Connected Lead</h2>
+                  </div>
+                  <button
+                    onClick={closeConnectedForm}
+                    className="p-1 hover:bg-white/20 rounded-full transition-colors duration-200"
+                  >
+                    <FiX className="text-white text-lg" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleConnectedFormSubmit} className="p-6 space-y-6">
+                {/* Name Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Name</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiUser className="text-lg" />
+                    </div>
+                    <input
+                      type="text"
+                      value={connectedForm.name}
+                      onChange={(e) => handleConnectedFormChange('name', e.target.value)}
+                      placeholder="Enter client name"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Description Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Description</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-3 text-teal-600">
+                      <FiFileText className="text-lg" />
+                    </div>
+                    <textarea
+                      value={connectedForm.description}
+                      onChange={(e) => handleConnectedFormChange('description', e.target.value)}
+                      placeholder="Enter project description"
+                      rows={3}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Project Type */}
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-gray-700">Project Type</label>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleConnectedFormChange('projectType', 'web')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        connectedForm.projectType === 'web'
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Web
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleConnectedFormChange('projectType', 'app')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        connectedForm.projectType === 'app'
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      App
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleConnectedFormChange('projectType', 'taxi')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        connectedForm.projectType === 'taxi'
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Taxi
+                    </button>
+                  </div>
+                </div>
+
+                {/* Estimated Price */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Estimated Price</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <span className="text-lg font-bold">₹</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={connectedForm.estimatedPrice}
+                      onChange={(e) => handleConnectedFormChange('estimatedPrice', e.target.value)}
+                      placeholder="Enter amount (e.g., 50000)"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+
+                {/* Checkboxes */}
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="quotationSent"
+                      checked={connectedForm.quotationSent}
+                      onChange={(e) => handleConnectedFormChange('quotationSent', e.target.checked)}
+                      className="w-4 h-4 text-teal-600 bg-gray-100 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
+                    />
+                    <label htmlFor="quotationSent" className="text-sm font-medium text-gray-700">
+                      Quotation sent
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="demoSent"
+                      checked={connectedForm.demoSent}
+                      onChange={(e) => handleConnectedFormChange('demoSent', e.target.checked)}
+                      className="w-4 h-4 text-teal-600 bg-gray-100 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
+                    />
+                    <label htmlFor="demoSent" className="text-sm font-medium text-gray-700">
+                      Demo sent
+                    </label>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeConnectedForm}
+                    className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-teal-700 transition-all duration-200 font-medium shadow-lg"
+                  >
+                    Save Lead
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Dialog */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={cancelDelete}
+            />
+
+            {/* Dialog Content */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="relative w-full max-w-sm bg-white rounded-xl shadow-2xl"
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-red-500 to-red-600 p-4 text-white rounded-t-xl">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                    <FiAlertCircle className="text-white text-lg" />
+                  </div>
+                  <h2 className="text-lg font-bold">Confirm Deletion</h2>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                <p className="text-gray-700 text-sm mb-4">
+                  Are you sure you want to mark this lead as "Not Interested"? This action will permanently delete the lead from your list.
+                </p>
+                
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                  <p className="text-red-700 text-xs font-medium">
+                    ⚠️ This action cannot be undone
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={cancelDelete}
+                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200 text-sm font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDelete}
+                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200 text-sm font-medium"
+                  >
+                    Delete Lead
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
