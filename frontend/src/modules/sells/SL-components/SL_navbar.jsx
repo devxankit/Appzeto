@@ -58,7 +58,7 @@ function SL_navbar() {
     <>
       {/* Mobile Top Header */}
       <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm lg:hidden z-50">
-        <div className="flex items-center justify-between h-12 px-4">
+        <div className="flex items-center justify-between h-14 px-4">
           <Link to="/dashboard" className="flex items-center -ml-2">
             <img 
               src={logo} 
