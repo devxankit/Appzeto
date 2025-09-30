@@ -115,7 +115,7 @@ const SL_not_picked = () => {
 
   const handleProfile = (leadId) => {
     console.log('Navigating to profile for lead ID:', leadId)
-    navigate(`/client-profile/${leadId}`)
+    navigate(`/lead-profile/${leadId}`)
   }
 
   const handleStatusChange = (leadId, newStatus) => {

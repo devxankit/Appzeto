@@ -122,7 +122,7 @@ const SL_converted = () => {
 
   const handleProfile = (clientId) => {
     console.log('Navigating to profile for client ID:', clientId)
-    navigate(`/client-profile/${clientId}`)
+    navigate(`/lead-profile/${clientId}`)
   }
 
   const handleStatusChange = (clientId, newStatus) => {

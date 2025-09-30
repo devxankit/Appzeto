@@ -7,7 +7,7 @@ import SL_profile from './modules/sells/SL-pages/SL_profile'
 import SL_wallet from './modules/sells/SL-pages/SL_wallet'
 import SL_newLeads from './modules/sells/SL-pages/SL_newLeads'
 import SL_connected from './modules/sells/SL-pages/SL_connected'
-import SL_ClientProfile from './modules/sells/SL-pages/SL_ClientProfile'
+import SL_leadProfile from './modules/sells/SL-pages/SL_leadProfile'
 import SL_notes from './modules/sells/SL-pages/SL_notes'
 import SL_payments_recovery from './modules/sells/SL-pages/SL_payments_recovery'
 import SL_demo_request from './modules/sells/SL-pages/SL_demo_request'
@@ -33,7 +33,7 @@ function App() {
           <Route path="/wallet" element={<SL_wallet />} />
           <Route path="/new-leads" element={<SL_newLeads />} />
           <Route path="/connected" element={<SL_connected />} />
-          <Route path="/client-profile/:id" element={<SL_ClientProfile />} />
+          <Route path="/lead-profile/:id" element={<SL_leadProfile />} />
           <Route path="/client-notes/:id" element={<SL_notes />} />
           <Route path="/payments-recovery" element={<SL_payments_recovery />} />
           <Route path="/demo-requests" element={<SL_demo_request />} />

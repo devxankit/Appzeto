@@ -26,7 +26,7 @@ import {
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 
-const SL_ClientProfile = () => {
+const SL_leadProfile = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   
@@ -1173,4 +1173,4 @@ const SL_ClientProfile = () => {
   )
 }
 
-export default SL_ClientProfile
+export default SL_leadProfile
