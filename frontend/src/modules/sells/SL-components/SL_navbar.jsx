@@ -7,7 +7,8 @@ import {
   FiUsers, 
   FiBarChart, 
   FiUser,
-  FiCreditCard
+  FiCreditCard,
+  FiBell
 } from 'react-icons/fi'
 
 function SL_navbar() {
@@ -15,6 +16,9 @@ function SL_navbar() {
   
   // Mock wallet balance - Employee's current available balance
   const [walletBalance] = useState(22750)
+  
+  // Mock notification count
+  const [notificationCount] = useState(3)
 
   const navItems = [
     { 
@@ -56,14 +60,24 @@ function SL_navbar() {
         <div className="flex items-center justify-between h-12 px-4">
           <h1 className="text-lg font-bold text-teal-900">Appzeto</h1>
           
-          {/* Wallet Balance Box */}
-          <Link
-            to="/wallet"
-            className="flex items-center space-x-1 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-3 py-1.5 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
-          >
-            <FiCreditCard className="text-teal-600 text-sm" />
-            <span className="text-sm font-semibold text-teal-700">₹{walletBalance.toLocaleString()}</span>
-          </Link>
+          <div className="flex items-center space-x-2">
+            {/* Notification Icon */}
+            <Link
+              to="/notifications"
+              className="relative p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200"
+            >
+              <FiBell className="text-lg" />
+            </Link>
+            
+            {/* Wallet Balance Box */}
+            <Link
+              to="/wallet"
+              className="flex items-center space-x-1 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-3 py-1.5 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
+            >
+              <FiCreditCard className="text-teal-600 text-sm" />
+              <span className="text-sm font-semibold text-teal-700">₹{walletBalance.toLocaleString()}</span>
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -116,6 +130,14 @@ function SL_navbar() {
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Notification Icon */}
+              <Link
+                to="/notifications"
+                className="relative p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200"
+              >
+                <FiBell className="text-xl" />
+              </Link>
+              
               {/* Desktop Wallet Balance */}
               <Link
                 to="/wallet"

@@ -8,6 +8,8 @@ import SL_wallet from './modules/sells/SL-pages/SL_wallet'
 import SL_newLeads from './modules/sells/SL-pages/SL_newLeads'
 import SL_connected from './modules/sells/SL-pages/SL_connected'
 import SL_leadProfile from './modules/sells/SL-pages/SL_leadProfile'
+import SL_ClientProfile from './modules/sells/SL-pages/SL_ClientProfile'
+import SL_client_transaction from './modules/sells/SL-pages/SL_client_transaction'
 import SL_notes from './modules/sells/SL-pages/SL_notes'
 import SL_payments_recovery from './modules/sells/SL-pages/SL_payments_recovery'
 import SL_demo_request from './modules/sells/SL-pages/SL_demo_request'
@@ -22,6 +24,7 @@ import SL_dq_sent from './modules/sells/SL-pages/SL_dq_sent'
 import SL_app_client from './modules/sells/SL-pages/SL_app_client'
 import SL_web from './modules/sells/SL-pages/SL_web'
 import SL_lost from './modules/sells/SL-pages/SL_lost'
+import SL_notification from './modules/sells/SL-pages/SL_notification'
 function App() {
   return (
     <ErrorBoundary>
@@ -34,6 +37,8 @@ function App() {
           <Route path="/new-leads" element={<SL_newLeads />} />
           <Route path="/connected" element={<SL_connected />} />
           <Route path="/lead-profile/:id" element={<SL_leadProfile />} />
+          <Route path="/client-profile/:id" element={<SL_ClientProfile />} />
+          <Route path="/client-transaction/:id" element={<SL_client_transaction />} />
           <Route path="/client-notes/:id" element={<SL_notes />} />
           <Route path="/payments-recovery" element={<SL_payments_recovery />} />
           <Route path="/demo-requests" element={<SL_demo_request />} />
@@ -49,6 +54,7 @@ function App() {
           <Route path="/web" element={<SL_web />} />
           <Route path="/lost" element={<SL_lost />} />
           <Route path="/profile" element={<SL_profile />} />
+          <Route path="/notifications" element={<SL_notification />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
