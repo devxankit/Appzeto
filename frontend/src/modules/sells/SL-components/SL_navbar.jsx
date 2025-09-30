@@ -8,9 +8,11 @@ import {
   FiBarChart, 
   FiUser,
   FiCreditCard,
-  FiBell
+  FiBell,
+  FiMenu
 } from 'react-icons/fi'
 import logo from '../../../assets/images/logo.png'
+import SL_sideBar from './SL_sideBar'
 
 function SL_navbar() {
   const location = useLocation()
@@ -20,6 +22,9 @@ function SL_navbar() {
   
   // Mock notification count
   const [notificationCount] = useState(3)
+  
+  // Sidebar state
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   const navItems = [
     { 
@@ -84,6 +89,14 @@ function SL_navbar() {
               <FiCreditCard className="text-teal-600 text-sm" />
               <span className="text-sm font-semibold text-teal-700">₹{walletBalance.toLocaleString()}</span>
             </Link>
+            
+            {/* Hamburger Menu Icon */}
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200"
+            >
+              <FiMenu className="text-lg" />
+            </button>
           </div>
         </div>
       </div>
@@ -195,6 +208,12 @@ function SL_navbar() {
           </div>
         </div>
       </nav>
+
+      {/* Sidebar Component */}
+      <SL_sideBar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+      />
     </>
   )
 }
