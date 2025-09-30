@@ -1,5 +1,5 @@
 import React, { useRef } from 'react'
-import { PieChart, Pie, Cell } from 'recharts'
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Sparklines, SparklinesLine, SparklinesSpots } from 'react-sparklines'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import { 
@@ -48,12 +48,27 @@ const SL_dashboard = () => {
   const tileCardsInView = useInView(tileCardsRef, { once: true, margin: "-100px" })
   const chartInView = useInView(chartRef, { once: true, margin: "-100px" })
 
-  // Chart data with better structure and colors
+  // Lead conversion chart data - showing conversion funnel
   const chartData = [
-    { name: 'Online Sales', value: 35, color: '#10B981', amount: '₹1,200K' },
-    { name: 'Retail Stores', value: 28, color: '#3B82F6', amount: '₹960K' },
-    { name: 'Direct Sales', value: 22, color: '#8B5CF6', amount: '₹750K' },
-    { name: 'Partnerships', value: 15, color: '#F59E0B', amount: '₹510K' }
+    { name: 'Connected', value: 80, color: '#06B6D4', amount: '80 leads' },
+    { name: 'Converted', value: 40, color: '#10B981', amount: '40 leads' },
+    { name: 'Lost', value: 28, color: '#EF4444', amount: '28 leads' }
+  ]
+
+  // Monthly conversion data for bar chart - 12 months for scrolling
+  const monthlyData = [
+    { month: 'Jan', totalLeads: 120, converted: 15, conversionRate: 12.5 },
+    { month: 'Feb', totalLeads: 135, converted: 18, conversionRate: 13.3 },
+    { month: 'Mar', totalLeads: 148, converted: 22, conversionRate: 14.9 },
+    { month: 'Apr', totalLeads: 142, converted: 20, conversionRate: 14.1 },
+    { month: 'May', totalLeads: 156, converted: 25, conversionRate: 16.0 },
+    { month: 'Jun', totalLeads: 148, converted: 40, conversionRate: 27.0 },
+    { month: 'Jul', totalLeads: 165, converted: 35, conversionRate: 21.2 },
+    { month: 'Aug', totalLeads: 158, converted: 28, conversionRate: 17.7 },
+    { month: 'Sep', totalLeads: 172, converted: 32, conversionRate: 18.6 },
+    { month: 'Oct', totalLeads: 168, converted: 38, conversionRate: 22.6 },
+    { month: 'Nov', totalLeads: 175, converted: 42, conversionRate: 24.0 },
+    { month: 'Dec', totalLeads: 180, converted: 45, conversionRate: 25.0 }
   ]
 
   // Sparkline data for sales trends
@@ -524,8 +539,8 @@ const SL_dashboard = () => {
           >
             {/* Header Section */}
             <div className="text-center mb-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Sales Distribution</h3>
-              <p className="text-gray-600 text-sm">Performance across different channels</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Lead Conversion</h3>
+              <p className="text-gray-600 text-sm">Conversion funnel from connected to converted leads</p>
             </div>
 
             {/* Modern Chart Container */}
@@ -552,8 +567,8 @@ const SL_dashboard = () => {
                   {/* Center Text */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-gray-900">₹3,420K</p>
-                      <p className="text-xs text-gray-600">Total Sales</p>
+                      <p className="text-2xl font-bold text-gray-900">148</p>
+                      <p className="text-xs text-gray-600">Total Leads</p>
                     </div>
                   </div>
                 </div>
@@ -602,27 +617,113 @@ const SL_dashboard = () => {
                 transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
                 className="mt-6 grid grid-cols-2 gap-4"
               >
-                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-200/50">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                    <p className="text-sm font-semibold text-emerald-700">Top Channel</p>
-                  </div>
-                  <p className="text-lg font-bold text-emerald-900">Online Sales</p>
-                  <p className="text-xs text-emerald-600">35% of total revenue</p>
-                </div>
-                
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200/50">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <p className="text-sm font-semibold text-blue-700">Growth Rate</p>
-                  </div>
-                  <p className="text-lg font-bold text-blue-900">+12.5%</p>
-                  <p className="text-xs text-blue-600">vs last month</p>
-                </div>
-              </motion.div>
-            </div>
-          </motion.div>
-        </div>
+                 <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-3 border border-emerald-200/50">
+                   <div className="flex items-center space-x-1.5 mb-1.5">
+                     <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
+                     <p className="text-xs font-semibold text-emerald-700">Conversion Rate</p>
+                   </div>
+                   <p className="text-base font-bold text-emerald-900">27.0%</p>
+                   <p className="text-xs text-emerald-600">40/148 converted</p>
+                 </div>
+                 
+                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200/50">
+                   <div className="flex items-center space-x-1.5 mb-1.5">
+                     <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                     <p className="text-xs font-semibold text-blue-700">Connected Rate</p>
+                   </div>
+                   <p className="text-base font-bold text-blue-900">54.1%</p>
+                   <p className="text-xs text-blue-600">80/148 connected</p>
+                 </div>
+               </motion.div>
+             </div>
+           </motion.div>
+
+           {/* Monthly Conversion Bar Chart */}
+           <motion.div 
+             initial={{ opacity: 0, y: 30 }}
+             animate={chartInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+             transition={{ duration: 0.8, delay: 0.8, ease: "easeOut" }}
+             className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 shadow-xl border border-gray-200/50"
+             style={{
+               boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.05)'
+             }}
+           >
+             {/* Header Section */}
+             <div className="text-center mb-4">
+               <h3 className="text-lg font-bold text-gray-900">Monthly Conversions</h3>
+               <p className="text-gray-600 text-xs">Swipe to see past months</p>
+             </div>
+
+             {/* Scrollable Bar Chart Container */}
+             <div className="h-64 overflow-x-auto">
+               <div className="min-w-[600px] h-full">
+                 <ResponsiveContainer width="100%" height="100%">
+                   <BarChart
+                     data={monthlyData}
+                     margin={{
+                       top: 10,
+                       right: 10,
+                       left: 10,
+                       bottom: 10,
+                     }}
+                   >
+                     <CartesianGrid strokeDasharray="2 2" stroke="#f3f4f6" />
+                     <XAxis 
+                       dataKey="month" 
+                       stroke="#6b7280"
+                       fontSize={11}
+                       tickLine={false}
+                       axisLine={false}
+                     />
+                     <YAxis 
+                       stroke="#6b7280"
+                       fontSize={11}
+                       tickLine={false}
+                       axisLine={false}
+                       width={30}
+                     />
+                     <Tooltip 
+                       contentStyle={{
+                         backgroundColor: 'white',
+                         border: '1px solid #e5e7eb',
+                         borderRadius: '6px',
+                         boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                         fontSize: '12px'
+                       }}
+                       formatter={(value) => [`${value} clients`, 'Converted']}
+                       labelFormatter={(label) => `${label}`}
+                     />
+                     <Bar 
+                       dataKey="converted" 
+                       fill="#10B981" 
+                       radius={[2, 2, 0, 0]}
+                       name="converted"
+                     />
+                   </BarChart>
+                 </ResponsiveContainer>
+               </div>
+             </div>
+
+             {/* Chart Summary - Compact Rectangle Cards */}
+             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+               <div className="bg-emerald-50 rounded-md p-2 border border-emerald-200/50">
+                 <p className="text-xs font-semibold text-emerald-700 mb-0.5">Best Month</p>
+                 <p className="text-xs font-bold text-emerald-900">Dec</p>
+                 <p className="text-xs text-emerald-600">45 converted</p>
+               </div>
+               <div className="bg-blue-50 rounded-md p-2 border border-blue-200/50">
+                 <p className="text-xs font-semibold text-blue-700 mb-0.5">Avg Conversion</p>
+                 <p className="text-xs font-bold text-blue-900">19.8%</p>
+                 <p className="text-xs text-blue-600">per month</p>
+               </div>
+               <div className="bg-purple-50 rounded-md p-2 border border-purple-200/50">
+                 <p className="text-xs font-semibold text-purple-700 mb-0.5">Total Converted</p>
+                 <p className="text-xs font-bold text-purple-900">360</p>
+                 <p className="text-xs text-purple-600">12 months</p>
+               </div>
+             </div>
+           </motion.div>
+         </div>
 
         {/* Desktop Layout - Hidden on mobile */}
         <div className="hidden lg:block mt-8">
@@ -799,8 +900,8 @@ const SL_dashboard = () => {
           {/* Desktop Chart */}
           <div className="mt-8 bg-white rounded-2xl p-8 shadow-lg border border-gray-200/50">
             <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Sales Distribution</h3>
-              <p className="text-gray-600">Performance across different channels</p>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Lead Conversion</h3>
+              <p className="text-gray-600">Conversion funnel from connected to converted leads</p>
             </div>
             
             <div className="flex items-center justify-between">
@@ -826,8 +927,8 @@ const SL_dashboard = () => {
                   {/* Center Text */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-3xl font-bold text-gray-900">₹3,420K</p>
-                      <p className="text-sm text-gray-600">Total Sales</p>
+                      <p className="text-3xl font-bold text-gray-900">148</p>
+                      <p className="text-sm text-gray-600">Total Leads</p>
                     </div>
                   </div>
                 </div>
