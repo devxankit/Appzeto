@@ -11,7 +11,8 @@ import {
   FiClock,
   FiCalendar,
   FiFlag,
-  FiX
+  FiX,
+  FiFilter
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 
@@ -19,6 +20,7 @@ const SL_tasks = () => {
   const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
+  const [showFilters, setShowFilters] = useState(false)
   const [showTaskDialog, setShowTaskDialog] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false)
@@ -284,37 +286,52 @@ const SL_tasks = () => {
           </div>
         </div>
 
-        {/* Search and Filters */}
-        <div className="space-y-3 mb-4">
-          {/* Search Bar */}
-          <div className="relative">
-            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600 text-sm" />
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-            />
-          </div>
+        {/* Search Bar with Filter Icon */}
+        <div className="relative mb-4">
+          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search..."
+            className="w-full pl-8 pr-12 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+          />
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-lg transition-all duration-200 ${
+              showFilters 
+                ? 'bg-teal-500 text-white shadow-md' 
+                : 'text-gray-500 hover:text-teal-600 hover:bg-teal-50 border border-teal-200'
+            }`}
+          >
+            <FiFilter className="text-base" />
+          </button>
+        </div>
 
-          {/* Filters */}
-          <div className="flex flex-wrap gap-2">
+        {/* Filters - Conditional Display */}
+        {showFilters && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex flex-wrap gap-2 mb-4"
+          >
             {filters.map((filter) => (
               <button
                 key={filter.id}
                 onClick={() => setSelectedFilter(filter.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   selectedFilter === filter.id
-                    ? 'bg-teal-500 text-white'
-                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                    ? 'bg-teal-500 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 {filter.label}
               </button>
             ))}
-          </div>
-        </div>
+          </motion.div>
+        )}
 
         {/* Tasks List */}
         <div className="space-y-3">

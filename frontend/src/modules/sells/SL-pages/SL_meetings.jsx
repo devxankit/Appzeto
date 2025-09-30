@@ -13,7 +13,8 @@ import {
   FiX,
   FiMapPin,
   FiVideo,
-  FiPhone
+  FiPhone,
+  FiFilter
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 
@@ -21,17 +22,20 @@ const SL_meetings = () => {
   const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
+  const [showFilters, setShowFilters] = useState(false)
   const [showMeetingDialog, setShowMeetingDialog] = useState(false)
   const [editingMeeting, setEditingMeeting] = useState(null)
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [showMeetingTypeDropdown, setShowMeetingTypeDropdown] = useState(false)
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
   const [meetingForm, setMeetingForm] = useState({
     clientName: '',
     meetingDate: '',
     meetingTime: '',
     meetingType: 'in-person',
     location: '',
-    notes: ''
+    notes: '',
+    assignee: ''
   })
 
   // Mock meetings data
@@ -126,6 +130,11 @@ const SL_meetings = () => {
     'Max Davis', 'Stuny Lee', 'Marlie Chen', 'Sarah Wilson', 'Mike Johnson'
   ]
 
+  const assignees = [
+    'John Developer', 'Sarah Manager', 'Mike Designer', 'Lisa Analyst', 
+    'David Consultant', 'Emma Specialist', 'Tom Expert', 'Anna Coordinator'
+  ]
+
   const filteredMeetings = meetings.filter(meeting => {
     const matchesSearch = meeting.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          meeting.location.toLowerCase().includes(searchTerm.toLowerCase())
@@ -163,7 +172,8 @@ const SL_meetings = () => {
       meetingTime: '',
       meetingType: 'in-person',
       location: '',
-      notes: ''
+      notes: '',
+      assignee: ''
     })
     setShowMeetingDialog(true)
   }
@@ -176,7 +186,8 @@ const SL_meetings = () => {
       meetingTime: meeting.meetingTime,
       meetingType: meeting.meetingType,
       location: meeting.location,
-      notes: meeting.notes
+      notes: meeting.notes,
+      assignee: meeting.assignee || ''
     })
     setShowMeetingDialog(true)
   }
@@ -221,6 +232,7 @@ const SL_meetings = () => {
     setEditingMeeting(null)
     setShowClientDropdown(false)
     setShowMeetingTypeDropdown(false)
+    setShowAssigneeDropdown(false)
   }
 
   const handleClientSelect = (client) => {
@@ -231,6 +243,11 @@ const SL_meetings = () => {
   const handleMeetingTypeSelect = (type) => {
     setMeetingForm(prev => ({ ...prev, meetingType: type }))
     setShowMeetingTypeDropdown(false)
+  }
+
+  const handleAssigneeSelect = (assignee) => {
+    setMeetingForm(prev => ({ ...prev, assignee: assignee }))
+    setShowAssigneeDropdown(false)
   }
 
   const stats = {
@@ -244,92 +261,99 @@ const SL_meetings = () => {
       <SL_navbar />
       
       <main className="max-w-4xl mx-auto px-4 pt-16 pb-20">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
-            >
-              <FiArrowLeft className="text-xl text-gray-600" />
-            </button>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Meetings</h1>
-              <p className="text-gray-600 text-sm">Manage your scheduled meetings</p>
+
+        {/* Summary Card */}
+        <div className="bg-teal-500 rounded-xl p-4 mb-4 text-white">
+          <div className="flex items-center justify-between">
+            {/* Left Section - Info (Smaller) */}
+            <div className="flex-1">
+              {/* Total Meetings */}
+              <div className="mb-3">
+                <h2 className="text-xs font-medium mb-1 opacity-90">Total Meetings</h2>
+                <p className="text-lg font-bold">{stats.total}</p>
+              </div>
+              
+              {/* Status Breakdown */}
+              <div className="flex items-center space-x-4">
+                {/* Today */}
+                <div className="text-center">
+                  <p className="text-sm font-bold mb-1">{stats.today}</p>
+                  <div className="flex items-center space-x-1">
+                    <div className="w-1.5 h-1.5 bg-orange-300 rounded-full"></div>
+                    <span className="text-xs opacity-80">Today</span>
+                  </div>
+                </div>
+                
+                {/* Upcoming */}
+                <div className="text-center">
+                  <p className="text-sm font-bold mb-1">{stats.upcoming}</p>
+                  <div className="flex items-center space-x-1">
+                    <div className="w-1.5 h-1.5 bg-blue-300 rounded-full"></div>
+                    <span className="text-xs opacity-80">Upcoming</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Right Section - Add Button (Highlighted) */}
+            <div className="ml-4">
+              <button
+                onClick={handleAddMeeting}
+                className="flex items-center space-x-2 bg-white text-teal-500 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors duration-200 shadow-lg font-semibold"
+              >
+                <FiPlus className="text-base" />
+                <span className="text-sm font-semibold">Add Meeting</span>
+              </button>
             </div>
           </div>
+        </div>
+
+        {/* Search Bar with Filter Icon */}
+        <div className="relative mb-4">
+          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search..."
+            className="w-full pl-8 pr-12 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+          />
           <button
-            onClick={handleAddMeeting}
-            className="flex items-center space-x-2 bg-teal-500 text-white px-4 py-2 rounded-lg hover:bg-teal-600 transition-colors duration-200"
+            onClick={() => setShowFilters(!showFilters)}
+            className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-lg transition-all duration-200 ${
+              showFilters 
+                ? 'bg-teal-500 text-white shadow-md' 
+                : 'text-gray-500 hover:text-teal-600 hover:bg-teal-50 border border-teal-200'
+            }`}
           >
-            <FiPlus className="text-sm" />
-            <span className="text-sm font-medium">Add Meeting</span>
+            <FiFilter className="text-base" />
           </button>
         </div>
 
-        {/* Summary Card */}
-        <div className="bg-teal-500 rounded-xl p-5 mb-4 text-white">
-          <div className="flex items-center justify-between">
-            {/* Left Section - Total */}
-            <div>
-              <h2 className="text-sm font-medium mb-2">Total Meetings</h2>
-              <p className="text-3xl font-bold">{stats.total}</p>
-            </div>
-            
-            {/* Right Section - Status Breakdown */}
-            <div className="flex items-center space-x-6">
-              {/* Today */}
-              <div className="text-center">
-                <p className="text-lg font-bold mb-1">{stats.today}</p>
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-orange-300 rounded-full"></div>
-                  <span className="text-sm">Today</span>
-                </div>
-              </div>
-              
-              {/* Upcoming */}
-              <div className="text-center">
-                <p className="text-lg font-bold mb-1">{stats.upcoming}</p>
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-blue-300 rounded-full"></div>
-                  <span className="text-sm">Upcoming</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Search and Filters */}
-        <div className="space-y-3 mb-4">
-          {/* Search Bar */}
-          <div className="relative">
-            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600 text-sm" />
-            <input
-              type="text"
-              placeholder="Search meetings..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-            />
-          </div>
-
-          {/* Filters */}
-          <div className="flex flex-wrap gap-2">
+        {/* Filters - Conditional Display */}
+        {showFilters && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex flex-wrap gap-2 mb-4"
+          >
             {filters.map((filter) => (
               <button
                 key={filter.id}
                 onClick={() => setSelectedFilter(filter.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   selectedFilter === filter.id
-                    ? 'bg-teal-500 text-white'
-                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                    ? 'bg-teal-500 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 {filter.label}
               </button>
             ))}
-          </div>
-        </div>
+          </motion.div>
+        )}
 
         {/* Meetings List */}
         <div className="space-y-3">
@@ -391,6 +415,14 @@ const SL_meetings = () => {
                         </div>
                       </div>
 
+                      {/* Assignee */}
+                      {meeting.assignee && (
+                        <div className="flex items-center space-x-1 text-gray-600 mt-2">
+                          <FiUser className="text-sm" />
+                          <span className="text-xs">Assigned to: {meeting.assignee}</span>
+                        </div>
+                      )}
+
                       {/* Notes */}
                       {meeting.notes && (
                         <p className="text-sm text-gray-600 mt-2 leading-relaxed">
@@ -450,6 +482,8 @@ const SL_meetings = () => {
                     type="button"
                     onClick={() => {
                       setShowClientDropdown(!showClientDropdown)
+                      setShowMeetingTypeDropdown(false)
+                      setShowAssigneeDropdown(false)
                     }}
                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 text-left flex items-center justify-between bg-white text-sm sm:text-base"
                   >
@@ -526,6 +560,70 @@ const SL_meetings = () => {
                   </div>
                 </div>
 
+                {/* Assignee */}
+                <div className="relative">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Assignee
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAssigneeDropdown(!showAssigneeDropdown)
+                      setShowClientDropdown(false)
+                      setShowMeetingTypeDropdown(false)
+                    }}
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 text-left flex items-center justify-between bg-white text-sm sm:text-base"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <FiUser className="text-sm text-gray-600" />
+                      <span className="text-gray-900">
+                        {meetingForm.assignee || 'Select Assignee'}
+                      </span>
+                    </div>
+                    <svg
+                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ml-2 ${
+                        showAssigneeDropdown ? 'rotate-180' : ''
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Assignee Dropdown */}
+                  {showAssigneeDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg"
+                    >
+                      <div className="py-1">
+                        {assignees.map((assignee) => (
+                          <button
+                            key={assignee}
+                            type="button"
+                            onClick={() => handleAssigneeSelect(assignee)}
+                            className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-left hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-2 sm:space-x-3 text-sm sm:text-base ${
+                              meetingForm.assignee === assignee ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
+                            }`}
+                          >
+                            <FiUser className="text-sm flex-shrink-0" />
+                            <span className="font-medium">{assignee}</span>
+                            {meetingForm.assignee === assignee && (
+                              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-auto text-teal-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+
                 {/* Meeting Type */}
                 <div className="relative">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -536,6 +634,7 @@ const SL_meetings = () => {
                     onClick={() => {
                       setShowMeetingTypeDropdown(!showMeetingTypeDropdown)
                       setShowClientDropdown(false)
+                      setShowAssigneeDropdown(false)
                     }}
                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 text-left flex items-center justify-between bg-white text-sm sm:text-base"
                   >

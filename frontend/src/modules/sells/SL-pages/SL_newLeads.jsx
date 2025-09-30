@@ -16,6 +16,7 @@ const SL_newLeads = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLeadId, setSelectedLeadId] = useState(null)
   const [showActionsMenu, setShowActionsMenu] = useState(null)
+  const [showFilters, setShowFilters] = useState(false)
 
   // Mock leads data
   const leadsData = [
@@ -295,24 +296,39 @@ const SL_newLeads = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="bg-white rounded-xl p-5 mb-6 shadow-lg border border-gray-200"
+            className="mb-4"
           >
-            {/* Search Bar */}
-            <div className="mb-4">
-              <div className="relative">
-                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
-                <input
-                  type="text"
-                  placeholder="Search leads..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                />
-              </div>
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search..."
+                className="w-full pl-8 pr-12 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+              />
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-lg transition-all duration-200 ${
+                  showFilters 
+                    ? 'bg-teal-500 text-white shadow-md' 
+                    : 'text-gray-500 hover:text-teal-600 hover:bg-teal-50 border border-teal-200'
+                }`}
+              >
+                <FiFilter className="text-base" />
+              </button>
             </div>
+          </motion.div>
 
-            {/* Simple Filters */}
-            <div className="flex flex-wrap gap-2">
+          {/* Filters - Conditional Display */}
+          {showFilters && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-wrap gap-2 mb-4"
+            >
               {filters.map((filter) => (
                 <button
                   key={filter.id}
@@ -326,8 +342,8 @@ const SL_newLeads = () => {
                   {filter.label}
                 </button>
               ))}
-            </div>
-          </motion.div>
+            </motion.div>
+          )}
 
           {/* Results Count */}
           <motion.div 
