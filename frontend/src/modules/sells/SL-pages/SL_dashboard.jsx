@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Sparklines, SparklinesLine, SparklinesSpots } from 'react-sparklines'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
@@ -16,7 +16,9 @@ import {
   FaFire,
   FaGem,
   FaCrown,
-  FaRocket
+  FaRocket,
+  FaUser,
+  FaExclamationCircle
 } from 'react-icons/fa'
 import { 
   TrendingUp, 
@@ -47,6 +49,17 @@ const SL_dashboard = () => {
   // Check if elements are in view
   const tileCardsInView = useInView(tileCardsRef, { once: true, margin: "-100px" })
   const chartInView = useInView(chartRef, { once: true, margin: "-100px" })
+
+  // State for warning message
+  const [showWarningMessage, setShowWarningMessage] = useState(false)
+
+  const handleWarningClick = () => {
+    setShowWarningMessage(true)
+    // Auto-hide after 4 seconds
+    setTimeout(() => {
+      setShowWarningMessage(false)
+    }, 4000)
+  }
 
   // Lead conversion chart data - showing conversion funnel
   const chartData = [
@@ -128,18 +141,21 @@ const SL_dashboard = () => {
                     boxShadow: '0 12px 35px -8px rgba(20, 184, 166, 0.25), 0 6px 15px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
                   }}
                 >
-                  <span className="text-teal-700 text-lg">👨‍💼</span>
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-teal-500 to-teal-600 rounded-full flex items-center justify-center shadow-lg"
+                  <FaUser className="text-teal-700 text-lg" />
+                  <button 
+                    onClick={handleWarningClick}
+                    className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-lg animate-pulse hover:scale-110 transition-transform duration-200"
                     style={{
-                      boxShadow: '0 6px 18px -3px rgba(20, 184, 166, 0.5), 0 3px 8px -2px rgba(0, 0, 0, 0.15), 0 1px 4px -1px rgba(0, 0, 0, 0.08)'
+                      boxShadow: '0 6px 18px -3px rgba(239, 68, 68, 0.5), 0 3px 8px -2px rgba(0, 0, 0, 0.15), 0 1px 4px -1px rgba(0, 0, 0, 0.08)',
+                      animation: 'pulse 1.5s ease-in-out infinite'
                     }}
                   >
-                    <FaCrown className="text-white text-xs" />
-                  </div>
+                    <FaExclamationCircle className="text-white text-xs" />
+                  </button>
                 </motion.div>
                 <div>
                   <h1 className="text-lg font-bold mb-0.5 text-gray-900">Hi, Sumit</h1>
-                  <p className="text-teal-700 text-xs font-medium">Welcome back! 🚀</p>
+                  <p className="text-teal-700 text-xs font-medium">Welcome back!</p>
                 </div>
               </div>
               <motion.div 
@@ -153,6 +169,34 @@ const SL_dashboard = () => {
                 <span className="text-teal-800 font-bold text-xs">Top Performer</span>
               </motion.div>
             </motion.div>
+
+            {/* Warning Message */}
+            <AnimatePresence>
+              {showWarningMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -20, scale: 0.9 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className="absolute top-16 right-4 z-50 bg-red-50 border border-red-200 rounded-lg p-3 shadow-lg max-w-xs"
+                  style={{
+                    boxShadow: '0 10px 25px -5px rgba(239, 68, 68, 0.3), 0 4px 12px -3px rgba(0, 0, 0, 0.1)'
+                  }}
+                >
+                  <div className="flex items-start space-x-2">
+                    <FaExclamationCircle className="text-red-500 text-sm mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-red-800 text-xs font-semibold mb-1">Lead Alert</p>
+                      <p className="text-red-700 text-xs leading-relaxed">
+                        You haven't connected with leads for the last 7 days. Take immediate action to follow up.
+                      </p>
+                    </div>
+                  </div>
+                  {/* Arrow pointing to warning icon */}
+                  <div className="absolute -top-1 right-3 w-2 h-2 bg-red-50 border-l border-t border-red-200 transform rotate-45"></div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Enhanced Sales Metrics */}
             <motion.div 
@@ -726,7 +770,7 @@ const SL_dashboard = () => {
                 <div className="flex items-center justify-between mb-6 relative z-10">
                   <div className="flex items-center space-x-3">
                     <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
-                      <span className="text-yellow-300 text-xl">👨‍🎓</span>
+                      <FaUser className="text-white text-xl" />
                     </div>
                     <div>
                       <h1 className="text-2xl font-bold mb-1">Hi, Sumit</h1>
