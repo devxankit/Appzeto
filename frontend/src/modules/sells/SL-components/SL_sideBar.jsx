@@ -1,6 +1,6 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { 
   FiHome, 
   FiZap, 
@@ -14,13 +14,14 @@ import { colors, gradients } from '../../../lib/colors'
 
 const SL_sideBar = ({ isOpen, onClose }) => {
   const location = useLocation()
+  const navigate = useNavigate()
   
   // Mock user data
   const user = {
     name: 'Abhishek Sen',
     email: 'abhishek@appzeto.com',
     avatar: 'A',
-    balance: 5000
+    balance: 22750
   }
 
   const navItems = [
@@ -49,6 +50,16 @@ const SL_sideBar = ({ isOpen, onClose }) => {
   const handleLogout = () => {
     console.log('Logging out...')
     // Handle logout logic here
+  }
+
+  const handleWalletClick = () => {
+    navigate('/wallet')
+    onClose()
+  }
+
+  const handleAddRecoveryClick = () => {
+    navigate('/payments-recovery')
+    onClose()
   }
 
   return (
@@ -122,11 +133,12 @@ const SL_sideBar = ({ isOpen, onClose }) => {
               </div>
 
               {/* Balance Card */}
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 0.3, ease: "easeOut" }}
-                className="bg-white rounded-lg p-3 shadow-xl"
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3, duration: 0.6, ease: "easeOut" }}
+                onClick={handleWalletClick}
+                className="w-full bg-white rounded-lg p-3 shadow-xl hover:shadow-2xl transition-all duration-200"
                 style={{
                   boxShadow: '0 8px 25px -5px rgba(0, 0, 0, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1)'
                 }}
@@ -140,7 +152,7 @@ const SL_sideBar = ({ isOpen, onClose }) => {
                   </div>
                   <span className="text-sm font-bold text-gray-900">₹{user.balance.toLocaleString()}</span>
                 </div>
-              </motion.div>
+              </motion.button>
             </motion.div>
 
             {/* Navigation Section */}
@@ -152,11 +164,10 @@ const SL_sideBar = ({ isOpen, onClose }) => {
             >
               {/* Add Recovery Button */}
               <motion.button
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.3, ease: "easeOut" }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5, duration: 0.6, ease: "easeOut" }}
+                onClick={handleAddRecoveryClick}
                 className="w-full mb-4 py-2.5 px-3 rounded-lg text-white font-semibold shadow-lg text-sm"
                 style={{ 
                   background: gradients.primary,

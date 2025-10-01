@@ -382,7 +382,7 @@ const SL_ClientProfile = () => {
             Transfer Client
           </motion.button>
 
-          {/* Completed Button */}
+          {/* No Dues Button */}
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -394,7 +394,7 @@ const SL_ClientProfile = () => {
             }}
           >
             <FiCheck className="w-5 h-5" />
-            Completed
+            No Dues
           </motion.button>
         </motion.div>
 

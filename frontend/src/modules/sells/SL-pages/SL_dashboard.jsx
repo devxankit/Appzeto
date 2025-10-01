@@ -52,7 +52,9 @@ const SL_dashboard = () => {
   const chartData = [
     { name: 'Connected', value: 80, color: '#06B6D4', amount: '80 leads' },
     { name: 'Converted', value: 40, color: '#10B981', amount: '40 leads' },
-    { name: 'Lost', value: 28, color: '#EF4444', amount: '28 leads' }
+    { name: 'Lost', value: 28, color: '#EF4444', amount: '28 leads' },
+    { name: 'Not Interested', value: 15, color: '#F59E0B', amount: '15 leads' },
+    { name: 'Not Picked', value: 12, color: '#8B5CF6', amount: '12 leads' }
   ]
 
   // Monthly conversion data for bar chart - 12 months for scrolling
@@ -547,7 +549,7 @@ const SL_dashboard = () => {
                   {/* Center Text */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-gray-900">148</p>
+                      <p className="text-2xl font-bold text-gray-900">175</p>
                       <p className="text-xs text-gray-600">Total Leads</p>
                     </div>
                   </div>
@@ -602,8 +604,8 @@ const SL_dashboard = () => {
                      <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
                      <p className="text-xs font-semibold text-emerald-700">Conversion Rate</p>
                    </div>
-                   <p className="text-base font-bold text-emerald-900">27.0%</p>
-                   <p className="text-xs text-emerald-600">40/148 converted</p>
+                   <p className="text-base font-bold text-emerald-900">22.9%</p>
+                   <p className="text-xs text-emerald-600">40/175 converted</p>
                  </div>
                  
                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200/50">
@@ -611,8 +613,8 @@ const SL_dashboard = () => {
                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                      <p className="text-xs font-semibold text-blue-700">Connected Rate</p>
                    </div>
-                   <p className="text-base font-bold text-blue-900">54.1%</p>
-                   <p className="text-xs text-blue-600">80/148 connected</p>
+                   <p className="text-base font-bold text-blue-900">45.7%</p>
+                   <p className="text-xs text-blue-600">80/175 connected</p>
                  </div>
                </motion.div>
              </div>
@@ -907,7 +909,7 @@ const SL_dashboard = () => {
                   {/* Center Text */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-3xl font-bold text-gray-900">148</p>
+                      <p className="text-3xl font-bold text-gray-900">175</p>
                       <p className="text-sm text-gray-600">Total Leads</p>
                     </div>
                   </div>

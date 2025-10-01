@@ -8,7 +8,8 @@ import {
   FaEnvelope,
   FaUser,
   FaHeart,
-  FaArrowRight
+  FaArrowRight,
+  FaClipboardList
 } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
 
@@ -80,6 +81,20 @@ const SL_profile = () => {
             </div>
           </Link>
 
+          {/* Requests Card */}
+          <Link to="/requests">
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-teal-100 to-teal-200 rounded-lg flex items-center justify-center">
+                    <FaClipboardList className="text-teal-600 text-base" />
+                  </div>
+                  <span className="text-gray-900 font-semibold text-base">Requests</span>
+                </div>
+                <FaArrowRight className="text-gray-400 text-sm" />
+              </div>
+            </div>
+          </Link>
 
           {/* Logout Card */}
           <div className="bg-white rounded-xl p-4 shadow-sm border border-red-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
@@ -169,6 +184,18 @@ const SL_profile = () => {
                 </div>
               </Link>
 
+              {/* Requests Card */}
+              <Link to="/requests">
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-teal-100 to-teal-200 rounded-lg flex items-center justify-center">
+                      <FaClipboardList className="text-teal-600 text-base" />
+                    </div>
+                    <span className="text-gray-900 font-semibold text-base">Requests</span>
+                  </div>
+                  <p className="text-gray-600 text-xs">View and manage your requests</p>
+                </div>
+              </Link>
 
               {/* Logout Card */}
               <div className="bg-white rounded-xl p-4 shadow-sm border border-red-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
