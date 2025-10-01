@@ -22,7 +22,9 @@ import {
   FiImage,
   FiUpload,
   FiClock,
-  FiSend
+  FiSend,
+  FiMapPin,
+  FiVideo
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 
@@ -46,7 +48,8 @@ const SL_leadProfile = () => {
         web: false,
         hotLead: false,
         demoSent: false,
-        app: false
+        app: false,
+        taxi: false
       }
     },
     2: {
@@ -61,7 +64,8 @@ const SL_leadProfile = () => {
         web: false,
         hotLead: true,
         demoSent: false,
-        app: false
+        app: false,
+        taxi: false
       }
     },
     3: {
@@ -76,7 +80,8 @@ const SL_leadProfile = () => {
         web: true,
         hotLead: false,
         demoSent: true,
-        app: true
+        app: true,
+        taxi: false
       }
     }
   }
@@ -114,6 +119,20 @@ const SL_leadProfile = () => {
   })
   const [lostReason, setLostReason] = useState('')
   const [showTypeDropdown, setShowTypeDropdown] = useState(false)
+  const [showTransferDialog, setShowTransferDialog] = useState(false)
+  const [selectedTransferPerson, setSelectedTransferPerson] = useState('')
+  const [showMeetingDialog, setShowMeetingDialog] = useState(false)
+  const [showMeetingTypeDropdown, setShowMeetingTypeDropdown] = useState(false)
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
+  const [meetingForm, setMeetingForm] = useState({
+    clientName: client.name,
+    meetingDate: '',
+    meetingTime: '',
+    meetingType: 'in-person',
+    location: '',
+    notes: '',
+    assignee: ''
+  })
 
   const handleCall = (phone) => {
     window.open(`tel:${phone}`, '_self')
@@ -266,8 +285,100 @@ const SL_leadProfile = () => {
   }
 
   const handleTransferClient = () => {
-    console.log('Transfer client:', client.id)
-    // Open transfer modal
+    setShowTransferDialog(true)
+  }
+
+  const handleTransferSubmit = async () => {
+    if (!selectedTransferPerson) {
+      alert('Please select a person to transfer to')
+      return
+    }
+
+    setIsLoading(true)
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    setIsLoading(false)
+    setShowTransferDialog(false)
+    console.log('Client transferred:', { clientId: client.id, transferTo: selectedTransferPerson })
+    
+    // Reset form
+    setSelectedTransferPerson('')
+  }
+
+  const handleCloseTransferDialog = () => {
+    setShowTransferDialog(false)
+    setSelectedTransferPerson('')
+  }
+
+  // Mock list of people to transfer to
+  const transferPeople = [
+    { id: 1, name: 'John Smith', role: 'Sales Manager' },
+    { id: 2, name: 'Sarah Johnson', role: 'Senior Sales Rep' },
+    { id: 3, name: 'Mike Wilson', role: 'Sales Rep' },
+    { id: 4, name: 'Emily Davis', role: 'Sales Rep' },
+    { id: 5, name: 'David Brown', role: 'Sales Rep' }
+  ]
+
+  const meetingTypes = [
+    { id: 'in-person', label: 'In-Person', icon: FiMapPin },
+    { id: 'video', label: 'Video Call', icon: FiVideo },
+    { id: 'phone', label: 'Phone Call', icon: FiPhone }
+  ]
+
+  const assignees = [
+    'John Developer', 'Sarah Manager', 'Mike Designer', 'Lisa Analyst', 
+    'David Consultant', 'Emma Specialist', 'Tom Expert', 'Anna Coordinator'
+  ]
+
+  const handleAddMeeting = () => {
+    setMeetingForm({
+      clientName: client.name,
+      meetingDate: '',
+      meetingTime: '',
+      meetingType: 'in-person',
+      location: '',
+      notes: '',
+      assignee: ''
+    })
+    setShowMeetingDialog(true)
+  }
+
+  const handleMeetingFormChange = (field, value) => {
+    setMeetingForm(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleSaveMeeting = () => {
+    if (!meetingForm.meetingDate || !meetingForm.meetingTime) {
+      alert('Please fill in meeting date and time')
+      return
+    }
+
+    setIsLoading(true)
+    // Simulate API call
+    setTimeout(() => {
+      setIsLoading(false)
+      setShowMeetingDialog(false)
+      console.log('Meeting scheduled:', meetingForm)
+    }, 1000)
+  }
+
+  const handleCloseMeetingDialog = () => {
+    setShowMeetingDialog(false)
+    setShowMeetingTypeDropdown(false)
+    setShowAssigneeDropdown(false)
+  }
+
+  const handleMeetingTypeSelect = (type) => {
+    setMeetingForm(prev => ({ ...prev, meetingType: type }))
+    setShowMeetingTypeDropdown(false)
+  }
+
+  const handleAssigneeSelect = (assignee) => {
+    setMeetingForm(prev => ({ ...prev, assignee: assignee }))
+    setShowAssigneeDropdown(false)
   }
 
   const handleConverted = () => {
@@ -302,29 +413,6 @@ const SL_leadProfile = () => {
         
         {/* Mobile Layout */}
         <div className="lg:hidden">
-          {/* Header with Back Button */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="flex items-center justify-between mb-6"
-          >
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 hover:bg-teal-50 rounded-full transition-colors duration-200"
-            >
-              <FiArrowLeft className="text-xl text-teal-600" />
-            </button>
-            <h1 className="text-lg font-semibold text-gray-900">Client Profile</h1>
-            <div className="flex items-center space-x-2">
-              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
-                E-cost: {client.estimatedCost}
-              </div>
-              <button className="p-2 hover:bg-teal-50 rounded-full transition-colors duration-200">
-                <FiPlus className="text-xl text-teal-600" />
-              </button>
-            </div>
-          </motion.div>
 
           {/* Profile Card */}
           <motion.div 
@@ -362,6 +450,27 @@ const SL_leadProfile = () => {
                 <FiMessageCircle className="text-lg" />
                 <span>WhatsApp</span>
               </button>
+            </div>
+          </motion.div>
+
+          {/* Action Card */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.15 }}
+            className="bg-gray-50 rounded-2xl p-4 shadow-sm border border-gray-100 mb-6"
+          >
+            <div className="flex items-center justify-between">
+              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
+                E-cost: {client.estimatedCost}
+              </div>
+            <button 
+              onClick={handleAddMeeting}
+              className="flex items-center space-x-2 p-2 hover:bg-teal-50 rounded-full transition-colors duration-200"
+            >
+              <FiPlus className="text-xl text-teal-600" />
+              <span className="text-sm font-medium text-teal-600">Add Meeting</span>
+            </button>
             </div>
           </motion.div>
 
@@ -417,7 +526,7 @@ const SL_leadProfile = () => {
                 <span className="text-sm font-medium text-teal-800">Demo Sent</span>
               </label>
               
-              <label className="flex items-center space-x-3 cursor-pointer col-span-2 p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
+              <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
                 <input
                   type="checkbox"
                   checked={status.app}
@@ -425,6 +534,16 @@ const SL_leadProfile = () => {
                   className="w-5 h-5 text-teal-600 border-teal-300 rounded focus:ring-teal-500 focus:ring-2"
                 />
                 <span className="text-sm font-medium text-teal-800">App</span>
+              </label>
+              
+              <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
+                <input
+                  type="checkbox"
+                  checked={status.taxi}
+                  onChange={() => handleStatusChange('taxi')}
+                  className="w-5 h-5 text-teal-600 border-teal-300 rounded focus:ring-teal-500 focus:ring-2"
+                />
+                <span className="text-sm font-medium text-teal-800">Taxi</span>
               </label>
             </div>
           </motion.div>
@@ -1023,6 +1142,323 @@ const SL_leadProfile = () => {
           </div>
         )}
 
+        {/* Transfer Dialog */}
+        {showTransferDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl"
+            >
+              {/* Dialog Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Transfer Client</h2>
+                <button
+                  onClick={handleCloseTransferDialog}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+                >
+                  <FiX className="text-xl text-gray-600" />
+                </button>
+              </div>
+
+              {/* Client Info */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-bold text-white">{client.avatar}</span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{client.name}</h3>
+                    <p className="text-sm text-gray-500">{client.business}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Transfer To List */}
+              <div className="space-y-3 mb-6">
+                <h3 className="text-sm font-medium text-gray-700">Transfer to:</h3>
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {transferPeople.map((person) => (
+                    <label
+                      key={person.id}
+                      className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
+                        selectedTransferPerson === person.id
+                          ? 'border-teal-500 bg-teal-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="transferPerson"
+                        value={person.id}
+                        checked={selectedTransferPerson === person.id}
+                        onChange={(e) => setSelectedTransferPerson(e.target.value)}
+                        className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{person.name}</div>
+                        <div className="text-sm text-gray-500">{person.role}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-3">
+                <button
+                  onClick={handleCloseTransferDialog}
+                  className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleTransferSubmit}
+                  disabled={isLoading || !selectedTransferPerson}
+                  className="px-6 py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg font-medium hover:from-teal-600 hover:to-teal-700 transition-all duration-200 disabled:opacity-50 flex items-center space-x-2"
+                >
+                  {isLoading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <FiRefreshCw className="w-4 h-4" />
+                  )}
+                  <span>{isLoading ? 'Transferring...' : 'Transfer'}</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Meeting Dialog */}
+        {showMeetingDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl"
+            >
+              {/* Dialog Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Add Meeting</h2>
+                <button
+                  onClick={handleCloseMeetingDialog}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+                >
+                  <FiX className="text-xl text-gray-600" />
+                </button>
+              </div>
+
+              {/* Form Fields */}
+              <div className="space-y-4">
+                {/* Client Name (Pre-filled) */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Client Name</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiUser className="text-lg" />
+                    </div>
+                    <input
+                      type="text"
+                      value={meetingForm.clientName}
+                      readOnly
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-900 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                {/* Date and Time Row */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Meeting Date */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Date *</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                        <FiCalendar className="text-lg" />
+                      </div>
+                      <input
+                        type="date"
+                        value={meetingForm.meetingDate}
+                        onChange={(e) => handleMeetingFormChange('meetingDate', e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Meeting Time */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Time *</label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                        <FiClock className="text-lg" />
+                      </div>
+                      <input
+                        type="time"
+                        value={meetingForm.meetingTime}
+                        onChange={(e) => handleMeetingFormChange('meetingTime', e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Meeting Type */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Meeting Type</label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMeetingTypeDropdown(!showMeetingTypeDropdown)
+                        setShowAssigneeDropdown(false)
+                      }}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 flex items-center justify-between"
+                    >
+                      <div className="flex items-center space-x-2">
+                        {(() => {
+                          const selectedType = meetingTypes.find(t => t.id === meetingForm.meetingType)
+                          const Icon = selectedType ? selectedType.icon : FiMapPin
+                          return (
+                            <>
+                              <Icon className="text-sm text-gray-600" />
+                              <span>{selectedType ? selectedType.label : 'Select Type'}</span>
+                            </>
+                          )
+                        })()}
+                      </div>
+                      <FiArrowLeft className={`text-gray-400 transition-transform duration-200 ${showMeetingTypeDropdown ? 'rotate-90' : '-rotate-90'}`} />
+                    </button>
+                    
+                    {showMeetingTypeDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10"
+                      >
+                        {meetingTypes.map((type) => {
+                          const Icon = type.icon
+                          return (
+                            <button
+                              key={type.id}
+                              type="button"
+                              onClick={() => handleMeetingTypeSelect(type.id)}
+                              className={`w-full px-4 py-3 text-left hover:bg-teal-50 transition-colors duration-200 flex items-center space-x-3 ${
+                                meetingForm.meetingType === type.id ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
+                              }`}
+                            >
+                              <Icon className="text-sm" />
+                              <span>{type.label}</span>
+                              {meetingForm.meetingType === type.id && (
+                                <FiCheck className="ml-auto text-teal-600" />
+                              )}
+                            </button>
+                          )
+                        })}
+                      </motion.div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Assignee */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Assignee</label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAssigneeDropdown(!showAssigneeDropdown)
+                        setShowMeetingTypeDropdown(false)
+                      }}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 flex items-center justify-between"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <FiUser className="text-sm text-gray-600" />
+                        <span>{meetingForm.assignee || 'Select Assignee'}</span>
+                      </div>
+                      <FiArrowLeft className={`text-gray-400 transition-transform duration-200 ${showAssigneeDropdown ? 'rotate-90' : '-rotate-90'}`} />
+                    </button>
+                    
+                    {showAssigneeDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto"
+                      >
+                        {assignees.map((assignee) => (
+                          <button
+                            key={assignee}
+                            type="button"
+                            onClick={() => handleAssigneeSelect(assignee)}
+                            className={`w-full px-4 py-3 text-left hover:bg-teal-50 transition-colors duration-200 flex items-center space-x-3 ${
+                              meetingForm.assignee === assignee ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
+                            }`}
+                          >
+                            <FiUser className="text-sm" />
+                            <span>{assignee}</span>
+                            {meetingForm.assignee === assignee && (
+                              <FiCheck className="ml-auto text-teal-600" />
+                            )}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Location */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Location</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiMapPin className="text-lg" />
+                    </div>
+                    <input
+                      type="text"
+                      value={meetingForm.location}
+                      onChange={(e) => handleMeetingFormChange('location', e.target.value)}
+                      placeholder="Enter meeting location or link"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Notes</label>
+                  <textarea
+                    value={meetingForm.notes}
+                    onChange={(e) => handleMeetingFormChange('notes', e.target.value)}
+                    placeholder="Add meeting notes or agenda..."
+                    className="w-full p-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 resize-none"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="mt-6">
+                <button
+                  onClick={handleSaveMeeting}
+                  disabled={isLoading || !meetingForm.meetingDate || !meetingForm.meetingTime}
+                  className="w-full bg-gradient-to-r from-teal-500 to-teal-600 text-white py-4 px-6 rounded-xl font-semibold flex items-center justify-center space-x-2 hover:from-teal-600 hover:to-teal-700 transition-all duration-200 disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <FiCalendar className="text-lg" />
+                  )}
+                  <span>{isLoading ? 'Scheduling...' : 'Schedule Meeting'}</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {/* Desktop Layout */}
         <div className="hidden lg:block">
           <div className="max-w-2xl mx-auto">
@@ -1089,7 +1525,8 @@ const SL_leadProfile = () => {
                     { key: 'web', label: 'Web' },
                     { key: 'hotLead', label: 'Hot Lead' },
                     { key: 'demoSent', label: 'Demo Sent' },
-                    { key: 'app', label: 'App' }
+                    { key: 'app', label: 'App' },
+                    { key: 'taxi', label: 'Taxi' }
                   ].map((item) => (
                     <label key={item.key} className="flex items-center space-x-3 cursor-pointer">
                       <input
