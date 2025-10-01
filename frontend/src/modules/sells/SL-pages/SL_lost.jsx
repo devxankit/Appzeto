@@ -221,16 +221,10 @@ const SL_lost = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'reconnect')}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
+                      onClick={() => handleStatusChange(lead.id, 'recover')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200"
                     >
-                      Reconnect
-                    </button>
-                    <button
-                      onClick={() => handleStatusChange(lead.id, 'archive')}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
-                    >
-                      Archive
+                      Recover
                     </button>
                   </div>
                 </motion.div>
@@ -335,16 +329,10 @@ const SL_lost = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'reconnect')}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
+                      onClick={() => handleStatusChange(lead.id, 'recover')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200"
                     >
-                      Reconnect
-                    </button>
-                    <button
-                      onClick={() => handleStatusChange(lead.id, 'archive')}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
-                    >
-                      Archive
+                      Recover
                     </button>
                   </div>
                 </motion.div>

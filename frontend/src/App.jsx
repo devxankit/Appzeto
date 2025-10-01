@@ -26,6 +26,7 @@ import SL_web from './modules/sells/SL-pages/SL_web'
 import SL_lost from './modules/sells/SL-pages/SL_lost'
 import SL_notification from './modules/sells/SL-pages/SL_notification'
 import SL_requests from './modules/sells/SL-pages/SL_requests'
+import SL_notice_board from './modules/sells/SL-pages/SL_notice_board'
 function App() {
   return (
     <ErrorBoundary>
@@ -57,6 +58,7 @@ function App() {
           <Route path="/profile" element={<SL_profile />} />
           <Route path="/notifications" element={<SL_notification />} />
           <Route path="/requests" element={<SL_requests />} />
+          <Route path="/notice-board" element={<SL_notice_board />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>

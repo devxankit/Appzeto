@@ -174,22 +174,6 @@ const SL_requests = () => {
       
       <main className="max-w-md mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
         
-        {/* Header */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="flex items-center justify-between mb-6"
-        >
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 hover:bg-teal-50 rounded-full transition-colors duration-200"
-          >
-            <FiArrowLeft className="text-xl text-teal-600" />
-          </button>
-          <h1 className="text-lg font-semibold text-gray-900">My Requests</h1>
-          <div className="w-8"></div>
-        </motion.div>
 
         {/* Stats Cards */}
         <motion.div 

@@ -5,7 +5,7 @@ import {
   FiHome, 
   FiZap, 
   FiPhone, 
-  FiHelpCircle, 
+  FiFileText, 
   FiLogOut,
   FiX,
   FiCreditCard
@@ -43,7 +43,7 @@ const SL_sideBar = ({ isOpen, onClose }) => {
     { 
       path: '/notice-board', 
       label: 'Notice Board', 
-      icon: FiHelpCircle
+      icon: FiFileText
     }
   ]
 
