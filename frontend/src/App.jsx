@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import ErrorBoundary from './components/ui/error-boundary'
 import NotFound from './components/ui/not-found'
+
+//SL pages start here //
 import SL_dashboard from './modules/sells/SL-pages/SL_dashboard'
 import SL_leads from './modules/sells/SL-pages/SL_leads'
 import SL_profile from './modules/sells/SL-pages/SL_profile'
@@ -27,11 +29,24 @@ import SL_lost from './modules/sells/SL-pages/SL_lost'
 import SL_notification from './modules/sells/SL-pages/SL_notification'
 import SL_requests from './modules/sells/SL-pages/SL_requests'
 import SL_notice_board from './modules/sells/SL-pages/SL_notice_board'
+
+//PM pages start here //
+import PM_dashboard from './modules/dev/DEV-pages/PM-pages/PM_dashboard'
+import PM_projects from './modules/dev/DEV-pages/PM-pages/PM_projects'
+import PM_milestone from './modules/dev/DEV-pages/PM-pages/PM_milestone'
+import PM_tasks from './modules/dev/DEV-pages/PM-pages/PM_tasks'
+import PM_leaderboard from './modules/dev/DEV-pages/PM-pages/PM_leaderboard'
+import PM_Profile from './modules/dev/DEV-pages/PM-pages/PM_Profile'
+
+
+
+
 function App() {
   return (
     <ErrorBoundary>
       <Router>
         <Routes>
+          //SL pages start here //
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<SL_dashboard />} />
           <Route path="/leads" element={<SL_leads />} />
@@ -59,6 +74,16 @@ function App() {
           <Route path="/notifications" element={<SL_notification />} />
           <Route path="/requests" element={<SL_requests />} />
           <Route path="/notice-board" element={<SL_notice_board />} />
+         
+         //PM pages start here //
+          <Route path="/pm-dashboard" element={<PM_dashboard />} />
+          <Route path="/pm-projects" element={<PM_projects />} />
+          <Route path="/pm-milestone" element={<PM_milestone />} />
+          <Route path="/pm-tasks" element={<PM_tasks />} />
+          <Route path="/pm-leaderboard" element={<PM_leaderboard />} />
+          <Route path="/pm-profile" element={<PM_Profile />} />
+         
+         
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
