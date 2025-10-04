@@ -22,7 +22,9 @@ const PM_sideBar = ({ isOpen, onClose }) => {
     name: 'Project Manager',
     email: 'pm@appzeto.com',
     avatar: 'PM',
-    balance: 0
+    monthlySalary: 35000,
+    monthlyRewards: 15000,
+    totalEarnings: 50000 // salary + rewards
   }
 
   const navItems = [
@@ -128,7 +130,7 @@ const PM_sideBar = ({ isOpen, onClose }) => {
                 </motion.div>
               </div>
 
-              {/* Balance Card */}
+              {/* Earnings Card */}
               <motion.button
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -139,14 +141,20 @@ const PM_sideBar = ({ isOpen, onClose }) => {
                   boxShadow: '0 8px 25px -5px rgba(0, 0, 0, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1)'
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-teal-100 rounded flex items-center justify-center">
-                      <FiCreditCard className="w-3 h-3 text-teal-600" />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-teal-100 rounded flex items-center justify-center">
+                        <FiCreditCard className="w-3 h-3 text-teal-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-700">Monthly Earnings</span>
                     </div>
-                    <span className="text-xs font-medium text-gray-700">My balance</span>
+                    <span className="text-sm font-bold text-gray-900">₹{user.totalEarnings.toLocaleString()}</span>
                   </div>
-                  <span className="text-sm font-bold text-gray-900">₹{user.balance.toLocaleString()}</span>
+                  <div className="flex justify-between text-xs text-gray-600">
+                    <span>Salary: ₹{user.monthlySalary.toLocaleString()}</span>
+                    <span>Rewards: ₹{user.monthlyRewards.toLocaleString()}</span>
+                  </div>
                 </div>
               </motion.button>
             </motion.div>

@@ -1,6 +1,8 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import PM_navbar from '../../DEV-components/PM_navbar'
+import PM_project_form from '../../DEV-components/PM_project_form'
+import PM_task_form from '../../DEV-components/PM_task_form'
 import { 
   FiFolder, 
   FiCheckSquare, 
@@ -16,6 +18,18 @@ import {
 } from 'react-icons/fi'
 
 const PM_dashboard = () => {
+  const [isProjectFormOpen, setIsProjectFormOpen] = useState(false)
+  const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
+
+  const handleProjectSubmit = async (data) => {
+    // TODO: integrate with API
+    setIsProjectFormOpen(false)
+  }
+
+  const handleTaskSubmit = async (data) => {
+    // TODO: integrate with API
+    setIsTaskFormOpen(false)
+  }
   // Mock data for projects
   const projectStats = {
     total: 12,
@@ -120,11 +134,11 @@ const PM_dashboard = () => {
 
           {/* Quick Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <button className="flex items-center justify-center space-x-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 hover:from-teal-600 hover:to-teal-700">
+            <button onClick={() => setIsProjectFormOpen(true)} className="flex items-center justify-center space-x-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 hover:from-teal-600 hover:to-teal-700">
               <FiPlus className="text-lg" />
               <span>Add New Project</span>
             </button>
-            <button className="flex items-center justify-center space-x-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 hover:from-purple-600 hover:to-purple-700">
+            <button onClick={() => setIsTaskFormOpen(true)} className="flex items-center justify-center space-x-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 hover:from-purple-600 hover:to-purple-700">
               <FiCheckSquare className="text-lg" />
               <span>Add New Task</span>
             </button>
@@ -417,6 +431,17 @@ const PM_dashboard = () => {
           </div>
         </div>
       </div>
+      {/* Forms */}
+      <PM_project_form
+        isOpen={isProjectFormOpen}
+        onClose={() => setIsProjectFormOpen(false)}
+        onSubmit={handleProjectSubmit}
+      />
+      <PM_task_form
+        isOpen={isTaskFormOpen}
+        onClose={() => setIsTaskFormOpen(false)}
+        onSubmit={handleTaskSubmit}
+      />
     </div>
   )
 }

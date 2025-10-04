@@ -40,6 +40,7 @@ import PM_Profile from './modules/dev/DEV-pages/PM-pages/PM_Profile'
 import PM_project_detail from './modules/dev/DEV-pages/PM-pages/PM_project_detail'
 import PM_milestone_detail from './modules/dev/DEV-pages/PM-pages/PM_milestone_detail'
 import PM_task_detail from './modules/dev/DEV-pages/PM-pages/PM_task_detail'
+import PM_wallet from './modules/dev/DEV-pages/PM-pages/PM_wallet'
 
 //Employee pages start here //
 import Employee_dashboard from './modules/dev/DEV-pages/Employee-pages/Employee_dashboard'
@@ -96,6 +97,7 @@ function App() {
           <Route path="/pm-tasks" element={<PM_tasks />} />
           <Route path="/pm-leaderboard" element={<PM_leaderboard />} />
           <Route path="/pm-profile" element={<PM_Profile />} />
+          <Route path="/pm-wallet" element={<PM_wallet />} />
 
           //Employee pages start here //
           <Route path="/employee-dashboard" element={<Employee_dashboard />} />

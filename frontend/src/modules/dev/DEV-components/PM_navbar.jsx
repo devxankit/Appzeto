@@ -16,8 +16,10 @@ import PM_sideBar from './PM_sideBar'
 function PM_navbar() {
   const location = useLocation()
   
-  // Mock wallet balance - PM's current available balance
-  const [walletBalance] = useState(0)
+  // Mock PM earnings data - total rewards and salary
+  const [totalRewards] = useState(15000)
+  const [monthlySalary] = useState(35000)
+  const [totalEarnings] = useState(50000) // monthly salary + rewards
   
   // Mock notification count
   const [notificationCount] = useState(5)
@@ -80,13 +82,13 @@ function PM_navbar() {
               <FiBell className="text-lg" />
             </Link>
             
-            {/* Wallet Balance Box */}
+            {/* Total Earnings Box */}
             <Link
               to="/pm-wallet"
               className="flex items-center space-x-1 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-3 py-1.5 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
             >
               <FiCreditCard className="text-teal-600 text-sm" />
-              <span className="text-sm font-semibold text-teal-700">₹{walletBalance.toLocaleString()}</span>
+              <span className="text-sm font-semibold text-teal-700">₹{totalEarnings.toLocaleString()}</span>
             </Link>
             
             {/* Hamburger Menu Icon */}
@@ -161,13 +163,13 @@ function PM_navbar() {
                 <FiBell className="text-xl" />
               </Link>
               
-              {/* Desktop Wallet Balance */}
+              {/* Desktop Total Earnings */}
               <Link
                 to="/pm-wallet"
                 className="flex items-center space-x-2 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-4 py-2 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-601/20 transition-all duration-200"
               >
                 <FiCreditCard className="text-teal-600 text-lg" />
-                <span className="text-sm font-semibold text-teal-700">₹{walletBalance.toLocaleString()}</span>
+                <span className="text-sm font-semibold text-teal-700">₹{totalEarnings.toLocaleString()}</span>
               </Link>
               
               <div className="flex items-center space-x-8">
