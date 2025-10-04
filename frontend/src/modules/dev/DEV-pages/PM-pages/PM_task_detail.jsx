@@ -58,14 +58,14 @@ const PM_task_detail = () => {
 
   if (isLoading || !task) {
     return (
-      <div className="min-h-screen bg-gray-50"><PM_navbar /><div className="flex items-center justify-center min-h-[60vh]"><div className="flex items-center space-x-3"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="text-lg text-gray-600">Loading task details...</span></div></div></div>
+      <div className="min-h-screen bg-gray-50"><PM_navbar /><div className="pt-16 pb-24 md:pt-20 md:pb-8"><div className="flex items-center justify-center min-h-[60vh]"><div className="flex items-center space-x-3"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="text-lg text-gray-600">Loading task details...</span></div></div></div></div>
     )
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <PM_navbar />
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24 md:pt-20 md:pb-8">
         <div className="mb-6 sm:mb-8">
           <button onClick={() => navigate(`/pm-project/${projectId}`)} className="mb-4 text-gray-600 hover:text-gray-900 flex items-center"><ArrowLeft className="h-4 w-4 mr-2" />Back to Project</button>
           <div className="space-y-4">
