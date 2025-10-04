@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import PM_milestone_form from '../../DEV-components/PM_milestone_form'
 import PM_task_form from '../../DEV-components/PM_task_form'
-import { FolderKanban, Calendar, Users, CheckSquare, TrendingUp, Clock, Target, User, Plus, Loader2, FileText } from 'lucide-react'
+import { FolderKanban, Calendar, Users, CheckSquare, TrendingUp, Clock, Target, User, Plus, Loader2, FileText, Paperclip, Upload, Eye, Download, X } from 'lucide-react'
 
 const PM_project_detail = () => {
   const { id } = useParams()
@@ -16,6 +16,8 @@ const PM_project_detail = () => {
   const [milestones, setMilestones] = useState([])
   const [tasks, setTasks] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isUploading, setIsUploading] = useState(false)
+  const [newAttachment, setNewAttachment] = useState(null)
 
   useEffect(() => {
     // mock load
@@ -35,7 +37,12 @@ const PM_project_detail = () => {
           { _id: 'u-002', fullName: 'Jane Smith', jobTitle: 'Designer' },
         ],
         customer: { name: 'Acme Corp' },
-        startDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
+        startDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+        attachments: [
+          { id: 'att-001', name: 'project-brief.pdf', size: 1024000, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
+          { id: 'att-002', name: 'wireframes.fig', size: 2048000, type: 'application/figma', url: '#', uploadedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
+          { id: 'att-003', name: 'requirements.docx', size: 512000, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', url: '#', uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
+        ]
       })
       setMilestones([
         { _id: 'm-001', title: 'M1 - UI/UX', description: 'Wireframes and designs', status: 'in-progress', priority: 'high', sequence: 1, progress: 45, dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), assignedTo: [{ _id: 'u-002' }] },
@@ -104,6 +111,36 @@ const PM_project_detail = () => {
     if (diff < 0) return 'text-red-600'; if (days <= 1) return 'text-orange-600'; if (days <= 3) return 'text-yellow-600'; return 'text-blue-600'
   }
 
+  const handleUploadChange = (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setNewAttachment(file)
+      setIsUploading(true)
+      setTimeout(() => {
+        setIsUploading(false)
+        setNewAttachment(null)
+        // In real app, upload file and add to project attachments
+      }, 1500)
+    }
+  }
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const getFileIcon = (type) => {
+    if (type.includes('pdf')) return '📄'
+    if (type.includes('image')) return '🖼️'
+    if (type.includes('video')) return '🎥'
+    if (type.includes('word') || type.includes('document')) return '📝'
+    if (type.includes('figma') || type.includes('fig')) return '🎨'
+    return '📎'
+  }
+
   const renderOverview = () => (
     <div className="space-y-6">
       <div className="space-y-4">
@@ -163,6 +200,93 @@ const PM_project_detail = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Attachments */}
+      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-2 min-w-0 flex-1">
+            <div className="p-1.5 bg-primary/10 rounded-lg shrink-0">
+              <Paperclip className="h-4 w-4 text-primary" />
+            </div>
+            <h3 className="text-base font-semibold text-gray-900 truncate">Attachments</h3>
+            <span className="text-sm text-gray-500 shrink-0">({project.attachments?.length || 0})</span>
+          </div>
+          <label className="flex items-center space-x-1.5 bg-primary text-white px-3 py-1.5 rounded-lg hover:bg-primary-dark transition-colors cursor-pointer shrink-0">
+            <Upload className="h-3.5 w-3.5" />
+            <span className="text-xs font-medium">Upload</span>
+            <input type="file" onChange={handleUploadChange} className="hidden" accept=".pdf,.png,.jpg,.jpeg,.docx,.mp4,.fig,.txt,.zip" />
+          </label>
+        </div>
+        
+        {isUploading && (
+          <div className="mb-3 p-2 bg-blue-50 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary"></div>
+              <span className="text-xs text-blue-600">Uploading...</span>
+            </div>
+          </div>
+        )}
+        
+        {newAttachment && (
+          <div className="mb-3 p-2 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 min-w-0 flex-1">
+                <span className="text-lg shrink-0">{getFileIcon(newAttachment.type || 'file')}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-gray-900 truncate">{newAttachment.name}</p>
+                  <p className="text-xs text-gray-500">{formatFileSize(newAttachment.size)}</p>
+                </div>
+              </div>
+              <button onClick={() => setNewAttachment(null)} className="p-1 text-gray-400 hover:text-gray-600 shrink-0">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {project.attachments && project.attachments.length > 0 ? (
+          <div className="space-y-2">
+            {project.attachments.map((att) => (
+              <div key={att.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                <div className="flex items-center space-x-2 min-w-0 flex-1">
+                  <span className="text-lg shrink-0">{getFileIcon(att.type)}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-gray-900 truncate">{att.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {formatFileSize(att.size)} • {new Date(att.uploadedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-1 shrink-0">
+                  <a 
+                    href={att.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </a>
+                  <a 
+                    href={att.url} 
+                    download={att.name} 
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : !newAttachment && (
+          <div className="text-center py-6">
+            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Paperclip className="h-4 w-4 text-gray-400" />
+            </div>
+            <h3 className="text-sm font-medium text-gray-900 mb-1">No attachments yet</h3>
+            <p className="text-xs text-gray-600">Upload files to share with your team</p>
+          </div>
+        )}
       </div>
 
       {/* Project Information */}

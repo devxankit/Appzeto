@@ -8,7 +8,7 @@ import { Combobox } from '../../../components/ui/combobox';
 import { MultiSelect } from '../../../components/ui/multi-select';
 import { DatePicker } from '../../../components/ui/date-picker';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Building2, AlertCircle, Star, Clock, CheckCircle, X, ArrowLeft, Loader2 } from 'lucide-react';
+import { Users, Building2, AlertCircle, Star, Clock, CheckCircle, X, ArrowLeft, Loader2, Upload, FileText } from 'lucide-react';
 import PM_navbar from './PM_navbar';
 
 const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
@@ -26,6 +26,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
     dueDate: '',
     assignedTeam: [],
     status: 'planning',
+    attachments: [],
   });
 
   const [errors, setErrors] = useState({});
@@ -118,6 +119,10 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
         assignedTeam: ['u-001', 'u-002'],
         status: 'active',
         tags: ['web', 'mobile'],
+        attachments: [
+          { id: 'att-001', name: 'project-brief.pdf', size: 1024000, type: 'application/pdf' },
+          { id: 'att-002', name: 'wireframes.fig', size: 2048000, type: 'application/figma' },
+        ],
       };
       
       setFormData({
@@ -128,6 +133,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
         dueDate: mockProject.dueDate || '',
         assignedTeam: mockProject.assignedTeam || [],
         status: mockProject.status || 'planning',
+        attachments: mockProject.attachments || [],
       });
     } catch (error) {
       console.error('Error loading project:', error);
@@ -157,6 +163,30 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+  };
+
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files);
+    const newAttachments = files.map(file => ({ 
+      id: Date.now() + Math.random(), 
+      name: file.name, 
+      size: file.size, 
+      type: file.type, 
+      file 
+    }));
+    setFormData(prev => ({ ...prev, attachments: [...prev.attachments, ...newAttachments] }));
+  };
+
+  const removeAttachment = (id) => {
+    setFormData(prev => ({ ...prev, attachments: prev.attachments.filter(att => att.id !== id) }));
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const validateForm = () => {
@@ -201,6 +231,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
       dueDate: '',
       assignedTeam: [],
       status: 'planning',
+      attachments: [],
     });
     setErrors({});
     setIsSubmitting(false);
@@ -391,6 +422,55 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
           )}
         </AnimatePresence>
       </motion.div>
+
+      {/* Attachments */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.8 }}
+        className="space-y-2"
+      >
+        <label className="text-sm font-semibold text-gray-700">Attachments</label>
+        <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-primary/50 transition-colors duration-200">
+          <input 
+            type="file" 
+            multiple 
+            accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip,.rar" 
+            onChange={handleFileUpload} 
+            className="hidden" 
+            id="project-attachments" 
+          />
+          <label htmlFor="project-attachments" className="cursor-pointer">
+            <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+            <p className="text-sm text-gray-600 mb-1">Click to upload files</p>
+            <p className="text-xs text-gray-500">Images, videos, PDFs, documents</p>
+          </label>
+        </div>
+        {formData.attachments.length > 0 && (
+          <div className="space-y-2">
+            {formData.attachments.map((att) => (
+              <div key={att.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <div className="p-1 bg-primary/10 rounded">
+                    <FileText className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{att.name}</p>
+                    <p className="text-xs text-gray-500">{formatFileSize(att.size)}</p>
+                  </div>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => removeAttachment(att.id)} 
+                  className="p-1 text-gray-400 hover:text-red-600 transition-colors duration-200"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.div>
     </>
   );
 
@@ -498,7 +578,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.9 }}
+            transition={{ delay: 1.0 }}
             className="flex flex-col sm:flex-row gap-3 pt-4"
           >
             <Button
