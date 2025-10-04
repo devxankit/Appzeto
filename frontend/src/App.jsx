@@ -37,8 +37,19 @@ import PM_milestone from './modules/dev/DEV-pages/PM-pages/PM_milestone'
 import PM_tasks from './modules/dev/DEV-pages/PM-pages/PM_tasks'
 import PM_leaderboard from './modules/dev/DEV-pages/PM-pages/PM_leaderboard'
 import PM_Profile from './modules/dev/DEV-pages/PM-pages/PM_Profile'
+import PM_project_detail from './modules/dev/DEV-pages/PM-pages/PM_project_detail'
+import PM_milestone_detail from './modules/dev/DEV-pages/PM-pages/PM_milestone_detail'
+import PM_task_detail from './modules/dev/DEV-pages/PM-pages/PM_task_detail'
 
-
+//Employee pages start here //
+import Employee_dashboard from './modules/dev/DEV-pages/Employee-pages/Employee_dashboard'
+import Employee_leaderboard from './modules/dev/DEV-pages/Employee-pages/Employee_leaderboard'
+import Employee_projects from './modules/dev/DEV-pages/Employee-pages/Employee_projects'
+import Employee_tasks from './modules/dev/DEV-pages/Employee-pages/Employee_tasks'
+import Employee_profile from './modules/dev/DEV-pages/Employee-pages/Employee_profile'
+import Employee_project_detail from './modules/dev/DEV-pages/Employee-pages/Employee_project_detail'
+import Employee_milestone_details from './modules/dev/DEV-pages/Employee-pages/Employee_milestone_details'
+import Employee_task_detail from './modules/dev/DEV-pages/Employee-pages/Employee_task_detail'
 
 
 function App() {
@@ -78,11 +89,23 @@ function App() {
          //PM pages start here //
           <Route path="/pm-dashboard" element={<PM_dashboard />} />
           <Route path="/pm-projects" element={<PM_projects />} />
+          <Route path="/pm-project/:id" element={<PM_project_detail />} />
+          <Route path="/pm-milestone/:id" element={<PM_milestone_detail />} />
+          <Route path="/pm-task/:id" element={<PM_task_detail />} />
           <Route path="/pm-milestone" element={<PM_milestone />} />
           <Route path="/pm-tasks" element={<PM_tasks />} />
           <Route path="/pm-leaderboard" element={<PM_leaderboard />} />
           <Route path="/pm-profile" element={<PM_Profile />} />
-         
+
+          //Employee pages start here //
+          <Route path="/employee-dashboard" element={<Employee_dashboard />} />
+          <Route path="/employee-projects" element={<Employee_projects />} />
+          <Route path="/employee-project/:id" element={<Employee_project_detail />} />
+          <Route path="/employee/milestone-details/:id" element={<Employee_milestone_details />} />
+          <Route path="/employee-task/:id" element={<Employee_task_detail />} />
+          <Route path="/employee-tasks" element={<Employee_tasks />} />
+          <Route path="/employee-leaderboard" element={<Employee_leaderboard />} />
+          <Route path="/employee-profile" element={<Employee_profile />} />
          
           <Route path="*" element={<NotFound />} />
         </Routes>

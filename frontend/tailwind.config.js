@@ -15,6 +15,9 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          hover: "hsl(var(--primary-hover))",
+          light: "hsl(var(--primary-light))",
+          dark: "hsl(var(--primary-dark))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -69,6 +72,9 @@ export default {
       animation: {
         'marquee': 'marquee var(--duration, 40s) infinite linear',
         'marquee-vertical': 'marquee-vertical var(--duration, 40s) infinite linear',
+        'shiny-text': 'shiny-text 8s infinite',
+        'aurora': 'aurora 8s ease-in-out infinite alternate',
+        'rippling': 'rippling var(--duration) ease-out',
       },
       keyframes: {
         marquee: {
@@ -78,6 +84,45 @@ export default {
         'marquee-vertical': {
           from: { transform: 'translateY(0)' },
           to: { transform: 'translateY(calc(-100% - var(--gap, 1rem)))' },
+        },
+        'shiny-text': {
+          '0%, 90%, 100%': {
+            'background-position': 'calc(-100% - var(--shiny-width)) 0',
+          },
+          '30%, 60%': {
+            'background-position': 'calc(100% + var(--shiny-width)) 0',
+          },
+        },
+        'aurora': {
+          '0%': {
+            'background-position': '0% 50%',
+            'transform': 'rotate(-5deg) scale(0.9)',
+          },
+          '25%': {
+            'background-position': '50% 100%',
+            'transform': 'rotate(5deg) scale(1.1)',
+          },
+          '50%': {
+            'background-position': '100% 50%',
+            'transform': 'rotate(-3deg) scale(0.95)',
+          },
+          '75%': {
+            'background-position': '50% 0%',
+            'transform': 'rotate(3deg) scale(1.05)',
+          },
+          '100%': {
+            'background-position': '0% 50%',
+            'transform': 'rotate(-5deg) scale(0.9)',
+          },
+        },
+        'rippling': {
+          '0%': {
+            'opacity': '1',
+          },
+          '100%': {
+            'transform': 'scale(2)',
+            'opacity': '0',
+          },
         },
       },
     },
