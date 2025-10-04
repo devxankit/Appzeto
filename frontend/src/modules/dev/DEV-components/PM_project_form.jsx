@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Building2, AlertCircle, Star, Clock, CheckCircle, X, ArrowLeft, Loader2, Upload, FileText } from 'lucide-react';
 import PM_navbar from './PM_navbar';
 
-const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
+const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   
@@ -21,7 +21,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    customer: '',
+    client: '',
     priority: 'normal',
     dueDate: '',
     assignedTeam: [],
@@ -32,7 +32,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [customers, setCustomers] = useState([]);
+  const [clients, setClients] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
 
   // Load users data when component mounts
@@ -42,12 +42,40 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
     }
   }, [isOpen, isEditMode]);
 
-  // Load project data when in edit mode
+  // Load project data when in edit mode or when projectData is provided
   useEffect(() => {
     if (isEditMode && id) {
       loadProjectData();
+    } else if (projectData && isOpen) {
+      // Pre-fill form with projectData from PM_new_projects
+      setFormData({
+        name: projectData.name || '',
+        description: projectData.description || '',
+        client: '', // Will be set after clients are loaded
+        priority: projectData.priority || 'normal',
+        dueDate: '',
+        assignedTeam: [],
+        status: 'planning',
+        attachments: projectData.attachments || [],
+      });
     }
-  }, [isEditMode, id]);
+  }, [isEditMode, id, projectData, isOpen]);
+
+  // Set client after clients are loaded
+  useEffect(() => {
+    if (projectData && clients.length > 0 && !formData.client) {
+      // Find client by matching client name
+      const matchingClient = clients.find(client => 
+        client.subtitle === projectData.client?.name || 
+        client.label === projectData.client?.name ||
+        client.label === projectData.client?.company
+      );
+      
+      if (matchingClient) {
+        setFormData(prev => ({ ...prev, client: matchingClient.value }));
+      }
+    }
+  }, [clients, projectData, formData.client]);
 
   const loadUsersData = async () => {
     setIsLoading(true);
@@ -55,14 +83,20 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
       // Simulate API call with mock data
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Mock customers data
-      const mockCustomers = [
+      // Mock clients data - including clients from PM_new_projects
+      const mockClients = [
         { _id: 'c-001', company: 'Acme Corp', fullName: 'John Smith', avatar: 'JS' },
         { _id: 'c-002', company: 'Globex', fullName: 'Jane Doe', avatar: 'JD' },
         { _id: 'c-003', company: 'Initech', fullName: 'Mike Johnson', avatar: 'MJ' },
         { _id: 'c-004', company: 'Umbrella LLC', fullName: 'Sarah Wilson', avatar: 'SW' },
         { _id: 'c-005', company: 'Soylent', fullName: 'David Brown', avatar: 'DB' },
         { _id: 'c-006', company: 'Stark Industries', fullName: 'Lisa Davis', avatar: 'LD' },
+        // Add customers from PM_new_projects
+        { _id: 'c-007', company: 'Tech Solutions Inc.', fullName: 'Sarah Wilson', avatar: 'SW' },
+        { _id: 'c-008', company: 'Digital Marketing Pro', fullName: 'Michael Chen', avatar: 'MC' },
+        { _id: 'c-009', company: 'E-commerce Store', fullName: 'Emily Rodriguez', avatar: 'ER' },
+        { _id: 'c-010', company: 'Restaurant Chain', fullName: 'James Thompson', avatar: 'JT' },
+        { _id: 'c-011', company: 'Fitness Center', fullName: 'Lisa Anderson', avatar: 'LA' },
       ];
 
       // Mock team members data
@@ -77,13 +111,13 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
         { _id: 'u-008', fullName: 'Emma Taylor', jobTitle: 'Business Analyst', department: 'Business', avatar: 'ET' },
       ];
       
-      // Format customers data
-      const formattedCustomers = mockCustomers.map(customer => ({
-        value: customer._id,
-        label: customer.company || customer.fullName,
-        subtitle: customer.fullName,
+      // Format clients data - prioritize client names over company names
+      const formattedClients = mockClients.map(client => ({
+        value: client._id,
+        label: client.fullName, // Show client name as primary label
+        subtitle: client.company, // Show company as subtitle
         icon: Building2,
-        avatar: customer.avatar
+        avatar: client.avatar
       }));
       
       // Format team members data
@@ -94,7 +128,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
         avatar: member.avatar
       }));
       
-      setCustomers(formattedCustomers);
+      setClients(formattedClients);
       setTeamMembers(formattedTeamMembers);
     } catch (error) {
       console.error('Error loading users data:', error);
@@ -128,7 +162,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
       setFormData({
         name: mockProject.name || '',
         description: mockProject.description || '',
-        customer: mockProject.customer || '',
+        client: mockProject.client || '',
         priority: mockProject.priority || 'normal',
         dueDate: mockProject.dueDate || '',
         assignedTeam: mockProject.assignedTeam || [],
@@ -167,8 +201,8 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
 
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
-    const newAttachments = files.map(file => ({ 
-      id: Date.now() + Math.random(), 
+    const newAttachments = files.map((file, index) => ({ 
+      id: `att-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`, 
       name: file.name, 
       size: file.size, 
       type: file.type, 
@@ -194,8 +228,8 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
     if (!formData.name.trim()) {
       newErrors.name = 'Project name is required';
     }
-    if (!formData.customer.trim()) {
-      newErrors.customer = 'Customer is required';
+    if (!formData.client.trim()) {
+      newErrors.client = 'Client is required';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -226,7 +260,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
     setFormData({
       name: '',
       description: '',
-      customer: '',
+      client: '',
       priority: 'normal',
       dueDate: '',
       assignedTeam: [],
@@ -292,7 +326,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
         />
       </motion.div>
 
-      {/* Customer Selection */}
+      {/* Client Selection */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -300,17 +334,17 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
         className="space-y-2"
       >
         <label className="text-sm font-semibold text-gray-700 flex items-center">
-          Customer <span className="text-red-500 ml-1">*</span>
+          Client <span className="text-red-500 ml-1">*</span>
         </label>
         <Combobox
-          options={customers}
-          value={formData.customer}
-          onChange={(value) => handleInputChange('customer', value)}
-          placeholder="Select a customer"
+          options={clients}
+          value={formData.client}
+          onChange={(value) => handleInputChange('client', value)}
+          placeholder="Select a client"
           className="h-12 rounded-xl border-2 border-gray-200 focus:border-primary focus:ring-primary/20 transition-all duration-200"
         />
         <AnimatePresence>
-          {errors.customer && (
+          {errors.client && (
             <motion.p 
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -318,7 +352,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
               className="text-red-500 text-sm flex items-center"
             >
               <AlertCircle className="h-4 w-4 mr-1" />
-              {errors.customer}
+              {errors.client}
             </motion.p>
           )}
         </AnimatePresence>
@@ -448,8 +482,8 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
         </div>
         {formData.attachments.length > 0 && (
           <div className="space-y-2">
-            {formData.attachments.map((att) => (
-              <div key={att.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            {formData.attachments.map((att, index) => (
+              <div key={att.id || `attachment-${index}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center space-x-3">
                   <div className="p-1 bg-primary/10 rounded">
                     <FileText className="h-4 w-4 text-primary" />
@@ -563,10 +597,13 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
         <div className="bg-gradient-to-r from-primary to-primary-dark p-6 text-white">
           <DialogHeader className="space-y-2">
             <DialogTitle className="text-2xl font-bold">
-              Create New Project
+              {projectData ? 'Edit Project' : 'Create New Project'}
             </DialogTitle>
             <DialogDescription className="text-primary-foreground/80">
-              Fill in the project details below. Fields marked with * are required.
+              {projectData 
+                ? 'Update the project details below. Fields marked with * are required.'
+                : 'Fill in the project details below. Fields marked with * are required.'
+              }
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -598,10 +635,10 @@ const PM_project_form = ({ isOpen, onClose, onSubmit }) => {
               {isSubmitting ? (
                 <div className="flex items-center space-x-2">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Creating...</span>
+                  <span>{projectData ? 'Updating...' : 'Creating...'}</span>
                 </div>
               ) : (
-                'Create Project'
+                projectData ? 'Update Project' : 'Create Project'
               )}
             </Button>
           </motion.div>

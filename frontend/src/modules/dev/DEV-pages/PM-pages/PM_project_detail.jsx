@@ -24,7 +24,106 @@ const PM_project_detail = () => {
     const load = async () => {
       setIsLoading(true)
       await new Promise(r => setTimeout(r, 500))
-      setProject({
+      
+      // Mock data for projects from PM_new_projects
+      const mockProjects = {
+        '1': {
+          _id: '1',
+          name: 'E-commerce Platform',
+          description: 'Complete e-commerce platform with mobile app, payment integration, and admin dashboard.',
+          status: 'active',
+          priority: 'high',
+          progress: 45,
+          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          assignedTeam: [
+            { _id: 'u-001', fullName: 'John Doe', jobTitle: 'Developer' },
+            { _id: 'u-002', fullName: 'Jane Smith', jobTitle: 'Designer' },
+          ],
+          customer: { name: 'Sarah Wilson' },
+          startDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+          attachments: [
+            { id: 'att-001', name: 'project-brief.pdf', size: 1024000, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
+            { id: 'att-002', name: 'wireframes.fig', size: 2048000, type: 'application/figma', url: '#', uploadedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
+          ]
+        },
+        '2': {
+          _id: '2',
+          name: 'Restaurant Management System',
+          description: 'Restaurant management system with online ordering, table booking, and kitchen management.',
+          status: 'active',
+          priority: 'normal',
+          progress: 25,
+          dueDate: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
+          assignedTeam: [
+            { _id: 'u-003', fullName: 'Mike Johnson', jobTitle: 'Developer' },
+            { _id: 'u-004', fullName: 'Sarah Wilson', jobTitle: 'Designer' },
+          ],
+          customer: { name: 'Michael Chen' },
+          startDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          attachments: [
+            { id: 'att-003', name: 'requirements.docx', size: 512000, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', url: '#', uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
+          ]
+        },
+        '3': {
+          _id: '3',
+          name: 'Healthcare Portal',
+          description: 'Healthcare portal for patient management, appointment booking, and medical records.',
+          status: 'active',
+          priority: 'urgent',
+          progress: 60,
+          dueDate: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString(),
+          assignedTeam: [
+            { _id: 'u-005', fullName: 'David Brown', jobTitle: 'Developer' },
+            { _id: 'u-006', fullName: 'Lisa Davis', jobTitle: 'Designer' },
+          ],
+          customer: { name: 'Emily Rodriguez' },
+          startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+          attachments: [
+            { id: 'att-004', name: 'healthcare-specs.pdf', size: 3584000, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString() },
+            { id: 'att-005', name: 'compliance-docs.pdf', size: 2867200, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
+          ]
+        },
+        '4': {
+          _id: '4',
+          name: 'Fitness App',
+          description: 'Fitness tracking app with workout plans, nutrition tracking, and social features.',
+          status: 'active',
+          priority: 'high',
+          progress: 35,
+          dueDate: new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString(),
+          assignedTeam: [
+            { _id: 'u-007', fullName: 'Tom Wilson', jobTitle: 'Developer' },
+            { _id: 'u-008', fullName: 'Emma Taylor', jobTitle: 'Designer' },
+          ],
+          customer: { name: 'James Thompson' },
+          startDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+          attachments: [
+            { id: 'att-006', name: 'fitness-mockups.fig', size: 4403200, type: 'application/figma', url: '#', uploadedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
+          ]
+        },
+        '5': {
+          _id: '5',
+          name: 'Real Estate Portal',
+          description: 'Real estate portal with property listings, virtual tours, and agent management.',
+          status: 'active',
+          priority: 'normal',
+          progress: 15,
+          dueDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+          assignedTeam: [
+            { _id: 'u-001', fullName: 'John Doe', jobTitle: 'Developer' },
+            { _id: 'u-002', fullName: 'Jane Smith', jobTitle: 'Designer' },
+          ],
+          customer: { name: 'Lisa Anderson' },
+          startDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          attachments: [
+            { id: 'att-007', name: 'real-estate-brief.pdf', size: 3041280, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() },
+            { id: 'att-008', name: 'design-guidelines.pdf', size: 1572864, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() },
+          ]
+        }
+      }
+      
+      // Load project data based on ID
+      const projectData = mockProjects[id] || {
         _id: id,
         name: 'Website Redesign',
         description: 'Complete overhaul of marketing site with CMS migration.',
@@ -43,7 +142,9 @@ const PM_project_detail = () => {
           { id: 'att-002', name: 'wireframes.fig', size: 2048000, type: 'application/figma', url: '#', uploadedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
           { id: 'att-003', name: 'requirements.docx', size: 512000, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', url: '#', uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
         ]
-      })
+      }
+      
+      setProject(projectData)
       setMilestones([
         { _id: 'm-001', title: 'M1 - UI/UX', description: 'Wireframes and designs', status: 'in-progress', priority: 'high', sequence: 1, progress: 45, dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), assignedTo: [{ _id: 'u-002' }] },
         { _id: 'm-002', title: 'M2 - Build', description: 'Frontend implementation', status: 'pending', priority: 'normal', sequence: 2, progress: 0, dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(), assignedTo: [] },

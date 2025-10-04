@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import PM_project_form from '../../DEV-components/PM_project_form'
@@ -18,6 +19,7 @@ import {
 } from 'react-icons/fi'
 
 const PM_dashboard = () => {
+  const navigate = useNavigate()
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false)
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
 
@@ -111,7 +113,9 @@ const PM_dashboard = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
           {/* New Project Card */}
-          <div className="bg-teal-100 rounded-xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 border border-teal-300/40 cursor-pointer mb-6"
+          <div 
+            onClick={() => navigate('/pm-new-projects')}
+            className="bg-teal-100 rounded-xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 border border-teal-300/40 cursor-pointer mb-6 transform hover:scale-[1.02] active:scale-[0.98]"
             style={{
               boxShadow: '0 8px 25px -5px rgba(20, 184, 166, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
             }}
