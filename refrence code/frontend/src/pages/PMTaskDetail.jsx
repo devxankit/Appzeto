@@ -214,10 +214,12 @@ const PMTaskDetail = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <PMNavbar />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="flex items-center space-x-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="text-lg text-gray-600">Loading task details...</span>
+        <div className="pt-16 pb-24 md:pt-20 md:pb-8">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="flex items-center space-x-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="text-lg text-gray-600">Loading task details...</span>
+            </div>
           </div>
         </div>
       </div>
@@ -228,14 +230,16 @@ const PMTaskDetail = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <PMNavbar />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Task Not Found</h2>
-            <p className="text-gray-600 mb-4">The task you're looking for doesn't exist or has been deleted.</p>
-            <Button onClick={() => navigate('/projects')} className="bg-primary hover:bg-primary-dark">
-              Back to Projects
-            </Button>
+        <div className="pt-16 pb-24 md:pt-20 md:pb-8">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Task Not Found</h2>
+              <p className="text-gray-600 mb-4">The task you're looking for doesn't exist or has been deleted.</p>
+              <Button onClick={() => navigate('/projects')} className="bg-primary hover:bg-primary-dark">
+                Back to Projects
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -246,7 +250,7 @@ const PMTaskDetail = () => {
     <div className="min-h-screen bg-gray-50">
       <PMNavbar />
       
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24 md:pt-20 md:pb-8">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
           <Button
