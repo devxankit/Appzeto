@@ -65,6 +65,7 @@ import Client_milestone_detail from './modules/dev/DEV-pages/Client-pages/Client
 import Client_requests from './modules/dev/DEV-pages/Client-pages/Client_request'
 import Client_explore from './modules/dev/DEV-pages/Client-pages/Client_explore'
 import Client_profile from './modules/dev/DEV-pages/Client-pages/Client_profile'
+import Client_notification from './modules/dev/DEV-pages/Client-pages/Client_notification'
 
 
 function App() {
@@ -135,6 +136,7 @@ function App() {
         <Route path="/client-requests" element={<Client_requests />} />
         <Route path="/client-explore" element={<Client_explore />} />
         <Route path="/client-profile" element={<Client_profile />} />
+        <Route path="/client-notifications" element={<Client_notification />} />
          
           <Route path="*" element={<NotFound />} />
         </Routes>
