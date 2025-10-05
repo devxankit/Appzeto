@@ -44,6 +44,7 @@ import PM_milestone_detail from './modules/dev/DEV-pages/PM-pages/PM_milestone_d
 import PM_task_detail from './modules/dev/DEV-pages/PM-pages/PM_task_detail'
 import PM_wallet from './modules/dev/DEV-pages/PM-pages/PM_wallet'
 import PM_new_projects from './modules/dev/DEV-pages/PM-pages/PM_new_projects'
+import PM_request from './modules/dev/DEV-pages/PM-pages/PM_request'
 
 //Employee pages start here //
 import Employee_dashboard from './modules/dev/DEV-pages/Employee-pages/Employee_dashboard'
@@ -53,6 +54,7 @@ import Employee_tasks from './modules/dev/DEV-pages/Employee-pages/Employee_task
 import Employee_profile from './modules/dev/DEV-pages/Employee-pages/Employee_profile'
 import Employee_project_detail from './modules/dev/DEV-pages/Employee-pages/Employee_project_detail'
 import Employee_milestone_details from './modules/dev/DEV-pages/Employee-pages/Employee_milestone_details'
+import Employee_request from './modules/dev/DEV-pages/Employee-pages/Employee_request'
 import PM_notifications from './modules/dev/DEV-pages/PM-pages/PM_notifications'
 import Employee_notification from './modules/dev/DEV-pages/Employee-pages/Employee_notification'
 import Employee_wallet from './modules/dev/DEV-pages/Employee-pages/Employee_wallet'
@@ -111,6 +113,7 @@ function App() {
           <Route path="/pm-milestone" element={<PM_milestone />} />
           <Route path="/pm-tasks" element={<PM_tasks />} />
           <Route path="/pm-urgent-tasks" element={<PM_urgent_tasks />} />
+          <Route path="/pm-requests" element={<PM_request />} />
           <Route path="/pm-notifications" element={<PM_notifications />} />
           <Route path="/pm-leaderboard" element={<PM_leaderboard />} />
           <Route path="/pm-profile" element={<PM_Profile />} />
@@ -124,6 +127,7 @@ function App() {
           <Route path="/employee/milestone-details/:id" element={<Employee_milestone_details />} />
           <Route path="/employee-notifications" element={<Employee_notification />} />
           <Route path="/employee-tasks" element={<Employee_tasks />} />
+          <Route path="/employee-requests" element={<Employee_request />} />
           <Route path="/employee-leaderboard" element={<Employee_leaderboard />} />
           <Route path="/employee-profile" element={<Employee_profile />} />
           <Route path="/employee-wallet" element={<Employee_wallet />} />

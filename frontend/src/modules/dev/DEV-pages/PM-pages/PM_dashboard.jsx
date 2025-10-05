@@ -15,7 +15,8 @@ import {
   FiTarget,
   FiClock,
   FiCheckCircle,
-  FiPauseCircle
+  FiPauseCircle,
+  FiFileText
 } from 'react-icons/fi'
 
 const PM_dashboard = () => {
@@ -196,6 +197,29 @@ const PM_dashboard = () => {
               </div>
               <div className="text-2xl font-bold text-gray-900 mb-1">24</div>
               <div className="text-sm text-gray-600">Total</div>
+            </div>
+          </div>
+
+          {/* Request Management Card */}
+          <div className="mb-6 md:mb-8">
+            <div 
+              onClick={() => navigate('/pm-requests')}
+              className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-2xl p-4 shadow-sm border border-teal-200 cursor-pointer hover:shadow-md hover:border-teal-300 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-teal-100 rounded-xl">
+                    <FiFileText className="h-5 w-5 text-teal-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-teal-900 mb-1">Request Management</h3>
+                    <p className="text-xs text-teal-700">Manage incoming and outgoing requests</p>
+                  </div>
+                </div>
+                 <div className="bg-teal-300 text-teal-800 px-4 py-2 rounded-xl shadow-sm">
+                   <p className="text-2xl font-bold">20</p>
+                 </div>
+              </div>
             </div>
           </div>
 
