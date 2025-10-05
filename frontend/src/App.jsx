@@ -53,7 +53,8 @@ import Employee_tasks from './modules/dev/DEV-pages/Employee-pages/Employee_task
 import Employee_profile from './modules/dev/DEV-pages/Employee-pages/Employee_profile'
 import Employee_project_detail from './modules/dev/DEV-pages/Employee-pages/Employee_project_detail'
 import Employee_milestone_details from './modules/dev/DEV-pages/Employee-pages/Employee_milestone_details'
-import Employee_wallet from './modules/dev/DEV-pages/Employee-pages/Employee_wallet'
+import PM_notifications from './modules/dev/DEV-pages/PM-pages/PM_notifications'
+import Employee_notification from './modules/dev/DEV-pages/Employee-pages/Employee_notification'
 
 
 function App() {
@@ -99,7 +100,7 @@ function App() {
           <Route path="/pm-milestone" element={<PM_milestone />} />
           <Route path="/pm-tasks" element={<PM_tasks />} />
           <Route path="/pm-urgent-tasks" element={<PM_urgent_tasks />} />
-          <Route path="/pm-urgent-task/:id" element={<PM_urgent_task_detail />} />
+          <Route path="/pm-notifications" element={<PM_notifications />} />
           <Route path="/pm-leaderboard" element={<PM_leaderboard />} />
           <Route path="/pm-profile" element={<PM_Profile />} />
           <Route path="/pm-wallet" element={<PM_wallet />} />
@@ -110,7 +111,7 @@ function App() {
           <Route path="/employee-projects" element={<Employee_projects />} />
           <Route path="/employee-project/:id" element={<Employee_project_detail />} />
           <Route path="/employee/milestone-details/:id" element={<Employee_milestone_details />} />
-          <Route path="/employee-wallet" element={<Employee_wallet />} />
+          <Route path="/employee-notifications" element={<Employee_notification />} />
           <Route path="/employee-tasks" element={<Employee_tasks />} />
           <Route path="/employee-leaderboard" element={<Employee_leaderboard />} />
           <Route path="/employee-profile" element={<Employee_profile />} />

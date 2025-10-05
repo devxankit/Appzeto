@@ -73,9 +73,9 @@ function Employee_navbar() {
           </Link>
 
           <div className="flex items-center space-x-2">
-            {/* Notification Icon (route placeholder) */}
+            {/* Notification Icon */}
             <Link
-              to="/employee-dashboard"
+              to="/employee-notifications"
               className="relative p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200"
             >
               <FiBell className="text-lg" />
@@ -156,7 +156,7 @@ function Employee_navbar() {
             <div className="flex items-center space-x-4">
               {/* Notification Icon */}
               <Link
-                to="/employee-dashboard"
+                to="/employee-notifications"
                 className="relative p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200"
               >
                 <FiBell className="text-xl" />
