@@ -15,7 +15,11 @@ import {
   FiEye,
   FiX,
   FiSend,
-  FiMessageSquare
+  FiMessageSquare,
+  FiHeart,
+  FiStar,
+  FiTarget,
+  FiAward
 } from 'react-icons/fi'
 
 const Client_dashboard = () => {
@@ -26,6 +30,69 @@ const Client_dashboard = () => {
   const [responseType, setResponseType] = useState('approve') // approve, reject, request_changes
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0)
+  const [clientName, setClientName] = useState('Client') // Default fallback name
+
+  // Fetch client name from backend (simulated for now)
+  useEffect(() => {
+    const fetchClientName = async () => {
+      try {
+        // TODO: Replace with actual API call after login
+        // const response = await fetch('/api/client/profile')
+        // const data = await response.json()
+        // setClientName(data.firstName)
+        
+        // Simulate API call with dummy data
+        setTimeout(() => {
+          setClientName('Sarah') // This will come from API after login
+        }, 500)
+      } catch (error) {
+        console.error('Error fetching client name:', error)
+        setClientName('Client') // Fallback name
+      }
+    }
+
+    fetchClientName()
+  }, [])
+
+  // Rotating welcome messages for better client relationship
+  const welcomeMessages = [
+    {
+      title: `Welcome back, ${clientName}!`,
+      subtitle: "Your success is our priority. Let's make great things happen.",
+      icon: FiHeart,
+      color: "text-pink-600"
+    },
+    {
+      title: "Projects in expert hands!",
+      subtitle: "Our dedicated team works hard to exceed your expectations.",
+      icon: FiStar,
+      color: "text-yellow-600"
+    },
+    {
+      title: "Building something amazing together!",
+      subtitle: "Every milestone achieved brings us closer to your vision.",
+      icon: FiTarget,
+      color: "text-blue-600"
+    },
+    {
+      title: "Your feedback drives excellence!",
+      subtitle: "Your insights help us deliver solutions that truly matter.",
+      icon: FiAward,
+      color: "text-purple-600"
+    }
+  ]
+
+  // Rotate messages every 4 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentMessageIndex((prevIndex) => 
+        (prevIndex + 1) % welcomeMessages.length
+      )
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [welcomeMessages.length])
   const [dashboardData, setDashboardData] = useState({
     statistics: {
       projects: {
@@ -239,13 +306,62 @@ const Client_dashboard = () => {
       {/* Main Content */}
       <main className="pt-16 lg:pt-16 pb-16 lg:pb-8">
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
-          {/* Welcome Section */}
+          {/* Compact Welcome Card with Seamless Animations */}
           <div className="mb-6 md:mb-8">
-            <div className="mb-4 md:mb-6">
-              <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900">
-                Welcome back, Client!
-              </h1>
-              <p className="text-sm md:text-base text-gray-600 mt-1">Monitor your project progress and respond to team requests</p>
+            <div className="bg-gradient-to-r from-teal-50 to-teal-100 rounded-xl p-4 md:p-5 border border-teal-200 shadow-sm max-w-2xl mx-auto">
+              <div className="flex items-center space-x-3">
+                <div className="flex-shrink-0">
+                  <div className="w-10 h-10 md:w-11 md:h-11 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                    <motion.div
+                      key={`icon-${currentMessageIndex}`}
+                      initial={{ scale: 0.7, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 0.25, ease: [0.4, 0.0, 0.2, 1] }}
+                    >
+                      {React.createElement(welcomeMessages[currentMessageIndex].icon, {
+                        className: `w-5 h-5 md:w-6 md:h-6 ${welcomeMessages[currentMessageIndex].color}`
+                      })}
+                    </motion.div>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                   <motion.h1
+                     key={`title-${currentMessageIndex}`}
+                     initial={{ opacity: 0, y: 8 }}
+                     animate={{ opacity: 1, y: 0 }}
+                     exit={{ opacity: 0, y: -8 }}
+                     transition={{ duration: 0.3, ease: [0.4, 0.0, 0.2, 1] }}
+                     className="text-sm md:text-base font-bold text-gray-900 mb-1 whitespace-nowrap"
+                   >
+                     {welcomeMessages[currentMessageIndex].title}
+                   </motion.h1>
+                   <motion.p
+                     key={`subtitle-${currentMessageIndex}`}
+                     initial={{ opacity: 0, y: 8 }}
+                     animate={{ opacity: 1, y: 0 }}
+                     exit={{ opacity: 0, y: -8 }}
+                     transition={{ duration: 0.3, delay: 0.05, ease: [0.4, 0.0, 0.2, 1] }}
+                     className="text-xs text-gray-700 leading-tight"
+                   >
+                     {welcomeMessages[currentMessageIndex].subtitle}
+                   </motion.p>
+                </div>
+              </div>
+              
+              {/* Minimalist Progress Dots */}
+              <div className="flex justify-center mt-3 space-x-1">
+                {welcomeMessages.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentMessageIndex(index)}
+                    className={`w-1 h-1 rounded-full transition-all duration-300 ${
+                      index === currentMessageIndex 
+                        ? 'bg-teal-600 w-3' 
+                        : 'bg-teal-300 hover:bg-teal-400'
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
           </div>
 

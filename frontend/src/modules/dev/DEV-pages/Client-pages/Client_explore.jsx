@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { 
   FiSearch, 
@@ -29,15 +29,10 @@ const Client_explore = () => {
   const [showRequestDialog, setShowRequestDialog] = useState(false)
   const [showDetailsDialog, setShowDetailsDialog] = useState(false)
   const [selectedService, setSelectedService] = useState(null)
-  const [requestData, setRequestData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    message: '',
-    budget: '',
-    timeline: ''
-  })
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false)
+  const [showThankYouDialog, setShowThankYouDialog] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
 
   // Mock services data - Website and Mobile App focused
   const services = [
@@ -160,7 +155,7 @@ const Client_explore = () => {
 
   const handleServiceRequest = (service) => {
     setSelectedService(service)
-    setShowRequestDialog(true)
+    setShowConfirmationDialog(true)
   }
 
   const handleViewDetails = (service) => {
@@ -168,22 +163,18 @@ const Client_explore = () => {
     setShowDetailsDialog(true)
   }
 
-  const handleRequestSubmit = async () => {
+  const handleConfirmRequest = async () => {
     setIsSubmitting(true)
     // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    await new Promise(resolve => setTimeout(resolve, 1500))
     setIsSubmitting(false)
-    setShowRequestDialog(false)
-    setRequestData({
-      name: '',
-      email: '',
-      phone: '',
-      message: '',
-      budget: '',
-      timeline: ''
-    })
-    // Show success message (you can implement a toast notification here)
-    alert('Service request submitted successfully! We will contact you soon.')
+    setShowConfirmationDialog(false)
+    setShowThankYouDialog(true)
+  }
+
+  const handleCloseThankYou = () => {
+    setShowThankYouDialog(false)
+    setSelectedService(null)
   }
 
   return (
@@ -538,135 +529,48 @@ const Client_explore = () => {
         </motion.div>
       )}
 
-      {/* Service Request Dialog */}
-      {showRequestDialog && (
+      {/* Service Request Confirmation Dialog */}
+      {showConfirmationDialog && selectedService && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowRequestDialog(false)}
+          onClick={() => setShowConfirmationDialog(false)}
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-2xl p-6 w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Request Service</h3>
-                <p className="text-sm text-gray-600">{selectedService?.title}</p>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <selectedService.icon className="h-8 w-8 text-teal-600" />
               </div>
-              <button
-                onClick={() => setShowRequestDialog(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <FiX className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={(e) => { e.preventDefault(); handleRequestSubmit(); }} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={requestData.name}
-                  onChange={(e) => setRequestData({...requestData, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-200 focus:border-teal-500 transition-colors"
-                  placeholder="Enter your full name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  required
-                  value={requestData.email}
-                  onChange={(e) => setRequestData({...requestData, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-200 focus:border-teal-500 transition-colors"
-                  placeholder="Enter your email"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                <input
-                  type="tel"
-                  required
-                  value={requestData.phone}
-                  onChange={(e) => setRequestData({...requestData, phone: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-200 focus:border-teal-500 transition-colors"
-                  placeholder="Enter your phone number"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Budget Range</label>
-                <select
-                  required
-                  value={requestData.budget}
-                  onChange={(e) => setRequestData({...requestData, budget: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-200 focus:border-teal-500 transition-colors"
-                >
-                  <option value="">Select budget range</option>
-                  <option value="under-50k">Under ₹50,000</option>
-                  <option value="50k-100k">₹50,000 - ₹1,00,000</option>
-                  <option value="100k-250k">₹1,00,000 - ₹2,50,000</option>
-                  <option value="250k-500k">₹2,50,000 - ₹5,00,000</option>
-                  <option value="above-500k">Above ₹5,00,000</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Timeline</label>
-                <select
-                  required
-                  value={requestData.timeline}
-                  onChange={(e) => setRequestData({...requestData, timeline: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-200 focus:border-teal-500 transition-colors"
-                >
-                  <option value="">Select timeline</option>
-                  <option value="asap">ASAP</option>
-                  <option value="1-month">Within 1 month</option>
-                  <option value="2-3-months">2-3 months</option>
-                  <option value="3-6-months">3-6 months</option>
-                  <option value="flexible">Flexible</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Project Details</label>
-                <textarea
-                  required
-                  value={requestData.message}
-                  onChange={(e) => setRequestData({...requestData, message: e.target.value})}
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-200 focus:border-teal-500 transition-colors"
-                  placeholder="Describe your project requirements..."
-                />
-              </div>
-
-              <div className="flex space-x-3 pt-4">
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Request Service</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to request <strong>{selectedService.title}</strong>? 
+                Our team will reach out to you within 24 hours to discuss your requirements.
+              </p>
+              
+              <div className="flex space-x-3">
                 <button
-                  type="button"
-                  onClick={() => setShowRequestDialog(false)}
+                  onClick={() => setShowConfirmationDialog(false)}
                   className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
-                  type="submit"
+                  onClick={handleConfirmRequest}
                   disabled={isSubmitting}
                   className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
                 >
                   {isSubmitting ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Submitting...</span>
+                      <span>Sending...</span>
                     </>
                   ) : (
                     <>
@@ -676,7 +580,41 @@ const Client_explore = () => {
                   )}
                 </button>
               </div>
-            </form>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* Thank You Dialog */}
+      {showThankYouDialog && selectedService && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={handleCloseThankYou}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-2xl p-6 w-full max-w-md text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FiCheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Request Sent!</h3>
+            <p className="text-gray-600 mb-6">
+              Thank you for requesting <strong>{selectedService.title}</strong>. 
+              Our team will contact you within 24 hours to discuss your project requirements.
+            </p>
+            <button
+              onClick={handleCloseThankYou}
+              className="w-full px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+            >
+              Close
+            </button>
           </motion.div>
         </motion.div>
       )}
