@@ -22,7 +22,9 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
     name: 'Employee',
     email: 'employee@appzeto.com',
     avatar: 'EM',
-    balance: 0
+    monthlySalary: 25000,
+    monthlyRewards: 8000,
+    totalThisMonth: 33000
   }
 
   const navItems = [
@@ -38,7 +40,7 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
   }
 
   const handleWalletClick = () => {
-    navigate('/employee-dashboard')
+    navigate('/employee-wallet')
     onClose()
   }
 
@@ -90,9 +92,9 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
                     <div className="w-6 h-6 bg-teal-100 rounded flex items-center justify-center">
                       <FiCreditCard className="w-3 h-3 text-teal-600" />
                     </div>
-                    <span className="text-xs font-medium text-gray-700">My balance</span>
+                    <span className="text-xs font-medium text-gray-700">This month</span>
                   </div>
-                  <span className="text-sm font-bold text-gray-900">₹{user.balance.toLocaleString()}</span>
+                  <span className="text-sm font-bold text-gray-900">₹{user.totalThisMonth.toLocaleString()}</span>
                 </div>
               </motion.button>
             </motion.div>

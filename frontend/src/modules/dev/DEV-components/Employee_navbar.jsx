@@ -16,8 +16,12 @@ import Employee_sideBar from './Employee_sideBar'
 function Employee_navbar() {
   const location = useLocation()
 
-  // Mock wallet balance - Employee's current available balance (optional)
-  const [walletBalance] = useState(0)
+  // Mock wallet data - Employee's current month earnings
+  const [walletData] = useState({
+    monthlySalary: 25000,
+    monthlyRewards: 8000,
+    totalThisMonth: 33000
+  })
 
   // Sidebar state (sidebar not implemented yet; kept for parity with PM navbar)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -77,13 +81,13 @@ function Employee_navbar() {
               <FiBell className="text-lg" />
             </Link>
 
-            {/* Wallet Balance Box (route placeholder) */}
+            {/* Wallet Balance Box */}
             <Link
-              to="/employee-dashboard"
+              to="/employee-wallet"
               className="flex items-center space-x-1 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-3 py-1.5 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
             >
               <FiCreditCard className="text-teal-600 text-sm" />
-              <span className="text-sm font-semibold text-teal-700">₹{walletBalance.toLocaleString()}</span>
+              <span className="text-sm font-semibold text-teal-700">₹{walletData.totalThisMonth.toLocaleString()}</span>
             </Link>
 
             {/* Hamburger Menu Icon (no sidebar wired yet) */}
@@ -160,11 +164,11 @@ function Employee_navbar() {
 
               {/* Desktop Wallet Balance */}
               <Link
-                to="/employee-dashboard"
-                className="flex items-center space-x-2 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-4 py-2 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-601/20 transition-all duration-200"
+                to="/employee-wallet"
+                className="flex items-center space-x-2 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-4 py-2 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
               >
                 <FiCreditCard className="text-teal-600 text-lg" />
-                <span className="text-sm font-semibold text-teal-700">₹{walletBalance.toLocaleString()}</span>
+                <span className="text-sm font-semibold text-teal-700">₹{walletData.totalThisMonth.toLocaleString()}</span>
               </Link>
 
               <div className="flex items-center space-x-8">

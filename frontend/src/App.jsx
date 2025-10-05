@@ -53,7 +53,7 @@ import Employee_tasks from './modules/dev/DEV-pages/Employee-pages/Employee_task
 import Employee_profile from './modules/dev/DEV-pages/Employee-pages/Employee_profile'
 import Employee_project_detail from './modules/dev/DEV-pages/Employee-pages/Employee_project_detail'
 import Employee_milestone_details from './modules/dev/DEV-pages/Employee-pages/Employee_milestone_details'
-import Employee_task_detail from './modules/dev/DEV-pages/Employee-pages/Employee_task_detail'
+import Employee_wallet from './modules/dev/DEV-pages/Employee-pages/Employee_wallet'
 
 
 function App() {
@@ -110,7 +110,7 @@ function App() {
           <Route path="/employee-projects" element={<Employee_projects />} />
           <Route path="/employee-project/:id" element={<Employee_project_detail />} />
           <Route path="/employee/milestone-details/:id" element={<Employee_milestone_details />} />
-          <Route path="/employee-task/:id" element={<Employee_task_detail />} />
+          <Route path="/employee-wallet" element={<Employee_wallet />} />
           <Route path="/employee-tasks" element={<Employee_tasks />} />
           <Route path="/employee-leaderboard" element={<Employee_leaderboard />} />
           <Route path="/employee-profile" element={<Employee_profile />} />
