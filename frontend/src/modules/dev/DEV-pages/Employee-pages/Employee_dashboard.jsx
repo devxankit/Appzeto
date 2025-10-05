@@ -144,7 +144,7 @@ const Employee_dashboard = () => {
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
           <div className="mb-6 md:mb-8">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Welcome, Employee!</h1>
-            <p className="text-sm text-gray-600 mt-1">Here's your task overview</p>
+            <p className="text-sm text-gray-600 mt-1">Appzeto loves you!</p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
@@ -187,6 +187,29 @@ const Employee_dashboard = () => {
               </div>
               <p className="text-2xl font-bold text-gray-900">{stats.overdue}</p>
               <p className="text-xs text-gray-600">Tasks</p>
+            </div>
+          </div>
+
+          {/* Urgent Tasks Card */}
+          <div className="mb-6 md:mb-8">
+            <div 
+              onClick={() => navigate('/employee-tasks?filter=urgent')}
+              className="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-4 shadow-sm border border-red-200 cursor-pointer hover:shadow-md hover:border-red-300 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-red-100 rounded-xl">
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-red-900 mb-1">Urgent Tasks</h3>
+                    <p className="text-xs text-red-700">Critical tasks need immediate attention</p>
+                  </div>
+                </div>
+                 <div className="bg-red-300 text-red-800 px-4 py-2 rounded-xl shadow-sm animate-pulse">
+                   <p className="text-2xl font-bold">{tasks.filter(t => t.priority === 'urgent' || t.priority === 'high').length}</p>
+                 </div>
+              </div>
             </div>
           </div>
 
