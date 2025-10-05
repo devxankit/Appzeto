@@ -121,10 +121,10 @@ const PM_new_projects = () => {
         'Prescription management',
         'Telemedicine features'
       ],
-       status: 'processing',
+       status: 'started',
        priority: 'urgent',
        estimatedDuration: '4 months',
-       progress: 0,
+       progress: 15,
       attachments: [
         { name: 'healthcare-specs.pdf', size: '3.5 MB' },
         { name: 'compliance-docs.pdf', size: '2.8 MB' }
@@ -151,10 +151,10 @@ const PM_new_projects = () => {
         'Progress analytics',
         'Personal trainer integration'
       ],
-       status: 'processing',
+       status: 'started',
        priority: 'high',
        estimatedDuration: '3 months',
-       progress: 0,
+       progress: 25,
       attachments: [
         { name: 'fitness-mockups.fig', size: '4.2 MB' }
       ]
@@ -193,7 +193,6 @@ const PM_new_projects = () => {
 
   const projectStatuses = [
     { value: 'untouched', label: 'Untouched', color: 'bg-gray-100 text-gray-800', icon: FiClock },
-    { value: 'processing', label: 'Processing', color: 'bg-blue-100 text-blue-800', icon: FiSettings },
     { value: 'started', label: 'Started', color: 'bg-yellow-100 text-yellow-800', icon: FiPlay },
     { value: 'in-progress', label: 'In Progress', color: 'bg-green-100 text-green-800', icon: FiTrendingUp },
     { value: 'milestone-complete', label: 'Milestone Complete', color: 'bg-purple-100 text-purple-800', icon: FiTarget },
@@ -513,16 +512,6 @@ const PM_new_projects = () => {
                  Untouched
                </button>
                <button
-                 onClick={() => setActiveTab('processing')}
-                 className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                   activeTab === 'processing'
-                     ? 'bg-teal-500 text-white shadow-sm'
-                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                 }`}
-               >
-                 Processing
-               </button>
-               <button
                  onClick={() => setActiveTab('started')}
                  className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
                    activeTab === 'started'
@@ -684,17 +673,6 @@ const PM_new_projects = () => {
                      <span>Untouched</span>
                    </button>
                    <button
-                     onClick={() => setActiveTab('processing')}
-                     className={`px-6 py-3 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
-                       activeTab === 'processing'
-                         ? 'bg-teal-500 text-white shadow-sm'
-                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                     }`}
-                   >
-                     <FiSettings className="h-4 w-4" />
-                     <span>Processing</span>
-                   </button>
-                   <button
                      onClick={() => setActiveTab('started')}
                      className={`px-6 py-3 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
                        activeTab === 'started'
@@ -854,10 +832,6 @@ const PM_new_projects = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700 text-sm font-medium">Untouched</span>
                     <span className="text-gray-900 text-xl font-bold">{newProjectsData.filter(p => p.status === 'untouched').length}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-700 text-sm font-medium">Processing</span>
-                    <span className="text-gray-900 text-xl font-bold">{newProjectsData.filter(p => p.status === 'processing').length}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700 text-sm font-medium">Started</span>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import PM_task_form from '../../DEV-components/PM_task_form'
-import { CheckSquare, Plus, Search, Filter, Calendar, User, MoreVertical, Loader2 } from 'lucide-react'
+import { CheckSquare, Plus, Search, Filter, Calendar, User, MoreVertical, Loader2, AlertTriangle } from 'lucide-react'
 
 const PM_tasks = () => {
   const [filter, setFilter] = useState('all')
@@ -115,33 +115,57 @@ const PM_tasks = () => {
                 </button>
               </div>
             </div>
+            
+            {/* Urgent Tasks Card */}
+            <div className="mt-4 bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-6 border border-red-200 cursor-pointer hover:shadow-lg transition-all duration-200" onClick={() => navigate('/pm-urgent-tasks')}>
+              <div className="flex items-center space-x-3">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                <div>
+                  <h2 className="text-lg font-semibold text-red-900">Assign Urgent Tasks</h2>
+                  <p className="text-sm text-red-700">Create and assign critical tasks to team members</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Desktop Layout */}
-          <div className="hidden md:flex md:items-center md:justify-between mb-8">
-            <div className="flex items-center space-x-3">
-              <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                <Search className="h-4 w-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">Search</span>
-              </button>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                <Filter className="h-4 w-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">Filter</span>
-              </button>
-            </div>
-            <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl p-4 border border-primary/20">
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <h3 className="text-sm font-semibold text-gray-900">Stay productive today</h3>
-                  <p className="text-xs text-gray-600">Add new tasks and track progress</p>
-                </div>
-                <button 
-                  onClick={() => setIsTaskFormOpen(true)}
-                  className="bg-gradient-to-r from-primary to-primary-dark text-white px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center space-x-2"
-                >
-                  <Plus className="h-5 w-5" />
-                  <span className="font-medium">New Task</span>
+          <div className="hidden md:block mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-3">
+                <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                  <Search className="h-4 w-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">Search</span>
                 </button>
+                <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                  <Filter className="h-4 w-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">Filter</span>
+                </button>
+              </div>
+              <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl p-4 border border-primary/20">
+                <div className="flex items-center space-x-4">
+                  <div className="text-right">
+                    <h3 className="text-sm font-semibold text-gray-900">Stay productive today</h3>
+                    <p className="text-xs text-gray-600">Add new tasks and track progress</p>
+                  </div>
+                  <button 
+                    onClick={() => setIsTaskFormOpen(true)}
+                    className="bg-gradient-to-r from-primary to-primary-dark text-white px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center space-x-2"
+                  >
+                    <Plus className="h-5 w-5" />
+                    <span className="font-medium">New Task</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Urgent Tasks Card - Desktop */}
+            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-6 border border-red-200 cursor-pointer hover:shadow-lg transition-all duration-200" onClick={() => navigate('/pm-urgent-tasks')}>
+              <div className="flex items-center space-x-3">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                <div>
+                  <h3 className="text-lg font-semibold text-red-900">Assign Urgent Tasks</h3>
+                  <p className="text-sm text-red-700">Create and assign critical tasks to team members</p>
+                </div>
               </div>
             </div>
           </div>

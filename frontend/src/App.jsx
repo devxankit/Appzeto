@@ -35,6 +35,8 @@ import PM_dashboard from './modules/dev/DEV-pages/PM-pages/PM_dashboard'
 import PM_projects from './modules/dev/DEV-pages/PM-pages/PM_projects'
 import PM_milestone from './modules/dev/DEV-pages/PM-pages/PM_milestone'
 import PM_tasks from './modules/dev/DEV-pages/PM-pages/PM_tasks'
+import PM_urgent_tasks from './modules/dev/DEV-pages/PM-pages/PM_urgent_tasks'
+import PM_urgent_task_detail from './modules/dev/DEV-pages/PM-pages/PM_urgent_task_detail'
 import PM_leaderboard from './modules/dev/DEV-pages/PM-pages/PM_leaderboard'
 import PM_Profile from './modules/dev/DEV-pages/PM-pages/PM_Profile'
 import PM_project_detail from './modules/dev/DEV-pages/PM-pages/PM_project_detail'
@@ -96,6 +98,8 @@ function App() {
           <Route path="/pm-task/:id" element={<PM_task_detail />} />
           <Route path="/pm-milestone" element={<PM_milestone />} />
           <Route path="/pm-tasks" element={<PM_tasks />} />
+          <Route path="/pm-urgent-tasks" element={<PM_urgent_tasks />} />
+          <Route path="/pm-urgent-task/:id" element={<PM_urgent_task_detail />} />
           <Route path="/pm-leaderboard" element={<PM_leaderboard />} />
           <Route path="/pm-profile" element={<PM_Profile />} />
           <Route path="/pm-wallet" element={<PM_wallet />} />

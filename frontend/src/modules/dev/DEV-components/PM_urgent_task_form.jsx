@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Save, Upload, AlertCircle, CheckCircle, Loader2, X } from 'lucide-react'
+import { Save, Upload, AlertCircle, CheckCircle, Loader2, X, AlertTriangle, Zap } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../../components/ui/dialog'
 import { Button } from '../../../components/ui/button'
 import { Input } from '../../../components/ui/input'
@@ -8,14 +8,14 @@ import { Textarea } from '../../../components/ui/textarea'
 import { Combobox } from '../../../components/ui/combobox'
 import { DatePicker } from '../../../components/ui/date-picker'
 
-const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => {
+const PM_urgent_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     dueDate: '',
     assignedTo: '',
     status: 'pending',
-    priority: 'normal',
+    priority: 'urgent',
     milestone: milestoneId || '',
     project: projectId || '',
     attachments: []
@@ -54,9 +54,10 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
       await new Promise(r => setTimeout(r, 400))
       // Mock projects
       setProjects([
-        { _id: 'p-001', name: 'Website Redesign' },
-        { _id: 'p-002', name: 'Mobile App v2' },
-        { _id: 'p-003', name: 'Data Warehouse Setup' }
+        { _id: 'p-001', name: 'Security Update' },
+        { _id: 'p-002', name: 'Infrastructure' },
+        { _id: 'p-003', name: 'Data Recovery' },
+        { _id: 'p-004', name: 'E-commerce Platform' }
       ])
     } finally {
       setIsLoadingProjects(false)
@@ -70,9 +71,10 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
       await new Promise(r => setTimeout(r, 400))
       // Mock milestones by project
       const map = {
-        'p-001': [ { _id: 'm-001', title: 'M1 - UI/UX' }, { _id: 'm-002', title: 'M2 - Build' } ],
-        'p-002': [ { _id: 'm-010', title: 'M1 - Foundations' } ],
-        'p-003': [ { _id: 'm-020', title: 'M1 - Modeling' } ]
+        'p-001': [ { _id: 'm-001', title: 'M1 - Critical Fixes' }, { _id: 'm-002', title: 'M2 - Security Patch' } ],
+        'p-002': [ { _id: 'm-010', title: 'M1 - Emergency' }, { _id: 'm-011', title: 'M2 - Recovery' } ],
+        'p-003': [ { _id: 'm-020', title: 'M1 - Recovery' }, { _id: 'm-021', title: 'M2 - Backup' } ],
+        'p-004': [ { _id: 'm-030', title: 'M1 - Payment Fix' }, { _id: 'm-031', title: 'M2 - Integration' } ]
       }
       setMilestones(map[pid] || [])
     } finally {
@@ -87,9 +89,10 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
       await new Promise(r => setTimeout(r, 400))
       // Mock members
       setTeamMembers([
-        { _id: 'u-001', fullName: 'John Doe', jobTitle: 'Developer' },
-        { _id: 'u-002', fullName: 'Jane Smith', jobTitle: 'Designer' },
-        { _id: 'u-003', fullName: 'Mike Johnson', jobTitle: 'QA' }
+        { _id: 'u-001', fullName: 'John Doe', jobTitle: 'Security Expert' },
+        { _id: 'u-002', fullName: 'Jane Smith', jobTitle: 'DevOps Engineer' },
+        { _id: 'u-003', fullName: 'Mike Johnson', jobTitle: 'Data Recovery Specialist' },
+        { _id: 'u-004', fullName: 'Sarah Wilson', jobTitle: 'Backend Developer' }
       ])
     } finally {
       setIsLoadingTeamMembers(false)
@@ -146,7 +149,7 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
       dueDate: '',
       assignedTo: '',
       status: 'pending',
-      priority: 'normal',
+      priority: 'urgent',
       milestone: milestoneId || '',
       project: projectId || '',
       attachments: []
@@ -167,13 +170,14 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
         status: formData.status,
         priority: formData.priority,
         milestone: formData.milestone,
-        project: formData.project
+        project: formData.project,
+        isUrgent: true
       }
       await new Promise(r => setTimeout(r, 700))
       onSubmit && onSubmit(taskData)
       handleClose()
     } catch (err) {
-      console.error('Error creating task:', err)
+      console.error('Error creating urgent task:', err)
     } finally {
       setIsSubmitting(false)
     }
@@ -192,10 +196,10 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
   ]
 
   const priorityOptions = [
-    { value: 'low', label: 'Low' },
-    { value: 'normal', label: 'Normal' },
+    { value: 'urgent', label: 'Urgent' },
     { value: 'high', label: 'High' },
-    { value: 'urgent', label: 'Urgent' }
+    { value: 'normal', label: 'Normal' },
+    { value: 'low', label: 'Low' }
   ]
 
   const projectOptions = (projects || []).map(p => ({ value: p._id, label: p.name }))
@@ -206,23 +210,46 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto p-0" onClose={handleClose}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-primary to-primary-dark p-6 text-white">
+        <div className="bg-gradient-to-r from-red-500 to-red-600 p-6 text-white">
           <DialogHeader className="space-y-2">
-            <DialogTitle className="text-2xl font-bold">Create New Task</DialogTitle>
-            <DialogDescription className="text-primary-foreground/80">Fill in the task details below. Fields marked with * are required.</DialogDescription>
+            <DialogTitle className="text-2xl font-bold flex items-center">
+              <AlertTriangle className="h-6 w-6 mr-2" />
+              Create Urgent Task
+            </DialogTitle>
+            <DialogDescription className="text-red-100">
+              Fill in the urgent task details below. This task will be marked as high priority and requires immediate attention.
+            </DialogDescription>
           </DialogHeader>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Urgent Warning */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ delay: 0.05 }}
+            className="bg-red-50 border border-red-200 rounded-xl p-4"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="bg-red-500 text-white p-2 rounded-full">
+                <Zap className="h-4 w-4" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-red-900">Urgent Task Notice</h4>
+                <p className="text-xs text-red-700">This task will be automatically marked as urgent and will appear in the urgent tasks section.</p>
+              </div>
+            </div>
+          </motion.div>
+
           {/* Task Title */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-2">
             <label className="text-sm font-semibold text-gray-700 flex items-center">Task Title <span className="text-red-500 ml-1">*</span></label>
             <Input
               type="text"
-              placeholder="Enter task title"
+              placeholder="Enter urgent task title"
               value={formData.title}
               onChange={(e) => handleInputChange('title', e.target.value)}
-              className={`h-12 rounded-xl border-2 transition-all duration-200 ${errors.title ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-gray-200 focus:border-primary focus:ring-primary/20'}`}
+              className={`h-12 rounded-xl border-2 transition-all duration-200 ${errors.title ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-red-200 focus:border-red-500 focus:ring-red-500/20'}`}
             />
             <AnimatePresence>
               {errors.title && (
@@ -237,11 +264,11 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-2">
             <label className="text-sm font-semibold text-gray-700">Description</label>
             <Textarea
-              placeholder="Enter task description"
+              placeholder="Enter urgent task description"
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
               rows={3}
-              className="rounded-xl border-2 border-gray-200 focus:border-primary focus:ring-primary/20 transition-all duration-200"
+              className="rounded-xl border-2 border-red-200 focus:border-red-500 focus:ring-red-500/20 transition-all duration-200"
             />
           </motion.div>
 
@@ -327,10 +354,10 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
           {/* Attachments */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} className="space-y-2">
             <label className="text-sm font-semibold text-gray-700">Attachments</label>
-            <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-primary/50 transition-colors duration-200">
-              <input type="file" multiple onChange={handleFileChange} className="hidden" id="task-attachments" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" />
-              <label htmlFor="task-attachments" className="cursor-pointer flex flex-col items-center space-y-3 text-gray-500 hover:text-primary transition-colors duration-200">
-                <div className="p-3 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full">
+            <div className="border-2 border-dashed border-red-300 rounded-xl p-6 hover:border-red-500 transition-colors duration-200">
+              <input type="file" multiple onChange={handleFileChange} className="hidden" id="urgent-task-attachments" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" />
+              <label htmlFor="urgent-task-attachments" className="cursor-pointer flex flex-col items-center space-y-3 text-gray-500 hover:text-red-600 transition-colors duration-200">
+                <div className="p-3 bg-gradient-to-br from-red-100 to-red-200 rounded-full">
                   <Upload className="h-8 w-8" />
                 </div>
                 <div className="text-center">
@@ -345,7 +372,7 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
                 <h4 className="text-sm font-semibold text-gray-800 flex items-center space-x-2"><CheckCircle className="h-4 w-4 text-green-500" /><span>Selected Files ({formData.attachments.length})</span></h4>
                 <div className="space-y-2">
                   {formData.attachments.map((attachment, index) => (
-                    <motion.div key={index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+                    <motion.div key={index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center justify-between p-3 bg-gradient-to-r from-red-50 to-red-100 rounded-lg border border-red-200">
                       <div className="flex items-center space-x-3">
                         <span className="text-2xl">📎</span>
                         <div>
@@ -364,10 +391,10 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
           </motion.div>
 
           {/* Actions */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }} className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-200">
-            <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting} className="flex-1 h-12 rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-50">Cancel</Button>
-            <Button type="submit" disabled={isSubmitting} className="flex-1 h-12 rounded-xl bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white hover:shadow-lg transition-all duration-200 disabled:opacity-50">
-              {isSubmitting ? (<><Loader2 className="h-4 w-4 animate-spin mr-2" />Creating Task...</>) : (<><Save className="h-4 w-4 mr-2" />Create Task</>)}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }} className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-red-200">
+            <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting} className="flex-1 h-12 rounded-xl border-2 border-red-200 text-red-600 hover:bg-red-50">Cancel</Button>
+            <Button type="submit" disabled={isSubmitting} className="flex-1 h-12 rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white hover:shadow-lg transition-all duration-200 disabled:opacity-50">
+              {isSubmitting ? (<><Loader2 className="h-4 w-4 animate-spin mr-2" />Creating Urgent Task...</>) : (<><Save className="h-4 w-4 mr-2" />Create Urgent Task</>)}
             </Button>
           </motion.div>
         </form>
@@ -376,4 +403,4 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
   )
 }
 
-export default PM_task_form
+export default PM_urgent_task_form
