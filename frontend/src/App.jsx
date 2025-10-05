@@ -55,6 +55,16 @@ import Employee_project_detail from './modules/dev/DEV-pages/Employee-pages/Empl
 import Employee_milestone_details from './modules/dev/DEV-pages/Employee-pages/Employee_milestone_details'
 import PM_notifications from './modules/dev/DEV-pages/PM-pages/PM_notifications'
 import Employee_notification from './modules/dev/DEV-pages/Employee-pages/Employee_notification'
+import Employee_wallet from './modules/dev/DEV-pages/Employee-pages/Employee_wallet'
+
+//Client pages start here //
+import Client_dashboard from './modules/dev/DEV-pages/Client-pages/Client_dashboard'
+import Client_projects from './modules/dev/DEV-pages/Client-pages/Client_projects'
+import Client_project_detail from './modules/dev/DEV-pages/Client-pages/Client_project_detail'
+import Client_milestone_detail from './modules/dev/DEV-pages/Client-pages/Client_milestone_detail'
+import Client_requests from './modules/dev/DEV-pages/Client-pages/Client_request'
+import Client_explore from './modules/dev/DEV-pages/Client-pages/Client_explore'
+import Client_profile from './modules/dev/DEV-pages/Client-pages/Client_profile'
 
 
 function App() {
@@ -115,6 +125,16 @@ function App() {
           <Route path="/employee-tasks" element={<Employee_tasks />} />
           <Route path="/employee-leaderboard" element={<Employee_leaderboard />} />
           <Route path="/employee-profile" element={<Employee_profile />} />
+          <Route path="/employee-wallet" element={<Employee_wallet />} />
+
+          //Client pages start here //
+        <Route path="/client-dashboard" element={<Client_dashboard />} />
+        <Route path="/client-projects" element={<Client_projects />} />
+        <Route path="/client-project-detail/:id" element={<Client_project_detail />} />
+        <Route path="/client-milestone-detail/:id" element={<Client_milestone_detail />} />
+        <Route path="/client-requests" element={<Client_requests />} />
+        <Route path="/client-explore" element={<Client_explore />} />
+        <Route path="/client-profile" element={<Client_profile />} />
          
           <Route path="*" element={<NotFound />} />
         </Routes>
