@@ -157,7 +157,22 @@ const PM_projects = () => {
 
   // Filter projects based on status and search term
   const filteredProjects = projects.filter(project => {
-    const matchesFilter = filter === 'all' || project.status === filter;
+    let matchesFilter = false;
+    
+    if (filter === 'all') {
+      matchesFilter = true;
+    } else if (filter === 'overdue') {
+      if (!project.dueDate) {
+        matchesFilter = false;
+      } else {
+        const now = new Date();
+        const dueDate = new Date(project.dueDate);
+        matchesFilter = dueDate.getTime() < now.getTime();
+      }
+    } else {
+      matchesFilter = project.status === filter;
+    }
+    
     const matchesSearch = !searchTerm || 
       project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       project.description?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -236,7 +251,12 @@ const PM_projects = () => {
               {[
                 { key: 'all', label: 'All', count: projects.length },
                 { key: 'active', label: 'Active', count: projects.filter(p => p.status === 'active').length },
-                { key: 'planning', label: 'Planning', count: projects.filter(p => p.status === 'planning').length },
+                { key: 'overdue', label: 'Overdue', count: projects.filter(p => {
+                  if (!p.dueDate) return false;
+                  const now = new Date();
+                  const dueDate = new Date(p.dueDate);
+                  return dueDate.getTime() < now.getTime();
+                }).length },
                 { key: 'completed', label: 'Done', count: projects.filter(p => p.status === 'completed').length }
               ].map(({ key, label, count }) => (
                 <button
@@ -263,7 +283,12 @@ const PM_projects = () => {
               {[
                 { key: 'all', label: 'All', count: projects.length },
                 { key: 'active', label: 'Active', count: projects.filter(p => p.status === 'active').length },
-                { key: 'planning', label: 'Planning', count: projects.filter(p => p.status === 'planning').length },
+                { key: 'overdue', label: 'Overdue', count: projects.filter(p => {
+                  if (!p.dueDate) return false;
+                  const now = new Date();
+                  const dueDate = new Date(p.dueDate);
+                  return dueDate.getTime() < now.getTime();
+                }).length },
                 { key: 'completed', label: 'Done', count: projects.filter(p => p.status === 'completed').length }
               ].map(({ key, label, count }) => (
                 <button

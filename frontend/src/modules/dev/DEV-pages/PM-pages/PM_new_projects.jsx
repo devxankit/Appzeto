@@ -38,6 +38,10 @@ const PM_new_projects = () => {
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false)
   const [editingProject, setEditingProject] = useState(null)
+  const [isMeetingDialogOpen, setIsMeetingDialogOpen] = useState(false)
+  const [selectedProjectForMeeting, setSelectedProjectForMeeting] = useState(null)
+  const [selectedMeetingStatus, setSelectedMeetingStatus] = useState('pending')
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
 
   // Mock new projects data from sales team
   const newProjectsData = [
@@ -66,6 +70,7 @@ const PM_new_projects = () => {
        priority: 'high',
        estimatedDuration: '3 months',
        progress: 0,
+       meetingStatus: 'pending',
       attachments: [
         { name: 'project-brief.pdf', size: '2.1 MB' },
         { name: 'wireframes.fig', size: '1.8 MB' }
@@ -96,6 +101,7 @@ const PM_new_projects = () => {
        priority: 'normal',
        estimatedDuration: '2 months',
        progress: 0,
+       meetingStatus: 'done',
       attachments: [
         { name: 'requirements.docx', size: '1.2 MB' }
       ]
@@ -125,6 +131,7 @@ const PM_new_projects = () => {
        priority: 'urgent',
        estimatedDuration: '4 months',
        progress: 15,
+       meetingStatus: 'done',
       attachments: [
         { name: 'healthcare-specs.pdf', size: '3.5 MB' },
         { name: 'compliance-docs.pdf', size: '2.8 MB' }
@@ -155,6 +162,7 @@ const PM_new_projects = () => {
        priority: 'high',
        estimatedDuration: '3 months',
        progress: 25,
+       meetingStatus: 'pending',
       attachments: [
         { name: 'fitness-mockups.fig', size: '4.2 MB' }
       ]
@@ -184,6 +192,7 @@ const PM_new_projects = () => {
        priority: 'normal',
        estimatedDuration: '5 months',
        progress: 35,
+       meetingStatus: 'done',
       attachments: [
         { name: 'real-estate-brief.pdf', size: '2.9 MB' },
         { name: 'design-guidelines.pdf', size: '1.5 MB' }
@@ -237,6 +246,27 @@ const PM_new_projects = () => {
     }
   }
 
+  const getMeetingStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800'
+      case 'done': return 'bg-green-100 text-green-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getMeetingStatusLabel = (status) => {
+    switch (status) {
+      case 'pending': return 'Meeting Pending'
+      case 'done': return 'Meeting Done'
+      default: return 'No Meeting'
+    }
+  }
+
+  const meetingStatusOptions = [
+    { value: 'pending', label: 'Meeting Pending', icon: FiClock },
+    { value: 'done', label: 'Meeting Done', icon: FiCheckCircle }
+  ]
+
   const handleEditProject = (projectId) => {
     const project = newProjectsData.find(p => p.id === projectId)
     if (project) {
@@ -268,6 +298,53 @@ const PM_new_projects = () => {
     setEditingProject(null)
   }
 
+  const handleStartMeeting = (projectId) => {
+    const project = newProjectsData.find(p => p.id === projectId)
+    if (project) {
+      setSelectedProjectForMeeting(project)
+      setSelectedMeetingStatus('pending') // Set default to pending
+      setIsDropdownOpen(false)
+      setIsMeetingDialogOpen(true)
+    }
+  }
+
+  const handleMeetingStatusUpdate = () => {
+    if (selectedProjectForMeeting) {
+      // Update the project's meeting status
+      const updatedProject = { ...selectedProjectForMeeting, meetingStatus: selectedMeetingStatus }
+      console.log('Meeting status updated:', updatedProject)
+      // Here you would typically update the project data in your backend
+    }
+    setIsMeetingDialogOpen(false)
+    setSelectedProjectForMeeting(null)
+    setSelectedMeetingStatus('pending')
+    setIsDropdownOpen(false)
+  }
+
+  const handleMeetingDialogClose = () => {
+    setIsMeetingDialogOpen(false)
+    setSelectedProjectForMeeting(null)
+    setSelectedMeetingStatus('pending')
+    setIsDropdownOpen(false)
+  }
+
+  const handleStatusSelect = (status) => {
+    setSelectedMeetingStatus(status)
+    setIsDropdownOpen(false)
+  }
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isDropdownOpen && !event.target.closest('.dropdown-container')) {
+        setIsDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isDropdownOpen])
+
   // Mobile Project Card Component
   const MobileProjectCard = ({ project, ...motionProps }) => {
     const statusInfo = getStatusInfo(project.status)
@@ -295,11 +372,20 @@ const PM_new_projects = () => {
                 </svg>
                 <span className="truncate">Client: {project.client.name}</span>
               </div>
+              <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 text-teal-600">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                </svg>
+                <span className="truncate">{project.client.phone}</span>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusInfo.color}`}>
               {statusInfo.label}
+            </span>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getMeetingStatusColor(project.meetingStatus)}`}>
+              {getMeetingStatusLabel(project.meetingStatus)}
             </span>
           </div>
         </div>
@@ -326,40 +412,57 @@ const PM_new_projects = () => {
           </div>
         </div>
 
-        <div className="mt-3 flex items-center justify-between">
-          <div className="inline-flex items-center gap-1 text-xs text-black">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 text-teal-700">
+        <div className="mt-3 flex items-center justify-between gap-2">
+          {/* Date Section */}
+          <div className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded-full flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 text-teal-600">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 7V3m8 4V3M3.75 8.25h16.5M5 21h14a2 2 0 002-2V8.25H3v10.75A2 2 0 005 21z" />
             </svg>
-            Due: {project.convertedDate}
+            <span className="font-medium whitespace-nowrap">Due: {project.convertedDate}</span>
           </div>
           
-          {/* Conditional Button based on status */}
-          {project.status === 'started' ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleViewDetails(project.id)
-              }}
-              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
-              title="View Project Details"
-            >
-              <span>View details</span>
-              <FiEye className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleEditProject(project.id)
-              }}
-              className="inline-flex items-center gap-1 text-xs font-medium text-teal-600 hover:underline"
-              title="Edit Project"
-            >
-              <span>Edit</span>
-              <FiEdit className="h-4 w-4" />
-            </button>
-          )}
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {project.status === 'started' ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleViewDetails(project.id)
+                }}
+                className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline px-2 py-1 rounded-md hover:bg-blue-50 transition-colors duration-200"
+                title="View Project Details"
+              >
+                <span>View details</span>
+                <FiEye className="h-3 w-3" />
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleStartMeeting(project.id)
+                  }}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-orange-600 border border-orange-600 hover:bg-orange-50 px-2 py-1 rounded-md transition-colors duration-200"
+                  title="Start Meeting"
+                >
+                  <FiUsers className="h-3 w-3" />
+                  <span className="hidden sm:inline">Start Meeting</span>
+                  <span className="sm:hidden">Meeting</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleEditProject(project.id)
+                  }}
+                  className="inline-flex items-center gap-1 text-sm font-medium text-teal-600 hover:underline px-2 py-1 rounded-md hover:bg-teal-50 transition-colors duration-200"
+                  title="Edit Project"
+                >
+                  <FiEdit className="h-4 w-4" />
+                  <span>Edit</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </motion.div>
     )
@@ -392,6 +495,12 @@ const PM_new_projects = () => {
                 </svg>
                 <span className="truncate">Client: {project.client.name}</span>
               </div>
+              <div className="mt-1 flex items-center gap-1 text-sm text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 text-teal-600">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                </svg>
+                <span className="truncate">{project.client.phone}</span>
+              </div>
               <div className="mt-1 text-xs text-gray-600">
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">
                   {project.package}
@@ -405,6 +514,9 @@ const PM_new_projects = () => {
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${statusInfo.color}`}>
               {statusInfo.label}
+            </span>
+            <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${getMeetingStatusColor(project.meetingStatus)}`}>
+              {getMeetingStatusLabel(project.meetingStatus)}
             </span>
           </div>
         </div>
@@ -431,40 +543,56 @@ const PM_new_projects = () => {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between">
-          <div className="inline-flex items-center gap-1 text-sm text-black">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 text-teal-700">
+        <div className="mt-4 flex items-center justify-between gap-4">
+          {/* Date Section */}
+          <div className="inline-flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-full flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 text-teal-600">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 7V3m8 4V3M3.75 8.25h16.5M5 21h14a2 2 0 002-2V8.25H3v10.75A2 2 0 005 21z" />
             </svg>
-            Due: {project.convertedDate}
+            <span className="font-medium whitespace-nowrap">Due: {project.convertedDate}</span>
           </div>
           
-          {/* Conditional Button based on status */}
-          {project.status === 'started' ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleViewDetails(project.id)
-              }}
-              className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
-              title="View Project Details"
-            >
-              <span>View details</span>
-              <FiEye className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleEditProject(project.id)
-              }}
-              className="inline-flex items-center gap-1 text-sm font-medium text-teal-600 hover:underline"
-              title="Edit Project"
-            >
-              <span>Edit</span>
-              <FiEdit className="h-4 w-4" />
-            </button>
-          )}
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {project.status === 'started' ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleViewDetails(project.id)
+                }}
+                className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:underline px-3 py-2 rounded-md hover:bg-blue-50 transition-colors duration-200"
+                title="View Project Details"
+              >
+                <span>View details</span>
+                <FiEye className="h-4 w-4" />
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleStartMeeting(project.id)
+                  }}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-orange-600 border border-orange-600 hover:bg-orange-50 px-3 py-2 rounded-md transition-colors duration-200"
+                  title="Start Meeting"
+                >
+                  <FiUsers className="h-4 w-4" />
+                  <span>Start Meeting</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleEditProject(project.id)
+                  }}
+                  className="inline-flex items-center gap-2 text-base font-medium text-teal-600 hover:underline px-3 py-2 rounded-md hover:bg-teal-50 transition-colors duration-200"
+                  title="Edit Project"
+                >
+                  <FiEdit className="h-5 w-5" />
+                  <span>Edit</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </motion.div>
     )
@@ -877,6 +1005,139 @@ const PM_new_projects = () => {
          onSubmit={handleProjectFormSubmit}
          projectData={editingProject}
        />
+
+       {/* Meeting Dialog */}
+       <AnimatePresence>
+         {isMeetingDialogOpen && selectedProjectForMeeting && (
+           <motion.div
+             initial={{ opacity: 0 }}
+             animate={{ opacity: 1 }}
+             exit={{ opacity: 0 }}
+             className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+             onClick={handleMeetingDialogClose}
+           >
+             <motion.div
+               initial={{ scale: 0.9, opacity: 0 }}
+               animate={{ scale: 1, opacity: 1 }}
+               exit={{ scale: 0.9, opacity: 0 }}
+               className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl"
+               onClick={(e) => e.stopPropagation()}
+             >
+               <div className="text-center mb-6">
+                 <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                   <FiUsers className="text-orange-600 text-2xl" />
+                 </div>
+                 <h3 className="text-xl font-bold text-gray-900 mb-2">Meeting Status</h3>
+                 <p className="text-gray-600 text-sm">
+                   Update meeting status for <span className="font-semibold">{selectedProjectForMeeting.name}</span>
+                 </p>
+               </div>
+
+               <div className="space-y-4 mb-6">
+                 <div className="bg-gray-50 rounded-lg p-4">
+                   <div className="flex items-center justify-between mb-2">
+                     <span className="text-sm font-medium text-gray-700">Client:</span>
+                     <span className="text-sm text-gray-900">{selectedProjectForMeeting.client.name}</span>
+                   </div>
+                   <div className="flex items-center justify-between mb-2">
+                     <span className="text-sm font-medium text-gray-700">Company:</span>
+                     <span className="text-sm text-gray-900">{selectedProjectForMeeting.client.company}</span>
+                   </div>
+                   <div className="flex items-center justify-between mb-2">
+                     <span className="text-sm font-medium text-gray-700">Phone:</span>
+                     <div className="flex items-center gap-2">
+                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 text-teal-600">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                       </svg>
+                       <span className="text-sm text-gray-900 font-mono">{selectedProjectForMeeting.client.phone}</span>
+                     </div>
+                   </div>
+                   <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium text-gray-700">Current Status:</span>
+                     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getMeetingStatusColor(selectedProjectForMeeting.meetingStatus)}`}>
+                       {getMeetingStatusLabel(selectedProjectForMeeting.meetingStatus)}
+                     </span>
+                   </div>
+                 </div>
+
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">Select Meeting Status:</label>
+                   <div className="relative dropdown-container">
+                     <button
+                       type="button"
+                       onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                       className="flex h-12 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm transition-all duration-200 hover:border-gray-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 focus:outline-none"
+                     >
+                       <span className="flex items-center space-x-3">
+                         {selectedMeetingStatus === 'pending' ? (
+                           <FiClock className="h-4 w-4 text-yellow-600" />
+                         ) : (
+                           <FiCheckCircle className="h-4 w-4 text-green-600" />
+                         )}
+                         <span>{getMeetingStatusLabel(selectedMeetingStatus)}</span>
+                       </span>
+                       <FiArrowRight className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-90' : ''}`} />
+                     </button>
+
+                     <AnimatePresence>
+                       {isDropdownOpen && (
+                         <motion.div
+                           initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                           animate={{ opacity: 1, y: 0, scale: 1 }}
+                           exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                           transition={{ duration: 0.15 }}
+                           className="absolute top-full left-0 right-0 z-50 mt-2 max-h-64 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
+                         >
+                           <div className="max-h-48 overflow-y-auto">
+                             {meetingStatusOptions.map((option, index) => (
+                               <motion.button
+                                 key={option.value}
+                                 initial={{ opacity: 0, x: -20 }}
+                                 animate={{ opacity: 1, x: 0 }}
+                                 transition={{ delay: index * 0.05 }}
+                                 type="button"
+                                 onClick={() => handleStatusSelect(option.value)}
+                                 className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors duration-150 hover:bg-gray-50 ${
+                                   selectedMeetingStatus === option.value ? 'bg-teal-50 text-teal-700' : ''
+                                 }`}
+                               >
+                                 <span className="flex items-center space-x-3">
+                                   <option.icon className={`h-4 w-4 ${option.value === 'pending' ? 'text-yellow-600' : 'text-green-600'}`} />
+                                   <span>{option.label}</span>
+                                 </span>
+                                 {selectedMeetingStatus === option.value && (
+                                   <FiCheckCircle className="h-4 w-4 text-teal-600" />
+                                 )}
+                               </motion.button>
+                             ))}
+                           </div>
+                         </motion.div>
+                       )}
+                     </AnimatePresence>
+                   </div>
+                 </div>
+               </div>
+
+               <div className="space-y-3">
+                 <button
+                   onClick={handleMeetingDialogClose}
+                   className="w-full bg-gray-100 text-gray-700 font-semibold py-3 px-4 rounded-xl hover:bg-gray-200 transition-colors duration-200"
+                 >
+                   Cancel
+                 </button>
+                 
+                 <button
+                   onClick={handleMeetingStatusUpdate}
+                   className="w-full bg-teal-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-teal-600 transition-colors duration-200 flex items-center justify-center space-x-2"
+                 >
+                   <FiCheckCircle className="text-lg" />
+                   <span>Confirm Status</span>
+                 </button>
+               </div>
+             </motion.div>
+           </motion.div>
+         )}
+       </AnimatePresence>
      </div>
    )
  }

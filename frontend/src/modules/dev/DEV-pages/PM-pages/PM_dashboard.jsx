@@ -175,28 +175,28 @@ const PM_dashboard = () => {
               <div className="text-sm text-gray-600">Completed</div>
             </div>
 
-            {/* Team Card */}
+            {/* Overdue Projects Card */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <FiUsers className="text-blue-600 text-lg" />
+                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                  <FiClock className="text-red-600 text-lg" />
                 </div>
-                <span className="text-sm text-gray-600 font-medium">Team</span>
+                <span className="text-sm text-gray-600 font-medium">Overdue</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">8</div>
-              <div className="text-sm text-gray-600">Active</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">2</div>
+              <div className="text-sm text-gray-600">Projects</div>
             </div>
 
-            {/* Tasks Card */}
+            {/* Active Tasks Card */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <FiCalendar className="text-purple-600 text-lg" />
+                  <FiCheckSquare className="text-purple-600 text-lg" />
                 </div>
-                <span className="text-sm text-gray-600 font-medium">Tasks</span>
+                <span className="text-sm text-gray-600 font-medium">Active</span>
               </div>
               <div className="text-2xl font-bold text-gray-900 mb-1">24</div>
-              <div className="text-sm text-gray-600">Total</div>
+              <div className="text-sm text-gray-600">Tasks</div>
             </div>
           </div>
 
