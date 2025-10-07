@@ -91,6 +91,7 @@ const PM_dashboard = () => {
       case 'near-completion': return 'bg-blue-500'
       case 'overdue': return 'bg-red-500'
       case 'on-hold': return 'bg-yellow-500'
+      case 'testing': return 'bg-purple-500'
       default: return 'bg-gray-500'
     }
   }
@@ -101,6 +102,7 @@ const PM_dashboard = () => {
       case 'near-completion': return 'Near Completion'
       case 'overdue': return 'Overdue'
       case 'on-hold': return 'On Hold'
+      case 'testing': return 'Testing'
       default: return 'Unknown'
     }
   }
@@ -218,6 +220,52 @@ const PM_dashboard = () => {
                 </div>
                  <div className="bg-teal-300 text-teal-800 px-4 py-2 rounded-xl shadow-sm">
                    <p className="text-2xl font-bold">20</p>
+                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Testing Projects Card */}
+          <div className="mb-6 md:mb-8">
+            <div 
+              onClick={() => navigate('/pm-testing-projects')}
+              className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-4 shadow-sm border border-purple-200 cursor-pointer hover:shadow-md hover:border-purple-300 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-purple-100 rounded-xl">
+                    <FiCheckSquare className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-purple-900 mb-1">Testing Projects</h3>
+                    <p className="text-xs text-purple-700">Projects currently in testing phase</p>
+                  </div>
+                </div>
+                 <div className="bg-purple-300 text-purple-800 px-4 py-2 rounded-xl shadow-sm">
+                   <p className="text-2xl font-bold">4</p>
+                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Testing Milestones Card */}
+          <div className="mb-6 md:mb-8">
+            <div 
+              onClick={() => navigate('/pm-testing-milestones')}
+              className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl p-4 shadow-sm border border-indigo-200 cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-indigo-100 rounded-xl">
+                    <FiTarget className="h-5 w-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-indigo-900 mb-1">Testing Milestones</h3>
+                    <p className="text-xs text-indigo-700">Milestones currently in testing phase</p>
+                  </div>
+                </div>
+                 <div className="bg-indigo-300 text-indigo-800 px-4 py-2 rounded-xl shadow-sm">
+                   <p className="text-2xl font-bold">6</p>
                  </div>
               </div>
             </div>

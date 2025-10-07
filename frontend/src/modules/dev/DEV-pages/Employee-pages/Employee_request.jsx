@@ -18,7 +18,10 @@ import {
   FiEye,
   FiTrash2,
   FiAlertCircle,
-  FiInfo
+  FiInfo,
+  FiArrowDown,
+  FiArrowUp,
+  FiShield
 } from 'react-icons/fi'
 
 const Employee_request = () => {
@@ -30,6 +33,9 @@ const Employee_request = () => {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
+  const [requestType, setRequestType] = useState('incoming') // 'incoming' or 'outgoing'
+  const [responseText, setResponseText] = useState('')
+  const [responseType, setResponseType] = useState('approve')
 
   // Form states for creating new request
   const [newRequest, setNewRequest] = useState({
@@ -38,18 +44,122 @@ const Employee_request = () => {
     type: 'approval',
     priority: 'normal',
     projectName: '',
-    recipientType: 'pm' // 'pm' or 'client'
+    recipientType: 'pm' // 'pm', 'client', or 'admin'
   })
 
   // Mock requests data - Employee's perspective
   const [requestsData] = useState({
-    statistics: {
-      total: 8,
-      pending: 2,
-      responded: 5,
-      draft: 1
+    incoming: {
+      statistics: {
+        total: 12,
+        pending: 5,
+        responded: 6,
+        urgent: 2
+      },
+      requests: [
+        {
+          id: 1,
+          title: "Code Review Request",
+          description: "Please review the authentication module code I've implemented. I need your feedback before merging to main branch.",
+          status: "pending",
+          priority: "high",
+          submittedDate: "2024-01-20",
+          submittedBy: "Sarah Johnson (PM)",
+          submittedByType: "pm",
+          type: "approval",
+          projectName: "E-commerce Website",
+          response: null
+        },
+        {
+          id: 2,
+          title: "Task Assignment - Payment Integration",
+          description: "I'm assigning you the payment gateway integration task. Please review the requirements and let me know if you need any clarification.",
+          status: "responded",
+          priority: "normal",
+          submittedDate: "2024-01-18",
+          submittedBy: "Mike Chen (PM)",
+          submittedByType: "pm",
+          type: "approval",
+          projectName: "Payment System",
+          response: {
+            type: "approve",
+            message: "I've reviewed the requirements and I'm ready to start. I'll begin with the API integration first.",
+            respondedDate: "2024-01-19",
+            respondedBy: "You (Employee)"
+          }
+        },
+        {
+          id: 3,
+          title: "Client Feedback on Dashboard Design",
+          description: "The client has provided feedback on the dashboard design. They want to discuss the color scheme and layout changes.",
+          status: "pending",
+          priority: "urgent",
+          submittedDate: "2024-01-22",
+          submittedBy: "John Smith (Client)",
+          submittedByType: "client",
+          type: "feedback",
+          projectName: "Dashboard Redesign",
+          response: null
+        },
+        {
+          id: 4,
+          title: "Bug Fix Request - User Authentication",
+          description: "There's a critical bug in the user authentication flow. Please investigate and fix it as soon as possible.",
+          status: "responded",
+          priority: "urgent",
+          submittedDate: "2024-01-15",
+          submittedBy: "Sarah Johnson (PM)",
+          submittedByType: "pm",
+          type: "approval",
+          projectName: "User Management",
+          response: {
+            type: "approve",
+            message: "I've identified the issue and implemented the fix. The authentication flow is now working correctly.",
+            respondedDate: "2024-01-16",
+            respondedBy: "You (Employee)"
+          }
+        },
+        {
+          id: 5,
+          title: "Meeting Request - Project Discussion",
+          description: "Let's schedule a meeting to discuss the upcoming project requirements and timeline.",
+          status: "pending",
+          priority: "normal",
+          submittedDate: "2024-01-23",
+          submittedBy: "Lisa Brown (Client)",
+          submittedByType: "client",
+          type: "feedback",
+          projectName: "New Project",
+          response: null
+        },
+        {
+          id: 6,
+          title: "Documentation Update Request",
+          description: "Please update the API documentation with the new endpoints we've implemented.",
+          status: "responded",
+          priority: "normal",
+          submittedDate: "2024-01-20",
+          submittedBy: "Mike Chen (PM)",
+          submittedByType: "pm",
+          type: "approval",
+          projectName: "API Documentation",
+          response: {
+            type: "request_changes",
+            message: "I'll update the documentation, but I need clarification on the authentication flow section.",
+            respondedDate: "2024-01-21",
+            respondedBy: "You (Employee)"
+          }
+        }
+      ]
     },
-    requests: [
+    outgoing: {
+      statistics: {
+        total: 8,
+        pending: 2,
+        responded: 5,
+        draft: 1
+      },
+      requests: [
       {
         id: 1,
         title: "Request for Additional Development Time",
@@ -162,6 +272,7 @@ const Employee_request = () => {
         response: null
       }
     ]
+    }
   })
 
   const getStatusColor = (status) => {
@@ -184,6 +295,15 @@ const Employee_request = () => {
   }
 
   const getRecipientTypeColor = (type) => {
+    switch (type) {
+      case 'pm': return 'bg-blue-100 text-blue-700'
+      case 'client': return 'bg-purple-100 text-purple-700'
+      case 'admin': return 'bg-red-100 text-red-700'
+      default: return 'bg-gray-100 text-gray-700'
+    }
+  }
+
+  const getSubmittedByTypeColor = (type) => {
     switch (type) {
       case 'pm': return 'bg-blue-100 text-blue-700'
       case 'client': return 'bg-purple-100 text-purple-700'
@@ -211,6 +331,15 @@ const Employee_request = () => {
   }
 
   const formatRecipientType = (type) => {
+    switch (type) {
+      case 'pm': return 'PM'
+      case 'client': return 'Client'
+      case 'admin': return 'Admin'
+      default: return type
+    }
+  }
+
+  const formatSubmittedByType = (type) => {
     switch (type) {
       case 'pm': return 'PM'
       case 'client': return 'Client'
@@ -245,6 +374,8 @@ const Employee_request = () => {
     setIsViewDialogOpen(false)
     setSelectedRequest(null)
     setShowConfirmation(false)
+    setResponseText('')
+    setResponseType('approve')
   }
 
   const handleSubmitNewRequest = async () => {
@@ -284,21 +415,55 @@ const Employee_request = () => {
     // In real app, this would delete the draft
   }
 
+  const handleSubmitResponse = () => {
+    if (responseType !== 'approve' && !responseText.trim()) return
+    setShowConfirmation(true)
+  }
+
+  const handleConfirmResponse = async () => {
+    setIsSubmitting(true)
+    
+    setTimeout(() => {
+      console.log('Response submitted:', {
+        requestId: selectedRequest.id,
+        responseType,
+        responseText,
+        timestamp: new Date().toISOString()
+      })
+      
+      setIsSubmitting(false)
+      handleCloseDialog()
+      console.log('Request status updated to responded')
+    }, 1000)
+  }
+
+  const handleCancelConfirmation = () => {
+    setShowConfirmation(false)
+  }
+
+  // Get current data based on request type
+  const currentData = requestType === 'incoming' ? requestsData.incoming : requestsData.outgoing
+  const currentRequests = currentData.requests
+
   // Filter requests based on active filter and search term
-  const filteredRequests = requestsData.requests.filter(request => {
+  const filteredRequests = currentRequests.filter(request => {
     const matchesFilter = activeFilter === 'all' || request.status === activeFilter
     const matchesSearch = request.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          request.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         request.recipientName.toLowerCase().includes(searchTerm.toLowerCase())
+                         (request.submittedBy && request.submittedBy.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (request.recipientName && request.recipientName.toLowerCase().includes(searchTerm.toLowerCase()))
     return matchesFilter && matchesSearch
   })
 
   const filters = [
-    { key: 'all', label: 'All Requests', count: requestsData.statistics.total },
-    { key: 'pending', label: 'Pending', count: requestsData.statistics.pending },
-    { key: 'responded', label: 'Responded', count: requestsData.statistics.responded },
-    { key: 'draft', label: 'Drafts', count: requestsData.statistics.draft }
+    { key: 'all', label: 'All Requests', count: currentData.statistics.total },
+    { key: 'pending', label: 'Pending', count: currentData.statistics.pending },
+    { key: 'responded', label: 'Responded', count: currentData.statistics.responded }
   ]
+
+  if (requestType === 'outgoing' && currentData.statistics.draft > 0) {
+    filters.push({ key: 'draft', label: 'Drafts', count: currentData.statistics.draft })
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
@@ -311,8 +476,8 @@ const Employee_request = () => {
           {/* Header with Create Button */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 md:mb-8">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">My Requests</h1>
-              <p className="text-sm text-gray-600 mt-1">Manage your requests to PM and clients</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Request Management</h1>
+              <p className="text-sm text-gray-600 mt-1">Manage incoming and outgoing requests</p>
             </div>
             <button
               onClick={handleCreateRequest}
@@ -321,6 +486,34 @@ const Employee_request = () => {
               <FiPlus className="w-4 h-4" />
               <span>New Request</span>
             </button>
+          </div>
+
+          {/* Request Type Toggle */}
+          <div className="flex justify-center mb-6">
+            <div className="flex space-x-1 bg-gray-200 rounded-lg p-1">
+              <button
+                onClick={() => setRequestType('incoming')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                  requestType === 'incoming'
+                    ? 'bg-teal-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <FiArrowDown className="w-4 h-4" />
+                <span>Incoming ({requestsData.incoming.statistics.total})</span>
+              </button>
+              <button
+                onClick={() => setRequestType('outgoing')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                  requestType === 'outgoing'
+                    ? 'bg-teal-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <FiArrowUp className="w-4 h-4" />
+                <span>Outgoing ({requestsData.outgoing.statistics.total})</span>
+              </button>
+            </div>
           </div>
 
           {/* Overview Stats */}
@@ -332,7 +525,7 @@ const Employee_request = () => {
                 </div>
                 <span className="text-xs md:text-sm text-gray-500">Total</span>
               </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{requestsData.statistics.total}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{currentData.statistics.total}</p>
               <p className="text-xs md:text-sm text-gray-600">Requests</p>
             </div>
 
@@ -343,7 +536,7 @@ const Employee_request = () => {
                 </div>
                 <span className="text-xs md:text-sm text-gray-500">Pending</span>
               </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{requestsData.statistics.pending}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{currentData.statistics.pending}</p>
               <p className="text-xs md:text-sm text-gray-600">Awaiting</p>
             </div>
 
@@ -354,19 +547,19 @@ const Employee_request = () => {
                 </div>
                 <span className="text-xs md:text-sm text-gray-500">Responded</span>
               </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{requestsData.statistics.responded}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{currentData.statistics.responded}</p>
               <p className="text-xs md:text-sm text-gray-600">Completed</p>
             </div>
 
             <div className="w-full bg-white rounded-2xl md:rounded-lg p-4 md:p-6 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-2 md:mb-3">
-                <div className="p-2 md:p-3 bg-gray-100 rounded-xl md:rounded-lg">
-                  <FiEdit className="h-5 w-5 md:h-6 md:w-6 text-gray-600" />
+                <div className="p-2 md:p-3 bg-red-100 rounded-xl md:rounded-lg">
+                  <FiAlertCircle className="h-5 w-5 md:h-6 md:w-6 text-red-600" />
                 </div>
-                <span className="text-xs md:text-sm text-gray-500">Drafts</span>
+                <span className="text-xs md:text-sm text-gray-500">Urgent</span>
               </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{requestsData.statistics.draft}</p>
-              <p className="text-xs md:text-sm text-gray-600">Saved</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{currentData.statistics.urgent || 0}</p>
+              <p className="text-xs md:text-sm text-gray-600">Priority</p>
             </div>
           </div>
 
@@ -408,10 +601,7 @@ const Employee_request = () => {
             <div className="p-4 md:p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg md:text-xl font-semibold text-gray-900">
-                  {activeFilter === 'all' ? 'All Requests' : 
-                   activeFilter === 'pending' ? 'Pending Requests' : 
-                   activeFilter === 'responded' ? 'Responded Requests' :
-                   'Draft Requests'}
+                  {requestType === 'incoming' ? 'Incoming Requests' : 'Outgoing Requests'}
                 </h2>
                 <span className="text-sm text-gray-500">{filteredRequests.length} requests</span>
               </div>
@@ -460,12 +650,25 @@ const Employee_request = () => {
                     {/* Footer Row */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRecipientTypeColor(request.recipientType)}`}>
-                          {formatRecipientType(request.recipientType)}
-                        </span>
-                        <span className="text-xs text-gray-600 font-medium">
-                          {request.recipientName.split(' (')[0]}
-                        </span>
+                        {requestType === 'incoming' ? (
+                          <>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getSubmittedByTypeColor(request.submittedByType)}`}>
+                              {formatSubmittedByType(request.submittedByType)}
+                            </span>
+                            <span className="text-xs text-gray-600 font-medium">
+                              {request.submittedBy.split(' (')[0]}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRecipientTypeColor(request.recipientType)}`}>
+                              {formatRecipientType(request.recipientType)}
+                            </span>
+                            <span className="text-xs text-gray-600 font-medium">
+                              {request.recipientName.split(' (')[0]}
+                            </span>
+                          </>
+                        )}
                       </div>
                       <div className="flex items-center space-x-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
@@ -584,7 +787,7 @@ const Employee_request = () => {
                   {/* Recipient Type */}
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-3">Send To *</label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <button
                         onClick={() => setNewRequest({...newRequest, recipientType: 'pm'})}
                         className={`p-3 rounded-lg border-2 transition-all duration-200 ${
@@ -595,7 +798,7 @@ const Employee_request = () => {
                       >
                         <div className="flex items-center justify-center space-x-2">
                           <FiUser className="w-4 h-4" />
-                          <span className="text-sm font-medium">Project Manager</span>
+                          <span className="text-sm font-medium">PM</span>
                         </div>
                       </button>
                       <button
@@ -609,6 +812,19 @@ const Employee_request = () => {
                         <div className="flex items-center justify-center space-x-2">
                           <FiUsers className="w-4 h-4" />
                           <span className="text-sm font-medium">Client</span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => setNewRequest({...newRequest, recipientType: 'admin'})}
+                        className={`p-3 rounded-lg border-2 transition-all duration-200 ${
+                          newRequest.recipientType === 'admin'
+                            ? 'border-red-500 bg-red-50 text-red-700'
+                            : 'border-gray-200 hover:border-red-300 text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center space-x-2">
+                          <FiShield className="w-4 h-4" />
+                          <span className="text-sm font-medium">Admin</span>
                         </div>
                       </button>
                     </div>
@@ -778,7 +994,9 @@ const Employee_request = () => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{selectedRequest.title}</h2>
-                    <p className="text-xs sm:text-sm text-gray-500 truncate">To: {selectedRequest.recipientName}</p>
+                    <p className="text-xs sm:text-sm text-gray-500 truncate">
+                      {requestType === 'incoming' ? `From: ${selectedRequest.submittedBy}` : `To: ${selectedRequest.recipientName}`}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -800,9 +1018,15 @@ const Employee_request = () => {
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(selectedRequest.priority)}`}>
                         {formatPriority(selectedRequest.priority)} Priority
                       </span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRecipientTypeColor(selectedRequest.recipientType)}`}>
-                        To: {formatRecipientType(selectedRequest.recipientType)}
-                      </span>
+                      {requestType === 'incoming' ? (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getSubmittedByTypeColor(selectedRequest.submittedByType)}`}>
+                          From: {formatSubmittedByType(selectedRequest.submittedByType)}
+                        </span>
+                      ) : (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRecipientTypeColor(selectedRequest.recipientType)}`}>
+                          To: {formatRecipientType(selectedRequest.recipientType)}
+                        </span>
+                      )}
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedRequest.status)}`}>
                         {formatStatus(selectedRequest.status)}
                       </span>
@@ -810,50 +1034,216 @@ const Employee_request = () => {
                   </div>
 
                   {/* Response Section */}
-                  {selectedRequest.response ? (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
-                      <div className="flex items-center space-x-2 mb-3">
-                        <FiCheckSquare className="w-4 h-4 text-green-600" />
-                        <h3 className="text-sm font-medium text-green-900">Response Received</h3>
+                  {!showConfirmation ? (
+                    selectedRequest.response ? (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
+                        <div className="flex items-center space-x-2 mb-3">
+                          <FiCheckSquare className="w-4 h-4 text-green-600" />
+                          <h3 className="text-sm font-medium text-green-900">Response Received</h3>
+                        </div>
+                        <div className="mb-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            selectedRequest.response.type === 'approve' ? 'bg-green-100 text-green-700' :
+                            selectedRequest.response.type === 'reject' ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {selectedRequest.response.type === 'approve' ? 'Approved' :
+                             selectedRequest.response.type === 'reject' ? 'Rejected' :
+                             'Changes Requested'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-green-800 leading-relaxed mb-2">{selectedRequest.response.message}</p>
+                        <p className="text-xs text-green-600">
+                          Responded by {selectedRequest.response.respondedBy} on {new Date(selectedRequest.response.respondedDate).toLocaleDateString()}
+                        </p>
                       </div>
-                      <div className="mb-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          selectedRequest.response.type === 'approve' ? 'bg-green-100 text-green-700' :
-                          selectedRequest.response.type === 'reject' ? 'bg-red-100 text-red-700' :
-                          'bg-yellow-100 text-yellow-700'
+                    ) : selectedRequest.status === 'pending' && requestType === 'incoming' ? (
+                      // Employee Response Form for Incoming Requests
+                      <div className="space-y-4 sm:space-y-6">
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 sm:p-4">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <FiClock className="w-4 h-4 text-amber-600" />
+                            <h3 className="text-sm font-medium text-amber-900">Awaiting Your Response</h3>
+                          </div>
+                          <p className="text-sm text-amber-800">
+                            This request is pending your review and response.
+                          </p>
+                        </div>
+
+                        {/* Response Type Selection */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-900 mb-3">Your Response</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                            <button
+                              onClick={() => setResponseType('approve')}
+                              className={`p-3 rounded-lg border-2 transition-all duration-200 ${
+                                responseType === 'approve'
+                                  ? 'border-green-500 bg-green-50 text-green-700'
+                                  : 'border-gray-200 hover:border-green-300 text-gray-700'
+                              }`}
+                            >
+                              <div className="flex items-center justify-center space-x-2">
+                                <FiCheckSquare className="w-4 h-4" />
+                                <span className="text-sm font-medium">Approve</span>
+                              </div>
+                            </button>
+                            <button
+                              onClick={() => setResponseType('reject')}
+                              className={`p-3 rounded-lg border-2 transition-all duration-200 ${
+                                responseType === 'reject'
+                                  ? 'border-red-500 bg-red-50 text-red-700'
+                                  : 'border-gray-200 hover:border-red-300 text-gray-700'
+                              }`}
+                            >
+                              <div className="flex items-center justify-center space-x-2">
+                                <FiX className="w-4 h-4" />
+                                <span className="text-sm font-medium">Reject</span>
+                              </div>
+                            </button>
+                            <button
+                              onClick={() => setResponseType('request_changes')}
+                              className={`p-3 rounded-lg border-2 transition-all duration-200 ${
+                                responseType === 'request_changes'
+                                  ? 'border-yellow-500 bg-yellow-50 text-yellow-700'
+                                  : 'border-gray-200 hover:border-yellow-300 text-gray-700'
+                              }`}
+                            >
+                              <div className="flex items-center justify-center space-x-2">
+                                <FiMessageSquare className="w-4 h-4" />
+                                <span className="text-sm font-medium">Request Changes</span>
+                              </div>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Response Text */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-900 mb-2">
+                            Your Response {responseType === 'approve' ? '(Optional)' : '(Required)'}
+                          </label>
+                          <textarea
+                            value={responseText}
+                            onChange={(e) => setResponseText(e.target.value)}
+                            placeholder={
+                              responseType === 'approve' ? 'Add any additional comments...' :
+                              responseType === 'reject' ? 'Please explain why you are rejecting this request...' :
+                              'Please specify what changes you would like...'
+                            }
+                            className="w-full h-24 sm:h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 resize-none"
+                            required={responseType !== 'approve'}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            {responseType === 'approve' ? 'Optional feedback for the requester' : 'This field is required'}
+                          </p>
+                        </div>
+                      </div>
+                    ) : selectedRequest.status === 'pending' && requestType === 'outgoing' ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 sm:p-4">
+                        <div className="flex items-center space-x-2">
+                          <FiClock className="w-4 h-4 text-amber-600" />
+                          <h3 className="text-sm font-medium text-amber-900">Awaiting Response</h3>
+                        </div>
+                        <p className="text-sm text-amber-800 mt-1">
+                          Your request is pending review. You'll be notified once a response is received.
+                        </p>
+                      </div>
+                    ) : null
+                  ) : (
+                    // Confirmation View
+                    <div className="space-y-4 sm:space-y-6">
+                      {/* Confirmation Header */}
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center ${
+                          responseType === 'approve' ? 'bg-green-100' :
+                          responseType === 'reject' ? 'bg-red-100' :
+                          'bg-yellow-100'
                         }`}>
-                          {selectedRequest.response.type === 'approve' ? 'Approved' :
-                           selectedRequest.response.type === 'reject' ? 'Rejected' :
-                           'Changes Requested'}
-                        </span>
+                          {responseType === 'approve' && <FiCheckSquare className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />}
+                          {responseType === 'reject' && <FiX className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />}
+                          {responseType === 'request_changes' && <FiMessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-600" />}
+                        </div>
+                        <div>
+                          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Confirm Your Response</h3>
+                          <p className="text-sm text-gray-500">Please review your response before submitting</p>
+                        </div>
                       </div>
-                      <p className="text-sm text-green-800 leading-relaxed mb-2">{selectedRequest.response.message}</p>
-                      <p className="text-xs text-green-600">
-                        Responded by {selectedRequest.response.respondedBy} on {new Date(selectedRequest.response.respondedDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                  ) : selectedRequest.status === 'pending' ? (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 sm:p-4">
-                      <div className="flex items-center space-x-2">
-                        <FiClock className="w-4 h-4 text-amber-600" />
-                        <h3 className="text-sm font-medium text-amber-900">Awaiting Response</h3>
+
+                      {/* Request Summary */}
+                      <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                        <h4 className="text-sm font-medium text-gray-900 mb-2">Request</h4>
+                        <p className="text-sm text-gray-600">{selectedRequest.title}</p>
                       </div>
-                      <p className="text-sm text-amber-800 mt-1">
-                        Your request is pending review. You'll be notified once a response is received.
-                      </p>
+
+                      {/* Response Summary */}
+                      <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                        <h4 className="text-sm font-medium text-gray-900 mb-2">Your Response</h4>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            responseType === 'approve' ? 'bg-green-100 text-green-700' :
+                            responseType === 'reject' ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {responseType === 'approve' ? 'Approve' :
+                             responseType === 'reject' ? 'Reject' :
+                             'Request Changes'}
+                          </span>
+                        </div>
+                        {responseText && (
+                          <p className="text-sm text-gray-600 mt-2">{responseText}</p>
+                        )}
+                      </div>
+
+                      {/* Warning Note */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <p className="text-sm text-blue-800">
+                          <strong>Note:</strong> Once submitted, this response cannot be undone. The requester will be notified immediately.
+                        </p>
+                      </div>
                     </div>
-                  ) : null}
+                  )}
                 </div>
               </div>
 
               {/* Dialog Footer */}
               <div className="flex items-center justify-end space-x-3 p-4 sm:p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
                 <button
-                  onClick={handleCloseDialog}
+                  onClick={showConfirmation ? handleCancelConfirmation : handleCloseDialog}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
                 >
-                  Close
+                  {showConfirmation ? 'Back' : 'Close'}
                 </button>
+                {selectedRequest.status === 'pending' && requestType === 'incoming' && !selectedRequest.response && (
+                  <button
+                    onClick={showConfirmation ? handleConfirmResponse : handleSubmitResponse}
+                    disabled={isSubmitting || (!showConfirmation && responseType !== 'approve' && !responseText.trim())}
+                    className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors duration-200 flex items-center space-x-2 ${
+                      isSubmitting || (!showConfirmation && responseType !== 'approve' && !responseText.trim())
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : responseType === 'approve'
+                        ? 'bg-green-600 hover:bg-green-700'
+                        : responseType === 'reject'
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : 'bg-yellow-600 hover:bg-yellow-700'
+                    }`}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiSend className="w-4 h-4" />
+                        <span>
+                          {showConfirmation ? 'Confirm & Submit' :
+                           responseType === 'approve' ? 'Approve Request' :
+                           responseType === 'reject' ? 'Reject Request' :
+                           'Request Changes'}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </motion.div>
           </motion.div>

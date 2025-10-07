@@ -188,6 +188,8 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
     { value: 'planning', label: 'Planning', icon: Star },
     { value: 'active', label: 'Active', icon: CheckCircle },
     { value: 'on-hold', label: 'On Hold', icon: Clock },
+    { value: 'testing', label: 'Testing', icon: CheckCircle },
+    { value: 'maintenance', label: 'Maintenance', icon: Clock },
     { value: 'completed', label: 'Completed', icon: CheckCircle },
     { value: 'cancelled', label: 'Cancelled', icon: X }
   ];

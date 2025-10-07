@@ -34,6 +34,7 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
   const statusOptions = [
     { value: 'pending', label: 'Pending' },
     { value: 'in-progress', label: 'In Progress' },
+    { value: 'testing', label: 'Testing' },
     { value: 'completed', label: 'Completed' },
     { value: 'cancelled', label: 'Cancelled' }
   ]

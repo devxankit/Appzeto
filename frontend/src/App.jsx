@@ -45,6 +45,8 @@ import PM_task_detail from './modules/dev/DEV-pages/PM-pages/PM_task_detail'
 import PM_wallet from './modules/dev/DEV-pages/PM-pages/PM_wallet'
 import PM_new_projects from './modules/dev/DEV-pages/PM-pages/PM_new_projects'
 import PM_request from './modules/dev/DEV-pages/PM-pages/PM_request'
+import PM_testing_projects from './modules/dev/DEV-pages/PM-pages/PM_testing_projects'
+import PM_testing_milestones from './modules/dev/DEV-pages/PM-pages/PM_testing_milestones'
 
 //Employee pages start here //
 import Employee_dashboard from './modules/dev/DEV-pages/Employee-pages/Employee_dashboard'
@@ -120,6 +122,8 @@ function App() {
           <Route path="/pm-profile" element={<PM_Profile />} />
           <Route path="/pm-wallet" element={<PM_wallet />} />
           <Route path="/pm-new-projects" element={<PM_new_projects />} />
+          <Route path="/pm-testing-projects" element={<PM_testing_projects />} />
+          <Route path="/pm-testing-milestones" element={<PM_testing_milestones />} />
 
           //Employee pages start here //
           <Route path="/employee-dashboard" element={<Employee_dashboard />} />
