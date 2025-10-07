@@ -51,6 +51,7 @@ import Employee_dashboard from './modules/dev/DEV-pages/Employee-pages/Employee_
 import Employee_leaderboard from './modules/dev/DEV-pages/Employee-pages/Employee_leaderboard'
 import Employee_projects from './modules/dev/DEV-pages/Employee-pages/Employee_projects'
 import Employee_tasks from './modules/dev/DEV-pages/Employee-pages/Employee_tasks'
+import Employee_task_detail from './modules/dev/DEV-pages/Employee-pages/Employee_task_detail'
 import Employee_profile from './modules/dev/DEV-pages/Employee-pages/Employee_profile'
 import Employee_project_detail from './modules/dev/DEV-pages/Employee-pages/Employee_project_detail'
 import Employee_milestone_details from './modules/dev/DEV-pages/Employee-pages/Employee_milestone_details'
@@ -127,6 +128,7 @@ function App() {
           <Route path="/employee/milestone-details/:id" element={<Employee_milestone_details />} />
           <Route path="/employee-notifications" element={<Employee_notification />} />
           <Route path="/employee-tasks" element={<Employee_tasks />} />
+          <Route path="/employee-task/:id" element={<Employee_task_detail />} />
           <Route path="/employee-requests" element={<Employee_request />} />
           <Route path="/employee-leaderboard" element={<Employee_leaderboard />} />
           <Route path="/employee-profile" element={<Employee_profile />} />
