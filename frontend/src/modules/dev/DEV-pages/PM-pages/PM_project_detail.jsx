@@ -18,6 +18,9 @@ const PM_project_detail = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const [newAttachment, setNewAttachment] = useState(null)
+  const [revisions, setRevisions] = useState([])
+  const [showRevisionDialog, setShowRevisionDialog] = useState(false)
+  const [selectedRevision, setSelectedRevision] = useState(null)
 
   useEffect(() => {
     // mock load
@@ -153,6 +156,22 @@ const PM_project_detail = () => {
         { _id: 't-001', title: 'Hero section', status: 'in-progress', priority: 'high', assignedTo: [{ fullName: 'John Doe' }], dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() },
         { _id: 't-002', title: 'CTA tracking', status: 'pending', priority: 'normal', assignedTo: [], dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString() }
       ])
+      setRevisions([
+        {
+          _id: 'rev-001',
+          title: 'First Revision',
+          status: 'completed',
+          completedDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+          description: 'Initial project delivery and client approval'
+        },
+        {
+          _id: 'rev-002',
+          title: 'Final Revision',
+          status: 'pending',
+          completedDate: null,
+          description: 'Final project delivery and client approval'
+        }
+      ])
       setIsLoading(false)
     }
     load()
@@ -240,6 +259,37 @@ const PM_project_detail = () => {
     if (type.includes('word') || type.includes('document')) return '📝'
     if (type.includes('figma') || type.includes('fig')) return '🎨'
     return '📎'
+  }
+
+  const getRevisionStatusColor = (status) => {
+    switch (status) {
+      case 'completed': return 'bg-green-100 text-green-800 border-green-200'
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      default: return 'bg-gray-100 text-gray-800 border-gray-200'
+    }
+  }
+
+  const handleRevisionClick = (revision) => {
+    setSelectedRevision(revision)
+    setShowRevisionDialog(true)
+  }
+
+  const handleRevisionStatusChange = (newStatus) => {
+    if (!selectedRevision) return
+    
+    setRevisions(prevRevisions => 
+      prevRevisions.map(revision => 
+        revision._id === selectedRevision._id 
+          ? { 
+              ...revision, 
+              status: newStatus,
+              completedDate: newStatus === 'completed' ? new Date().toISOString() : null
+            }
+          : revision
+      )
+    )
+    setShowRevisionDialog(false)
+    setSelectedRevision(null)
   }
 
   const renderOverview = () => (
@@ -426,6 +476,66 @@ const PM_project_detail = () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Project Revisions Section */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="p-2 bg-purple-100 rounded-xl">
+            <CheckSquare className="h-5 w-5 text-purple-600" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900">Project Revisions</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {revisions.map((revision, index) => (
+            <div 
+              key={revision._id} 
+              onClick={() => handleRevisionClick(revision)}
+              className="group bg-white rounded-xl p-4 border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all duration-200 cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                    revision.status === 'completed' 
+                      ? 'bg-green-100 text-green-600' 
+                      : 'bg-yellow-100 text-yellow-600'
+                  }`}>
+                    {revision.status === 'completed' ? '✓' : index + 1}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">
+                      {revision.title}
+                    </h4>
+                    <p className="text-xs text-gray-600 mt-0.5">{revision.description}</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRevisionStatusColor(revision.status)}`}>
+                    {revision.status}
+                  </span>
+                  <div className="text-purple-600 group-hover:text-purple-700 transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              
+              {revision.completedDate && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <div className="text-xs text-gray-500">
+                    Completed: {new Date(revision.completedDate).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -633,6 +743,93 @@ const PM_project_detail = () => {
 
       <PM_milestone_form isOpen={isMilestoneFormOpen} onClose={() => setIsMilestoneFormOpen(false)} onSubmit={() => { setIsMilestoneFormOpen(false); }} projectId={project?._id} />
       <PM_task_form isOpen={isTaskFormOpen} onClose={() => setIsTaskFormOpen(false)} onSubmit={() => { setIsTaskFormOpen(false); }} projectId={project?._id} />
+
+      {/* Revision Status Dialog */}
+      {showRevisionDialog && selectedRevision && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-purple-100 rounded-xl">
+                  <CheckSquare className="h-5 w-5 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Manage Revision</h3>
+                  <p className="text-sm text-gray-600">{selectedRevision.title}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRevisionDialog(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-sm text-gray-600 mb-4">{selectedRevision.description}</p>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">Current Status:</span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRevisionStatusColor(selectedRevision.status)}`}>
+                    {selectedRevision.status}
+                  </span>
+                </div>
+                {selectedRevision.completedDate && (
+                  <div className="text-xs text-gray-500">
+                    Completed: {new Date(selectedRevision.completedDate).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-gray-700">Update Status:</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handleRevisionStatusChange('pending')}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    selectedRevision.status === 'pending'
+                      ? 'border-yellow-300 bg-yellow-50 text-yellow-800'
+                      : 'border-gray-200 hover:border-yellow-300 hover:bg-yellow-50 text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                    <span className="text-sm font-medium">Pending</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleRevisionStatusChange('completed')}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    selectedRevision.status === 'completed'
+                      ? 'border-green-300 bg-green-50 text-green-800'
+                      : 'border-gray-200 hover:border-green-300 hover:bg-green-50 text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span className="text-sm font-medium">Completed</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-100">
+              <button
+                onClick={() => setShowRevisionDialog(false)}
+                className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

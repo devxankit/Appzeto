@@ -68,6 +68,7 @@ import Client_projects from './modules/dev/DEV-pages/Client-pages/Client_project
 import Client_project_detail from './modules/dev/DEV-pages/Client-pages/Client_project_detail'
 import Client_milestone_detail from './modules/dev/DEV-pages/Client-pages/Client_milestone_detail'
 import Client_requests from './modules/dev/DEV-pages/Client-pages/Client_request'
+import Client_wallet from './modules/dev/DEV-pages/Client-pages/Client_wallet'
 import Client_explore from './modules/dev/DEV-pages/Client-pages/Client_explore'
 import Client_profile from './modules/dev/DEV-pages/Client-pages/Client_profile'
 import Client_notification from './modules/dev/DEV-pages/Client-pages/Client_notification'
@@ -144,6 +145,7 @@ function App() {
         <Route path="/client-project-detail/:id" element={<Client_project_detail />} />
         <Route path="/client-milestone-detail/:id" element={<Client_milestone_detail />} />
         <Route path="/client-requests" element={<Client_requests />} />
+        <Route path="/client-wallet" element={<Client_wallet />} />
         <Route path="/client-explore" element={<Client_explore />} />
         <Route path="/client-profile" element={<Client_profile />} />
         <Route path="/client-notifications" element={<Client_notification />} />

@@ -16,10 +16,12 @@ import {
   FiX,
   FiSend,
   FiMessageSquare,
-  FiHeart,
-  FiStar,
-  FiTarget,
-  FiAward
+  FiCheckCircle,
+  FiPlusCircle,
+  FiUpload,
+  FiRefreshCw,
+  FiVideo,
+  FiSettings
 } from 'react-icons/fi'
 
 const Client_dashboard = () => {
@@ -30,69 +32,7 @@ const Client_dashboard = () => {
   const [responseType, setResponseType] = useState('approve') // approve, reject, request_changes
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
-  const [currentMessageIndex, setCurrentMessageIndex] = useState(0)
-  const [clientName, setClientName] = useState('Client') // Default fallback name
-
-  // Fetch client name from backend (simulated for now)
-  useEffect(() => {
-    const fetchClientName = async () => {
-      try {
-        // TODO: Replace with actual API call after login
-        // const response = await fetch('/api/client/profile')
-        // const data = await response.json()
-        // setClientName(data.firstName)
-        
-        // Simulate API call with dummy data
-        setTimeout(() => {
-          setClientName('Sarah') // This will come from API after login
-        }, 500)
-      } catch (error) {
-        console.error('Error fetching client name:', error)
-        setClientName('Client') // Fallback name
-      }
-    }
-
-    fetchClientName()
-  }, [])
-
-  // Rotating welcome messages for better client relationship
-  const welcomeMessages = [
-    {
-      title: `Welcome back, ${clientName}!`,
-      subtitle: "Your success is our priority. Let's make great things happen.",
-      icon: FiHeart,
-      color: "text-pink-600"
-    },
-    {
-      title: "Projects in expert hands!",
-      subtitle: "Our dedicated team works hard to exceed your expectations.",
-      icon: FiStar,
-      color: "text-yellow-600"
-    },
-    {
-      title: "Building something amazing together!",
-      subtitle: "Every milestone achieved brings us closer to your vision.",
-      icon: FiTarget,
-      color: "text-blue-600"
-    },
-    {
-      title: "Your feedback drives excellence!",
-      subtitle: "Your insights help us deliver solutions that truly matter.",
-      icon: FiAward,
-      color: "text-purple-600"
-    }
-  ]
-
-  // Rotate messages every 4 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentMessageIndex((prevIndex) => 
-        (prevIndex + 1) % welcomeMessages.length
-      )
-    }, 4000)
-
-    return () => clearInterval(interval)
-  }, [welcomeMessages.length])
+  const [showAllActivities, setShowAllActivities] = useState(false)
   const [dashboardData, setDashboardData] = useState({
     statistics: {
       projects: {
@@ -128,7 +68,12 @@ const Client_dashboard = () => {
         totalTasks: 25,
         completedTasks: 16,
         awaitingClientFeedback: 2,
-        lastUpdate: "2024-01-22"
+        lastUpdate: "2024-01-22",
+        milestones: {
+          total: 5,
+          completed: 3,
+          progress: 60
+        }
       },
       {
         id: 2,
@@ -142,7 +87,12 @@ const Client_dashboard = () => {
         totalTasks: 30,
         completedTasks: 14,
         awaitingClientFeedback: 1,
-        lastUpdate: "2024-01-21"
+        lastUpdate: "2024-01-21",
+        milestones: {
+          total: 4,
+          completed: 1,
+          progress: 25
+        }
       },
       {
         id: 3,
@@ -156,7 +106,12 @@ const Client_dashboard = () => {
         totalTasks: 15,
         completedTasks: 15,
         awaitingClientFeedback: 0,
-        lastUpdate: "2024-01-15"
+        lastUpdate: "2024-01-15",
+        milestones: {
+          total: 3,
+          completed: 3,
+          progress: 100
+        }
       }
     ],
     recentRequests: [
@@ -189,6 +144,96 @@ const Client_dashboard = () => {
         submittedDate: "2024-01-15",
         submittedBy: "Mike Johnson (PM)",
         type: "confirmation"
+      }
+    ],
+    recentActivities: [
+      {
+        id: 1,
+        type: "milestone_completed",
+        title: "Milestone Completed",
+        description: "Phase 1: Design & Planning milestone completed for E-commerce Website",
+        projectName: "E-commerce Website",
+        timestamp: "2024-01-22T10:30:00Z",
+        user: "John Doe (PM)",
+        icon: "check-circle",
+        color: "text-green-600"
+      },
+      {
+        id: 2,
+        type: "task_created",
+        title: "New Task Created",
+        description: "Payment gateway integration task added to Mobile App Development",
+        projectName: "Mobile App Development",
+        timestamp: "2024-01-22T09:15:00Z",
+        user: "Sarah Wilson (Developer)",
+        icon: "plus-circle",
+        color: "text-blue-600"
+      },
+      {
+        id: 3,
+        type: "file_uploaded",
+        title: "File Uploaded",
+        description: "New design mockups uploaded for client review",
+        projectName: "E-commerce Website",
+        timestamp: "2024-01-21T16:45:00Z",
+        user: "Jane Smith (Developer)",
+        icon: "upload",
+        color: "text-purple-600"
+      },
+      {
+        id: 4,
+        type: "comment_added",
+        title: "Comment Added",
+        description: "Added feedback on database migration progress",
+        projectName: "Database Migration",
+        timestamp: "2024-01-21T14:20:00Z",
+        user: "David Brown (PM)",
+        icon: "message-circle",
+        color: "text-orange-600"
+      },
+      {
+        id: 5,
+        type: "status_changed",
+        title: "Status Updated",
+        description: "Project status changed from 'In Progress' to 'Testing'",
+        projectName: "Mobile App Development",
+        timestamp: "2024-01-21T11:30:00Z",
+        user: "Mike Johnson (PM)",
+        icon: "refresh-cw",
+        color: "text-teal-600"
+      },
+      {
+        id: 6,
+        type: "deadline_updated",
+        title: "Deadline Updated",
+        description: "Project deadline extended to February 15, 2024",
+        projectName: "E-commerce Website",
+        timestamp: "2024-01-20T15:00:00Z",
+        user: "John Doe (PM)",
+        icon: "calendar",
+        color: "text-red-600"
+      },
+      {
+        id: 7,
+        type: "bug_fixed",
+        title: "Bug Fixed",
+        description: "Fixed login authentication issue in mobile app",
+        projectName: "Mobile App Development",
+        timestamp: "2024-01-20T13:45:00Z",
+        user: "Sarah Wilson (Developer)",
+        icon: "bug",
+        color: "text-green-600"
+      },
+      {
+        id: 8,
+        type: "meeting_scheduled",
+        title: "Meeting Scheduled",
+        description: "Client review meeting scheduled for January 25, 2024",
+        projectName: "E-commerce Website",
+        timestamp: "2024-01-20T10:00:00Z",
+        user: "John Doe (PM)",
+        icon: "video",
+        color: "text-indigo-600"
       }
     ]
   })
@@ -306,284 +351,32 @@ const Client_dashboard = () => {
       {/* Main Content */}
       <main className="pt-16 lg:pt-16 pb-16 lg:pb-8">
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
-          {/* Compact Welcome Card with Seamless Animations */}
+          {/* Client Banner */}
           <div className="mb-6 md:mb-8">
-            <div className="bg-gradient-to-r from-teal-50 to-teal-100 rounded-xl p-4 md:p-5 border border-teal-200 shadow-sm max-w-2xl mx-auto">
-              <div className="flex items-center space-x-3">
-                <div className="flex-shrink-0">
-                  <div className="w-10 h-10 md:w-11 md:h-11 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                    <motion.div
-                      key={`icon-${currentMessageIndex}`}
-                      initial={{ scale: 0.7, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ duration: 0.25, ease: [0.4, 0.0, 0.2, 1] }}
-                    >
-                      {React.createElement(welcomeMessages[currentMessageIndex].icon, {
-                        className: `w-5 h-5 md:w-6 md:h-6 ${welcomeMessages[currentMessageIndex].color}`
-                      })}
-                    </motion.div>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                   <motion.h1
-                     key={`title-${currentMessageIndex}`}
-                     initial={{ opacity: 0, y: 8 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     exit={{ opacity: 0, y: -8 }}
-                     transition={{ duration: 0.3, ease: [0.4, 0.0, 0.2, 1] }}
-                     className="text-sm md:text-base font-bold text-gray-900 mb-1 whitespace-nowrap"
-                   >
-                     {welcomeMessages[currentMessageIndex].title}
-                   </motion.h1>
-                   <motion.p
-                     key={`subtitle-${currentMessageIndex}`}
-                     initial={{ opacity: 0, y: 8 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     exit={{ opacity: 0, y: -8 }}
-                     transition={{ duration: 0.3, delay: 0.05, ease: [0.4, 0.0, 0.2, 1] }}
-                     className="text-xs text-gray-700 leading-tight"
-                   >
-                     {welcomeMessages[currentMessageIndex].subtitle}
-                   </motion.p>
-                </div>
-              </div>
-              
-              {/* Minimalist Progress Dots */}
-              <div className="flex justify-center mt-3 space-x-1">
-                {welcomeMessages.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentMessageIndex(index)}
-                    className={`w-1 h-1 rounded-full transition-all duration-300 ${
-                      index === currentMessageIndex 
-                        ? 'bg-teal-600 w-3' 
-                        : 'bg-teal-300 hover:bg-teal-400'
-                    }`}
-                  />
-                ))}
-              </div>
+            <div className="w-full rounded-xl overflow-hidden shadow-sm">
+              <img 
+                src="/src/assets/images/client_banner.png" 
+                alt="Welcome to Appzeto" 
+                className="w-full h-auto object-cover"
+              />
             </div>
           </div>
 
-          {/* Quick Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
-            {/* Active Projects */}
-            <div className="w-full bg-white rounded-2xl md:rounded-lg p-4 md:p-6 shadow-md border border-gray-100">
-              <div className="flex items-center justify-between mb-2 md:mb-3">
-                <div className="p-2 md:p-3 bg-teal-100 rounded-xl md:rounded-lg">
-                  <FiFolder className="h-5 w-5 md:h-6 md:w-6 text-teal-600" />
-                </div>
-                <span className="text-xs md:text-sm text-gray-500">Active</span>
-              </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{dashboardData.statistics.projects.active}</p>
-              <p className="text-xs md:text-sm text-gray-600">Projects</p>
-            </div>
-
-            {/* Awaiting Your Response */}
-            <div className="w-full bg-white rounded-2xl md:rounded-lg p-4 md:p-6 shadow-md border border-gray-100">
-              <div className="flex items-center justify-between mb-2 md:mb-3">
-                <div className="p-2 md:p-3 bg-orange-100 rounded-xl md:rounded-lg">
-                  <FiClock className="h-5 w-5 md:h-6 md:w-6 text-orange-600" />
-                </div>
-                <span className="text-xs md:text-sm text-gray-500">Awaiting</span>
-              </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{dashboardData.statistics.requests.pendingResponse}</p>
-              <p className="text-xs md:text-sm text-gray-600">Your Response</p>
-            </div>
-
-            {/* Tasks Awaiting Input */}
-            <div className="w-full bg-white rounded-2xl md:rounded-lg p-4 md:p-6 shadow-md border border-gray-100">
-              <div className="flex items-center justify-between mb-2 md:mb-3">
-                <div className="p-2 md:p-3 bg-yellow-100 rounded-xl md:rounded-lg">
-                  <FiAlertTriangle className="h-5 w-5 md:h-6 md:w-6 text-yellow-600" />
-                </div>
-                <span className="text-xs md:text-sm text-gray-500">Need Input</span>
-              </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{dashboardData.statistics.tasks.awaitingClientInput}</p>
-              <p className="text-xs md:text-sm text-gray-600">Tasks</p>
-            </div>
-
-            {/* Overall Progress */}
-            <div className="w-full bg-white rounded-2xl md:rounded-lg p-4 md:p-6 shadow-md border border-gray-100">
-              <div className="flex items-center justify-between mb-2 md:mb-3">
-                <div className="p-2 md:p-3 bg-blue-100 rounded-xl md:rounded-lg">
-                  <FiTrendingUp className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
-                </div>
-                <span className="text-xs md:text-sm text-gray-500">Progress</span>
-              </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{dashboardData.statistics.overallProgress}%</p>
-              <p className="text-xs md:text-sm text-gray-600">Overall</p>
-            </div>
-          </div>
-
-          {/* Desktop Layout - Two Column Grid */}
-          <div className="md:grid md:grid-cols-2 md:gap-8 md:mb-8">
-            {/* Progress Overview */}
-            <div className="bg-white rounded-2xl md:rounded-lg p-5 md:p-6 shadow-md border border-gray-100 mb-6 md:mb-0">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg md:text-xl font-semibold text-gray-900">Overall Progress</h2>
-                <FiTrendingUp className="h-5 w-5 md:h-6 md:w-6 text-teal-600" />
-              </div>
-              
-              {/* Overall Progress Bar */}
-              <div className="mb-6">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Overall Progress</span>
-                  <span className="text-gray-900 font-medium">{dashboardData.statistics.overallProgress}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div 
-                    className="bg-gradient-to-r from-teal-500 to-teal-600 h-3 rounded-full transition-all duration-500"
-                    style={{ width: `${dashboardData.statistics.overallProgress}%` }}
-                  ></div>
-                </div>
-              </div>
-              
-              <div className="space-y-4 md:space-y-6">
-                {/* Projects Progress */}
-                <div>
-                  <div className="flex justify-between text-sm md:text-base mb-2 md:mb-3">
-                    <span className="text-gray-600">Completed Projects</span>
-                    <span className="text-gray-900 font-medium">{dashboardData.statistics.projects.completed}/{dashboardData.statistics.projects.total}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 md:h-3">
-                    <div 
-                      className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 md:h-3 rounded-full transition-all duration-500" 
-                      style={{width: `${(dashboardData.statistics.projects.completed / dashboardData.statistics.projects.total) * 100}%`}}
-                    ></div>
-                  </div>
-                </div>
-                
-                {/* Tasks Progress */}
-                <div>
-                  <div className="flex justify-between text-sm md:text-base mb-2 md:mb-3">
-                    <span className="text-gray-600">Completed Tasks</span>
-                    <span className="text-gray-900 font-medium">{dashboardData.statistics.tasks.completed}/{dashboardData.statistics.tasks.total}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 md:h-3">
-                    <div 
-                      className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 md:h-3 rounded-full transition-all duration-500" 
-                      style={{width: `${(dashboardData.statistics.tasks.completed / dashboardData.statistics.tasks.total) * 100}%`}}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Team Requests */}
-            <div className="bg-white rounded-2xl md:rounded-lg p-5 md:p-6 shadow-md border border-gray-100 mb-6 md:mb-0">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg md:text-xl font-semibold text-gray-900">Team Requests</h2>
-                <Link 
-                  to="/client-requests" 
-                  className="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center"
-                >
-                  View all <FiArrowRight className="ml-1 h-4 w-4" />
-                </Link>
-              </div>
-              
-              <div className="space-y-3">
-                {dashboardData.recentRequests.map((request) => (
-                  <div 
-                    key={request.id} 
-                    onClick={() => handleRequestClick(request)}
-                    className={`group relative bg-white rounded-lg p-4 border border-gray-200 hover:border-teal-300 hover:shadow-md transition-all duration-200 ${
-                      request.status === 'pending' ? 'cursor-pointer' : 'cursor-default'
-                    }`}
-                  >
-                    {/* Header Row */}
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center space-x-3 flex-1 min-w-0">
-                        <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${
-                          request.type === 'approval' ? 'bg-blue-100' :
-                          request.type === 'feedback' ? 'bg-purple-100' :
-                          'bg-green-100'
-                        }`}>
-                          {request.type === 'approval' && <FiFileText className="w-3.5 h-3.5 text-blue-600" />}
-                          {request.type === 'feedback' && <FiUsers className="w-3.5 h-3.5 text-purple-600" />}
-                          {request.type === 'confirmation' && <FiCheckSquare className="w-3.5 h-3.5 text-green-600" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-semibold text-gray-900 group-hover:text-teal-700 transition-colors duration-200 truncate">
-                            {request.title}
-                          </h3>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-1.5 flex-shrink-0 ml-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          request.priority === 'urgent' ? 'bg-red-100 text-red-700' :
-                          request.priority === 'high' ? 'bg-orange-100 text-orange-700' :
-                          request.priority === 'normal' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-gray-100 text-gray-700'
-                        }`}>
-                          {formatPriority(request.priority)}
-                        </span>
-                        {request.status === 'pending' && (
-                          <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Description */}
-                    <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-                      {request.description}
-                    </p>
-
-                    {/* Footer Row */}
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs text-gray-500">
-                        From: <span className="font-medium text-gray-700">{request.submittedBy}</span>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          request.status === 'pending' 
-                            ? 'bg-amber-50 text-amber-700' 
-                            : 'bg-green-50 text-green-700'
-                        }`}>
-                          {request.status === 'pending' ? 'Pending' : 'Responded'}
-                        </span>
-                        <div className="text-xs text-gray-500 font-medium">
-                          {(() => {
-                            const now = new Date()
-                            const submittedDate = new Date(request.submittedDate)
-                            const diffTime = now.getTime() - submittedDate.getTime()
-                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-                            
-                            if (diffDays === 0) return 'Today'
-                            if (diffDays === 1) return 'Yesterday'
-                            if (diffDays < 7) return `${diffDays}d ago`
-                            return new Date(request.submittedDate).toLocaleDateString('en-US', { 
-                              day: 'numeric',
-                              month: 'short'
-                            })
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Projects Section */}
-          <div className="bg-white rounded-2xl md:rounded-lg p-5 md:p-6 shadow-md border border-gray-100">
+          {/* Projects Section - Single Project Card */}
+          <div className="bg-white rounded-2xl md:rounded-lg p-5 md:p-6 shadow-md border border-gray-100 mb-6 md:mb-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg md:text-xl font-semibold text-gray-900">Your Projects</h2>
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-500">{dashboardData.statistics.projects.total} projects</span>
-                <Link 
-                  to="/client-projects" 
-                  className="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center"
-                >
-                  View all <FiArrowRight className="ml-1 h-4 w-4" />
-                </Link>
-              </div>
+              <Link 
+                to="/client-projects" 
+                className="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center"
+              >
+                View all <FiArrowRight className="ml-1 h-4 w-4" />
+              </Link>
             </div>
 
-            {/* Project Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {dashboardData.recentProjects.map((project) => (
+            {/* Single Project Card */}
+            <div className="grid grid-cols-1 gap-4 sm:gap-6">
+              {dashboardData.recentProjects.slice(0, 1).map((project) => (
                 <Link 
                   key={project.id} 
                   to={`/client-project-detail/${project.id}`}
@@ -794,6 +587,276 @@ const Client_dashboard = () => {
               ))}
             </div>
           </div>
+
+          {/* Desktop Layout - Two Column Grid */}
+          <div className="md:grid md:grid-cols-2 md:gap-8 md:mb-8">
+            {/* Project Progress Overview */}
+            <div className="bg-white rounded-2xl md:rounded-lg p-5 md:p-6 shadow-md border border-gray-100 mb-6 md:mb-0">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-900">Project Progress</h2>
+                <FiTrendingUp className="h-5 w-5 md:h-6 md:w-6 text-teal-600" />
+              </div>
+              
+              <div className="space-y-4 md:space-y-6">
+                {/* Project 1 Progress */}
+                <div>
+                  <div className="flex justify-between text-sm md:text-base mb-2 md:mb-3">
+                    <span className="text-gray-600">{dashboardData.recentProjects[0].name}</span>
+                    <span className="text-gray-900 font-medium">{dashboardData.recentProjects[0].milestones.progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 md:h-3">
+                    <div 
+                      className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 md:h-3 rounded-full transition-all duration-500" 
+                      style={{width: `${dashboardData.recentProjects[0].milestones.progress}%`}}
+                    ></div>
+                  </div>
+                </div>
+                
+                {/* Project 2 Progress */}
+                <div>
+                  <div className="flex justify-between text-sm md:text-base mb-2 md:mb-3">
+                    <span className="text-gray-600">{dashboardData.recentProjects[1].name}</span>
+                    <span className="text-gray-900 font-medium">{dashboardData.recentProjects[1].milestones.progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 md:h-3">
+                    <div 
+                      className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 md:h-3 rounded-full transition-all duration-500" 
+                      style={{width: `${dashboardData.recentProjects[1].milestones.progress}%`}}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Project 3 Progress */}
+                <div>
+                  <div className="flex justify-between text-sm md:text-base mb-2 md:mb-3">
+                    <span className="text-gray-600">{dashboardData.recentProjects[2].name}</span>
+                    <span className="text-gray-900 font-medium">{dashboardData.recentProjects[2].milestones.progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 md:h-3">
+                    <div 
+                      className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 md:h-3 rounded-full transition-all duration-500" 
+                      style={{width: `${dashboardData.recentProjects[2].milestones.progress}%`}}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Team Requests */}
+            <div className="bg-white rounded-2xl md:rounded-lg p-5 md:p-6 shadow-md border border-gray-100 mb-6 md:mb-0">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-900">Team Requests</h2>
+                <Link 
+                  to="/client-requests" 
+                  className="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center"
+                >
+                  View all <FiArrowRight className="ml-1 h-4 w-4" />
+                </Link>
+              </div>
+              
+              <div className="space-y-3">
+                {dashboardData.recentRequests.map((request) => (
+                  <div 
+                    key={request.id} 
+                    onClick={() => handleRequestClick(request)}
+                    className={`group relative bg-white rounded-lg p-4 border border-gray-200 hover:border-teal-300 hover:shadow-md transition-all duration-200 ${
+                      request.status === 'pending' ? 'cursor-pointer' : 'cursor-default'
+                    }`}
+                  >
+                    {/* Header Row */}
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${
+                          request.type === 'approval' ? 'bg-blue-100' :
+                          request.type === 'feedback' ? 'bg-purple-100' :
+                          'bg-green-100'
+                        }`}>
+                          {request.type === 'approval' && <FiFileText className="w-3.5 h-3.5 text-blue-600" />}
+                          {request.type === 'feedback' && <FiUsers className="w-3.5 h-3.5 text-purple-600" />}
+                          {request.type === 'confirmation' && <FiCheckSquare className="w-3.5 h-3.5 text-green-600" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-semibold text-gray-900 group-hover:text-teal-700 transition-colors duration-200 truncate">
+                            {request.title}
+                          </h3>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-1.5 flex-shrink-0 ml-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          request.priority === 'urgent' ? 'bg-red-100 text-red-700' :
+                          request.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+                          request.priority === 'normal' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {formatPriority(request.priority)}
+                        </span>
+                        {request.status === 'pending' && (
+                          <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+                      {request.description}
+                    </p>
+
+                    {/* Footer Row */}
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-gray-500">
+                        From: <span className="font-medium text-gray-700">{request.submittedBy}</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          request.status === 'pending' 
+                            ? 'bg-amber-50 text-amber-700' 
+                            : 'bg-green-50 text-green-700'
+                        }`}>
+                          {request.status === 'pending' ? 'Pending' : 'Responded'}
+                        </span>
+                        <div className="text-xs text-gray-500 font-medium">
+                          {(() => {
+                            const now = new Date()
+                            const submittedDate = new Date(request.submittedDate)
+                            const diffTime = now.getTime() - submittedDate.getTime()
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+                            
+                            if (diffDays === 0) return 'Today'
+                            if (diffDays === 1) return 'Yesterday'
+                            if (diffDays < 7) return `${diffDays}d ago`
+                            return new Date(request.submittedDate).toLocaleDateString('en-US', { 
+                              day: 'numeric',
+                              month: 'short'
+                            })
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Activity Section */}
+          <div className="bg-white rounded-2xl md:rounded-lg p-5 md:p-6 shadow-md border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg md:text-xl font-semibold text-gray-900">Recent Activity</h2>
+              <div className="text-sm text-gray-500">
+                {dashboardData.recentActivities.length} activities
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {(showAllActivities ? dashboardData.recentActivities : dashboardData.recentActivities.slice(0, 5)).map((activity, index) => {
+                const getActivityIcon = (iconType) => {
+                  switch (iconType) {
+                    case 'check-circle': return FiCheckCircle
+                    case 'plus-circle': return FiPlusCircle
+                    case 'upload': return FiUpload
+                    case 'message-circle': return FiMessageSquare
+                    case 'refresh-cw': return FiRefreshCw
+                    case 'calendar': return FiCalendar
+                    case 'bug': return FiSettings
+                    case 'video': return FiVideo
+                    default: return FiClock
+                  }
+                }
+
+                const formatTimeAgo = (timestamp) => {
+                  const now = new Date()
+                  const activityTime = new Date(timestamp)
+                  const diffTime = now.getTime() - activityTime.getTime()
+                  const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
+                  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+                  if (diffHours < 1) {
+                    const diffMinutes = Math.floor(diffTime / (1000 * 60))
+                    return diffMinutes <= 1 ? 'Just now' : `${diffMinutes}m ago`
+                  } else if (diffHours < 24) {
+                    return `${diffHours}h ago`
+                  } else if (diffDays === 1) {
+                    return 'Yesterday'
+                  } else if (diffDays < 7) {
+                    return `${diffDays}d ago`
+                  } else {
+                    return activityTime.toLocaleDateString('en-US', { 
+                      month: 'short', 
+                      day: 'numeric'
+                    })
+                  }
+                }
+
+                const IconComponent = getActivityIcon(activity.icon)
+
+                return (
+                  <div key={activity.id} className="group relative bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all duration-200">
+                    <div className="flex items-start space-x-4">
+                      {/* Activity Icon */}
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${activity.color.replace('text-', 'bg-').replace('-600', '-100')} group-hover:scale-105 transition-transform duration-200`}>
+                        <IconComponent className={`w-5 h-5 ${activity.color}`} />
+                      </div>
+
+                      {/* Activity Content */}
+                      <div className="flex-1 min-w-0">
+                        {/* Title and Time */}
+                        <div className="flex items-start justify-between mb-2">
+                          <h3 className="text-sm font-semibold text-gray-900 leading-tight pr-2">
+                            {activity.title}
+                          </h3>
+                          <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
+                            {formatTimeAgo(activity.timestamp)}
+                          </span>
+                        </div>
+
+                        {/* Description */}
+                        <p className="text-sm text-gray-600 leading-relaxed mb-3 line-clamp-2">
+                          {activity.description}
+                        </p>
+
+                        {/* Project and User Info */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3 text-xs text-gray-500">
+                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium">
+                              {activity.projectName}
+                            </span>
+                            <span className="text-gray-400">by</span>
+                            <span className="font-medium text-gray-600">{activity.user}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Load More Button */}
+            {!showAllActivities && dashboardData.recentActivities.length > 5 && (
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => setShowAllActivities(true)}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-teal-600 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 hover:border-teal-300 transition-colors duration-200"
+                >
+                  Load More Activities
+                  <FiArrowRight className="ml-2 h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Show Less Button */}
+            {showAllActivities && (
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => setShowAllActivities(false)}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 hover:border-gray-300 transition-colors duration-200"
+                >
+                  Show Less
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
       </main>
 

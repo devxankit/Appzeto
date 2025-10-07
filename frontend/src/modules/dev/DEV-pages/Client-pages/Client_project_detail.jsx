@@ -25,7 +25,8 @@ import {
   FiFile,
   FiDownload,
   FiPlus,
-  FiMinus
+  FiMinus,
+  FiEye
 } from 'react-icons/fi'
 
 const Client_project_detail = () => {
@@ -212,6 +213,23 @@ const Client_project_detail = () => {
         method: "Bank Transfer",
         status: "completed",
         transactionId: "TXN001234568"
+      }
+    ],
+    // Project Revisions
+    revisions: [
+      {
+        id: 1,
+        title: "First Revision",
+        status: "completed",
+        completedDate: "2024-01-20",
+        description: "Initial project delivery and client approval"
+      },
+      {
+        id: 2,
+        title: "Final Revision",
+        status: "pending",
+        completedDate: null,
+        description: "Final project delivery and client approval"
       }
     ]
   })
@@ -408,6 +426,16 @@ const Client_project_detail = () => {
     }, 2000)
   }
 
+
+  const getRevisionStatusColor = (status) => {
+    switch (status) {
+      case 'completed': return 'bg-green-100 text-green-800 border-green-200'
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      default: return 'bg-gray-100 text-gray-800 border-gray-200'
+    }
+  }
+
+
   const renderOverview = () => (
     <div className="space-y-4 sm:space-y-6">
       {/* Project Stats */}
@@ -580,6 +608,60 @@ const Client_project_detail = () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Project Revisions Section */}
+      <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+        <div className="flex items-center space-x-2 sm:space-x-3 mb-4 sm:mb-6">
+          <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg sm:rounded-xl">
+            <FiFileText className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
+          </div>
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-gray-900">Project Revisions</h3>
+            <p className="text-xs sm:text-sm text-gray-600">Project delivery stages</p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {projectData.revisions.map((revision, index) => (
+            <div
+              key={revision.id}
+              className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200"
+            >
+              <div className="flex items-center space-x-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  revision.status === 'completed' 
+                    ? 'bg-green-500' 
+                    : 'bg-yellow-500'
+                }`}>
+                  {revision.status === 'completed' ? (
+                    <FiCheckCircle className="h-5 w-5 text-white" />
+                  ) : (
+                    <span className="text-white font-bold text-sm">{revision.id}</span>
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-sm sm:text-base font-semibold text-gray-900">
+                    {revision.title}
+                  </h4>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    {revision.description}
+                  </p>
+                  {revision.completedDate && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Completed: {new Date(revision.completedDate).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRevisionStatusColor(revision.status)}`}>
+                  {revision.status === 'completed' ? 'Done' : 'Pending'}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -1355,6 +1437,7 @@ const Client_project_detail = () => {
           </div>
         </div>
       </main>
+
     </div>
   )
 }

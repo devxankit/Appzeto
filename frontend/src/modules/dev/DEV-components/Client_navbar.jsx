@@ -7,7 +7,8 @@ import {
   FiSearch,
   FiUser,
   FiBell,
-  FiMenu
+  FiMenu,
+  FiCreditCard
 } from 'react-icons/fi'
 import logo from '../../../assets/images/logo.png'
 import Client_sidebar from './Client_sidebar'
@@ -17,6 +18,13 @@ function Client_navbar() {
   
   // Sidebar state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+
+  // Mock wallet data - Client's current balance
+  const [walletData] = useState({
+    totalBalance: 125000,
+    availableBalance: 85000,
+    pendingBalance: 40000
+  })
 
   const navItems = [
     { 
@@ -71,6 +79,15 @@ function Client_navbar() {
               className="relative p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200"
             >
               <FiBell className="text-lg" />
+            </Link>
+
+            {/* Wallet Balance Box */}
+            <Link
+              to="/client-wallet"
+              className="flex items-center space-x-1 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-3 py-1.5 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
+            >
+              <FiCreditCard className="text-teal-600 text-sm" />
+              <span className="text-sm font-semibold text-teal-700">${walletData.totalBalance.toLocaleString()}</span>
             </Link>
             
             {/* Hamburger Menu Icon */}
@@ -143,6 +160,15 @@ function Client_navbar() {
                 className="relative p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200"
               >
                 <FiBell className="text-xl" />
+              </Link>
+
+              {/* Desktop Wallet Balance */}
+              <Link
+                to="/client-wallet"
+                className="flex items-center space-x-2 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-4 py-2 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
+              >
+                <FiCreditCard className="text-teal-600 text-lg" />
+                <span className="text-sm font-semibold text-teal-700">${walletData.totalBalance.toLocaleString()}</span>
               </Link>
               
               <div className="flex items-center space-x-8">
