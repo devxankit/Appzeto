@@ -73,6 +73,15 @@ import Client_explore from './modules/dev/DEV-pages/Client-pages/Client_explore'
 import Client_profile from './modules/dev/DEV-pages/Client-pages/Client_profile'
 import Client_notification from './modules/dev/DEV-pages/Client-pages/Client_notification'
 
+//Admin pages start here //
+import Admin_dashboard from './modules/admin/admin-pages/Admin_dashboard'
+import Admin_dev_management from './modules/admin/admin-pages/Admin_dev_management'
+import Admin_finance_management from './modules/admin/admin-pages/Admin_finance_management'
+import Admin_leaderboard from './modules/admin/admin-pages/Admin_leaderboard'
+import Admin_reward_management from './modules/admin/admin-pages/Admin_reward_management'
+import Admin_requests_management from './modules/admin/admin-pages/Admin_requests_management'
+import Admin_sells_management from './modules/admin/admin-pages/Admin_sells_management'
+
 
 function App() {
   return (
@@ -149,6 +158,15 @@ function App() {
         <Route path="/client-explore" element={<Client_explore />} />
         <Route path="/client-profile" element={<Client_profile />} />
         <Route path="/client-notifications" element={<Client_notification />} />
+
+          //Admin pages start here //
+          <Route path="/admin-dashboard" element={<Admin_dashboard />} />
+          <Route path="/admin-dev-management" element={<Admin_dev_management />} />
+          <Route path="/admin-finance-management" element={<Admin_finance_management />} />
+          <Route path="/admin-leaderboard" element={<Admin_leaderboard />} />
+          <Route path="/admin-reward-management" element={<Admin_reward_management />} />
+          <Route path="/admin-requests-management" element={<Admin_requests_management />} />
+          <Route path="/admin-sells-management" element={<Admin_sells_management />} />
          
           <Route path="*" element={<NotFound />} />
         </Routes>
