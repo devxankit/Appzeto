@@ -75,13 +75,14 @@ import Client_notification from './modules/dev/DEV-pages/Client-pages/Client_not
 
 //Admin pages start here //
 import Admin_dashboard from './modules/admin/admin-pages/Admin_dashboard'
-import Admin_dev_management from './modules/admin/admin-pages/Admin_dev_management'
+import Admin_project_management from './modules/admin/admin-pages/Admin_project_management'
 import Admin_finance_management from './modules/admin/admin-pages/Admin_finance_management'
 import Admin_leaderboard from './modules/admin/admin-pages/Admin_leaderboard'
 import Admin_reward_management from './modules/admin/admin-pages/Admin_reward_management'
 import Admin_requests_management from './modules/admin/admin-pages/Admin_requests_management'
-import Admin_sells_management from './modules/admin/admin-pages/Admin_sells_management'
-
+import Admin_sales_management from './modules/admin/admin-pages/Admin_sales_management'
+import Admin_user_management from './modules/admin/admin-pages/Admin_user_management'
+import Admin_hr_management from './modules/admin/admin-pages/Admin_hr_management'
 
 function App() {
   return (
@@ -161,12 +162,14 @@ function App() {
 
           //Admin pages start here //
           <Route path="/admin-dashboard" element={<Admin_dashboard />} />
-          <Route path="/admin-dev-management" element={<Admin_dev_management />} />
+          <Route path="/admin-project-management" element={<Admin_project_management />} />
           <Route path="/admin-finance-management" element={<Admin_finance_management />} />
           <Route path="/admin-leaderboard" element={<Admin_leaderboard />} />
           <Route path="/admin-reward-management" element={<Admin_reward_management />} />
           <Route path="/admin-requests-management" element={<Admin_requests_management />} />
-          <Route path="/admin-sells-management" element={<Admin_sells_management />} />
+          <Route path="/admin-sales-management" element={<Admin_sales_management />} />
+            <Route path="/admin-user-management" element={<Admin_user_management />} />
+            <Route path="/admin-hr-management" element={<Admin_hr_management />} />
          
           <Route path="*" element={<NotFound />} />
         </Routes>

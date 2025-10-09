@@ -29,7 +29,7 @@ import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
 
-const Admin_sells_management = () => {
+const Admin_sales_management = () => {
   // State management
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('leads')
@@ -438,7 +438,7 @@ const Admin_sells_management = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                  Sells Management
+                  Sales Management
                 </h1>
                 <p className="text-gray-600">
                   Monitor sales performance, leads, and sales team activities.
@@ -1047,4 +1047,4 @@ const Admin_sells_management = () => {
   )
 }
 
-export default Admin_sells_management
+export default Admin_sales_management

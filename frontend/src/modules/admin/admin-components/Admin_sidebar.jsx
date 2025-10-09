@@ -3,12 +3,13 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { 
   LayoutDashboard, 
   Code, 
-  DollarSign, 
+  IndianRupee, 
   Trophy, 
   Gift, 
   TrendingUp,
   MessageSquare,
-  Menu
+  Users,
+  UserCheck
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 
@@ -24,28 +25,34 @@ const Admin_sidebar = () => {
       icon: LayoutDashboard
     },
     {
-      id: 'dev-management',
-      label: 'Dev Management',
-      path: '/admin-dev-management',
+      id: 'project-management',
+      label: 'Project Management',
+      path: '/admin-project-management',
       icon: Code
     },
     {
-      id: 'sells-management',
-      label: 'Sells Management',
-      path: '/admin-sells-management',
+      id: 'user-management',
+      label: 'User Management',
+      path: '/admin-user-management',
+      icon: Users
+    },
+    {
+      id: 'hr-management',
+      label: 'HR Management',
+      path: '/admin-hr-management',
+      icon: UserCheck
+    },
+    {
+      id: 'sales-management',
+      label: 'Sales Management',
+      path: '/admin-sales-management',
       icon: TrendingUp
     },
     {
       id: 'finance-management',
       label: 'Finance Management',
       path: '/admin-finance-management',
-      icon: DollarSign
-    },
-    {
-      id: 'leaderboard',
-      label: 'Leaderboard',
-      path: '/admin-leaderboard',
-      icon: Trophy
+      icon: IndianRupee
     },
     {
       id: 'reward-management',
@@ -58,6 +65,12 @@ const Admin_sidebar = () => {
       label: 'Requests Management',
       path: '/admin-requests-management',
       icon: MessageSquare
+    },
+    {
+      id: 'leaderboard',
+      label: 'Leaderboard',
+      path: '/admin-leaderboard',
+      icon: Trophy
     }
   ]
 
@@ -68,10 +81,6 @@ const Admin_sidebar = () => {
   return (
     <div className="fixed left-0 top-16 w-64 bg-white shadow-sm border-r border-gray-200 h-screen z-40">
       <div className="p-6 h-full flex flex-col">
-        <div className="flex items-center space-x-2 mb-8">
-          <Menu className="h-6 w-6 text-teal-500" />
-          <h2 className="text-lg font-semibold text-teal-600">Admin Panel</h2>
-        </div>
 
         <nav className="space-y-2 flex-1">
           {menuItems.map((item) => {

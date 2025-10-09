@@ -32,11 +32,12 @@ import {
   FiActivity,
   FiX
 } from 'react-icons/fi'
+import { Combobox } from '../../../components/ui/combobox'
 import Loading from '../../../components/ui/loading'
 
-const Admin_dev_management = () => {
+const Admin_project_management = () => {
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('projects')
+  const [activeTab, setActiveTab] = useState('pending-projects')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
@@ -47,6 +48,22 @@ const Admin_dev_management = () => {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
   const [modalType, setModalType] = useState('') // 'project', 'employee', 'client', 'pm'
+  const [showPMAssignmentModal, setShowPMAssignmentModal] = useState(false)
+  const [selectedPendingProject, setSelectedPendingProject] = useState(null)
+  const [showPendingDetailsModal, setShowPendingDetailsModal] = useState(false)
+  const [selectedPM, setSelectedPM] = useState('')
+
+  // PM Options for Combobox
+  const getPMOptions = () => {
+    return projectManagers
+      .filter(pm => pm.status === 'active')
+      .map(pm => ({
+        value: pm.id.toString(),
+        label: `${pm.name} - ${pm.projects} projects - ${pm.performance}% performance`,
+        icon: FiUser,
+        data: pm
+      }))
+  }
 
   // Mock data for statistics
   const [statistics, setStatistics] = useState({
@@ -56,7 +73,8 @@ const Admin_dev_management = () => {
       completed: 22,
       onHold: 3,
       overdue: 2,
-      thisMonth: 8
+      thisMonth: 8,
+      pending: 3
     },
     milestones: {
       total: 156,
@@ -94,6 +112,8 @@ const Admin_dev_management = () => {
 
   // Mock data for lists
   const [projects, setProjects] = useState([])
+  const [pendingProjects, setPendingProjects] = useState([])
+  const [completedProjects, setCompletedProjects] = useState([])
   const [employees, setEmployees] = useState([])
   const [clients, setClients] = useState([])
   const [projectManagers, setProjectManagers] = useState([])
@@ -174,6 +194,154 @@ const Admin_dev_management = () => {
           budget: 20000,
           pm: "Emma Taylor",
           startDate: "2023-12-15"
+        }
+      ]
+
+      // Mock pending projects data (from sales team)
+      const mockPendingProjects = [
+        {
+          id: 'pending-1',
+          name: "Restaurant Management System",
+          client: "Delicious Bites Restaurant",
+          clientContact: "Rajesh Kumar",
+          clientPhone: "+91 98765 43210",
+          clientEmail: "rajesh@deliciousbites.in",
+          package: "Restaurant App + Web Portal",
+          budget: 45000,
+          priority: "high",
+          submittedBy: "Sales Team - Priya Sharma",
+          submittedDate: "2024-01-20",
+          requirements: "Online ordering, table booking, inventory management",
+          status: "pending-assignment"
+        },
+        {
+          id: 'pending-2',
+          name: "E-learning Platform",
+          client: "EduTech Solutions",
+          clientContact: "Dr. Anjali Singh",
+          clientPhone: "+91 87654 32109",
+          clientEmail: "anjali@edutech.in",
+          package: "E-learning Platform",
+          budget: 75000,
+          priority: "urgent",
+          submittedBy: "Sales Team - Amit Patel",
+          submittedDate: "2024-01-19",
+          requirements: "Course management, student portal, payment integration",
+          status: "pending-assignment"
+        },
+        {
+          id: 'pending-3',
+          name: "Healthcare Management App",
+          client: "HealthCare Plus",
+          clientContact: "Dr. Vikram Mehta",
+          clientPhone: "+91 76543 21098",
+          clientEmail: "vikram@healthcareplus.in",
+          package: "Healthcare Management System",
+          budget: 60000,
+          priority: "normal",
+          submittedBy: "Sales Team - Sneha Gupta",
+          submittedDate: "2024-01-18",
+          requirements: "Patient management, appointment booking, prescription tracking",
+          status: "pending-assignment"
+        }
+      ]
+
+      // Mock completed projects data
+      const mockCompletedProjects = [
+        {
+          id: 101,
+          name: "E-commerce Website",
+          client: "Fashion Store Ltd",
+          status: "completed",
+          progress: 100,
+          priority: "high",
+          dueDate: "2024-01-15",
+          teamSize: 4,
+          budget: 45000,
+          pm: "Sarah Johnson",
+          startDate: "2023-11-01",
+          completedDate: "2024-01-10",
+          clientContact: "Priya Sharma",
+          clientPhone: "+91 98765 43210",
+          clientEmail: "priya@fashionstore.in",
+          requirements: "Online store with payment integration, inventory management, and admin panel",
+          submittedBy: "Sales Team - Amit Patel"
+        },
+        {
+          id: 102,
+          name: "Restaurant App",
+          client: "Delicious Bites",
+          status: "completed",
+          progress: 100,
+          priority: "normal",
+          dueDate: "2024-01-20",
+          teamSize: 3,
+          budget: 35000,
+          pm: "Mike Wilson",
+          startDate: "2023-12-01",
+          completedDate: "2024-01-18",
+          clientContact: "Rajesh Kumar",
+          clientPhone: "+91 87654 32109",
+          clientEmail: "rajesh@deliciousbites.in",
+          requirements: "Food ordering app with table booking and delivery tracking",
+          submittedBy: "Sales Team - Sneha Gupta"
+        },
+        {
+          id: 103,
+          name: "Healthcare Portal",
+          client: "MedCare Plus",
+          status: "completed",
+          progress: 100,
+          priority: "urgent",
+          dueDate: "2024-01-25",
+          teamSize: 5,
+          budget: 60000,
+          pm: "Lisa Davis",
+          startDate: "2023-10-15",
+          completedDate: "2024-01-22",
+          clientContact: "Dr. Anjali Singh",
+          clientPhone: "+91 76543 21098",
+          clientEmail: "anjali@medcareplus.in",
+          requirements: "Patient management system with appointment booking and prescription tracking",
+          submittedBy: "Sales Team - Priya Sharma"
+        },
+        {
+          id: 104,
+          name: "School Management System",
+          client: "EduTech Academy",
+          status: "completed",
+          progress: 100,
+          priority: "normal",
+          dueDate: "2024-01-30",
+          teamSize: 4,
+          budget: 50000,
+          pm: "David Brown",
+          startDate: "2023-11-15",
+          completedDate: "2024-01-28",
+          clientContact: "Vikram Mehta",
+          clientPhone: "+91 65432 10987",
+          clientEmail: "vikram@edutechacademy.in",
+          requirements: "Student management, attendance tracking, and parent portal",
+          submittedBy: "Sales Team - Amit Patel"
+        },
+        {
+          id: 105,
+          name: "Real Estate Portal",
+          client: "Property Hub",
+          status: "completed",
+          progress: 100,
+          priority: "high",
+          dueDate: "2024-02-05",
+          teamSize: 6,
+          budget: 75000,
+          pm: "Emma Taylor",
+          startDate: "2023-12-01",
+          completedDate: "2024-02-02",
+          clientContact: "Suresh Patel",
+          clientPhone: "+91 54321 09876",
+          clientEmail: "suresh@propertyhub.in",
+          requirements: "Property listing portal with virtual tours and mortgage calculator",
+          submittedBy: "Sales Team - Sneha Gupta"
         }
       ]
 
@@ -321,6 +489,8 @@ const Admin_dev_management = () => {
       ]
 
       setProjects(mockProjects)
+      setPendingProjects(mockPendingProjects)
+      setCompletedProjects(mockCompletedProjects)
       setEmployees(mockEmployees)
       setClients(mockClients)
       setProjectManagers(mockPMs)
@@ -371,7 +541,9 @@ const Admin_dev_management = () => {
 
   const getCurrentData = () => {
     switch (activeTab) {
-      case 'projects': return projects
+      case 'pending-projects': return pendingProjects
+      case 'active-projects': return projects
+      case 'completed-projects': return completedProjects
       case 'employees': return employees
       case 'clients': return clients
       case 'project-managers': return projectManagers
@@ -382,9 +554,15 @@ const Admin_dev_management = () => {
   const filteredData = getCurrentData().filter(item => {
     const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          item.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.client?.toLowerCase().includes(searchTerm.toLowerCase())
+                         item.client?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         item.clientContact?.toLowerCase().includes(searchTerm.toLowerCase())
     
-    const matchesFilter = selectedFilter === 'all' || item.status === selectedFilter
+    let matchesFilter = true
+    if (activeTab === 'pending-projects') {
+      matchesFilter = selectedFilter === 'all' || item.priority === selectedFilter
+    } else {
+      matchesFilter = selectedFilter === 'all' || item.status === selectedFilter
+    }
     
     return matchesSearch && matchesFilter
   })
@@ -445,8 +623,71 @@ const Admin_dev_management = () => {
     setShowEditModal(false)
     setShowViewModal(false)
     setShowDeleteModal(false)
+    setShowPMAssignmentModal(false)
+    setShowPendingDetailsModal(false)
     setSelectedItem(null)
+    setSelectedPendingProject(null)
+    setSelectedPM('')
     setModalType('')
+  }
+
+  // PM Assignment Functions
+  const handleAssignPM = (pendingProject) => {
+    setSelectedPendingProject(pendingProject)
+    setSelectedPM('')
+    setShowPMAssignmentModal(true)
+  }
+
+  const handleViewPendingDetails = (pendingProject) => {
+    setSelectedPendingProject(pendingProject)
+    setShowPendingDetailsModal(true)
+  }
+
+  const confirmPMAssignment = () => {
+    if (!selectedPM || !selectedPendingProject) return
+
+    const selectedPMData = projectManagers.find(pm => pm.id.toString() === selectedPM)
+    if (!selectedPMData) return
+
+    // Create new project from pending project
+    const newProject = {
+      id: Date.now(), // Generate new ID
+      name: selectedPendingProject.name,
+      client: selectedPendingProject.client,
+      status: "active",
+      progress: 0,
+      priority: selectedPendingProject.priority,
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+      teamSize: 3, // Default team size
+      budget: selectedPendingProject.budget,
+      pm: selectedPMData.name,
+      startDate: new Date().toISOString().split('T')[0],
+      clientContact: selectedPendingProject.clientContact,
+      clientPhone: selectedPendingProject.clientPhone,
+      clientEmail: selectedPendingProject.clientEmail,
+      requirements: selectedPendingProject.requirements,
+      submittedBy: selectedPendingProject.submittedBy
+    }
+
+    // Add to projects list
+    setProjects(prev => [...prev, newProject])
+    
+    // Remove from pending projects
+    setPendingProjects(prev => prev.filter(p => p.id !== selectedPendingProject.id))
+    
+    // Update statistics
+    setStatistics(prev => ({
+      ...prev,
+      projects: {
+        ...prev.projects,
+        total: prev.projects.total + 1,
+        active: prev.projects.active + 1,
+        thisMonth: prev.projects.thisMonth + 1
+      }
+    }))
+
+    // Close modal
+    closeModals()
   }
 
   if (loading) {
@@ -479,7 +720,7 @@ const Admin_dev_management = () => {
             <div className="flex items-center justify-between">
               <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Dev Management
+              Project Management
             </h1>
             <p className="text-gray-600">
                   Comprehensive management of development teams, projects, and resources.
@@ -498,7 +739,7 @@ const Admin_dev_management = () => {
           </div>
 
           {/* Compact Statistics Overview */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-4">
             {/* Projects Stats */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -630,46 +871,215 @@ const Admin_dev_management = () => {
                 </div>
               </div>
             </motion.div>
+
+            {/* Pending Projects Stats */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+              className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className="p-1.5 bg-orange-100 rounded-lg">
+                  <FiClock className="h-3 w-3 text-orange-600" />
+                </div>
+                <span className="text-xs text-gray-500 font-medium">Pending</span>
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-lg font-bold text-gray-900">{statistics.projects.pending}</p>
+                <div className="flex items-center space-x-1">
+                  <span className="text-xs text-orange-600 font-semibold">needs PM</span>
+                </div>
+              </div>
+            </motion.div>
           </div>
 
           {/* Navigation Tabs */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
             <div className="border-b border-gray-200">
-              <nav className="flex space-x-8 px-6">
+              <nav className="flex flex-wrap gap-1 px-4">
                 {[
-                  { key: 'projects', label: 'Projects', icon: FiFolder },
+                  { key: 'pending-projects', label: 'Pending', icon: FiClock },
+                  { key: 'active-projects', label: 'Active', icon: FiFolder },
+                  { key: 'completed-projects', label: 'Completed', icon: FiCheckCircle },
                   { key: 'employees', label: 'Employees', icon: FiUsers },
                   { key: 'clients', label: 'Clients', icon: FiHome },
-                  { key: 'project-managers', label: 'Project Managers', icon: FiUser }
+                  { key: 'project-managers', label: 'PMs', icon: FiUser }
                 ].map((tab) => (
                   <button
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
-                    className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                    className={`flex items-center space-x-1.5 py-2.5 px-3 border-b-2 font-medium text-xs transition-colors rounded-t-md ${
                       activeTab === tab.key
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        ? 'border-primary text-primary bg-primary/5'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
                     }`}
                   >
-                    <tab.icon className="h-4 w-4" />
-                    <span>{tab.label}</span>
+                    <tab.icon className="h-3.5 w-3.5" />
+                    <span className="whitespace-nowrap">{tab.label}</span>
                   </button>
                 ))}
               </nav>
             </div>
 
             {/* Tab Content */}
-            <div className="p-6">
-              {/* Projects Tab */}
-              {activeTab === 'projects' && (
+            <div className="p-4">
+              {/* Pending Projects Tab */}
+              {activeTab === 'pending-projects' && (
                 <div className="space-y-6">
+                  {/* Header Section */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">Pending Projects</h2>
+                      <p className="text-gray-600 mt-1">Projects from sales team waiting for PM assignment</p>
+                    </div>
+                    <div className="bg-orange-100 text-orange-800 px-4 py-2 rounded-lg text-sm font-semibold">
+                      {pendingProjects.length} pending assignment
+                    </div>
+                  </div>
+
                   {/* Search and Filters */}
                   <div className="flex flex-col sm:flex-row gap-4">
                     <div className="flex-1 relative">
                       <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                       <input
                         type="text"
-                        placeholder="Search projects..."
+                        placeholder="Search pending projects..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      />
+                    </div>
+                    <select
+                      value={selectedFilter}
+                      onChange={(e) => setSelectedFilter(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    >
+                      <option value="all">All Priority</option>
+                      <option value="urgent">Urgent</option>
+                      <option value="high">High</option>
+                      <option value="normal">Normal</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+
+                  {/* Pending Projects Grid */}
+                  {pendingProjects.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                      {pendingProjects.map((pendingProject) => (
+                        <div key={pendingProject.id} className="bg-white rounded-lg border border-orange-200 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 overflow-hidden">
+                          {/* Header with Priority Badge */}
+                          <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-3 border-b border-orange-100">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0 pr-2">
+                                <h4 className="text-sm font-bold text-gray-900 truncate mb-0.5">{pendingProject.name}</h4>
+                                <p className="text-xs text-gray-600 font-medium truncate">{pendingProject.client}</p>
+                              </div>
+                              <span className={`inline-flex px-2 py-0.5 text-xs font-bold rounded-full ${getPriorityColor(pendingProject.priority)} flex-shrink-0`}>
+                                {pendingProject.priority}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Content Section */}
+                          <div className="p-3 space-y-3">
+                            {/* Client Contact */}
+                            <div className="flex items-center space-x-2">
+                              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <FiUser className="h-3 w-3 text-blue-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-gray-900 truncate">{pendingProject.clientContact}</p>
+                                <p className="text-xs text-gray-500 truncate">{pendingProject.clientPhone}</p>
+                              </div>
+                            </div>
+
+                            {/* Package & Budget Row */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="bg-blue-50 rounded-md p-2">
+                                <div className="text-xs text-blue-600 font-medium mb-0.5">Package</div>
+                                <div className="text-xs font-bold text-blue-800 line-clamp-2">{pendingProject.package}</div>
+                              </div>
+                              <div className="bg-green-50 rounded-md p-2">
+                                <div className="text-xs text-green-600 font-medium mb-0.5">Budget</div>
+                                <div className="text-xs font-bold text-green-700">{formatCurrency(pendingProject.budget)}</div>
+                              </div>
+                            </div>
+
+                            {/* Submission Info */}
+                            <div className="bg-gray-50 rounded-md p-2">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="text-xs text-gray-600 font-medium">Submitted</div>
+                                  <div className="text-xs font-semibold text-gray-900">{formatDate(pendingProject.submittedDate)}</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs text-gray-600 font-medium">By</div>
+                                  <div className="text-xs font-semibold text-gray-900 truncate max-w-16">{pendingProject.submittedBy.split(' - ')[1] || pendingProject.submittedBy}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="px-3 pb-3">
+                            <div className="flex space-x-1.5">
+                              <button
+                                onClick={() => handleViewPendingDetails(pendingProject)}
+                                className="flex-1 bg-blue-500 text-white rounded-md py-2 px-2 text-xs font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center space-x-1"
+                              >
+                                <FiEye className="h-3 w-3" />
+                                <span>Details</span>
+                              </button>
+                              <button
+                                onClick={() => handleAssignPM(pendingProject)}
+                                className="flex-1 bg-orange-500 text-white rounded-md py-2 px-2 text-xs font-semibold hover:bg-orange-600 transition-colors flex items-center justify-center space-x-1"
+                              >
+                                <FiUser className="h-3 w-3" />
+                                <span>Assign</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-16">
+                      <div className="max-w-md mx-auto">
+                        <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                          <FiClock className="text-orange-500 text-3xl" />
+                        </div>
+                        <h3 className="text-2xl font-semibold text-gray-900 mb-4">No pending projects</h3>
+                        <p className="text-gray-600 text-lg">
+                          All projects have been assigned to project managers. New projects from the sales team will appear here.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Active Projects Tab */}
+              {activeTab === 'active-projects' && (
+                <div className="space-y-6">
+                  {/* Header Section */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">Active Projects</h2>
+                      <p className="text-gray-600 mt-1">Projects currently in progress with assigned PMs</p>
+                    </div>
+                    <div className="bg-green-100 text-green-800 px-4 py-2 rounded-lg text-sm font-semibold">
+                      {projects.length} active projects
+                    </div>
+                  </div>
+
+                  {/* Search and Filters */}
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex-1 relative">
+                      <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <input
+                        type="text"
+                        placeholder="Search active projects..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -775,6 +1185,170 @@ const Admin_dev_management = () => {
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-gray-700">
                       Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} projects
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-1 border rounded-md text-sm font-medium ${
+                            currentPage === page
+                              ? 'border-primary bg-primary text-white'
+                              : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Completed Projects Tab */}
+              {activeTab === 'completed-projects' && (
+                <div className="space-y-6">
+                  {/* Header Section */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">Completed Projects</h2>
+                      <p className="text-gray-600 mt-1">Successfully completed projects with full details</p>
+                    </div>
+                    <div className="bg-green-100 text-green-800 px-4 py-2 rounded-lg text-sm font-semibold">
+                      {completedProjects.length} completed projects
+                    </div>
+                  </div>
+
+                  {/* Search and Filters */}
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex-1 relative">
+                      <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <input
+                        type="text"
+                        placeholder="Search completed projects..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      />
+                    </div>
+                    <select
+                      value={selectedFilter}
+                      onChange={(e) => setSelectedFilter(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    >
+                      <option value="all">All Priority</option>
+                      <option value="urgent">Urgent</option>
+                      <option value="high">High</option>
+                      <option value="normal">Normal</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+
+                  {/* Completed Projects Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {paginatedData.map((project) => (
+                      <div key={project.id} className="bg-white rounded-xl border border-green-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+                        {/* Header with Status Badge */}
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 border-b border-green-100">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0 pr-3">
+                              <h4 className="text-base font-bold text-gray-900 truncate mb-1">{project.name}</h4>
+                              <p className="text-sm text-gray-600 font-medium truncate">{project.client}</p>
+                            </div>
+                            <div className="flex flex-col space-y-1">
+                              <span className="inline-flex px-2.5 py-1 text-xs font-bold rounded-full bg-green-100 text-green-800">
+                                Completed
+                              </span>
+                              <span className={`inline-flex px-2.5 py-1 text-xs font-bold rounded-full ${getPriorityColor(project.priority)}`}>
+                                {project.priority}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Content Section */}
+                        <div className="p-4 space-y-4">
+                          {/* PM & Completion Info */}
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <FiUser className="h-4 w-4 text-indigo-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">PM: {project.pm}</p>
+                              <p className="text-xs text-gray-500">Completed: {formatDate(project.completedDate)}</p>
+                            </div>
+                          </div>
+
+                          {/* Budget & Duration */}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-green-50 rounded-lg p-3">
+                              <div className="text-xs text-green-600 font-medium mb-1">Budget</div>
+                              <div className="text-sm font-bold text-green-700">{formatCurrency(project.budget)}</div>
+                            </div>
+                            <div className="bg-blue-50 rounded-lg p-3">
+                              <div className="text-xs text-blue-600 font-medium mb-1">Duration</div>
+                              <div className="text-sm font-bold text-blue-700">
+                                {Math.ceil((new Date(project.completedDate) - new Date(project.startDate)) / (1000 * 60 * 60 * 24))} days
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Team & Client Info */}
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-xs text-gray-600 font-medium">Team Size</div>
+                                <div className="text-sm font-semibold text-gray-900">{project.teamSize} members</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xs text-gray-600 font-medium">Client</div>
+                                <div className="text-sm font-semibold text-gray-900 truncate max-w-20">{project.clientContact}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="px-4 pb-4">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleView(project, 'project')}
+                              className="flex-1 bg-blue-500 text-white rounded-lg py-2.5 px-3 text-sm font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2"
+                            >
+                              <FiEye className="h-4 w-4" />
+                              <span>View Details</span>
+                            </button>
+                            <button
+                              onClick={() => handleEdit(project, 'project')}
+                              className="flex-1 bg-gray-500 text-white rounded-lg py-2.5 px-3 text-sm font-semibold hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2"
+                            >
+                              <FiEdit3 className="h-4 w-4" />
+                              <span>Edit</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-700">
+                      Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} completed projects
                     </div>
                     <div className="flex items-center space-x-2">
                       <button
@@ -1556,9 +2130,232 @@ const Admin_dev_management = () => {
             </motion.div>
           </motion.div>
         )}
+
+        {/* PM Assignment Modal */}
+        {showPMAssignmentModal && selectedPendingProject && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-5 max-w-sm w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Assign PM</h3>
+                  <p className="text-gray-600 text-xs mt-1">Select a project manager</p>
+                </div>
+                <button
+                  onClick={closeModals}
+                  className="text-gray-400 hover:text-gray-600 p-1.5 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Project Info */}
+              <div className="bg-orange-50 rounded-lg p-3 mb-4 border border-orange-200">
+                <h4 className="font-semibold text-gray-900 text-sm mb-1 truncate">{selectedPendingProject.name}</h4>
+                <div className="space-y-0.5 text-xs text-gray-600">
+                  <div><span className="font-medium">Client:</span> {selectedPendingProject.client}</div>
+                  <div><span className="font-medium">Budget:</span> {formatCurrency(selectedPendingProject.budget)}</div>
+                  <div><span className="font-medium">Priority:</span> <span className="capitalize">{selectedPendingProject.priority}</span></div>
+                </div>
+              </div>
+
+              {/* PM Selection Combobox */}
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Select Project Manager</label>
+                <Combobox
+                  options={getPMOptions()}
+                  value={selectedPM}
+                  onChange={(value) => setSelectedPM(value)}
+                  placeholder="Choose a PM..."
+                  className="w-full h-10 px-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                />
+              </div>
+
+              {/* Selected PM Info */}
+              {selectedPM && (
+                <div className="bg-blue-50 rounded-lg p-3 mb-4 border border-blue-200">
+                  {(() => {
+                    const pm = projectManagers.find(p => p.id.toString() === selectedPM)
+                    return pm ? (
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs">
+                          {pm.name.split(' ').map(n => n[0]).join('')}
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-semibold text-gray-900 text-sm">{pm.name}</div>
+                          <div className="text-xs text-gray-600">Projects: {pm.projects} | Performance: {pm.performance}%</div>
+                        </div>
+                      </div>
+                    ) : null
+                  })()}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-2">
+                <button
+                  onClick={closeModals}
+                  className="px-3 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmPMAssignment}
+                  disabled={!selectedPM}
+                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Assign PM
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Pending Project Details Modal */}
+        {showPendingDetailsModal && selectedPendingProject && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">Project Details</h3>
+                  <p className="text-gray-600 text-sm mt-1">Complete information about the pending project</p>
+                </div>
+                <button
+                  onClick={closeModals}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Project Overview */}
+              <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-6 mb-6 border border-orange-200">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <h4 className="text-xl font-bold text-gray-900 mb-2">{selectedPendingProject.name}</h4>
+                    <p className="text-gray-600 font-medium mb-1">{selectedPendingProject.client}</p>
+                    <p className="text-gray-500">{selectedPendingProject.clientContact}</p>
+                  </div>
+                  <span className={`inline-flex px-3 py-1 text-sm font-bold rounded-full ${getPriorityColor(selectedPendingProject.priority)}`}>
+                    {selectedPendingProject.priority} Priority
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white rounded-lg p-3">
+                    <div className="text-sm text-blue-600 font-medium mb-1">Package</div>
+                    <div className="text-sm font-bold text-blue-800">{selectedPendingProject.package}</div>
+                  </div>
+                  <div className="bg-white rounded-lg p-3">
+                    <div className="text-sm text-green-600 font-medium mb-1">Budget</div>
+                    <div className="text-lg font-bold text-green-700">{formatCurrency(selectedPendingProject.budget)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Client Information */}
+              <div className="mb-6">
+                <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <FiUser className="h-5 w-5 mr-2 text-blue-600" />
+                  Client Information
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 font-medium mb-1">Client Name</div>
+                    <div className="text-base font-semibold text-gray-900">{selectedPendingProject.client}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 font-medium mb-1">Contact Person</div>
+                    <div className="text-base font-semibold text-gray-900">{selectedPendingProject.clientContact}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 font-medium mb-1">Phone Number</div>
+                    <div className="text-base font-semibold text-gray-900">{selectedPendingProject.clientPhone}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 font-medium mb-1">Email Address</div>
+                    <div className="text-base font-semibold text-gray-900">{selectedPendingProject.clientEmail}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Project Requirements */}
+              <div className="mb-6">
+                <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <FiTarget className="h-5 w-5 mr-2 text-purple-600" />
+                  Project Requirements
+                </h5>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-sm text-gray-800 leading-relaxed">{selectedPendingProject.requirements}</div>
+                </div>
+              </div>
+
+              {/* Submission Information */}
+              <div className="mb-6">
+                <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <FiClock className="h-5 w-5 mr-2 text-orange-600" />
+                  Submission Details
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 font-medium mb-1">Submitted By</div>
+                    <div className="text-base font-semibold text-gray-900">{selectedPendingProject.submittedBy}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 font-medium mb-1">Submission Date</div>
+                    <div className="text-base font-semibold text-gray-900">{formatDate(selectedPendingProject.submittedDate)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
+                <button
+                  onClick={closeModals}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPendingDetailsModal(false)
+                    setShowPMAssignmentModal(true)
+                  }}
+                  className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold flex items-center space-x-2"
+                >
+                  <FiUser className="h-4 w-4" />
+                  <span>Assign PM</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   )
 }
 
-export default Admin_dev_management
+export default Admin_project_management
