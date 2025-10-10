@@ -525,9 +525,9 @@ const Admin_project_management = () => {
   }
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'INR'
     }).format(amount)
   }
 
@@ -1259,86 +1259,83 @@ const Admin_project_management = () => {
                   </div>
 
                   {/* Completed Projects Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                     {paginatedData.map((project) => (
-                      <div key={project.id} className="bg-white rounded-xl border border-green-200 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden">
-                        {/* Header with Status Badge */}
-                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 border-b border-green-100">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0 pr-3">
-                              <h4 className="text-base font-bold text-gray-900 truncate mb-1">{project.name}</h4>
-                              <p className="text-sm text-gray-600 font-medium truncate">{project.client}</p>
+                      <div key={project.id} className="bg-white rounded-lg border border-green-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
+                        {/* Header Section */}
+                        <div className="mb-3">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-sm font-bold text-gray-900 truncate mb-1">{project.name}</h3>
+                              <p className="text-xs text-gray-600 font-medium mb-1">{project.client}</p>
+                              <p className="text-xs text-gray-400">PM: {project.pm}</p>
                             </div>
-                            <div className="flex flex-col space-y-1">
-                              <span className="inline-flex px-2.5 py-1 text-xs font-bold rounded-full bg-green-100 text-green-800">
+                            <div className="flex flex-col space-y-1 ml-2">
+                              <span className="inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border bg-green-100 text-green-800 border-green-200">
                                 Completed
                               </span>
-                              <span className={`inline-flex px-2.5 py-1 text-xs font-bold rounded-full ${getPriorityColor(project.priority)}`}>
+                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full ${getPriorityColor(project.priority)}`}>
                                 {project.priority}
                               </span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Content Section */}
-                        <div className="p-4 space-y-4">
-                          {/* PM & Completion Info */}
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
-                              <FiUser className="h-4 w-4 text-indigo-600" />
+                        {/* Completion Info */}
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-gray-700">Completed</span>
+                            <span className="text-sm font-bold text-green-600">{formatDate(project.completedDate)}</span>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">PM: {project.pm}</p>
-                              <p className="text-xs text-gray-500">Completed: {formatDate(project.completedDate)}</p>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                            <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-1.5 rounded-full w-full"></div>
                             </div>
                           </div>
 
-                          {/* Budget & Duration */}
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-green-50 rounded-lg p-3">
-                              <div className="text-xs text-green-600 font-medium mb-1">Budget</div>
-                              <div className="text-sm font-bold text-green-700">{formatCurrency(project.budget)}</div>
-                            </div>
-                            <div className="bg-blue-50 rounded-lg p-3">
+                        {/* Key Metrics */}
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <div className="bg-blue-50 rounded-lg p-2">
                               <div className="text-xs text-blue-600 font-medium mb-1">Duration</div>
-                              <div className="text-sm font-bold text-blue-700">
+                            <div className="text-xs font-bold text-blue-800">
                                 {Math.ceil((new Date(project.completedDate) - new Date(project.startDate)) / (1000 * 60 * 60 * 24))} days
                               </div>
                             </div>
-                          </div>
-
-                          {/* Team & Client Info */}
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="text-xs text-gray-600 font-medium">Team Size</div>
-                                <div className="text-sm font-semibold text-gray-900">{project.teamSize} members</div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-xs text-gray-600 font-medium">Client</div>
-                                <div className="text-sm font-semibold text-gray-900 truncate max-w-20">{project.clientContact}</div>
-                              </div>
+                          <div className="bg-purple-50 rounded-lg p-2">
+                            <div className="text-xs text-purple-600 font-medium mb-1">Team Size</div>
+                            <div className="text-xs font-bold text-purple-800">{project.teamSize}</div>
                             </div>
                           </div>
+
+                        {/* Budget Highlight */}
+                        <div className="bg-green-50 rounded-lg p-2 mb-3">
+                          <div className="text-xs text-green-600 font-medium mb-1">Budget</div>
+                          <div className="text-sm font-bold text-green-700">{formatCurrency(project.budget)}</div>
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="px-4 pb-4">
-                          <div className="flex space-x-2">
+                        {/* Footer */}
+                        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                          <div className="flex items-center space-x-1">
                             <button
                               onClick={() => handleView(project, 'project')}
-                              className="flex-1 bg-blue-500 text-white rounded-lg py-2.5 px-3 text-sm font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2"
+                              className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all duration-200 group-hover:text-primary"
                             >
-                              <FiEye className="h-4 w-4" />
-                              <span>View Details</span>
+                              <FiEye className="h-3 w-3" />
                             </button>
                             <button
                               onClick={() => handleEdit(project, 'project')}
-                              className="flex-1 bg-gray-500 text-white rounded-lg py-2.5 px-3 text-sm font-semibold hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2"
+                              className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
                             >
-                              <FiEdit3 className="h-4 w-4" />
-                              <span>Edit</span>
+                              <FiEdit3 className="h-3 w-3" />
                             </button>
+                            <button 
+                              onClick={() => handleDelete(project, 'project')}
+                              className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all duration-200 group-hover:text-red-600"
+                            >
+                              <FiTrash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <div className="text-xs text-gray-400 font-medium">
+                            {formatDate(project.startDate)}
                           </div>
                         </div>
                       </div>
@@ -2082,35 +2079,314 @@ const Admin_project_management = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">
                   {modalType.charAt(0).toUpperCase() + modalType.slice(1)} Details
                 </h3>
+                  <p className="text-gray-600 text-sm mt-1">Complete information about the {modalType}</p>
+                </div>
                 <button
                   onClick={closeModals}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
                 >
-                  <FiX className="h-6 w-6" />
+                  <FiX className="h-5 w-5" />
                 </button>
               </div>
               
-              <div className="space-y-4">
-                {selectedItem && Object.entries(selectedItem).map(([key, value]) => (
-                  <div key={key} className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="font-medium text-gray-700 capitalize">
-                      {key.replace(/([A-Z])/g, ' $1').trim()}:
+              {/* Project Details */}
+              {modalType === 'project' && selectedItem && (
+                <>
+                  {/* Project Overview */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-6 border border-blue-200">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <h4 className="text-xl font-bold text-gray-900 mb-2">{selectedItem.name}</h4>
+                        <p className="text-gray-600 font-medium mb-1">{selectedItem.client}</p>
+                        <p className="text-gray-500">PM: {selectedItem.pm}</p>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <span className={`inline-flex px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedItem.status)}`}>
+                          {selectedItem.status}
                     </span>
-                    <span className="text-gray-900">
-                      {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                        <span className={`inline-flex px-3 py-1 text-sm font-bold rounded-full ${getPriorityColor(selectedItem.priority)}`}>
+                          {selectedItem.priority} Priority
                     </span>
                   </div>
-                ))}
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200 mt-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white rounded-lg p-3">
+                        <div className="text-sm text-blue-600 font-medium mb-1">Progress</div>
+                        <div className="text-lg font-bold text-blue-800">{selectedItem.progress}%</div>
+                      </div>
+                      <div className="bg-white rounded-lg p-3">
+                        <div className="text-sm text-green-600 font-medium mb-1">Budget</div>
+                        <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem.budget)}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Project Information */}
+                  <div className="mb-6">
+                    <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <FiFolder className="h-5 w-5 mr-2 text-blue-600" />
+                      Project Information
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Start Date</div>
+                        <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.startDate)}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Due Date</div>
+                        <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.dueDate)}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Team Size</div>
+                        <div className="text-base font-semibold text-gray-900">{selectedItem.teamSize} members</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Project Manager</div>
+                        <div className="text-base font-semibold text-gray-900">{selectedItem.pm}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Client Information */}
+                  {selectedItem.clientContact && (
+                    <div className="mb-6">
+                      <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <FiUser className="h-5 w-5 mr-2 text-blue-600" />
+                        Client Information
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 font-medium mb-1">Client Name</div>
+                          <div className="text-base font-semibold text-gray-900">{selectedItem.client}</div>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 font-medium mb-1">Contact Person</div>
+                          <div className="text-base font-semibold text-gray-900">{selectedItem.clientContact}</div>
+                        </div>
+                        {selectedItem.clientPhone && (
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm text-gray-600 font-medium mb-1">Phone Number</div>
+                            <div className="text-base font-semibold text-gray-900">{selectedItem.clientPhone}</div>
+                          </div>
+                        )}
+                        {selectedItem.clientEmail && (
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm text-gray-600 font-medium mb-1">Email Address</div>
+                            <div className="text-base font-semibold text-gray-900">{selectedItem.clientEmail}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Requirements */}
+                  {selectedItem.requirements && (
+                    <div className="mb-6">
+                      <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <FiTarget className="h-5 w-5 mr-2 text-purple-600" />
+                        Project Requirements
+                      </h5>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-800 leading-relaxed">{selectedItem.requirements}</div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Employee Details */}
+              {modalType === 'employee' && selectedItem && (
+                <>
+                  {/* Employee Overview */}
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 mb-6 border border-green-200">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary-dark text-white rounded-full flex items-center justify-center font-bold text-xl shadow-md">
+                          {selectedItem.avatar}
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-xl font-bold text-gray-900 mb-1">{selectedItem.name}</h4>
+                          <p className="text-gray-600 font-medium mb-1">{selectedItem.role}</p>
+                          <p className="text-gray-500">{selectedItem.department}</p>
+                        </div>
+                      </div>
+                      <span className={`inline-flex px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedItem.status)}`}>
+                        {selectedItem.status}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white rounded-lg p-3">
+                        <div className="text-sm text-green-600 font-medium mb-1">Performance</div>
+                        <div className="text-lg font-bold text-green-800">{selectedItem.performance}%</div>
+                      </div>
+                      <div className="bg-white rounded-lg p-3">
+                        <div className="text-sm text-blue-600 font-medium mb-1">Projects</div>
+                        <div className="text-lg font-bold text-blue-800">{selectedItem.projects}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Employee Information */}
+                  <div className="mb-6">
+                    <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <FiUsers className="h-5 w-5 mr-2 text-green-600" />
+                      Employee Information
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Email</div>
+                        <div className="text-base font-semibold text-gray-900">{selectedItem.email}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Department</div>
+                        <div className="text-base font-semibold text-gray-900">{selectedItem.department}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Join Date</div>
+                        <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.joinDate)}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Active Tasks</div>
+                        <div className="text-base font-semibold text-gray-900">{selectedItem.tasks}</div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Client Details */}
+              {modalType === 'client' && selectedItem && (
+                <>
+                  {/* Client Overview */}
+                  <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-6 mb-6 border border-teal-200">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <h4 className="text-xl font-bold text-gray-900 mb-2">{selectedItem.name}</h4>
+                        <p className="text-gray-600 font-medium mb-1">{selectedItem.contact}</p>
+                        <p className="text-gray-500">{selectedItem.email}</p>
+                      </div>
+                      <span className={`inline-flex px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedItem.status)}`}>
+                        {selectedItem.status}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white rounded-lg p-3">
+                        <div className="text-sm text-teal-600 font-medium mb-1">Total Spent</div>
+                        <div className="text-lg font-bold text-teal-800">{formatCurrency(selectedItem.totalSpent)}</div>
+                      </div>
+                      <div className="bg-white rounded-lg p-3">
+                        <div className="text-sm text-blue-600 font-medium mb-1">Projects</div>
+                        <div className="text-lg font-bold text-blue-800">{selectedItem.projects}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Client Information */}
+                  <div className="mb-6">
+                    <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <FiHome className="h-5 w-5 mr-2 text-teal-600" />
+                      Client Information
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Company Name</div>
+                        <div className="text-base font-semibold text-gray-900">{selectedItem.name}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Contact Person</div>
+                        <div className="text-base font-semibold text-gray-900">{selectedItem.contact}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Email</div>
+                        <div className="text-base font-semibold text-gray-900">{selectedItem.email}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Join Date</div>
+                        <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.joinDate)}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Last Activity</div>
+                        <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.lastActivity)}</div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* PM Details */}
+              {modalType === 'pm' && selectedItem && (
+                <>
+                  {/* PM Overview */}
+                  <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-6 mb-6 border border-indigo-200">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xl shadow-md">
+                          {selectedItem.name.split(' ').map(n => n[0]).join('')}
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-xl font-bold text-gray-900 mb-1">{selectedItem.name}</h4>
+                          <p className="text-gray-600 font-medium mb-1">Project Manager</p>
+                          <p className="text-gray-500">{selectedItem.email}</p>
+                        </div>
+                      </div>
+                      <span className={`inline-flex px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedItem.status)}`}>
+                        {selectedItem.status}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white rounded-lg p-3">
+                        <div className="text-sm text-indigo-600 font-medium mb-1">Performance</div>
+                        <div className="text-lg font-bold text-indigo-800">{selectedItem.performance}%</div>
+                      </div>
+                      <div className="bg-white rounded-lg p-3">
+                        <div className="text-sm text-purple-600 font-medium mb-1">Completion Rate</div>
+                        <div className="text-lg font-bold text-purple-800">{selectedItem.completionRate}%</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PM Information */}
+                  <div className="mb-6">
+                    <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <FiUser className="h-5 w-5 mr-2 text-indigo-600" />
+                      Manager Information
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Email</div>
+                        <div className="text-base font-semibold text-gray-900">{selectedItem.email}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Join Date</div>
+                        <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.joinDate)}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Active Projects</div>
+                        <div className="text-base font-semibold text-gray-900">{selectedItem.projects}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Team Size</div>
+                        <div className="text-base font-semibold text-gray-900">{selectedItem.teamSize} members</div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
                 <button
                   onClick={closeModals}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
@@ -2122,9 +2398,10 @@ const Admin_project_management = () => {
                     setShowViewModal(false)
                     setShowEditModal(true)
                   }}
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                  className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors font-semibold flex items-center space-x-2"
                 >
-                  Edit
+                  <FiEdit3 className="h-4 w-4" />
+                  <span>Edit</span>
                 </button>
               </div>
             </motion.div>

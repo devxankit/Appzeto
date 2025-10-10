@@ -34,6 +34,7 @@ const Admin_finance_management = () => {
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(20)
+  const [timeFilter, setTimeFilter] = useState('all')
   
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -44,13 +45,70 @@ const Admin_finance_management = () => {
   const [deleteConfirm, setDeleteConfirm] = useState('')
 
   // Mock data - Finance statistics
-  const statistics = {
+  const [statistics] = useState({
     totalRevenue: 2850000,
     totalExpenses: 1250000,
     netProfit: 1600000,
     pendingPayments: 450000,
     activeProjects: 24,
-    totalClients: 156
+    totalClients: 156,
+    todayEarnings: 45000,
+    rewardMoney: 125000,
+    employeeSalary: 180000,
+    otherExpenses: 35000,
+    profitLoss: 85000
+  })
+
+  // Time-based statistics that change with filters
+  const getTimeBasedStats = () => {
+    const baseStats = {
+      todayEarnings: 45000,
+      rewardMoney: 125000,
+      employeeSalary: 180000,
+      otherExpenses: 35000,
+      profitLoss: 85000
+    }
+
+    switch (timeFilter) {
+      case 'today':
+        return {
+          ...baseStats,
+          todayEarnings: 45000,
+          rewardMoney: 5000,
+          employeeSalary: 0,
+          otherExpenses: 2000,
+          profitLoss: 43000
+        }
+      case 'week':
+        return {
+          ...baseStats,
+          todayEarnings: 180000,
+          rewardMoney: 25000,
+          employeeSalary: 45000,
+          otherExpenses: 8000,
+          profitLoss: 102000
+        }
+      case 'month':
+        return {
+          ...baseStats,
+          todayEarnings: 750000,
+          rewardMoney: 125000,
+          employeeSalary: 180000,
+          otherExpenses: 35000,
+          profitLoss: 410000
+        }
+      case 'year':
+        return {
+          ...baseStats,
+          todayEarnings: 2850000,
+          rewardMoney: 450000,
+          employeeSalary: 2160000,
+          otherExpenses: 420000,
+          profitLoss: -180000
+        }
+      default:
+        return baseStats
+    }
   }
 
   // Mock data - Transactions
@@ -442,98 +500,311 @@ const Admin_finance_management = () => {
             </div>
           </div>
 
-          {/* Statistics Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                  <p className="text-2xl font-bold text-green-600">{formatCurrency(statistics.totalRevenue)}</p>
+          {/* Statistics Cards - Row 1 */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4"
+          >
+            {/* Total Revenue */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-green-500/10">
+                    <FiTrendingUp className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-green-700">+12.5%</p>
+                    <p className="text-xs text-green-600">this month</p>
+                  </div>
                 </div>
-                <FiTrendingUp className="text-green-600 text-xl" />
+                <div>
+                  <p className="text-xs font-medium text-green-700 mb-1">Total Revenue</p>
+                  <p className="text-lg font-bold text-green-800">{formatCurrency(statistics.totalRevenue)}</p>
+                </div>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Expenses</p>
-                  <p className="text-2xl font-bold text-red-600">{formatCurrency(statistics.totalExpenses)}</p>
+            {/* Total Expenses */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-red-500/10">
+                    <FiTrendingDown className="h-4 w-4 text-red-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-red-700">+8.2%</p>
+                    <p className="text-xs text-red-600">this month</p>
+                  </div>
                 </div>
-                <FiTrendingDown className="text-red-600 text-xl" />
+                <div>
+                  <p className="text-xs font-medium text-red-700 mb-1">Total Expenses</p>
+                  <p className="text-lg font-bold text-red-800">{formatCurrency(statistics.totalExpenses)}</p>
+                </div>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Net Profit</p>
-                  <p className="text-2xl font-bold text-blue-600">{formatCurrency(statistics.netProfit)}</p>
+            {/* Net Profit */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-blue-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-blue-400/20 to-indigo-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-blue-500/10">
+                    <FiBarChart className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-blue-700">+15.3%</p>
+                    <p className="text-xs text-blue-600">this month</p>
+                  </div>
                 </div>
-                <FiBarChart className="text-blue-600 text-xl" />
+                <div>
+                  <p className="text-xs font-medium text-blue-700 mb-1">Net Profit</p>
+                  <p className="text-lg font-bold text-blue-800">{formatCurrency(statistics.netProfit)}</p>
+                </div>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Pending Payments</p>
-                  <p className="text-2xl font-bold text-yellow-600">{formatCurrency(statistics.pendingPayments)}</p>
+            {/* Pending Payments */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-yellow-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-yellow-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-yellow-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-yellow-500/10">
+                    <FiCreditCard className="h-4 w-4 text-yellow-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-yellow-700">Pending</p>
+                    <p className="text-xs text-yellow-600">payments</p>
+                  </div>
                 </div>
-                <FiCreditCard className="text-yellow-600 text-xl" />
+                <div>
+                  <p className="text-xs font-medium text-yellow-700 mb-1">Pending Payments</p>
+                  <p className="text-lg font-bold text-yellow-800">{formatCurrency(statistics.pendingPayments)}</p>
+                </div>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Active Projects</p>
-                  <p className="text-2xl font-bold text-purple-600">{statistics.activeProjects}</p>
+            {/* Active Projects */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-50 to-blue-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-indigo-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-indigo-400/20 to-blue-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-indigo-500/10">
+                    <FiHome className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-indigo-700">Active</p>
+                    <p className="text-xs text-indigo-600">projects</p>
+                  </div>
                 </div>
-                <FiHome className="text-purple-600 text-xl" />
+                <div>
+                  <p className="text-xs font-medium text-indigo-700 mb-1">Active Projects</p>
+                  <p className="text-lg font-bold text-indigo-800">{statistics.activeProjects}</p>
+                </div>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Clients</p>
-                  <p className="text-2xl font-bold text-indigo-600">{statistics.totalClients}</p>
+            {/* Total Clients */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-cyan-50 to-teal-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-cyan-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-cyan-400/20 to-teal-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-cyan-500/10">
+                    <FiUsers className="h-4 w-4 text-cyan-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-cyan-700">Total</p>
+                    <p className="text-xs text-cyan-600">clients</p>
+                  </div>
                 </div>
-                <FiUsers className="text-indigo-600 text-xl" />
+                <div>
+                  <p className="text-xs font-medium text-cyan-700 mb-1">Total Clients</p>
+                  <p className="text-lg font-bold text-cyan-800">{statistics.totalClients}</p>
+                </div>
               </div>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
+
+          {/* Statistics Cards - Row 2 */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"
+          >
+            {/* Today Earnings */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-emerald-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-emerald-400/20 to-green-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-emerald-500/10">
+                    <FiDollarSign className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-emerald-700">Today</p>
+                    <p className="text-xs text-emerald-600">earnings</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-emerald-700 mb-1">Today Earnings</p>
+                  <p className="text-lg font-bold text-emerald-800">{formatCurrency(getTimeBasedStats().todayEarnings)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Reward Money */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-50 to-violet-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-purple-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-purple-400/20 to-violet-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-purple-500/10">
+                    <FiAward className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-purple-700">Rewards</p>
+                    <p className="text-xs text-purple-600">bonuses</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-purple-700 mb-1">Reward Money</p>
+                  <p className="text-lg font-bold text-purple-800">{formatCurrency(getTimeBasedStats().rewardMoney)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Employee Salary */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-orange-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-orange-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-orange-500/10">
+                    <FiUsers className="h-4 w-4 text-orange-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-orange-700">Monthly</p>
+                    <p className="text-xs text-orange-600">payroll</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-orange-700 mb-1">Employee Salary</p>
+                  <p className="text-lg font-bold text-orange-800">{formatCurrency(getTimeBasedStats().employeeSalary)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Other Expenses */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-rose-50 to-pink-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-rose-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-400/20 to-pink-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-rose-500/10">
+                    <FiFileText className="h-4 w-4 text-rose-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-rose-700">Misc</p>
+                    <p className="text-xs text-rose-600">expenses</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-rose-700 mb-1">Other Expenses</p>
+                  <p className="text-lg font-bold text-rose-800">{formatCurrency(getTimeBasedStats().otherExpenses)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Profit/Loss */}
+            <div className={`group relative overflow-hidden rounded-xl p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border ${
+              getTimeBasedStats().profitLoss >= 0 
+                ? 'bg-gradient-to-br from-teal-50 to-cyan-100 border-teal-200/50' 
+                : 'bg-gradient-to-br from-red-50 to-rose-100 border-red-200/50'
+            }`}>
+              <div className={`absolute top-0 right-0 w-12 h-12 rounded-full -translate-y-6 translate-x-6 ${
+                getTimeBasedStats().profitLoss >= 0 
+                  ? 'bg-gradient-to-br from-teal-400/20 to-cyan-500/20' 
+                  : 'bg-gradient-to-br from-red-400/20 to-rose-500/20'
+              }`}></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`p-2 rounded-lg ${
+                    getTimeBasedStats().profitLoss >= 0 
+                      ? 'bg-teal-500/10' 
+                      : 'bg-red-500/10'
+                  }`}>
+                    {getTimeBasedStats().profitLoss >= 0 ? (
+                      <FiTrendingUp className={`h-4 w-4 text-teal-600`} />
+                    ) : (
+                      <FiTrendingDown className={`h-4 w-4 text-red-600`} />
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-xs font-medium ${
+                      getTimeBasedStats().profitLoss >= 0 
+                        ? 'text-teal-700' 
+                        : 'text-red-700'
+                    }`}>
+                      {getTimeBasedStats().profitLoss >= 0 ? 'Profit' : 'Loss'}
+                    </p>
+                    <p className={`text-xs ${
+                      getTimeBasedStats().profitLoss >= 0 
+                        ? 'text-teal-600' 
+                        : 'text-red-600'
+                    }`}>
+                      {timeFilter === 'all' ? 'this month' : timeFilter}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <p className={`text-xs font-medium mb-1 ${
+                    getTimeBasedStats().profitLoss >= 0 
+                      ? 'text-teal-700' 
+                      : 'text-red-700'
+                  }`}>
+                    {getTimeBasedStats().profitLoss >= 0 ? 'Profit' : 'Loss'}
+                  </p>
+                  <p className={`text-lg font-bold ${
+                    getTimeBasedStats().profitLoss >= 0 
+                      ? 'text-teal-800' 
+                      : 'text-red-800'
+                  }`}>
+                    {formatCurrency(Math.abs(getTimeBasedStats().profitLoss))}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Time Filter */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-gray-50 to-slate-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-gray-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-gray-400/20 to-slate-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-gray-500/10">
+                    <FiCalendar className="h-4 w-4 text-gray-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-gray-700">Filter</p>
+                    <p className="text-xs text-gray-600">time period</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-1">Time Filter</p>
+                  <select
+                    value={timeFilter}
+                    onChange={(e) => setTimeFilter(e.target.value)}
+                    className="w-full text-sm font-bold text-gray-800 bg-transparent border-none outline-none cursor-pointer"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                    <option value="year">This Year</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </motion.div>
 
           {/* Navigation Tabs */}
           <div className="mb-6">
