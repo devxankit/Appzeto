@@ -12,7 +12,7 @@ import {
   FiUser,
   FiHome,
   FiTrendingUp,
-  FiDollarSign,
+  FiCreditCard,
   FiTarget,
   FiCalendar,
   FiPhone,
@@ -50,8 +50,12 @@ const Admin_sales_management = () => {
   const [showBulkLeadModal, setShowBulkLeadModal] = useState(false)
   const [showTargetModal, setShowTargetModal] = useState(false)
   const [showAssignLeadModal, setShowAssignLeadModal] = useState(false)
+  const [showLeadListModal, setShowLeadListModal] = useState(false)
+  const [showIncentiveModal, setShowIncentiveModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [modalType, setModalType] = useState('')
+  const [selectedLeadCategory, setSelectedLeadCategory] = useState('')
+  const [selectedLeadCategoryData, setSelectedLeadCategoryData] = useState([])
   
   // Form states
   const [leadNumber, setLeadNumber] = useState('')
@@ -59,6 +63,7 @@ const Admin_sales_management = () => {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [targetAmount, setTargetAmount] = useState('')
   const [leadsToAssign, setLeadsToAssign] = useState('')
+  const [incentiveAmount, setIncentiveAmount] = useState('')
 
   // Mock statistics data
   const [statistics] = useState({
@@ -863,9 +868,27 @@ const Admin_sales_management = () => {
       convertedCount: 18,
       revenue: 450000,
       target: 500000,
+      incentive: 45000,
       joinDate: '2022-03-15',
       lastActivity: '2024-01-20',
-      avatar: 'SW'
+      avatar: 'SW',
+      leadBreakdown: {
+        new: 5,
+        contacted: 8,
+        notPicked: 3,
+        todayFollowUp: 2,
+        quotationSent: 4,
+        dqSent: 3,
+        appClient: 2,
+        web: 1,
+        converted: 18,
+        lost: 7,
+        notInterested: 4,
+        hotLead: 6,
+        demoSent: 5,
+        app: 3,
+        taxi: 1
+      }
     },
     {
       id: 2,
@@ -880,9 +903,27 @@ const Admin_sales_management = () => {
       convertedCount: 14,
       revenue: 320000,
       target: 400000,
+      incentive: 32000,
       joinDate: '2023-01-10',
       lastActivity: '2024-01-19',
-      avatar: 'MC'
+      avatar: 'MC',
+      leadBreakdown: {
+        new: 3,
+        contacted: 6,
+        notPicked: 2,
+        todayFollowUp: 1,
+        quotationSent: 3,
+        dqSent: 2,
+        appClient: 1,
+        web: 0,
+        converted: 14,
+        lost: 5,
+        notInterested: 3,
+        hotLead: 4,
+        demoSent: 3,
+        app: 2,
+        taxi: 0
+      }
     },
     {
       id: 3,
@@ -897,9 +938,27 @@ const Admin_sales_management = () => {
       convertedCount: 22,
       revenue: 580000,
       target: 600000,
+      incentive: 58000,
       joinDate: '2021-08-20',
       lastActivity: '2024-01-20',
-      avatar: 'LA'
+      avatar: 'LA',
+      leadBreakdown: {
+        new: 8,
+        contacted: 10,
+        notPicked: 4,
+        todayFollowUp: 3,
+        quotationSent: 6,
+        dqSent: 4,
+        appClient: 3,
+        web: 2,
+        converted: 22,
+        lost: 8,
+        notInterested: 5,
+        hotLead: 7,
+        demoSent: 6,
+        app: 4,
+        taxi: 2
+      }
     },
     {
       id: 4,
@@ -914,9 +973,27 @@ const Admin_sales_management = () => {
       convertedCount: 10,
       revenue: 240000,
       target: 300000,
+      incentive: 24000,
       joinDate: '2023-06-05',
       lastActivity: '2024-01-15',
-      avatar: 'DR'
+      avatar: 'DR',
+      leadBreakdown: {
+        new: 2,
+        contacted: 4,
+        notPicked: 3,
+        todayFollowUp: 1,
+        quotationSent: 2,
+        dqSent: 1,
+        appClient: 1,
+        web: 0,
+        converted: 10,
+        lost: 5,
+        notInterested: 2,
+        hotLead: 3,
+        demoSent: 2,
+        app: 1,
+        taxi: 0
+      }
     },
     {
       id: 5,
@@ -931,9 +1008,27 @@ const Admin_sales_management = () => {
       convertedCount: 16,
       revenue: 380000,
       target: 450000,
+      incentive: 38000,
       joinDate: '2022-11-12',
       lastActivity: '2024-01-18',
-      avatar: 'EJ'
+      avatar: 'EJ',
+      leadBreakdown: {
+        new: 4,
+        contacted: 7,
+        notPicked: 2,
+        todayFollowUp: 2,
+        quotationSent: 3,
+        dqSent: 2,
+        appClient: 2,
+        web: 1,
+        converted: 16,
+        lost: 6,
+        notInterested: 3,
+        hotLead: 5,
+        demoSent: 4,
+        app: 2,
+        taxi: 1
+      }
     }
   ])
 
@@ -1196,12 +1291,67 @@ const Admin_sales_management = () => {
     setShowBulkLeadModal(false)
     setShowTargetModal(false)
     setShowAssignLeadModal(false)
+    setShowLeadListModal(false)
+    setShowIncentiveModal(false)
     setSelectedItem(null)
     setLeadNumber('')
     setUploadedFile(null)
     setUploadProgress(0)
     setTargetAmount('')
     setLeadsToAssign('')
+    setIncentiveAmount('')
+    setSelectedLeadCategory('')
+    setSelectedLeadCategoryData([])
+  }
+
+  // Handle lead category click
+  const handleLeadCategoryClick = (category, member) => {
+    const categoryCount = member.leadBreakdown[category]
+    if (categoryCount > 0) {
+      // Generate mock lead data for the selected category
+      const mockLeads = generateMockLeadsForCategory(category, categoryCount, member.name)
+      setSelectedLeadCategory(category)
+      setSelectedLeadCategoryData(mockLeads)
+      setShowLeadListModal(true)
+    }
+  }
+
+  // Generate mock leads for a specific category
+  const generateMockLeadsForCategory = (category, count, assignedTo) => {
+    const categoryLabels = {
+      new: 'New Lead',
+      contacted: 'Contacted',
+      notPicked: 'Not Picked',
+      todayFollowUp: 'Today Follow Up',
+      quotationSent: 'Quotation Sent',
+      dqSent: 'D&Q Sent',
+      appClient: 'App Client',
+      web: 'Web',
+      converted: 'Converted',
+      lost: 'Lost',
+      notInterested: 'Not Interested',
+      hotLead: 'Hot Lead',
+      demoSent: 'Demo Sent',
+      app: 'App',
+      taxi: 'Taxi'
+    }
+
+    return Array.from({ length: count }, (_, index) => ({
+      id: Date.now() + index,
+      name: `Lead ${index + 1}`,
+      phone: `+91 98765${String(43210 + index).padStart(5, '0')}`,
+      email: `lead${index + 1}@example.com`,
+      company: 'Unknown Company',
+      status: category,
+      priority: category === 'hotLead' ? 'high' : category === 'lost' || category === 'notInterested' ? 'low' : 'medium',
+      source: 'manual',
+      value: 25000,
+      lastContact: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      nextFollowUp: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      assignedTo: assignedTo,
+      notes: `${categoryLabels[category]} - Assigned to ${assignedTo}`,
+      category: categoryLabels[category]
+    }))
   }
 
   // Handle single lead addition
@@ -1315,6 +1465,28 @@ const Admin_sales_management = () => {
     setSelectedItem(member)
     setLeadsToAssign('')
     setShowAssignLeadModal(true)
+  }
+
+  // Handle incentive editing
+  const handleEditIncentive = (member) => {
+    setSelectedItem(member)
+    setIncentiveAmount(member.incentive.toString())
+    setShowIncentiveModal(true)
+  }
+
+  const handleSaveIncentive = () => {
+    if (!incentiveAmount || !selectedItem) return
+    
+    const newIncentive = parseFloat(incentiveAmount)
+    if (isNaN(newIncentive) || newIncentive < 0) return
+
+    setSalesTeam(prev => prev.map(member => 
+      member.id === selectedItem.id 
+        ? { ...member, incentive: newIncentive }
+        : member
+    ))
+    
+    closeModals()
   }
 
   const handleSaveLeadAssignment = () => {
@@ -1448,7 +1620,7 @@ const Admin_sales_management = () => {
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-3">
                   <div className="p-2 rounded-lg bg-emerald-500/10">
-                    <FiDollarSign className="h-4 w-4 text-emerald-600" />
+                    <FiCreditCard className="h-4 w-4 text-emerald-600" />
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-medium text-emerald-700">{statistics.sales.conversion}%</p>
@@ -1780,8 +1952,14 @@ const Admin_sales_management = () => {
                         </div>
                       </div>
 
+                      {/* Incentive Metric */}
+                      <div className="bg-green-50 rounded-lg p-2 mb-3">
+                        <div className="text-xs text-green-600 font-medium mb-1">Incentive</div>
+                        <div className="text-xs font-bold text-green-800">{formatCurrency(member.incentive)}</div>
+                      </div>
+
                       {/* Footer */}
-                      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                      <div className="flex items-center justify-center pt-3 border-t border-gray-100">
                         <div className="flex items-center space-x-1">
                           <button 
                             onClick={() => handleView(member, 'sales-team')}
@@ -1805,6 +1983,13 @@ const Admin_sales_management = () => {
                             <FiUsers className="h-3 w-3" />
                           </button>
                           <button 
+                            onClick={() => handleEditIncentive(member)}
+                            className="text-gray-400 hover:text-green-600 p-1.5 rounded hover:bg-green-50 transition-all duration-200 group-hover:text-green-600"
+                            title="Set Incentive"
+                          >
+                            <FiCreditCard className="h-3 w-3" />
+                          </button>
+                          <button 
                             onClick={() => handleDelete(member, 'sales-team')}
                             className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all duration-200 group-hover:text-red-600"
                             title="Delete Member"
@@ -1812,9 +1997,6 @@ const Admin_sales_management = () => {
                             <FiTrash2 className="h-3 w-3" />
                           </button>
                         </div>
-                        <a href={`mailto:${member.email}`} className="text-xs text-gray-400 hover:text-gray-600 truncate max-w-20 font-medium">
-                          {member.email}
-                        </a>
                       </div>
                     </div>
                   ))}
@@ -2275,6 +2457,51 @@ const Admin_sales_management = () => {
                 </div>
               </div>
 
+              {/* Lead Breakdown */}
+              <div className="mb-6">
+                <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <FiUsers className="h-5 w-5 mr-2 text-blue-600" />
+                  Lead Breakdown
+                </h5>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {[
+                    { key: 'new', label: 'New Leads', color: 'bg-green-50 text-green-700 border-green-200', icon: '🆕' },
+                    { key: 'contacted', label: 'Contacted', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: '📞' },
+                    { key: 'notPicked', label: 'Not Picked', color: 'bg-red-50 text-red-700 border-red-200', icon: '📵' },
+                    { key: 'todayFollowUp', label: 'Today Follow Up', color: 'bg-yellow-50 text-yellow-700 border-yellow-200', icon: '📅' },
+                    { key: 'quotationSent', label: 'Quotation Sent', color: 'bg-purple-50 text-purple-700 border-purple-200', icon: '📄' },
+                    { key: 'dqSent', label: 'D&Q Sent', color: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: '📤' },
+                    { key: 'appClient', label: 'App Client', color: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: '📱' },
+                    { key: 'web', label: 'Web', color: 'bg-teal-50 text-teal-700 border-teal-200', icon: '🌐' },
+                    { key: 'converted', label: 'Converted', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✅' },
+                    { key: 'lost', label: 'Lost', color: 'bg-gray-50 text-gray-700 border-gray-200', icon: '❌' },
+                    { key: 'notInterested', label: 'Not Interested', color: 'bg-orange-50 text-orange-700 border-orange-200', icon: '😞' },
+                    { key: 'hotLead', label: 'Hot Lead', color: 'bg-rose-50 text-rose-700 border-rose-200', icon: '🔥' },
+                    { key: 'demoSent', label: 'Demo Sent', color: 'bg-violet-50 text-violet-700 border-violet-200', icon: '🎯' },
+                    { key: 'app', label: 'App', color: 'bg-sky-50 text-sky-700 border-sky-200', icon: '📲' },
+                    { key: 'taxi', label: 'Taxi', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: '🚕' }
+                  ].map((category) => {
+                    const count = selectedItem.leadBreakdown[category.key] || 0
+                    return (
+                      <button
+                        key={category.key}
+                        onClick={() => handleLeadCategoryClick(category.key, selectedItem)}
+                        disabled={count === 0}
+                        className={`${category.color} rounded-lg p-3 border-2 hover:shadow-md transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${
+                          count > 0 ? 'hover:scale-105 cursor-pointer' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-lg">{category.icon}</span>
+                          <span className="text-lg font-bold">{count}</span>
+                        </div>
+                        <div className="text-xs font-medium truncate">{category.label}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               {/* Member Information */}
               <div className="mb-6">
                 <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -2704,6 +2931,209 @@ const Admin_sales_management = () => {
                 >
                   <FiUsers className="h-4 w-4" />
                   <span>Assign {leadsToAssign || 0} Lead{leadsToAssign && parseInt(leadsToAssign) > 1 ? 's' : ''}</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Lead List Modal */}
+        {showLeadListModal && selectedItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">
+                    {selectedLeadCategoryData[0]?.category || 'Lead Category'} - {selectedItem.name}
+                  </h3>
+                  <p className="text-gray-600 text-sm mt-1">
+                    {selectedLeadCategoryData.length} leads found in this category
+                  </p>
+                </div>
+                <button
+                  onClick={closeModals}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Lead List */}
+              <div className="space-y-3">
+                {selectedLeadCategoryData.map((lead, index) => (
+                  <div key={lead.id} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-bold text-primary">{index + 1}</span>
+                        </div>
+                        <div>
+                          <div className="text-lg font-semibold text-gray-900 font-mono">
+                            {lead.phone}
+                          </div>
+                          <div className="flex items-center space-x-4 text-sm text-gray-500">
+                            <span>Name: {lead.name}</span>
+                            <span>Company: {lead.company}</span>
+                            <span>Added: {formatDate(lead.lastContact)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-full ${getStatusColor(lead.status)}`}>
+                          {lead.status}
+                        </span>
+                        <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-full ${getPriorityColor(lead.priority)}`}>
+                          {lead.priority}
+                        </span>
+                        <button 
+                          onClick={() => handleDelete(lead, 'lead')}
+                          className="text-gray-400 hover:text-red-600 p-2 rounded hover:bg-red-50 transition-all duration-200"
+                          title="Delete Lead"
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Lead Details */}
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600 font-medium">Email:</span>
+                          <span className="ml-2 text-gray-900">{lead.email}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600 font-medium">Value:</span>
+                          <span className="ml-2 text-gray-900">{formatCurrency(lead.value)}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600 font-medium">Next Follow-up:</span>
+                          <span className="ml-2 text-gray-900">{formatDate(lead.nextFollowUp)}</span>
+                        </div>
+                      </div>
+                      {lead.notes && (
+                        <div className="mt-2">
+                          <span className="text-gray-600 font-medium text-sm">Notes:</span>
+                          <span className="ml-2 text-gray-900 text-sm">{lead.notes}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200 mt-6">
+                <button
+                  onClick={closeModals}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    // Export leads functionality
+                    console.log('Export leads:', selectedLeadCategoryData)
+                  }}
+                  className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold flex items-center space-x-2"
+                >
+                  <FiFile className="h-4 w-4" />
+                  <span>Export Leads</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Incentive Edit Modal */}
+        {showIncentiveModal && selectedItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-md w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Set Incentive</h3>
+                  <p className="text-gray-600 text-sm mt-1">Set incentive amount for {selectedItem.name}</p>
+                </div>
+                <button
+                  onClick={closeModals}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Current Incentive Display */}
+              <div className="bg-green-50 rounded-lg p-4 mb-6 border border-green-200">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary-dark text-white rounded-full flex items-center justify-center font-bold text-lg">
+                    {selectedItem.avatar}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-gray-900">{selectedItem.name}</h4>
+                    <p className="text-sm text-gray-600">{selectedItem.position}</p>
+                    <div className="text-sm text-green-700 font-medium">
+                      Current Incentive: {formatCurrency(selectedItem.incentive)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Incentive Input */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">New Incentive Amount</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
+                  <input
+                    type="number"
+                    value={incentiveAmount}
+                    onChange={(e) => setIncentiveAmount(e.target.value)}
+                    placeholder="Enter incentive amount"
+                    className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg font-semibold"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Enter the incentive amount for this sales team member</p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-3">
+                <button
+                  onClick={closeModals}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveIncentive}
+                  disabled={!incentiveAmount || parseFloat(incentiveAmount) < 0}
+                  className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  <FiCreditCard className="h-4 w-4" />
+                  <span>Set Incentive</span>
                 </button>
               </div>
             </motion.div>

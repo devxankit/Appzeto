@@ -83,6 +83,7 @@ import Admin_requests_management from './modules/admin/admin-pages/Admin_request
 import Admin_sales_management from './modules/admin/admin-pages/Admin_sales_management'
 import Admin_user_management from './modules/admin/admin-pages/Admin_user_management'
 import Admin_hr_management from './modules/admin/admin-pages/Admin_hr_management'
+import Admin_notice_board from './modules/admin/admin-pages/Admin_notice_board'
 
 function App() {
   return (
@@ -170,6 +171,7 @@ function App() {
           <Route path="/admin-sales-management" element={<Admin_sales_management />} />
             <Route path="/admin-user-management" element={<Admin_user_management />} />
             <Route path="/admin-hr-management" element={<Admin_hr_management />} />
+            <Route path="/admin-notice-board" element={<Admin_notice_board />} />
          
           <Route path="*" element={<NotFound />} />
         </Routes>

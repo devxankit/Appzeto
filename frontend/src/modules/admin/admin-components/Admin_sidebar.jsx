@@ -9,7 +9,8 @@ import {
   TrendingUp,
   MessageSquare,
   Users,
-  UserCheck
+  UserCheck,
+  FileText
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 
@@ -71,6 +72,12 @@ const Admin_sidebar = () => {
       label: 'Leaderboard',
       path: '/admin-leaderboard',
       icon: Trophy
+    },
+    {
+      id: 'notice-board',
+      label: 'Notice Board',
+      path: '/admin-notice-board',
+      icon: FileText
     }
   ]
 

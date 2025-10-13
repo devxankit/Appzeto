@@ -24,7 +24,9 @@ import {
   AlertCircle,
   Clock,
   Plus,
-  RefreshCw
+  RefreshCw,
+  Upload,
+  FileText
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
@@ -33,9 +35,10 @@ import Loading from '../../../components/ui/loading'
 
 const Admin_user_management = () => {
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('all')
+  const [activeTab, setActiveTab] = useState('project-managers')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
+  const [selectedDepartment, setSelectedDepartment] = useState('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
@@ -47,7 +50,11 @@ const Admin_user_management = () => {
     phone: '',
     role: '',
     team: '',
+    department: '',
     status: 'active',
+    dateOfBirth: '',
+    joiningDate: '',
+    document: null,
     password: '',
     confirmPassword: ''
   })
@@ -141,6 +148,7 @@ const Admin_user_management = () => {
           phone: "+91 54321 09876",
           role: "employee",
           team: "developer",
+          department: "full-stack",
           status: "active",
           joinDate: "2023-05-15",
           lastActive: "2024-01-22",
@@ -154,6 +162,7 @@ const Admin_user_management = () => {
           phone: "+91 43210 98765",
           role: "employee",
           team: "developer",
+          department: "nodejs",
           status: "active",
           joinDate: "2023-06-01",
           lastActive: "2024-01-22",
@@ -167,6 +176,7 @@ const Admin_user_management = () => {
           phone: "+91 32109 87654",
           role: "employee",
           team: "developer",
+          department: "web",
           status: "active",
           joinDate: "2023-07-10",
           lastActive: "2024-01-21",
@@ -180,6 +190,7 @@ const Admin_user_management = () => {
           phone: "+91 21098 76543",
           role: "employee",
           team: "developer",
+          department: "app",
           status: "active",
           joinDate: "2023-08-15",
           lastActive: "2024-01-22",
@@ -193,6 +204,7 @@ const Admin_user_management = () => {
           phone: "+91 10987 65432",
           role: "employee",
           team: "developer",
+          department: "full-stack",
           status: "inactive",
           joinDate: "2023-09-01",
           lastActive: "2024-01-10",
@@ -208,6 +220,7 @@ const Admin_user_management = () => {
           phone: "+91 98765 43211",
           role: "employee",
           team: "sales",
+          department: "sales",
           status: "active",
           joinDate: "2023-03-01",
           lastActive: "2024-01-22",
@@ -221,6 +234,7 @@ const Admin_user_management = () => {
           phone: "+91 87654 32110",
           role: "employee",
           team: "sales",
+          department: "sales",
           status: "active",
           joinDate: "2023-04-15",
           lastActive: "2024-01-22",
@@ -234,6 +248,7 @@ const Admin_user_management = () => {
           phone: "+91 76543 21099",
           role: "employee",
           team: "sales",
+          department: "sales",
           status: "active",
           joinDate: "2023-05-20",
           lastActive: "2024-01-21",
@@ -247,6 +262,7 @@ const Admin_user_management = () => {
           phone: "+91 65432 10988",
           role: "employee",
           team: "sales",
+          department: "sales",
           status: "active",
           joinDate: "2023-06-10",
           lastActive: "2024-01-22",
@@ -393,19 +409,22 @@ const Admin_user_management = () => {
     let filteredUsers = users
 
     // Filter by tab
-    if (activeTab !== 'all') {
-      filteredUsers = users.filter(user => {
-        switch (activeTab) {
-          case 'employees':
-            return user.role === 'employee'
-          case 'project-managers':
-            return user.role === 'project-manager'
-          case 'clients':
-            return user.role === 'client'
-          default:
-            return user.role === activeTab
-        }
-      })
+    filteredUsers = users.filter(user => {
+      switch (activeTab) {
+        case 'employees':
+          return user.role === 'employee'
+        case 'project-managers':
+          return user.role === 'project-manager'
+        case 'clients':
+          return user.role === 'client'
+        default:
+          return user.role === activeTab
+      }
+    })
+
+    // Filter by department (only for employees)
+    if (activeTab === 'employees' && selectedDepartment !== 'all') {
+      filteredUsers = filteredUsers.filter(user => user.department === selectedDepartment)
     }
 
     // Filter by search term
@@ -432,7 +451,11 @@ const Admin_user_management = () => {
       phone: '',
       role: '',
       team: '',
+      department: '',
       status: 'active',
+      dateOfBirth: '',
+      joiningDate: '',
+      document: null,
       password: '',
       confirmPassword: ''
     })
@@ -446,7 +469,11 @@ const Admin_user_management = () => {
       phone: user.phone,
       role: user.role,
       team: user.team || '',
+      department: user.department || '',
       status: user.status,
+      dateOfBirth: user.dateOfBirth || '',
+      joiningDate: user.joiningDate || user.joinDate || '',
+      document: user.document || null,
       password: '',
       confirmPassword: ''
     })
@@ -481,6 +508,29 @@ const Admin_user_management = () => {
       return
     }
 
+    // Validation for department field when role is employee and team is developer
+    if (formData.role === 'employee' && formData.team === 'developer' && !formData.department) {
+      alert('Please select a department for developer employees')
+      return
+    }
+
+    // Validation for required date fields
+    if (!formData.dateOfBirth) {
+      alert('Please select date of birth')
+      return
+    }
+
+    if (!formData.joiningDate) {
+      alert('Please select joining date')
+      return
+    }
+
+    // Validation for document field
+    if (!formData.document) {
+      alert('Please upload a document')
+      return
+    }
+
     // Simulate API call
     console.log('Saving user:', formData)
     setShowCreateModal(false)
@@ -492,7 +542,11 @@ const Admin_user_management = () => {
       phone: '',
       role: '',
       team: '',
+      department: '',
       status: 'active',
+      dateOfBirth: '',
+      joiningDate: '',
+      document: null,
       password: '',
       confirmPassword: ''
     })
@@ -517,14 +571,24 @@ const Admin_user_management = () => {
       phone: '',
       role: '',
       team: '',
+      department: '',
       status: 'active',
+      dateOfBirth: '',
+      joiningDate: '',
+      document: null,
       password: '',
       confirmPassword: ''
     })
   }
 
+  // Reset department filter when switching tabs
+  useEffect(() => {
+    if (activeTab !== 'employees') {
+      setSelectedDepartment('all')
+    }
+  }, [activeTab])
+
   const tabs = [
-    { key: 'all', label: 'All Users', icon: Users, count: 20 },
     { key: 'project-managers', label: 'Project Managers', icon: Shield, count: 4 },
     { key: 'employees', label: 'Employees', icon: Code, count: 9 },
     { key: 'clients', label: 'Clients', icon: Home, count: 7 }
@@ -540,6 +604,17 @@ const Admin_user_management = () => {
   const teamOptions = [
     { value: 'developer', label: 'Developer', icon: Code },
     { value: 'sales', label: 'Sales Team', icon: TrendingUp }
+  ]
+
+  const departmentOptions = [
+    { value: 'full-stack', label: 'Full Stack', icon: Code },
+    { value: 'nodejs', label: 'Node.js', icon: Code },
+    { value: 'web', label: 'Web', icon: Code },
+    { value: 'app', label: 'App', icon: Code }
+  ]
+
+  const salesDepartmentOptions = [
+    { value: 'sales', label: 'Sales', icon: TrendingUp }
   ]
 
   const statusOptions = [
@@ -806,6 +881,20 @@ const Admin_user_management = () => {
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                   </select>
+                  {activeTab === 'employees' && (
+                    <select
+                      value={selectedDepartment}
+                      onChange={(e) => setSelectedDepartment(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Departments</option>
+                      <option value="full-stack">Full Stack</option>
+                      <option value="nodejs">Node.js</option>
+                      <option value="web">Web</option>
+                      <option value="app">App</option>
+                      <option value="sales">Sales</option>
+                    </select>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -899,6 +988,14 @@ const Admin_user_management = () => {
                         {user.team && (
                           <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full ${getTeamColor(user.team)}`}>
                             {user.team === 'developer' ? 'Dev' : 'Sales'}
+                          </span>
+                        )}
+                        {user.department && user.role === 'employee' && (
+                          <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-800">
+                            {user.department === 'full-stack' ? 'Full Stack' : 
+                             user.department === 'nodejs' ? 'Node.js' :
+                             user.department === 'web' ? 'Web' :
+                             user.department === 'app' ? 'App' : 'Sales'}
                           </span>
                         )}
                         <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(user.status)}`}>
@@ -1062,7 +1159,7 @@ const Admin_user_management = () => {
                       <Combobox
                         options={teamOptions}
                         value={formData.team}
-                        onChange={(value) => setFormData({...formData, team: value})}
+                        onChange={(value) => setFormData({...formData, team: value, department: ''})}
                         placeholder="Select team"
                         className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
                       />
@@ -1070,11 +1167,120 @@ const Admin_user_management = () => {
                   )}
                 </div>
 
+                {/* Department Field - Only for Developer Employees */}
+                {formData.role === 'employee' && formData.team === 'developer' && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                    className="space-y-2"
+                  >
+                    <label className="text-sm font-semibold text-gray-700 flex items-center">
+                      Department <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <Combobox
+                      options={departmentOptions}
+                      value={formData.department}
+                      onChange={(value) => setFormData({...formData, department: value})}
+                      placeholder="Select department"
+                      className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    />
+                  </motion.div>
+                )}
+
+                {/* Department Field - Only for Sales Employees */}
+                {formData.role === 'employee' && formData.team === 'sales' && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                    className="space-y-2"
+                  >
+                    <label className="text-sm font-semibold text-gray-700 flex items-center">
+                      Department <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <Combobox
+                      options={salesDepartmentOptions}
+                      value={formData.department}
+                      onChange={(value) => setFormData({...formData, department: value})}
+                      placeholder="Select department"
+                      className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    />
+                  </motion.div>
+                )}
+
+                {/* Date Fields Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.7 }}
+                    className="space-y-2"
+                  >
+                    <label className="text-sm font-semibold text-gray-700 flex items-center">
+                      Date of Birth <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.dateOfBirth}
+                      onChange={(e) => setFormData({...formData, dateOfBirth: e.target.value})}
+                      className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    />
+                  </motion.div>
+
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.8 }}
+                    className="space-y-2"
+                  >
+                    <label className="text-sm font-semibold text-gray-700 flex items-center">
+                      Joining Date <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.joiningDate}
+                      onChange={(e) => setFormData({...formData, joiningDate: e.target.value})}
+                      className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    />
+                  </motion.div>
+                </div>
+
+                {/* Document Upload Field */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.9 }}
+                  className="space-y-2"
+                >
+                  <label className="text-sm font-semibold text-gray-700 flex items-center">
+                    Document <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      onChange={(e) => setFormData({...formData, document: e.target.files[0]})}
+                      className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <Upload className="h-4 w-4 text-gray-400" />
+                    </div>
+                  </div>
+                  {formData.document && (
+                    <div className="flex items-center space-x-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                      <FileText className="h-4 w-4 text-green-600" />
+                      <span className="text-sm text-green-700 font-medium">{formData.document.name}</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500">Supported formats: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 10MB)</p>
+                </motion.div>
+
                 {/* Status Field */}
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6 }}
+                  transition={{ delay: 1.0 }}
                   className="space-y-2"
                 >
                   <label className="text-sm font-semibold text-gray-700">Status</label>
@@ -1092,7 +1298,7 @@ const Admin_user_management = () => {
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.7 }}
+                    transition={{ delay: 1.1 }}
                     className="space-y-2"
                   >
                     <label className="text-sm font-semibold text-gray-700 flex items-center">
@@ -1111,7 +1317,7 @@ const Admin_user_management = () => {
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.8 }}
+                    transition={{ delay: 1.2 }}
                     className="space-y-2"
                   >
                     <label className="text-sm font-semibold text-gray-700 flex items-center">
@@ -1141,7 +1347,7 @@ const Admin_user_management = () => {
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.9 }}
+                  transition={{ delay: 1.2 }}
                   className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-200"
                 >
                   <Button
@@ -1218,6 +1424,14 @@ const Admin_user_management = () => {
                       {selectedUser.team && (
                         <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${getTeamColor(selectedUser.team)}`}>
                           {selectedUser.team === 'developer' ? 'Developer' : 'Sales Team'}
+                        </span>
+                      )}
+                      {selectedUser.department && selectedUser.role === 'employee' && (
+                        <span className="inline-flex px-3 py-1 text-sm font-medium rounded-full bg-cyan-100 text-cyan-800">
+                          {selectedUser.department === 'full-stack' ? 'Full Stack' : 
+                           selectedUser.department === 'nodejs' ? 'Node.js' :
+                           selectedUser.department === 'web' ? 'Web' :
+                           selectedUser.department === 'app' ? 'App' : 'Sales'}
                         </span>
                       )}
                       <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full border ${getStatusColor(selectedUser.status)}`}>
