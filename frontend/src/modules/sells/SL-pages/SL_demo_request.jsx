@@ -14,7 +14,8 @@ import {
   FiXCircle,
   FiEye,
   FiMoreVertical,
-  FiFilter
+  FiFilter,
+  FiTag
 } from 'react-icons/fi'
 import { FaWhatsapp } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
@@ -23,10 +24,50 @@ const SL_demo_request = () => {
   const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
+  const [selectedCategory, setSelectedCategory] = useState('all')
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
 
-  // Mock demo requests data
+  // Lead categories (matching admin system)
+  const leadCategories = [
+    {
+      id: 1,
+      name: 'Hot Leads',
+      description: 'High priority leads with immediate potential',
+      color: '#EF4444',
+      icon: '🔥'
+    },
+    {
+      id: 2,
+      name: 'Cold Leads',
+      description: 'Leads that need nurturing and follow-up',
+      color: '#3B82F6',
+      icon: '❄️'
+    },
+    {
+      id: 3,
+      name: 'Warm Leads',
+      description: 'Leads showing interest but not ready to convert',
+      color: '#F59E0B',
+      icon: '🌡️'
+    },
+    {
+      id: 4,
+      name: 'Enterprise',
+      description: 'Large enterprise clients and prospects',
+      color: '#8B5CF6',
+      icon: '🏢'
+    },
+    {
+      id: 5,
+      name: 'SME',
+      description: 'Small and medium enterprise prospects',
+      color: '#10B981',
+      icon: '🏪'
+    }
+  ]
+
+  // Mock demo requests data with categories
   const demoRequestsData = [
     {
       id: 1,
@@ -40,7 +81,9 @@ const SL_demo_request = () => {
       status: 'pending',
       demoType: 'Web Application',
       notes: 'Interested in our CRM solution for their sales team',
-      priority: 'high'
+      priority: 'high',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 2,
@@ -54,7 +97,9 @@ const SL_demo_request = () => {
       status: 'scheduled',
       demoType: 'Mobile App',
       notes: 'Looking for mobile app development services',
-      priority: 'medium'
+      priority: 'medium',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 3,
@@ -68,7 +113,9 @@ const SL_demo_request = () => {
       status: 'completed',
       demoType: 'E-commerce Platform',
       notes: 'Need a complete e-commerce solution with payment integration',
-      priority: 'high'
+      priority: 'high',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 4,
@@ -82,7 +129,9 @@ const SL_demo_request = () => {
       status: 'pending',
       demoType: 'Web Application',
       notes: 'Hospital management system demo required',
-      priority: 'low'
+      priority: 'low',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 5,
@@ -96,7 +145,9 @@ const SL_demo_request = () => {
       status: 'cancelled',
       demoType: 'Financial Software',
       notes: 'Budget constraints, postponed for next quarter',
-      priority: 'medium'
+      priority: 'medium',
+      categoryId: 5,
+      category: 'SME'
     }
   ]
 
@@ -112,8 +163,14 @@ const SL_demo_request = () => {
                          request.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          request.demoType.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesFilter = selectedFilter === 'all' || request.status === selectedFilter
-    return matchesSearch && matchesFilter
+    const matchesCategory = selectedCategory === 'all' || request.categoryId === parseInt(selectedCategory)
+    return matchesSearch && matchesFilter && matchesCategory
   })
+
+  // Get category info for a request
+  const getCategoryInfo = (categoryId) => {
+    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -238,21 +295,61 @@ const SL_demo_request = () => {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
-            className="flex flex-wrap gap-2 mb-4"
+            className="space-y-4 mb-4"
           >
-            {filters.map((filter) => (
-              <button
-                key={filter.id}
-                onClick={() => setSelectedFilter(filter.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  selectedFilter === filter.id
-                    ? 'bg-teal-500 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
+            {/* Status Filters */}
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">Status</h4>
+              <div className="flex flex-wrap gap-2">
+                {filters.map((filter) => (
+                  <button
+                    key={filter.id}
+                    onClick={() => setSelectedFilter(filter.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      selectedFilter === filter.id
+                        ? 'bg-teal-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Category Filters */}
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">Category</h4>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedCategory('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                    selectedCategory === 'all'
+                      ? 'bg-teal-500 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  All Categories
+                </button>
+                {leadCategories.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => setSelectedCategory(category.id.toString())}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
+                      selectedCategory === category.id.toString()
+                        ? 'text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                    style={{
+                      backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                    }}
+                  >
+                    <span>{category.icon}</span>
+                    <span>{category.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -291,6 +388,18 @@ const SL_demo_request = () => {
                     <div className="mb-2">
                       <p className="text-xs text-gray-600">Preferred Date</p>
                       <p className="text-sm text-gray-900">{request.preferredDate} at {request.preferredTime}</p>
+                    </div>
+
+                    {/* Category Tag */}
+                    <div className="mb-2">
+                      <div className="flex items-center space-x-1">
+                        <span 
+                          className="text-xs text-gray-500"
+                          style={{ color: getCategoryInfo(request.categoryId).color }}
+                        >
+                          {getCategoryInfo(request.categoryId).icon} {getCategoryInfo(request.categoryId).name}
+                        </span>
+                      </div>
                     </div>
                   </div>
 

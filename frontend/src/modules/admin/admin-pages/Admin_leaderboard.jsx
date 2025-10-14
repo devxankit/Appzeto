@@ -33,7 +33,7 @@ const Admin_leaderboard = () => {
   // State management
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
-  const [selectedModule, setSelectedModule] = useState('all')
+  const [selectedModule, setSelectedModule] = useState('dev')
   const [selectedPeriod, setSelectedPeriod] = useState('month')
   const [searchQuery, setSearchQuery] = useState('')
   const [showFilters, setShowFilters] = useState(false)
@@ -152,13 +152,7 @@ const Admin_leaderboard = () => {
 
   // Filter data based on selected module
   const filteredData = useMemo(() => {
-    let data = []
-    
-    if (selectedModule === 'all') {
-      data = Object.values(allLeaderboardData).flat()
-    } else {
-      data = allLeaderboardData[selectedModule] || []
-    }
+    let data = allLeaderboardData[selectedModule] || []
 
     // Apply search filter
     if (searchQuery) {
@@ -523,7 +517,6 @@ const Admin_leaderboard = () => {
             <div className="border-b border-gray-200">
               <nav className="-mb-px flex space-x-8">
                 {[
-                  { id: 'all', label: 'All Teams', icon: FiUsers },
                   { id: 'dev', label: 'Development', icon: FiCode },
                   { id: 'sales', label: 'Sales Team', icon: FiShoppingCart }
                 ].map((tab) => {
@@ -646,7 +639,7 @@ const Admin_leaderboard = () => {
           <div className="mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">
-                {selectedModule === 'all' ? 'All Teams Rankings' : `${selectedModule.toUpperCase()} Team Rankings`}
+                {selectedModule.toUpperCase()} Team Rankings
               </h2>
               <span className="text-sm text-gray-500">
                 {filteredData.length} members

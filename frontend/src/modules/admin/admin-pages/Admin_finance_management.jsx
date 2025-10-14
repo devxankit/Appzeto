@@ -33,6 +33,7 @@ const Admin_finance_management = () => {
   const [activeTab, setActiveTab] = useState('transactions')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(20)
   const [timeFilter, setTimeFilter] = useState('all')
@@ -64,7 +65,7 @@ const Admin_finance_management = () => {
 
   // Form data for different tabs
   const [transactionFormData, setTransactionFormData] = useState({
-    type: 'revenue',
+    type: 'incoming',
     category: '',
     amount: '',
     client: '',
@@ -171,7 +172,7 @@ const Admin_finance_management = () => {
   const [transactions, setTransactions] = useState([
     {
       id: 1,
-      type: 'revenue',
+      type: 'incoming',
       category: 'Project Payment',
       amount: 150000,
       client: 'TechCorp Solutions',
@@ -183,7 +184,7 @@ const Admin_finance_management = () => {
     },
     {
       id: 2,
-      type: 'expense',
+      type: 'outgoing',
       category: 'Salary',
       amount: 35000,
       employee: 'John Doe',
@@ -195,7 +196,7 @@ const Admin_finance_management = () => {
     },
     {
       id: 3,
-      type: 'revenue',
+      type: 'incoming',
       category: 'Consulting',
       amount: 75000,
       client: 'StartupXYZ',
@@ -207,7 +208,7 @@ const Admin_finance_management = () => {
     },
     {
       id: 4,
-      type: 'expense',
+      type: 'outgoing',
       category: 'Office Rent',
       amount: 25000,
       vendor: 'Prime Properties',
@@ -218,7 +219,7 @@ const Admin_finance_management = () => {
     },
     {
       id: 5,
-      type: 'revenue',
+      type: 'incoming',
       category: 'Maintenance',
       amount: 12000,
       client: 'RetailChain',
@@ -230,7 +231,7 @@ const Admin_finance_management = () => {
     },
     {
       id: 6,
-      type: 'expense',
+      type: 'outgoing',
       category: 'Software License',
       amount: 5000,
       vendor: 'Adobe Inc.',
@@ -448,7 +449,7 @@ const Admin_finance_management = () => {
   }
 
   const getTypeColor = (type) => {
-    return type === 'revenue' ? 'text-green-600' : 'text-red-600'
+    return type === 'incoming' ? 'text-green-600' : 'text-red-600'
   }
 
   const formatCurrency = (amount) => {
@@ -497,7 +498,7 @@ const Admin_finance_management = () => {
       let matchesFilter = true
       if (selectedFilter !== 'all') {
         if (activeTab === 'transactions') {
-          matchesFilter = item.type === selectedFilter
+          matchesFilter = item.status === selectedFilter
         } else if (activeTab === 'budgets') {
           matchesFilter = item.status === selectedFilter
         } else if (activeTab === 'invoices') {
@@ -508,10 +509,16 @@ const Admin_finance_management = () => {
           matchesFilter = item.isActive === (selectedFilter === 'active')
         }
       }
+
+      // Handle transaction type filter for transactions tab
+      let matchesTransactionType = true
+      if (activeTab === 'transactions' && transactionTypeFilter !== 'all') {
+        matchesTransactionType = item.type === transactionTypeFilter
+      }
       
-      return matchesSearch && matchesFilter
+      return matchesSearch && matchesFilter && matchesTransactionType
     })
-  }, [activeTab, searchTerm, selectedFilter])
+  }, [activeTab, searchTerm, selectedFilter, transactionTypeFilter])
 
   // Pagination
   const paginatedData = useMemo(() => {
@@ -585,7 +592,7 @@ const Admin_finance_management = () => {
       description: ''
     })
     setTransactionFormData({
-      type: 'revenue',
+      type: 'incoming',
       category: '',
       amount: '',
       client: '',
@@ -691,7 +698,7 @@ const Admin_finance_management = () => {
   // Handler functions for different tabs
   const handleCreateTransaction = () => {
     setTransactionFormData({
-      type: 'revenue',
+      type: 'incoming',
       category: '',
       amount: '',
       client: '',
@@ -1200,53 +1207,92 @@ const Admin_finance_management = () => {
             </div>
           </div>
 
-          {/* Add Buttons - Show for all tabs */}
-          <div className="mb-6 flex justify-end">
+          {/* Add Buttons and Transaction Type Tabs */}
+          <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            {/* Transaction Type Tabs - Only show for transactions tab */}
             {activeTab === 'transactions' && (
-              <button
-                onClick={handleCreateTransaction}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-              >
-                <FiPlus className="text-sm" />
-                <span>Add Transaction</span>
-              </button>
+              <div className="flex items-center space-x-1 bg-gray-100 p-1 rounded-lg">
+                <button
+                  onClick={() => setTransactionTypeFilter('all')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                    transactionTypeFilter === 'all'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setTransactionTypeFilter('incoming')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                    transactionTypeFilter === 'incoming'
+                      ? 'bg-white text-green-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  Incoming
+                </button>
+                <button
+                  onClick={() => setTransactionTypeFilter('outgoing')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                    transactionTypeFilter === 'outgoing'
+                      ? 'bg-white text-red-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  Outgoing
+                </button>
+              </div>
             )}
-            {activeTab === 'budgets' && (
-              <button
-                onClick={handleCreateBudget}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-              >
-                <FiPlus className="text-sm" />
-                <span>Add Budget</span>
-              </button>
-            )}
-            {activeTab === 'invoices' && (
-              <button
-                onClick={handleCreateInvoice}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-              >
-                <FiPlus className="text-sm" />
-                <span>Add Invoice</span>
-              </button>
-            )}
-            {activeTab === 'expenses' && (
-              <button
-                onClick={handleCreateExpense}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-              >
-                <FiPlus className="text-sm" />
-                <span>Add Expense</span>
-              </button>
-            )}
-            {activeTab === 'accounts' && (
-              <button
-                onClick={handleCreateAccount}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-              >
-                <FiPlus className="text-sm" />
-                <span>Add Account</span>
-              </button>
-            )}
+            
+            {/* Add Buttons */}
+            <div className="flex justify-end">
+              {activeTab === 'transactions' && (
+                <button
+                  onClick={handleCreateTransaction}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                >
+                  <FiPlus className="text-sm" />
+                  <span>Add Transaction</span>
+                </button>
+              )}
+              {activeTab === 'budgets' && (
+                <button
+                  onClick={handleCreateBudget}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                >
+                  <FiPlus className="text-sm" />
+                  <span>Add Budget</span>
+                </button>
+              )}
+              {activeTab === 'invoices' && (
+                <button
+                  onClick={handleCreateInvoice}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                >
+                  <FiPlus className="text-sm" />
+                  <span>Add Invoice</span>
+                </button>
+              )}
+              {activeTab === 'expenses' && (
+                <button
+                  onClick={handleCreateExpense}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                >
+                  <FiPlus className="text-sm" />
+                  <span>Add Expense</span>
+                </button>
+              )}
+              {activeTab === 'accounts' && (
+                <button
+                  onClick={handleCreateAccount}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                >
+                  <FiPlus className="text-sm" />
+                  <span>Add Account</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Search and Filter */}
@@ -1271,8 +1317,9 @@ const Admin_finance_management = () => {
                 <option value="all">All</option>
                 {activeTab === 'transactions' && (
                   <>
-                    <option value="revenue">Revenue</option>
-                    <option value="expense">Expense</option>
+                    <option value="completed">Completed</option>
+                    <option value="pending">Pending</option>
+                    <option value="failed">Failed</option>
                   </>
                 )}
                 {(activeTab === 'budgets' || activeTab === 'invoices' || activeTab === 'expenses') && (
@@ -1307,7 +1354,7 @@ const Admin_finance_management = () => {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className={`text-sm font-medium ${getTypeColor(item.type)}`}>
-                        {item.type === 'revenue' ? '+' : '-'}{formatCurrency(item.amount)}
+                        {item.type === 'incoming' ? '+' : '-'}{formatCurrency(item.amount)}
                       </span>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
                         {item.status}
@@ -1973,8 +2020,8 @@ const Admin_finance_management = () => {
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   >
-                    <option value="revenue">Revenue</option>
-                    <option value="expense">Expense</option>
+                    <option value="incoming">Incoming</option>
+                    <option value="outgoing">Outgoing</option>
                   </select>
                 </div>
                 <div>

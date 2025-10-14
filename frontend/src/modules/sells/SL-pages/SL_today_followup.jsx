@@ -11,19 +11,60 @@ import {
   FiUserCheck,
   FiMessageCircle,
   FiMail,
-  FiCalendar
+  FiCalendar,
+  FiTag
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 
 const SL_today_followup = () => {
   const navigate = useNavigate()
   const [selectedFilter, setSelectedFilter] = useState('all')
+  const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLeadId, setSelectedLeadId] = useState(null)
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
 
-  // Mock today follow-up leads data
+  // Lead categories (matching admin system)
+  const leadCategories = [
+    {
+      id: 1,
+      name: 'Hot Leads',
+      description: 'High priority leads with immediate potential',
+      color: '#EF4444',
+      icon: '🔥'
+    },
+    {
+      id: 2,
+      name: 'Cold Leads',
+      description: 'Leads that need nurturing and follow-up',
+      color: '#3B82F6',
+      icon: '❄️'
+    },
+    {
+      id: 3,
+      name: 'Warm Leads',
+      description: 'Leads showing interest but not ready to convert',
+      color: '#F59E0B',
+      icon: '🌡️'
+    },
+    {
+      id: 4,
+      name: 'Enterprise',
+      description: 'Large enterprise clients and prospects',
+      color: '#8B5CF6',
+      icon: '🏢'
+    },
+    {
+      id: 5,
+      name: 'SME',
+      description: 'Small and medium enterprise prospects',
+      color: '#10B981',
+      icon: '🏪'
+    }
+  ]
+
+  // Mock today follow-up leads data with categories
   const todayFollowupData = [
     {
       id: 1,
@@ -32,7 +73,9 @@ const SL_today_followup = () => {
       company: 'Tech Solutions Inc.',
       followupTime: '10:00 AM',
       followupDate: 'Today',
-      status: 'followup'
+      status: 'followup',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 2,
@@ -41,7 +84,9 @@ const SL_today_followup = () => {
       company: 'Digital Marketing Pro',
       followupTime: '2:00 PM',
       followupDate: 'Today',
-      status: 'followup'
+      status: 'followup',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 3,
@@ -50,7 +95,9 @@ const SL_today_followup = () => {
       company: 'E-commerce Store',
       followupTime: '4:30 PM',
       followupDate: 'Today',
-      status: 'followup'
+      status: 'followup',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 4,
@@ -59,7 +106,9 @@ const SL_today_followup = () => {
       company: 'Restaurant Chain',
       followupTime: '11:30 AM',
       followupDate: 'Today',
-      status: 'followup'
+      status: 'followup',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 5,
@@ -68,7 +117,9 @@ const SL_today_followup = () => {
       company: 'Fitness Center',
       followupTime: '3:15 PM',
       followupDate: 'Today',
-      status: 'followup'
+      status: 'followup',
+      categoryId: 5,
+      category: 'SME'
     }
   ]
 
@@ -83,8 +134,14 @@ const SL_today_followup = () => {
     const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          lead.phone.includes(searchTerm) ||
                          lead.company.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchesSearch
+    const matchesCategory = selectedCategory === 'all' || lead.categoryId === parseInt(selectedCategory)
+    return matchesSearch && matchesCategory
   })
+
+  // Get category info for a lead
+  const getCategoryInfo = (categoryId) => {
+    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+  }
 
   const handleCall = (phone) => {
     window.open(`tel:${phone}`, '_self')
@@ -117,10 +174,19 @@ const SL_today_followup = () => {
           </div>
         </div>
 
-        {/* Lead Info */}
+        {/* Lead Info & Category */}
         <div className="flex-1 min-w-0">
           <h3 className="text-base font-semibold text-gray-900 truncate">{lead.name}</h3>
           <p className="text-sm text-gray-600 truncate">{lead.company}</p>
+          {/* Category Tag */}
+          <div className="flex items-center space-x-1 mt-1">
+            <span 
+              className="text-xs text-gray-500"
+              style={{ color: getCategoryInfo(lead.categoryId).color }}
+            >
+              {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
+            </span>
+          </div>
         </div>
 
         {/* Time Badge */}
@@ -227,10 +293,19 @@ const SL_today_followup = () => {
           </div>
         </div>
 
-        {/* Lead Info */}
+        {/* Lead Info & Category */}
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.name}</h3>
           <p className="text-sm text-gray-600 truncate">{lead.company}</p>
+          {/* Category Tag */}
+          <div className="flex items-center space-x-2 mt-1">
+            <span 
+              className="text-xs text-gray-500"
+              style={{ color: getCategoryInfo(lead.categoryId).color }}
+            >
+              {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
+            </span>
+          </div>
         </div>
 
         {/* Time & Date */}
@@ -408,21 +483,61 @@ const SL_today_followup = () => {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
-              className="flex flex-wrap gap-2 mb-4"
+              className="space-y-4 mb-4"
             >
-              {filters.map((filter) => (
-                <button
-                  key={filter.id}
-                  onClick={() => setSelectedFilter(filter.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                    selectedFilter === filter.id
-                      ? 'bg-teal-500 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
+              {/* Time Filters */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Time Period</h4>
+                <div className="flex flex-wrap gap-2">
+                  {filters.map((filter) => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setSelectedFilter(filter.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                        selectedFilter === filter.id
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Category Filters */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Category</h4>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setSelectedCategory('all')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      selectedCategory === 'all'
+                        ? 'bg-teal-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    All Categories
+                  </button>
+                  {leadCategories.map((category) => (
+                    <button
+                      key={category.id}
+                      onClick={() => setSelectedCategory(category.id.toString())}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
+                        selectedCategory === category.id.toString()
+                          ? 'text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                      style={{
+                        backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                      }}
+                    >
+                      <span>{category.icon}</span>
+                      <span>{category.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </motion.div>
           )}
 
@@ -546,21 +661,61 @@ const SL_today_followup = () => {
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="flex flex-wrap gap-2"
+                    className="space-y-4"
                   >
-                    {filters.map((filter) => (
-                      <button
-                        key={filter.id}
-                        onClick={() => setSelectedFilter(filter.id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                          selectedFilter === filter.id
-                            ? 'bg-teal-500 text-white shadow-md'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
+                    {/* Time Period Filters */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Time Period</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {filters.map((filter) => (
+                          <button
+                            key={filter.id}
+                            onClick={() => setSelectedFilter(filter.id)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                              selectedFilter === filter.id
+                                ? 'bg-teal-500 text-white shadow-md'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {filter.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Category Filters */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Category</h4>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => setSelectedCategory('all')}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                            selectedCategory === 'all'
+                              ? 'bg-teal-500 text-white shadow-md'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          All Categories
+                        </button>
+                        {leadCategories.map((category) => (
+                          <button
+                            key={category.id}
+                            onClick={() => setSelectedCategory(category.id.toString())}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
+                              selectedCategory === category.id.toString()
+                                ? 'text-white shadow-md'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                            style={{
+                              backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                            }}
+                          >
+                            <span>{category.icon}</span>
+                            <span>{category.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </motion.div>
                 )}
               </motion.div>

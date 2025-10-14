@@ -1,5 +1,5 @@
 // Single-file mobile Lead Dashboard component — Tailwind v4 + react-icons
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { motion, useInView, AnimatePresence } from 'framer-motion'
 import { 
   FiPlus,
@@ -13,7 +13,9 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiArrowLeft,
-  FiX
+  FiX,
+  FiTag,
+  FiChevronDown
 } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import SL_navbar from '../SL-components/SL_navbar'
@@ -22,8 +24,69 @@ const LeadDashboard = () => {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formData, setFormData] = useState({
-    phoneNumber: ''
+    phoneNumber: '',
+    categoryId: ''
   })
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
+  const dropdownRef = useRef(null)
+
+  // Handle clicks outside dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowCategoryDropdown(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  // Lead categories (matching admin system)
+  const leadCategories = [
+    {
+      id: 1,
+      name: 'Hot Leads',
+      description: 'High priority leads with immediate potential',
+      color: '#EF4444',
+      icon: '🔥'
+    },
+    {
+      id: 2,
+      name: 'Cold Leads',
+      description: 'Leads that need nurturing and follow-up',
+      color: '#3B82F6',
+      icon: '❄️'
+    },
+    {
+      id: 3,
+      name: 'Warm Leads',
+      description: 'Leads showing interest but not ready to convert',
+      color: '#F59E0B',
+      icon: '🌡️'
+    },
+    {
+      id: 4,
+      name: 'Enterprise',
+      description: 'Large enterprise clients with complex requirements',
+      color: '#8B5CF6',
+      icon: '🏢'
+    },
+    {
+      id: 5,
+      name: 'SME',
+      description: 'Small and medium enterprise clients',
+      color: '#10B981',
+      icon: '🏪'
+    }
+  ]
+
+  // Helper function to get category info by ID
+  const getCategoryInfo = (categoryId) => {
+    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+  }
   
   // Refs for scroll-triggered animations
   const tilesRef = useRef(null)
@@ -35,7 +98,11 @@ const LeadDashboard = () => {
 
   // Modal functions
   const openModal = () => setIsModalOpen(true)
-  const closeModal = () => setIsModalOpen(false)
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setShowCategoryDropdown(false)
+    setFormData({ phoneNumber: '', categoryId: '' })
+  }
   
   // Form handlers
   const handleInputChange = (e) => {
@@ -44,15 +111,28 @@ const LeadDashboard = () => {
       [e.target.name]: e.target.value
     })
   }
+
+  const handleCategorySelect = (categoryId) => {
+    setFormData({
+      ...formData,
+      categoryId: categoryId
+    })
+    setShowCategoryDropdown(false)
+  }
   
   const handleSubmit = (e) => {
     e.preventDefault()
+    // Validate required fields
+    if (!formData.phoneNumber || !formData.categoryId) {
+      alert('Please fill in all required fields')
+      return
+    }
     // Handle form submission logic here
     console.log('Form submitted:', formData)
     // Close modal after successful submission
     closeModal()
     // Reset form
-    setFormData({ phoneNumber: '' })
+    setFormData({ phoneNumber: '', categoryId: '' })
   }
 
   // Sample data for tiles with monochromatic color scheme
@@ -439,6 +519,55 @@ const LeadDashboard = () => {
                       className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                       required
                     />
+                  </div>
+                </div>
+
+                {/* Category Selection */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative" ref={dropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                      className="w-full pl-4 pr-10 py-4 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 flex items-center justify-between"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <FiTag className="text-teal-600 text-xl" />
+                        <span className={formData.categoryId ? 'text-gray-900' : 'text-gray-500'}>
+                          {formData.categoryId 
+                            ? `${getCategoryInfo(parseInt(formData.categoryId)).icon} ${getCategoryInfo(parseInt(formData.categoryId)).name}`
+                            : 'Select a category'
+                          }
+                        </span>
+                      </div>
+                      <FiChevronDown className={`text-gray-400 transition-transform duration-200 ${showCategoryDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Category Dropdown */}
+                    {showCategoryDropdown && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {leadCategories.map((category) => (
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={() => handleCategorySelect(category.id.toString())}
+                            className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-3 border-b border-gray-100 last:border-b-0"
+                          >
+                            <span className="text-lg">{category.icon}</span>
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-900">{category.name}</div>
+                              <div className="text-sm text-gray-500">{category.description}</div>
+                            </div>
+                            <div 
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: category.color }}
+                            ></div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

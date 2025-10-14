@@ -10,19 +10,60 @@ import {
   FiAlertCircle,
   FiUserCheck,
   FiMessageCircle,
-  FiMail
+  FiMail,
+  FiTag
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 
 const SL_connected = () => {
   const navigate = useNavigate()
   const [selectedFilter, setSelectedFilter] = useState('all')
+  const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLeadId, setSelectedLeadId] = useState(null)
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
 
-  // Mock connected leads data with names
+  // Lead categories (matching admin system)
+  const leadCategories = [
+    {
+      id: 1,
+      name: 'Hot Leads',
+      description: 'High priority leads with immediate potential',
+      color: '#EF4444',
+      icon: '🔥'
+    },
+    {
+      id: 2,
+      name: 'Cold Leads',
+      description: 'Leads that need nurturing and follow-up',
+      color: '#3B82F6',
+      icon: '❄️'
+    },
+    {
+      id: 3,
+      name: 'Warm Leads',
+      description: 'Leads showing interest but not ready to convert',
+      color: '#F59E0B',
+      icon: '🌡️'
+    },
+    {
+      id: 4,
+      name: 'Enterprise',
+      description: 'Large enterprise clients and prospects',
+      color: '#8B5CF6',
+      icon: '🏢'
+    },
+    {
+      id: 5,
+      name: 'SME',
+      description: 'Small and medium enterprise prospects',
+      color: '#10B981',
+      icon: '🏪'
+    }
+  ]
+
+  // Mock connected leads data with names and categories
   const connectedLeadsData = [
     {
       id: 1,
@@ -30,7 +71,9 @@ const SL_connected = () => {
       phone: '9845637236',
       priority: 'high',
       lastContact: '2 hours ago',
-      status: 'connected'
+      status: 'connected',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 2,
@@ -38,7 +81,9 @@ const SL_connected = () => {
       phone: '9876543210',
       priority: 'medium',
       lastContact: '1 day ago',
-      status: 'connected'
+      status: 'connected',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 3,
@@ -46,7 +91,9 @@ const SL_connected = () => {
       phone: '9087654321',
       priority: 'high',
       lastContact: '3 hours ago',
-      status: 'connected'
+      status: 'connected',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 4,
@@ -54,7 +101,9 @@ const SL_connected = () => {
       phone: '8765432109',
       priority: 'low',
       lastContact: '2 days ago',
-      status: 'connected'
+      status: 'connected',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 5,
@@ -62,7 +111,9 @@ const SL_connected = () => {
       phone: '7654321098',
       priority: 'high',
       lastContact: '5 hours ago',
-      status: 'connected'
+      status: 'connected',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 6,
@@ -70,7 +121,9 @@ const SL_connected = () => {
       phone: '6543210987',
       priority: 'medium',
       lastContact: '1 day ago',
-      status: 'connected'
+      status: 'connected',
+      categoryId: 5,
+      category: 'SME'
     },
     {
       id: 7,
@@ -78,7 +131,9 @@ const SL_connected = () => {
       phone: '5432109876',
       priority: 'low',
       lastContact: '3 days ago',
-      status: 'connected'
+      status: 'connected',
+      categoryId: 3,
+      category: 'Warm Leads'
     }
   ]
 
@@ -93,8 +148,14 @@ const SL_connected = () => {
   const filteredLeads = connectedLeadsData.filter(lead => {
     const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          lead.phone.includes(searchTerm)
-    return matchesSearch
+    const matchesCategory = selectedCategory === 'all' || lead.categoryId === parseInt(selectedCategory)
+    return matchesSearch && matchesCategory
   })
+
+  // Get category info for a lead
+  const getCategoryInfo = (categoryId) => {
+    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+  }
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -125,25 +186,37 @@ const SL_connected = () => {
   }
 
   // Mobile Lead Card Component
-  const MobileLeadCard = ({ lead }) => (
-    <div className="flex items-center justify-between">
-      {/* Left Section - Avatar & Info */}
-      <div className="flex items-center space-x-3 flex-1 min-w-0">
-        {/* Avatar */}
-        <div className="relative flex-shrink-0">
-          <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center">
-            <FiUser className="text-white text-xs" />
+  const MobileLeadCard = ({ lead }) => {
+    const categoryInfo = getCategoryInfo(lead.categoryId)
+    
+    return (
+      <div className="flex items-center justify-between">
+        {/* Left Section - Avatar & Info */}
+        <div className="flex items-center space-x-3 flex-1 min-w-0">
+          {/* Avatar */}
+          <div className="relative flex-shrink-0">
+            <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center">
+              <FiUser className="text-white text-xs" />
+            </div>
+            <div className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full flex items-center justify-center ${getPriorityColor(lead.priority)}`}>
+              <div className={`w-1 h-1 rounded-full ${getPriorityColor(lead.priority).replace('text', 'bg')}`}></div>
+            </div>
           </div>
-          <div className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full flex items-center justify-center ${getPriorityColor(lead.priority)}`}>
-            <div className={`w-1 h-1 rounded-full ${getPriorityColor(lead.priority).replace('text', 'bg')}`}></div>
-          </div>
-        </div>
 
-        {/* Name & Phone */}
-        <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-gray-900 truncate">{lead.name}</h3>
-          <p className="text-sm text-gray-600 truncate">{lead.phone}</p>
-        </div>
+          {/* Name, Phone & Category */}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold text-gray-900 truncate">{lead.name}</h3>
+            <p className="text-sm text-gray-600 truncate">{lead.phone}</p>
+            {/* Category Tag */}
+            <div className="flex items-center space-x-1 mt-1">
+              <span 
+                className="text-xs text-gray-500"
+                style={{ color: categoryInfo.color }}
+              >
+                {categoryInfo.icon} {categoryInfo.name}
+              </span>
+            </div>
+          </div>
       </div>
 
       {/* Actions */}
@@ -217,28 +290,41 @@ const SL_connected = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   // Desktop Lead Card Component
-  const DesktopLeadCard = ({ lead }) => (
-    <div className="flex items-center justify-between">
-      {/* Left Section - Avatar & Info */}
-      <div className="flex-1 flex items-center space-x-4">
-        {/* Avatar */}
-        <div className="relative flex-shrink-0">
-          <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center">
-            <FiUser className="text-white text-sm" />
+  const DesktopLeadCard = ({ lead }) => {
+    const categoryInfo = getCategoryInfo(lead.categoryId)
+    
+    return (
+      <div className="flex items-center justify-between">
+        {/* Left Section - Avatar & Info */}
+        <div className="flex-1 flex items-center space-x-4">
+          {/* Avatar */}
+          <div className="relative flex-shrink-0">
+            <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center">
+              <FiUser className="text-white text-sm" />
+            </div>
+            <div className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center ${getPriorityColor(lead.priority)}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${getPriorityColor(lead.priority).replace('text', 'bg')}`}></div>
+            </div>
           </div>
-          <div className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center ${getPriorityColor(lead.priority)}`}>
-            <div className={`w-1.5 h-1.5 rounded-full ${getPriorityColor(lead.priority).replace('text', 'bg')}`}></div>
-          </div>
-        </div>
 
-        {/* Name & Phone */}
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900">{lead.name}</h3>
-          <p className="text-gray-600">{lead.phone}</p>
-        </div>
+          {/* Name, Phone & Category */}
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900">{lead.name}</h3>
+            <p className="text-gray-600">{lead.phone}</p>
+            {/* Category Tag */}
+            <div className="flex items-center space-x-2 mt-1">
+              <span 
+                className="text-xs text-gray-500"
+                style={{ color: categoryInfo.color }}
+              >
+                {categoryInfo.icon} {categoryInfo.name}
+              </span>
+            </div>
+          </div>
       </div>
 
       {/* Actions Section */}
@@ -310,7 +396,8 @@ const SL_connected = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -395,21 +482,61 @@ const SL_connected = () => {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
-              className="flex flex-wrap gap-2 mb-4"
+              className="space-y-4 mb-4"
             >
-              {filters.map((filter) => (
-                <button
-                  key={filter.id}
-                  onClick={() => setSelectedFilter(filter.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                    selectedFilter === filter.id
-                      ? 'bg-teal-500 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
+              {/* Time Filters */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Time Period</h4>
+                <div className="flex flex-wrap gap-2">
+                  {filters.map((filter) => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setSelectedFilter(filter.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                        selectedFilter === filter.id
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Category Filters */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Category</h4>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setSelectedCategory('all')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      selectedCategory === 'all'
+                        ? 'bg-teal-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    All Categories
+                  </button>
+                  {leadCategories.map((category) => (
+                    <button
+                      key={category.id}
+                      onClick={() => setSelectedCategory(category.id.toString())}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
+                        selectedCategory === category.id.toString()
+                          ? 'text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                      style={{
+                        backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                      }}
+                    >
+                      <span>{category.icon}</span>
+                      <span>{category.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </motion.div>
           )}
 
@@ -533,21 +660,61 @@ const SL_connected = () => {
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="flex flex-wrap gap-2"
+                    className="space-y-4"
                   >
-                    {filters.map((filter) => (
-                      <button
-                        key={filter.id}
-                        onClick={() => setSelectedFilter(filter.id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                          selectedFilter === filter.id
-                            ? 'bg-teal-500 text-white shadow-md'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
+                    {/* Time Period Filters */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Time Period</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {filters.map((filter) => (
+                          <button
+                            key={filter.id}
+                            onClick={() => setSelectedFilter(filter.id)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                              selectedFilter === filter.id
+                                ? 'bg-teal-500 text-white shadow-md'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {filter.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Category Filters */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Category</h4>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => setSelectedCategory('all')}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                            selectedCategory === 'all'
+                              ? 'bg-teal-500 text-white shadow-md'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          All Categories
+                        </button>
+                        {leadCategories.map((category) => (
+                          <button
+                            key={category.id}
+                            onClick={() => setSelectedCategory(category.id.toString())}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
+                              selectedCategory === category.id.toString()
+                                ? 'text-white shadow-md'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                            style={{
+                              backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                            }}
+                          >
+                            <span>{category.icon}</span>
+                            <span>{category.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </motion.div>
                 )}
               </motion.div>

@@ -52,6 +52,8 @@ const Admin_sales_management = () => {
   const [showAssignLeadModal, setShowAssignLeadModal] = useState(false)
   const [showLeadListModal, setShowLeadListModal] = useState(false)
   const [showIncentiveModal, setShowIncentiveModal] = useState(false)
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [showCategoryEditModal, setShowCategoryEditModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [modalType, setModalType] = useState('')
   const [selectedLeadCategory, setSelectedLeadCategory] = useState('')
@@ -64,6 +66,12 @@ const Admin_sales_management = () => {
   const [targetAmount, setTargetAmount] = useState('')
   const [leadsToAssign, setLeadsToAssign] = useState('')
   const [incentiveAmount, setIncentiveAmount] = useState('')
+  const [categoryName, setCategoryName] = useState('')
+  const [categoryDescription, setCategoryDescription] = useState('')
+  const [categoryColor, setCategoryColor] = useState('#3B82F6')
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const [assignCategoryFilter, setAssignCategoryFilter] = useState('all')
+  const [leadsPerCategory, setLeadsPerCategory] = useState({})
 
   // Mock statistics data
   const [statistics] = useState({
@@ -114,8 +122,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-20',
       nextFollowUp: '2024-01-27',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 2,
@@ -129,8 +139,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-20',
       nextFollowUp: '2024-01-27',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 3,
@@ -144,8 +156,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-20',
       nextFollowUp: '2024-01-27',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 4,
@@ -159,8 +173,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-19',
       nextFollowUp: '2024-01-26',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 5,
@@ -174,8 +190,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-19',
       nextFollowUp: '2024-01-26',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 5,
+      category: 'SME'
     },
     {
       id: 6,
@@ -189,8 +207,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-18',
       nextFollowUp: '2024-01-25',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 7,
@@ -204,8 +224,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-18',
       nextFollowUp: '2024-01-25',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 8,
@@ -219,8 +241,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-17',
       nextFollowUp: '2024-01-24',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 9,
@@ -234,8 +258,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-17',
       nextFollowUp: '2024-01-24',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 10,
@@ -249,8 +275,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-16',
       nextFollowUp: '2024-01-23',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 5,
+      category: 'SME'
     },
     {
       id: 11,
@@ -264,8 +292,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-16',
       nextFollowUp: '2024-01-23',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Michael Chen',
+      notes: 'Bulk uploaded lead',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 12,
@@ -279,8 +309,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-15',
       nextFollowUp: '2024-01-22',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 13,
@@ -294,8 +326,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-15',
       nextFollowUp: '2024-01-22',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 14,
@@ -309,8 +343,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-14',
       nextFollowUp: '2024-01-21',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 15,
@@ -324,8 +360,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-14',
       nextFollowUp: '2024-01-21',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 5,
+      category: 'SME'
     },
     {
       id: 16,
@@ -339,8 +377,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-13',
       nextFollowUp: '2024-01-20',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 17,
@@ -354,8 +394,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-13',
       nextFollowUp: '2024-01-20',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 18,
@@ -369,8 +411,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-12',
       nextFollowUp: '2024-01-19',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 19,
@@ -384,8 +428,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-12',
       nextFollowUp: '2024-01-19',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 20,
@@ -399,8 +445,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-11',
       nextFollowUp: '2024-01-18',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 5,
+      category: 'SME'
     },
     {
       id: 21,
@@ -414,8 +462,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-11',
       nextFollowUp: '2024-01-18',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 22,
@@ -429,8 +479,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-10',
       nextFollowUp: '2024-01-17',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 23,
@@ -444,8 +496,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-10',
       nextFollowUp: '2024-01-17',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 24,
@@ -459,8 +513,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-09',
       nextFollowUp: '2024-01-16',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 25,
@@ -474,8 +530,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-09',
       nextFollowUp: '2024-01-16',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 5,
+      category: 'SME'
     },
     {
       id: 26,
@@ -489,8 +547,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-08',
       nextFollowUp: '2024-01-15',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 27,
@@ -504,8 +564,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-08',
       nextFollowUp: '2024-01-15',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 28,
@@ -519,8 +581,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-07',
       nextFollowUp: '2024-01-14',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 29,
@@ -534,8 +598,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-07',
       nextFollowUp: '2024-01-14',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 30,
@@ -549,8 +615,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-06',
       nextFollowUp: '2024-01-13',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 5,
+      category: 'SME'
     },
     {
       id: 31,
@@ -564,8 +632,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-06',
       nextFollowUp: '2024-01-13',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 32,
@@ -579,8 +649,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-05',
       nextFollowUp: '2024-01-12',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 33,
@@ -594,8 +666,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-05',
       nextFollowUp: '2024-01-12',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 34,
@@ -609,8 +683,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-04',
       nextFollowUp: '2024-01-11',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 35,
@@ -624,8 +700,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-04',
       nextFollowUp: '2024-01-11',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 5,
+      category: 'SME'
     },
     {
       id: 36,
@@ -639,8 +717,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-03',
       nextFollowUp: '2024-01-10',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 37,
@@ -654,8 +734,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-03',
       nextFollowUp: '2024-01-10',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 38,
@@ -669,8 +751,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-02',
       nextFollowUp: '2024-01-09',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 39,
@@ -684,8 +768,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-02',
       nextFollowUp: '2024-01-09',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 40,
@@ -699,8 +785,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-01',
       nextFollowUp: '2024-01-08',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 5,
+      category: 'SME'
     },
     {
       id: 41,
@@ -714,8 +802,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2024-01-01',
       nextFollowUp: '2024-01-08',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 42,
@@ -729,8 +819,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2023-12-31',
       nextFollowUp: '2024-01-07',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 43,
@@ -744,8 +836,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2023-12-31',
       nextFollowUp: '2024-01-07',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 44,
@@ -759,8 +853,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2023-12-30',
       nextFollowUp: '2024-01-06',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 45,
@@ -774,8 +870,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2023-12-30',
       nextFollowUp: '2024-01-06',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 5,
+      category: 'SME'
     },
     {
       id: 46,
@@ -789,8 +887,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2023-12-29',
       nextFollowUp: '2024-01-05',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 1,
+      category: 'Hot Leads'
     },
     {
       id: 47,
@@ -804,8 +904,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2023-12-29',
       nextFollowUp: '2024-01-05',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 2,
+      category: 'Cold Leads'
     },
     {
       id: 48,
@@ -819,8 +921,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2023-12-28',
       nextFollowUp: '2024-01-04',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 3,
+      category: 'Warm Leads'
     },
     {
       id: 49,
@@ -834,8 +938,10 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2023-12-28',
       nextFollowUp: '2024-01-04',
-      assignedTo: 'Unassigned',
-      notes: 'Bulk uploaded lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Bulk uploaded lead',
+      categoryId: 4,
+      category: 'Enterprise'
     },
     {
       id: 50,
@@ -849,8 +955,59 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: '2023-12-27',
       nextFollowUp: '2024-01-03',
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: 5,
+      category: 'SME'
+    }
+  ])
+
+  // Mock data for lead categories
+  const [leadCategories, setLeadCategories] = useState([
+    {
+      id: 1,
+      name: 'Hot Leads',
+      description: 'High priority leads with immediate potential',
+      color: '#EF4444',
+      icon: '🔥',
+      createdAt: '2024-01-01',
+      leadCount: 10
+    },
+    {
+      id: 2,
+      name: 'Cold Leads',
+      description: 'Leads that need nurturing and follow-up',
+      color: '#3B82F6',
+      icon: '❄️',
+      createdAt: '2024-01-01',
+      leadCount: 10
+    },
+    {
+      id: 3,
+      name: 'Warm Leads',
+      description: 'Leads showing interest but not ready to convert',
+      color: '#F59E0B',
+      icon: '🌡️',
+      createdAt: '2024-01-01',
+      leadCount: 10
+    },
+    {
+      id: 4,
+      name: 'Enterprise',
+      description: 'Large enterprise clients and prospects',
+      color: '#8B5CF6',
+      icon: '🏢',
+      createdAt: '2024-01-01',
+      leadCount: 10
+    },
+    {
+      id: 5,
+      name: 'SME',
+      description: 'Small and medium enterprise prospects',
+      color: '#10B981',
+      icon: '🏪',
+      createdAt: '2024-01-01',
+      leadCount: 10
     }
   ])
 
@@ -1128,6 +1285,7 @@ const Admin_sales_management = () => {
     setSelectedFilter('all')
     setSearchTerm('')
     setCurrentPage(1)
+    setSelectedCategory('')
   }, [activeTab])
 
   // Helper functions
@@ -1222,10 +1380,16 @@ const Admin_sales_management = () => {
           matchesFilter = item.status === selectedFilter || item.priority === selectedFilter
         }
       }
+
+      // Handle category filter for leads
+      let matchesCategory = true
+      if (activeTab === 'leads' && selectedCategory) {
+        matchesCategory = item.categoryId === parseInt(selectedCategory)
+      }
       
-      return matchesSearch && matchesFilter
+      return matchesSearch && matchesFilter && matchesCategory
     })
-  }, [activeTab, searchTerm, selectedFilter, leads, salesTeam, clients])
+  }, [activeTab, searchTerm, selectedFilter, selectedCategory, leads, salesTeam, clients])
 
   // Pagination
   const paginatedData = useMemo(() => {
@@ -1293,6 +1457,8 @@ const Admin_sales_management = () => {
     setShowAssignLeadModal(false)
     setShowLeadListModal(false)
     setShowIncentiveModal(false)
+    setShowCategoryModal(false)
+    setShowCategoryEditModal(false)
     setSelectedItem(null)
     setLeadNumber('')
     setUploadedFile(null)
@@ -1300,6 +1466,19 @@ const Admin_sales_management = () => {
     setTargetAmount('')
     setLeadsToAssign('')
     setIncentiveAmount('')
+    setSelectedLeadCategory('')
+    setSelectedLeadCategoryData([])
+    setCategoryName('')
+    setCategoryDescription('')
+    setCategoryColor('#3B82F6')
+    setSelectedCategory('')
+    setAssignCategoryFilter('all')
+    setLeadsPerCategory({})
+  }
+
+  // Close only the lead list modal while keeping view details modal open
+  const closeLeadListModal = () => {
+    setShowLeadListModal(false)
     setSelectedLeadCategory('')
     setSelectedLeadCategoryData([])
   }
@@ -1312,6 +1491,20 @@ const Admin_sales_management = () => {
       const mockLeads = generateMockLeadsForCategory(category, categoryCount, member.name)
       setSelectedLeadCategory(category)
       setSelectedLeadCategoryData(mockLeads)
+      setShowLeadListModal(true)
+    }
+  }
+
+  // Handle category card click in view details modal
+  const handleCategoryCardClick = (category, member) => {
+    // Get leads assigned to this member in this category
+    const categoryLeads = leads.filter(lead => 
+      lead.assignedTo === member.name && lead.categoryId === category.id
+    )
+    
+    if (categoryLeads.length > 0) {
+      setSelectedLeadCategory(category.name)
+      setSelectedLeadCategoryData(categoryLeads)
       setShowLeadListModal(true)
     }
   }
@@ -1356,10 +1549,13 @@ const Admin_sales_management = () => {
 
   // Handle single lead addition
   const handleAddLead = () => {
-    if (!leadNumber.trim()) return
+    if (!leadNumber.trim() || !selectedCategory) return
     
     // Simulate API call
     console.log('Adding lead:', leadNumber)
+    
+    // Get selected category details
+    const selectedCategoryData = leadCategories.find(cat => cat.id === parseInt(selectedCategory))
     
     // Create new lead object
     const newLead = {
@@ -1374,12 +1570,21 @@ const Admin_sales_management = () => {
       value: 25000,
       lastContact: new Date().toISOString().split('T')[0],
       nextFollowUp: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      assignedTo: 'Unassigned',
-      notes: 'Manually added lead'
+      assignedTo: 'Sarah Wilson',
+      notes: 'Manually added lead',
+      categoryId: parseInt(selectedCategory),
+      category: selectedCategoryData.name
     }
     
     // Add to leads array
     setLeads(prev => [newLead, ...prev])
+    
+    // Update category lead count
+    setLeadCategories(prev => prev.map(cat => 
+      cat.id === parseInt(selectedCategory)
+        ? { ...cat, leadCount: cat.leadCount + 1 }
+        : cat
+    ))
     
     // Close modal and reset form
     closeModals()
@@ -1387,7 +1592,7 @@ const Admin_sales_management = () => {
 
   // Handle bulk lead upload
   const handleBulkUpload = () => {
-    if (!uploadedFile) return
+    if (!uploadedFile || !selectedCategory) return
     
     // Simulate file processing
     setUploadProgress(0)
@@ -1405,6 +1610,9 @@ const Admin_sales_management = () => {
             '+91 98765 43214'
           ]
           
+          // Get selected category details
+          const selectedCategoryData = leadCategories.find(cat => cat.id === parseInt(selectedCategory))
+          
           const bulkLeads = samplePhoneNumbers.map((phoneNumber, index) => ({
             id: Date.now() + index,
             name: `Lead ${phoneNumber}`,
@@ -1417,11 +1625,21 @@ const Admin_sales_management = () => {
             value: 25000,
             lastContact: new Date().toISOString().split('T')[0],
             nextFollowUp: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            assignedTo: 'Unassigned',
-            notes: 'Bulk uploaded lead from phone number list'
+            assignedTo: 'Sarah Wilson',
+            notes: 'Bulk uploaded lead from phone number list',
+            categoryId: parseInt(selectedCategory),
+            category: selectedCategoryData.name
           }))
           
           setLeads(prev => [...bulkLeads, ...prev])
+          
+          // Update category lead count
+          setLeadCategories(prev => prev.map(cat => 
+            cat.id === parseInt(selectedCategory)
+              ? { ...cat, leadCount: cat.leadCount + bulkLeads.length }
+              : cat
+          ))
+          
           closeModals()
           return 100
         }
@@ -1464,6 +1682,23 @@ const Admin_sales_management = () => {
   const handleAssignLead = (member) => {
     setSelectedItem(member)
     setLeadsToAssign('')
+    setAssignCategoryFilter('all')
+    
+    // Calculate leads per category
+    const unassignedLeads = leads.filter(lead => lead.assignedTo === 'Unassigned')
+    const categoryBreakdown = {}
+    
+    leadCategories.forEach(category => {
+      const categoryLeads = unassignedLeads.filter(lead => lead.categoryId === category.id)
+      categoryBreakdown[category.id] = {
+        name: category.name,
+        icon: category.icon,
+        color: category.color,
+        count: categoryLeads.length
+      }
+    })
+    
+    setLeadsPerCategory(categoryBreakdown)
     setShowAssignLeadModal(true)
   }
 
@@ -1495,12 +1730,18 @@ const Admin_sales_management = () => {
     const numberOfLeads = parseInt(leadsToAssign)
     if (isNaN(numberOfLeads) || numberOfLeads <= 0) return
 
-    // Get unassigned leads
-    const unassignedLeads = leads.filter(lead => lead.assignedTo === 'Unassigned')
+    // Get unassigned leads based on category filter
+    let unassignedLeads = leads.filter(lead => lead.assignedTo === 'Unassigned')
+    
+    // Filter by category if specific category is selected
+    if (assignCategoryFilter !== 'all') {
+      unassignedLeads = unassignedLeads.filter(lead => lead.categoryId === parseInt(assignCategoryFilter))
+    }
     
     // Check if we have enough leads to assign
     if (unassignedLeads.length < numberOfLeads) {
-      alert(`Only ${unassignedLeads.length} unassigned leads available. Please enter a number between 1 and ${unassignedLeads.length}.`)
+      const categoryName = assignCategoryFilter === 'all' ? 'all categories' : leadCategories.find(cat => cat.id === parseInt(assignCategoryFilter))?.name
+      alert(`Only ${unassignedLeads.length} unassigned leads available in ${categoryName}. Please enter a number between 1 and ${unassignedLeads.length}.`)
       return
     }
 
@@ -1523,6 +1764,58 @@ const Admin_sales_management = () => {
     ))
 
     closeModals()
+  }
+
+  // Category management functions
+  const handleCreateCategory = () => {
+    if (!categoryName.trim()) return
+    
+    const newCategory = {
+      id: Date.now(),
+      name: categoryName,
+      description: categoryDescription,
+      color: categoryColor,
+      icon: '📋', // Default icon
+      createdAt: new Date().toISOString().split('T')[0],
+      leadCount: 0
+    }
+    
+    setLeadCategories(prev => [...prev, newCategory])
+    closeModals()
+  }
+
+  const handleEditCategory = (category) => {
+    setSelectedItem(category)
+    setCategoryName(category.name)
+    setCategoryDescription(category.description)
+    setCategoryColor(category.color)
+    setShowCategoryEditModal(true)
+  }
+
+  const handleUpdateCategory = () => {
+    if (!categoryName.trim() || !selectedItem) return
+    
+    setLeadCategories(prev => prev.map(category => 
+      category.id === selectedItem.id 
+        ? { 
+            ...category, 
+            name: categoryName, 
+            description: categoryDescription, 
+            color: categoryColor 
+          }
+        : category
+    ))
+    closeModals()
+  }
+
+  const handleDeleteCategory = (category) => {
+    setLeadCategories(prev => prev.filter(cat => cat.id !== category.id))
+    // Also remove category from leads that have this category
+    setLeads(prev => prev.map(lead => 
+      lead.categoryId === category.id 
+        ? { ...lead, categoryId: null, category: null }
+        : lead
+    ))
   }
 
   if (loading) {
@@ -1791,8 +2084,8 @@ const Admin_sales_management = () => {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             {/* Search and Filter */}
             <div className="p-6 border-b border-gray-200">
-               <div className="flex flex-col sm:flex-row gap-4 items-end">
-                <div className="flex-1 relative">
+               <div className="flex flex-col lg:flex-row gap-4 items-center">
+                <div className="w-full lg:w-80 relative">
                   <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <input
                     type="text"
@@ -1802,57 +2095,123 @@ const Admin_sales_management = () => {
                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                   />
                 </div>
-                 <div className="sm:w-56">
+                 <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
                    {activeTab === 'leads' ? (
-                     <div className="relative">
-                  <select
-                    value={selectedFilter}
-                    onChange={(e) => setSelectedFilter(e.target.value)}
+                     <>
+                       <div className="relative w-full sm:w-48">
+                         <select
+                           value={selectedFilter}
+                           onChange={(e) => setSelectedFilter(e.target.value)}
+                           className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white appearance-none cursor-pointer hover:border-gray-400 transition-colors shadow-sm"
+                         >
+                           <option value="all">📋 All Leads</option>
+                           <option value="today">📅 Today</option>
+                           <option value="week">📊 This Week</option>
+                           <option value="month">📈 This Month</option>
+                           <option value="hot">🔥 Hot Leads</option>
+                           <option value="connected">🤝 Connected</option>
+                           <option value="new">🆕 New Leads</option>
+                           <option value="converted">✅ Converted</option>
+                           <option value="lost">❌ Lost</option>
+                         </select>
+                         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                           <FiFilter className="h-4 w-4 text-gray-400" />
+                         </div>
+                       </div>
+                       <div className="relative w-full sm:w-48">
+                         <select
+                           value={selectedCategory}
+                           onChange={(e) => setSelectedCategory(e.target.value)}
+                           className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white appearance-none cursor-pointer hover:border-gray-400 transition-colors shadow-sm"
+                         >
+                           <option value="">🏷️ All Categories</option>
+                           {leadCategories.map(category => (
+                             <option key={category.id} value={category.id}>
+                               {category.icon} {category.name}
+                             </option>
+                           ))}
+                         </select>
+                         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                           <FiTarget className="h-4 w-4 text-gray-400" />
+                         </div>
+                       </div>
+                     </>
+                   ) : (
+                     <div className="relative w-full sm:w-48">
+                       <select
+                         value={selectedFilter}
+                         onChange={(e) => setSelectedFilter(e.target.value)}
                          className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white appearance-none cursor-pointer hover:border-gray-400 transition-colors shadow-sm"
                        >
-                         <option value="all">📋 All Leads</option>
-                         <option value="today">📅 Today</option>
-                         <option value="week">📊 This Week</option>
-                         <option value="month">📈 This Month</option>
-                         <option value="hot">🔥 Hot Leads</option>
-                         <option value="connected">🤝 Connected</option>
-                         <option value="new">🆕 New Leads</option>
-                         <option value="converted">✅ Converted</option>
-                         <option value="lost">❌ Lost</option>
+                         <option value="all">All Status</option>
+                         {activeTab === 'sales-team' && (
+                           <>
+                             <option value="active">Active</option>
+                             <option value="inactive">Inactive</option>
+                           </>
+                         )}
+                         {activeTab === 'clients' && (
+                           <>
+                             <option value="active">Active</option>
+                             <option value="inactive">Inactive</option>
+                           </>
+                         )}
                        </select>
                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                          <FiFilter className="h-4 w-4 text-gray-400" />
                        </div>
                      </div>
-                   ) : (
-                     <select
-                       value={selectedFilter}
-                       onChange={(e) => setSelectedFilter(e.target.value)}
-                       className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white hover:border-gray-400 transition-colors"
-                  >
-                    <option value="all">All Status</option>
-                    {activeTab === 'sales-team' && (
-                      <>
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                      </>
-                    )}
-                       {activeTab === 'clients' && (
-                         <>
-                           <option value="active">Active</option>
-                           <option value="inactive">Inactive</option>
-                         </>
-                       )}
-                  </select>
                    )}
-                </div>
-              </div>
-            </div>
+                 </div>
+               </div>
+             </div>
 
             {/* Content based on active tab */}
             <div className="p-6">
               {activeTab === 'leads' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  {/* Leads Management Header */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900">Lead Management</h3>
+                        <p className="text-gray-600 text-sm mt-1">Organize and manage your leads with categories</p>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <button
+                          onClick={() => setShowCategoryModal(true)}
+                          className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                        >
+                          <FiTarget className="h-4 w-4" />
+                          <span>Manage Categories</span>
+                        </button>
+                        <div className="text-sm text-gray-600">
+                          <span className="font-semibold">{filteredData.length}</span> leads found
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Category Overview */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                      {leadCategories.map((category) => (
+                        <div key={category.id} className="bg-white rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow">
+                          <div className="flex items-center space-x-2">
+                            <div 
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+                              style={{ backgroundColor: category.color }}
+                            >
+                              {category.icon}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-semibold text-gray-900 truncate">{category.name}</div>
+                              <div className="text-xs text-gray-500">{category.leadCount} leads</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Leads List */}
                   <div className="bg-white rounded-lg border border-gray-200">
                     <div className="p-4 border-b border-gray-200">
@@ -1886,6 +2245,14 @@ const Admin_sales_management = () => {
                               <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-full ${getStatusColor(lead.status)}`}>
                                 {lead.status}
                               </span>
+                              {lead.category && (
+                                <span 
+                                  className="inline-flex px-2 py-1 text-xs font-bold rounded-full text-white"
+                                  style={{ backgroundColor: leadCategories.find(cat => cat.name === lead.category)?.color || '#6B7280' }}
+                                >
+                                  {leadCategories.find(cat => cat.name === lead.category)?.icon} {lead.category}
+                                </span>
+                              )}
                           <button 
                             onClick={() => handleDelete(lead, 'lead')}
                                 className="text-gray-400 hover:text-red-600 p-2 rounded hover:bg-red-50 transition-all duration-200"
@@ -2203,6 +2570,28 @@ const Admin_sales_management = () => {
                     Enter the phone number or contact number of the lead
                   </p>
                 </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Category
+                  </label>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                    required
+                  >
+                    <option value="">Select a category</option>
+                    {leadCategories.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.icon} {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Choose a category to organize this lead
+                  </p>
+                </div>
               </div>
 
               <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200 mt-6">
@@ -2299,6 +2688,29 @@ const Admin_sales_management = () => {
                   )}
                 </div>
 
+                {/* Category Selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Assign Category
+                  </label>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                    required
+                  >
+                    <option value="">Select a category</option>
+                    {leadCategories.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.icon} {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Choose a category to assign to all leads in this upload
+                  </p>
+                </div>
+
                 {/* File Format Instructions */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-blue-900 mb-2">File Format Requirements</h4>
@@ -2381,220 +2793,321 @@ const Admin_sales_management = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-xl p-4 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-2xl font-bold text-gray-900">Sales Team Member Details</h3>
-                  <p className="text-gray-600 text-sm mt-1">Complete information about the sales team member</p>
+                  <h3 className="text-xl font-bold text-gray-900">Sales Team Member Details</h3>
+                  <p className="text-gray-600 text-xs mt-1">{selectedItem.name}</p>
                 </div>
                 <button
                   onClick={closeModals}
-                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full transition-colors"
                 >
                   <FiX className="h-5 w-5" />
                 </button>
               </div>
 
               {/* Member Overview */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-6 border border-blue-200">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary-dark text-white rounded-full flex items-center justify-center font-bold text-xl shadow-md">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mb-4 border border-blue-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary-dark text-white rounded-full flex items-center justify-center font-bold text-lg shadow-md">
                       {selectedItem.avatar}
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-xl font-bold text-gray-900 mb-1">{selectedItem.name}</h4>
-                      <p className="text-gray-600 font-medium mb-1">{selectedItem.position}</p>
-                      <p className="text-gray-500">{selectedItem.department}</p>
+                      <h4 className="text-lg font-bold text-gray-900">{selectedItem.name}</h4>
+                      <p className="text-gray-600 font-medium text-sm">{selectedItem.position}</p>
+                      <div className="flex items-center space-x-3 mt-1">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-bold rounded-full ${getStatusColor(selectedItem.status)}`}>
+                          {selectedItem.status}
+                        </span>
+                        <span className="text-xs text-gray-500">Joined: {formatDate(selectedItem.joinDate)}</span>
+                      </div>
                     </div>
                   </div>
-                  <span className={`inline-flex px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedItem.status)}`}>
-                    {selectedItem.status}
-                  </span>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white rounded-lg p-3">
-                    <div className="text-sm text-blue-600 font-medium mb-1">Performance</div>
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="bg-white rounded-lg p-2 text-center">
+                    <div className="text-xs text-blue-600 font-medium">Performance</div>
                     <div className="text-lg font-bold text-blue-800">{selectedItem.performance}%</div>
                   </div>
-                  <div className="bg-white rounded-lg p-3">
-                    <div className="text-sm text-green-600 font-medium mb-1">Revenue</div>
+                  <div className="bg-white rounded-lg p-2 text-center">
+                    <div className="text-xs text-green-600 font-medium">Revenue</div>
                     <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem.revenue)}</div>
                   </div>
-                </div>
-              </div>
-
-              {/* Performance Metrics */}
-              <div className="mb-6">
-                <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <FiTrendingUp className="h-5 w-5 mr-2 text-green-600" />
-                  Performance Metrics
-                </h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Total Leads</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.leadsCount}</div>
+                  <div className="bg-white rounded-lg p-2 text-center">
+                    <div className="text-xs text-purple-600 font-medium">Total Leads</div>
+                    <div className="text-lg font-bold text-purple-700">{selectedItem.leadsCount}</div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Converted Leads</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.convertedCount}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Conversion Rate</div>
-                    <div className="text-base font-semibold text-gray-900">
-                      {selectedItem.leadsCount > 0 ? Math.round((selectedItem.convertedCount / selectedItem.leadsCount) * 100) : 0}%
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Target Achievement</div>
-                    <div className="text-base font-semibold text-gray-900">
-                      {selectedItem.target > 0 ? Math.round((selectedItem.revenue / selectedItem.target) * 100) : 0}%
-                    </div>
+                  <div className="bg-white rounded-lg p-2 text-center">
+                    <div className="text-xs text-orange-600 font-medium">Converted</div>
+                    <div className="text-lg font-bold text-orange-700">{selectedItem.convertedCount}</div>
                   </div>
                 </div>
               </div>
 
-              {/* Lead Breakdown */}
-              <div className="mb-6">
-                <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <FiUsers className="h-5 w-5 mr-2 text-blue-600" />
-                  Lead Breakdown
-                </h5>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {[
-                    { key: 'new', label: 'New Leads', color: 'bg-green-50 text-green-700 border-green-200', icon: '🆕' },
-                    { key: 'contacted', label: 'Contacted', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: '📞' },
-                    { key: 'notPicked', label: 'Not Picked', color: 'bg-red-50 text-red-700 border-red-200', icon: '📵' },
-                    { key: 'todayFollowUp', label: 'Today Follow Up', color: 'bg-yellow-50 text-yellow-700 border-yellow-200', icon: '📅' },
-                    { key: 'quotationSent', label: 'Quotation Sent', color: 'bg-purple-50 text-purple-700 border-purple-200', icon: '📄' },
-                    { key: 'dqSent', label: 'D&Q Sent', color: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: '📤' },
-                    { key: 'appClient', label: 'App Client', color: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: '📱' },
-                    { key: 'web', label: 'Web', color: 'bg-teal-50 text-teal-700 border-teal-200', icon: '🌐' },
-                    { key: 'converted', label: 'Converted', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✅' },
-                    { key: 'lost', label: 'Lost', color: 'bg-gray-50 text-gray-700 border-gray-200', icon: '❌' },
-                    { key: 'notInterested', label: 'Not Interested', color: 'bg-orange-50 text-orange-700 border-orange-200', icon: '😞' },
-                    { key: 'hotLead', label: 'Hot Lead', color: 'bg-rose-50 text-rose-700 border-rose-200', icon: '🔥' },
-                    { key: 'demoSent', label: 'Demo Sent', color: 'bg-violet-50 text-violet-700 border-violet-200', icon: '🎯' },
-                    { key: 'app', label: 'App', color: 'bg-sky-50 text-sky-700 border-sky-200', icon: '📲' },
-                    { key: 'taxi', label: 'Taxi', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: '🚕' }
-                  ].map((category) => {
-                    const count = selectedItem.leadBreakdown[category.key] || 0
-                    return (
-                      <button
-                        key={category.key}
-                        onClick={() => handleLeadCategoryClick(category.key, selectedItem)}
-                        disabled={count === 0}
-                        className={`${category.color} rounded-lg p-3 border-2 hover:shadow-md transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${
-                          count > 0 ? 'hover:scale-105 cursor-pointer' : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-lg">{category.icon}</span>
-                          <span className="text-lg font-bold">{count}</span>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Left Column */}
+                <div className="space-y-4">
+                  {/* Category-Based Lead Distribution */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                      <FiTarget className="h-5 w-5 mr-2 text-purple-600" />
+                      Lead Distribution by Category
+                    </h5>
+                    <div className="space-y-3">
+                      {leadCategories.map((category) => {
+                        // Calculate leads for this category assigned to this member
+                        const categoryLeads = leads.filter(lead => 
+                          lead.assignedTo === selectedItem.name && lead.categoryId === category.id
+                        )
+                        const categoryCount = categoryLeads.length
+                        const conversionRate = categoryCount > 0 ? 
+                          Math.round((categoryLeads.filter(lead => lead.status === 'converted').length / categoryCount) * 100) : 0
+                        
+                        return (
+                          <button
+                            key={category.id}
+                            onClick={() => handleCategoryCardClick(category, selectedItem)}
+                            disabled={categoryCount === 0}
+                            className={`w-full bg-gray-50 rounded-lg p-3 border border-gray-200 hover:shadow-md transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${
+                              categoryCount > 0 ? 'hover:scale-105 cursor-pointer hover:border-gray-300' : ''
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <div 
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+                                  style={{ backgroundColor: category.color }}
+                                >
+                                  {category.icon}
+                                </div>
+                                <div>
+                                  <h6 className="font-semibold text-gray-900 text-sm">{category.name}</h6>
+                                  <p className="text-xs text-gray-500">{category.description}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xl font-bold" style={{ color: category.color }}>
+                                  {categoryCount}
+                                </div>
+                                <div className="text-xs text-gray-500">leads</div>
+                              </div>
+                            </div>
+                            
+                            {categoryCount > 0 && (
+                              <div className="grid grid-cols-3 gap-2 text-center">
+                                <div className="bg-white rounded p-1">
+                                  <div className="text-xs text-gray-600">Active</div>
+                                  <div className="font-semibold text-blue-600 text-sm">
+                                    {categoryLeads.filter(lead => lead.status !== 'converted' && lead.status !== 'lost').length}
+                                  </div>
+                                </div>
+                                <div className="bg-white rounded p-1">
+                                  <div className="text-xs text-gray-600">Converted</div>
+                                  <div className="font-semibold text-green-600 text-sm">
+                                    {categoryLeads.filter(lead => lead.status === 'converted').length}
+                                  </div>
+                                </div>
+                                <div className="bg-white rounded p-1">
+                                  <div className="text-xs text-gray-600">Rate</div>
+                                  <div className="font-semibold text-purple-600 text-sm">{conversionRate}%</div>
+                                </div>
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Performance Metrics */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                      <FiTrendingUp className="h-5 w-5 mr-2 text-green-600" />
+                      Performance Metrics
+                    </h5>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-gray-50 rounded-lg p-3 text-center">
+                        <div className="text-xs text-gray-600 font-medium mb-1">Conversion Rate</div>
+                        <div className="text-lg font-bold text-gray-900">
+                          {selectedItem.leadsCount > 0 ? Math.round((selectedItem.convertedCount / selectedItem.leadsCount) * 100) : 0}%
                         </div>
-                        <div className="text-xs font-medium truncate">{category.label}</div>
-                      </button>
-                    )
-                  })}
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 text-center">
+                        <div className="text-xs text-gray-600 font-medium mb-1">Target Achievement</div>
+                        <div className="text-lg font-bold text-gray-900">
+                          {selectedItem.target > 0 ? Math.round((selectedItem.revenue / selectedItem.target) * 100) : 0}%
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 text-center">
+                        <div className="text-xs text-gray-600 font-medium mb-1">Avg Lead Value</div>
+                        <div className="text-lg font-bold text-gray-900">
+                          {selectedItem.leadsCount > 0 ? formatCurrency(selectedItem.revenue / selectedItem.leadsCount) : '$0'}
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 text-center">
+                        <div className="text-xs text-gray-600 font-medium mb-1">Incentive</div>
+                        <div className="text-lg font-bold text-gray-900">{formatCurrency(selectedItem.incentive)}</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              {/* Member Information */}
-              <div className="mb-6">
-                <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <FiUser className="h-5 w-5 mr-2 text-blue-600" />
-                  Member Information
-                </h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Email</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.email}</div>
+                {/* Right Column */}
+                <div className="space-y-4">
+                  {/* Lead Status Breakdown */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                      <FiUsers className="h-5 w-5 mr-2 text-blue-600" />
+                      Lead Status Breakdown
+                    </h5>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {[
+                        { key: 'new', label: 'New Leads', color: 'bg-green-50 text-green-700 border-green-200', icon: '🆕' },
+                        { key: 'contacted', label: 'Contacted', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: '📞' },
+                        { key: 'notPicked', label: 'Not Picked', color: 'bg-red-50 text-red-700 border-red-200', icon: '📵' },
+                        { key: 'todayFollowUp', label: 'Today Follow Up', color: 'bg-yellow-50 text-yellow-700 border-yellow-200', icon: '📅' },
+                        { key: 'quotationSent', label: 'Quotation Sent', color: 'bg-purple-50 text-purple-700 border-purple-200', icon: '📄' },
+                        { key: 'dqSent', label: 'D&Q Sent', color: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: '📤' },
+                        { key: 'appClient', label: 'App Client', color: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: '📱' },
+                        { key: 'web', label: 'Web', color: 'bg-teal-50 text-teal-700 border-teal-200', icon: '🌐' },
+                        { key: 'converted', label: 'Converted', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✅' },
+                        { key: 'lost', label: 'Lost', color: 'bg-gray-50 text-gray-700 border-gray-200', icon: '❌' },
+                        { key: 'notInterested', label: 'Not Interested', color: 'bg-orange-50 text-orange-700 border-orange-200', icon: '😞' },
+                        { key: 'hotLead', label: 'Hot Lead', color: 'bg-rose-50 text-rose-700 border-rose-200', icon: '🔥' },
+                        { key: 'demoSent', label: 'Demo Sent', color: 'bg-violet-50 text-violet-700 border-violet-200', icon: '🎯' },
+                        { key: 'app', label: 'App', color: 'bg-sky-50 text-sky-700 border-sky-200', icon: '📲' },
+                        { key: 'taxi', label: 'Taxi', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: '🚕' }
+                      ].map((category) => {
+                        const count = selectedItem.leadBreakdown[category.key] || 0
+                        return (
+                          <button
+                            key={category.key}
+                            onClick={() => handleLeadCategoryClick(category.key, selectedItem)}
+                            disabled={count === 0}
+                            className={`${category.color} rounded-lg p-3 border-2 hover:shadow-md transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${
+                              count > 0 ? 'hover:scale-105 cursor-pointer' : ''
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-lg">{category.icon}</span>
+                              <span className="text-lg font-bold">{count}</span>
+                            </div>
+                            <div className="text-xs font-medium truncate">{category.label}</div>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Phone</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.phone}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Department</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.department}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Position</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.position}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Join Date</div>
-                    <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.joinDate)}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Last Activity</div>
-                    <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.lastActivity)}</div>
-                  </div>
-                </div>
-              </div>
 
-              {/* Revenue & Target Information */}
-              <div className="mb-6">
-                <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <FiTarget className="h-5 w-5 mr-2 text-orange-600" />
-                  Revenue & Targets
-                </h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                    <div className="text-sm text-green-600 font-medium mb-1">Current Revenue</div>
-                    <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem.revenue)}</div>
+                  {/* Member Information */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                      <FiUser className="h-5 w-5 mr-2 text-blue-600" />
+                      Contact Information
+                    </h5>
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg">
+                        <FiMail className="h-4 w-4 text-gray-400" />
+                        <div>
+                          <div className="text-xs text-gray-600">Email</div>
+                          <div className="font-semibold text-gray-900 text-sm">{selectedItem.email}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg">
+                        <FiPhone className="h-4 w-4 text-gray-400" />
+                        <div>
+                          <div className="text-xs text-gray-600">Phone</div>
+                          <div className="font-semibold text-gray-900 text-sm">{selectedItem.phone}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg">
+                        <FiCalendar className="h-4 w-4 text-gray-400" />
+                        <div>
+                          <div className="text-xs text-gray-600">Last Activity</div>
+                          <div className="font-semibold text-gray-900 text-sm">{formatDate(selectedItem.lastActivity)}</div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                    <div className="text-sm text-orange-600 font-medium mb-1">Target Revenue</div>
-                    <div className="text-lg font-bold text-orange-700">{formatCurrency(selectedItem.target)}</div>
-                  </div>
-                </div>
-                <div className="mt-4 bg-gray-50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-600 font-medium">Target Progress</span>
-                    <span className="text-sm font-semibold text-gray-900">
-                      {selectedItem.target > 0 ? Math.round((selectedItem.revenue / selectedItem.target) * 100) : 0}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-orange-500 to-orange-600 h-2 rounded-full transition-all duration-500" 
-                      style={{ width: `${selectedItem.target > 0 ? Math.min((selectedItem.revenue / selectedItem.target) * 100, 100) : 0}%` }}
-                    ></div>
+
+                  {/* Revenue & Target Information */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                      <FiTarget className="h-5 w-5 mr-2 text-orange-600" />
+                      Revenue & Targets
+                    </h5>
+                    <div className="space-y-3">
+                      <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                        <div className="text-xs text-green-600 font-medium mb-1">Current Revenue</div>
+                        <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem.revenue)}</div>
+                      </div>
+                      <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                        <div className="text-xs text-orange-600 font-medium mb-1">Target Revenue</div>
+                        <div className="text-lg font-bold text-orange-700">{formatCurrency(selectedItem.target)}</div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs text-gray-600 font-medium">Target Progress</span>
+                          <span className="text-xs font-semibold text-gray-900">
+                            {selectedItem.target > 0 ? Math.round((selectedItem.revenue / selectedItem.target) * 100) : 0}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-gradient-to-r from-orange-500 to-orange-600 h-2 rounded-full transition-all duration-500" 
+                            style={{ width: `${selectedItem.target > 0 ? Math.min((selectedItem.revenue / selectedItem.target) * 100, 100) : 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-between pt-4 border-t border-gray-200 mt-4">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => {
+                      setShowViewModal(false)
+                      setShowTargetModal(true)
+                    }}
+                    className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold flex items-center space-x-1 text-sm"
+                  >
+                    <FiTarget className="h-3 w-3" />
+                    <span>Edit Target</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowViewModal(false)
+                      setShowAssignLeadModal(true)
+                    }}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold flex items-center space-x-1 text-sm"
+                  >
+                    <FiUsers className="h-3 w-3" />
+                    <span>Assign Leads</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowViewModal(false)
+                      setShowIncentiveModal(true)
+                    }}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold flex items-center space-x-1 text-sm"
+                  >
+                    <FiCreditCard className="h-3 w-3" />
+                    <span>Set Incentive</span>
+                  </button>
+                </div>
                 <button
                   onClick={closeModals}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-semibold text-sm"
                 >
                   Close
-                </button>
-                <button
-                  onClick={() => {
-                    setShowViewModal(false)
-                    setShowTargetModal(true)
-                  }}
-                  className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold flex items-center space-x-2"
-                >
-                  <FiTarget className="h-4 w-4" />
-                  <span>Edit Target</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setShowViewModal(false)
-                    setShowAssignLeadModal(true)
-                  }}
-                  className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold flex items-center space-x-2"
-                >
-                  <FiUsers className="h-4 w-4" />
-                  <span>Assign Leads</span>
                 </button>
               </div>
             </motion.div>
@@ -2843,12 +3356,12 @@ const Admin_sales_management = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 max-w-md w-full mx-4"
+              className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900">Assign Leads</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">Assign Leads</h3>
                   <p className="text-gray-600 text-sm mt-1">Assign leads to {selectedItem.name}</p>
                 </div>
                 <button
@@ -2876,21 +3389,56 @@ const Admin_sales_management = () => {
                 </div>
               </div>
 
-              {/* Available Leads Info */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mb-6 border border-blue-200">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <FiUsers className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-lg font-bold text-blue-800">
-                      {leads.filter(lead => lead.assignedTo === 'Unassigned').length} New Leads Available
+              {/* Available Leads by Category */}
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Available Leads by Category</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {Object.entries(leadsPerCategory).map(([categoryId, categoryData]) => (
+                    <div 
+                      key={categoryId}
+                      className={`p-3 rounded-lg border-2 transition-all duration-200 ${
+                        assignCategoryFilter === categoryId 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-lg">{categoryData.icon}</span>
+                          <div>
+                            <div className="font-medium text-gray-900 text-sm">{categoryData.name}</div>
+                            <div className="text-xs text-gray-500">Available leads</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold" style={{ color: categoryData.color }}>
+                            {categoryData.count}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-sm text-blue-600 mt-1">
-                      These are the unassigned leads ready for distribution
-                    </p>
-                  </div>
+                  ))}
                 </div>
+              </div>
+
+              {/* Category Filter */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Filter by Category</label>
+                <select
+                  value={assignCategoryFilter}
+                  onChange={(e) => setAssignCategoryFilter(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">All Categories</option>
+                  {Object.entries(leadsPerCategory).map(([categoryId, categoryData]) => (
+                    <option key={categoryId} value={categoryId}>
+                      {categoryData.icon} {categoryData.name} ({categoryData.count} leads)
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Select a specific category to assign leads from, or choose "All Categories" for mixed assignment
+                </p>
               </div>
 
               {/* Number of Leads Input */}
@@ -2903,6 +3451,10 @@ const Admin_sales_management = () => {
                     onChange={(e) => setLeadsToAssign(e.target.value)}
                     placeholder="Enter number of leads to assign"
                     min="1"
+                    max={assignCategoryFilter === 'all' 
+                      ? leads.filter(lead => lead.assignedTo === 'Unassigned').length
+                      : leadsPerCategory[assignCategoryFilter]?.count || 0
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-semibold"
                   />
                 </div>
@@ -2911,7 +3463,11 @@ const Admin_sales_management = () => {
                     Enter how many leads you want to assign to {selectedItem.name}
                   </p>
                   <p className="text-xs font-medium text-blue-600">
-                    Available: {leads.filter(lead => lead.assignedTo === 'Unassigned').length}
+                    Available: {
+                      assignCategoryFilter === 'all' 
+                        ? leads.filter(lead => lead.assignedTo === 'Unassigned').length
+                        : leadsPerCategory[assignCategoryFilter]?.count || 0
+                    }
                   </p>
                 </div>
               </div>
@@ -2944,7 +3500,7 @@ const Admin_sales_management = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-            onClick={closeModals}
+            onClick={closeLeadListModal}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -2963,7 +3519,7 @@ const Admin_sales_management = () => {
                   </p>
                 </div>
                 <button
-                  onClick={closeModals}
+                  onClick={closeLeadListModal}
                   className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
                 >
                   <FiX className="h-5 w-5" />
@@ -3038,7 +3594,7 @@ const Admin_sales_management = () => {
               {/* Action Buttons */}
               <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200 mt-6">
                 <button
-                  onClick={closeModals}
+                  onClick={closeLeadListModal}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Close
@@ -3134,6 +3690,238 @@ const Admin_sales_management = () => {
                 >
                   <FiCreditCard className="h-4 w-4" />
                   <span>Set Incentive</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Category Management Modal */}
+        {showCategoryModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">Manage Lead Categories</h3>
+                  <p className="text-gray-600 text-sm mt-1">Create and manage categories for organizing leads</p>
+                </div>
+                <button
+                  onClick={closeModals}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Add New Category Form */}
+              <div className="bg-gray-50 rounded-lg p-6 mb-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Add New Category</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Category Name</label>
+                    <input
+                      type="text"
+                      value={categoryName}
+                      onChange={(e) => setCategoryName(e.target.value)}
+                      placeholder="Enter category name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                    <input
+                      type="text"
+                      value={categoryDescription}
+                      onChange={(e) => setCategoryDescription(e.target.value)}
+                      placeholder="Enter description"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Color</label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="color"
+                        value={categoryColor}
+                        onChange={(e) => setCategoryColor(e.target.value)}
+                        className="w-12 h-10 border border-gray-300 rounded-lg cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={categoryColor}
+                        onChange={(e) => setCategoryColor(e.target.value)}
+                        placeholder="#3B82F6"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={handleCreateCategory}
+                    disabled={!categoryName.trim()}
+                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  >
+                    <FiPlus className="h-4 w-4" />
+                    <span>Add Category</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Categories List */}
+              <div className="space-y-3">
+                <h4 className="text-lg font-semibold text-gray-900">Existing Categories</h4>
+                {leadCategories.map((category) => (
+                  <div key={category.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div 
+                          className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-lg"
+                          style={{ backgroundColor: category.color }}
+                        >
+                          {category.icon}
+                        </div>
+                        <div>
+                          <h5 className="font-semibold text-gray-900">{category.name}</h5>
+                          <p className="text-sm text-gray-600">{category.description}</p>
+                          <div className="flex items-center space-x-4 mt-1">
+                            <span className="text-xs text-gray-500">
+                              {category.leadCount} leads
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              Created: {formatDate(category.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleEditCategory(category)}
+                          className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50 transition-colors"
+                          title="Edit Category"
+                        >
+                          <FiEdit3 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategory(category)}
+                          className="text-red-600 hover:text-red-800 p-2 rounded hover:bg-red-50 transition-colors"
+                          title="Delete Category"
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200 mt-6">
+                <button
+                  onClick={closeModals}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Category Edit Modal */}
+        {showCategoryEditModal && selectedItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-md w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Edit Category</h3>
+                  <p className="text-gray-600 text-sm mt-1">Update category information</p>
+                </div>
+                <button
+                  onClick={closeModals}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Category Name</label>
+                  <input
+                    type="text"
+                    value={categoryName}
+                    onChange={(e) => setCategoryName(e.target.value)}
+                    placeholder="Enter category name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                  <input
+                    type="text"
+                    value={categoryDescription}
+                    onChange={(e) => setCategoryDescription(e.target.value)}
+                    placeholder="Enter description"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Color</label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="color"
+                      value={categoryColor}
+                      onChange={(e) => setCategoryColor(e.target.value)}
+                      className="w-12 h-10 border border-gray-300 rounded-lg cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={categoryColor}
+                      onChange={(e) => setCategoryColor(e.target.value)}
+                      placeholder="#3B82F6"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200 mt-6">
+                <button
+                  onClick={closeModals}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateCategory}
+                  disabled={!categoryName.trim()}
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Update Category
                 </button>
               </div>
             </motion.div>
