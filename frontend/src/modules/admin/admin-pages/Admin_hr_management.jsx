@@ -99,6 +99,8 @@ const Admin_hr_management = () => {
   const [salaryData, setSalaryData] = useState([])
   const [selectedSalaryMonth, setSelectedSalaryMonth] = useState(new Date().toISOString().slice(0, 7))
   const [selectedSalaryDepartment, setSelectedSalaryDepartment] = useState('all')
+  const [selectedSalaryWeek, setSelectedSalaryWeek] = useState('all')
+  const [selectedPaymentStatus, setSelectedPaymentStatus] = useState('all')
   const [salaryStats, setSalaryStats] = useState({
     totalEmployees: 0,
     paidEmployees: 0,
@@ -110,9 +112,15 @@ const Admin_hr_management = () => {
   const [showSalaryModal, setShowSalaryModal] = useState(false)
   const [selectedSalaryRecord, setSelectedSalaryRecord] = useState(null)
   const [showEditSalaryModal, setShowEditSalaryModal] = useState(false)
+  const [showAddEmployeeSalaryModal, setShowAddEmployeeSalaryModal] = useState(false)
+  const [showDeleteSalaryModal, setShowDeleteSalaryModal] = useState(false)
+  const [salaryToDelete, setSalaryToDelete] = useState(null)
+  const [newEmployeeSalaryData, setNewEmployeeSalaryData] = useState({
+    employeeId: '',
+    salary: ''
+  })
   const [editSalaryData, setEditSalaryData] = useState({
-    basicSalary: '',
-    remarks: ''
+    basicSalary: ''
   })
 
   // Requests states
@@ -1357,6 +1365,8 @@ const Admin_hr_management = () => {
     setShowDeleteModal(false)
     setShowSalaryModal(false)
     setShowEditSalaryModal(false)
+    setShowAddEmployeeSalaryModal(false)
+    setShowDeleteSalaryModal(false)
     setShowRequestModal(false)
     setShowAllowanceModal(false)
     setShowExpenseModal(false)
@@ -1364,7 +1374,9 @@ const Admin_hr_management = () => {
     setSelectedUser(null)
     setSelectedSalaryRecord(null)
     setSelectedExpense(null)
-    setEditSalaryData({ basicSalary: '', remarks: '' })
+    setEditSalaryData({ 
+      basicSalary: ''
+    })
     setRequestData({
       title: '',
       description: '',
@@ -1612,6 +1624,8 @@ const Admin_hr_management = () => {
         month: currentMonth,
         joiningDate: '2022-01-15',
         salaryDate: '2024-01-15', // Based on joining date
+        paymentDate: getPaymentDate('2022-01-15'),
+        paymentWeek: getWeekOfMonth(getPaymentDate('2022-01-15')),
         status: 'paid',
         paidDate: '2024-01-16',
         paymentMethod: 'Bank Transfer',
@@ -1631,6 +1645,8 @@ const Admin_hr_management = () => {
         month: currentMonth,
         joiningDate: '2021-08-20',
         salaryDate: '2024-01-20', // Based on joining date
+        paymentDate: getPaymentDate('2021-08-20'),
+        paymentWeek: getWeekOfMonth(getPaymentDate('2021-08-20')),
         status: 'pending',
         paidDate: null,
         paymentMethod: null,
@@ -1650,6 +1666,8 @@ const Admin_hr_management = () => {
         month: currentMonth,
         joiningDate: '2023-03-10',
         salaryDate: '2024-01-10', // Based on joining date
+        paymentDate: getPaymentDate('2023-03-10'),
+        paymentWeek: getWeekOfMonth(getPaymentDate('2023-03-10')),
         status: 'paid',
         paidDate: '2024-01-11',
         paymentMethod: 'Bank Transfer',
@@ -1669,6 +1687,8 @@ const Admin_hr_management = () => {
         month: currentMonth,
         joiningDate: '2020-11-05',
         salaryDate: '2024-01-05', // Based on joining date
+        paymentDate: getPaymentDate('2020-11-05'),
+        paymentWeek: getWeekOfMonth(getPaymentDate('2020-11-05')),
         status: 'paid',
         paidDate: '2024-01-06',
         paymentMethod: 'Bank Transfer',
@@ -1688,6 +1708,8 @@ const Admin_hr_management = () => {
         month: currentMonth,
         joiningDate: '2021-02-28',
         salaryDate: '2024-01-28', // Based on joining date
+        paymentDate: getPaymentDate('2021-02-28'),
+        paymentWeek: getWeekOfMonth(getPaymentDate('2021-02-28')),
         status: 'pending',
         paidDate: null,
         paymentMethod: null,
@@ -1728,7 +1750,25 @@ const Admin_hr_management = () => {
       filtered = filtered.filter(record => record.department === selectedSalaryDepartment)
     }
     
-    return filtered
+    if (selectedSalaryWeek !== 'all') {
+      filtered = filtered.filter(record => record.paymentWeek?.toString() === selectedSalaryWeek)
+    }
+    
+    if (selectedPaymentStatus !== 'all') {
+      filtered = filtered.filter(record => record.status === selectedPaymentStatus)
+    }
+    
+    // Sort by payment priority (upcoming payments first)
+    return filtered.sort((a, b) => {
+      const priorityA = getPaymentPriority(a)
+      const priorityB = getPaymentPriority(b)
+      if (priorityA !== priorityB) return priorityA - priorityB
+      
+      // If same priority, sort by payment date
+      const dateA = new Date(a.paymentDate || a.createdAt)
+      const dateB = new Date(b.paymentDate || b.createdAt)
+      return dateA - dateB
+    })
   }
 
   const handleMarkSalaryPaid = (record) => {
@@ -1736,11 +1776,24 @@ const Admin_hr_management = () => {
     setShowSalaryModal(true)
   }
 
+  const handleDeleteSalary = (record) => {
+    setSalaryToDelete(record)
+    setShowDeleteSalaryModal(true)
+  }
+
+  const confirmDeleteSalary = () => {
+    if (salaryToDelete) {
+      setSalaryData(prev => prev.filter(item => item.id !== salaryToDelete.id))
+      setShowDeleteSalaryModal(false)
+      setSalaryToDelete(null)
+      alert('Salary record deleted successfully!')
+    }
+  }
+
   const handleEditSalary = (record) => {
     setSelectedSalaryRecord(record)
     setEditSalaryData({
-      basicSalary: record.basicSalary.toString(),
-      remarks: record.remarks || ''
+      basicSalary: record.basicSalary.toString()
     })
     setShowEditSalaryModal(true)
   }
@@ -1748,12 +1801,12 @@ const Admin_hr_management = () => {
   const handleSaveSalaryEdit = () => {
     const updatedData = salaryData.map(record => {
       if (record.id === selectedSalaryRecord.id) {
-        const newBasicSalary = parseFloat(editSalaryData.basicSalary)
+        const basicSalary = parseFloat(editSalaryData.basicSalary) || 0
+        
         return {
           ...record,
-          basicSalary: newBasicSalary,
-          netSalary: newBasicSalary, // Simplified - net salary = basic salary
-          remarks: editSalaryData.remarks
+          basicSalary: basicSalary,
+          netSalary: basicSalary // Simplified - net salary = basic salary
         }
       }
       return record
@@ -1763,7 +1816,10 @@ const Admin_hr_management = () => {
     calculateSalaryStats(updatedData)
     setShowEditSalaryModal(false)
     setSelectedSalaryRecord(null)
-    setEditSalaryData({ basicSalary: '', remarks: '' })
+    setEditSalaryData({ 
+      basicSalary: ''
+    })
+    alert('Salary updated successfully!')
   }
 
   const confirmSalaryPayment = (paymentData) => {
@@ -1802,6 +1858,124 @@ const Admin_hr_management = () => {
       case 'overdue': return <AlertTriangle className="h-4 w-4" />
       default: return <Clock className="h-4 w-4" />
     }
+  }
+
+  // Helper functions for salary payment management
+  const getWeekOfMonth = (date) => {
+    const d = new Date(date)
+    const firstDay = new Date(d.getFullYear(), d.getMonth(), 1)
+    const firstWeekDay = firstDay.getDay()
+    const dayOfMonth = d.getDate()
+    const weekNumber = Math.ceil((dayOfMonth + firstWeekDay) / 7)
+    return Math.min(weekNumber, 4) // Max 4 weeks
+  }
+
+  const getPaymentDate = (joiningDate) => {
+    const joinDate = new Date(joiningDate)
+    const currentDate = new Date()
+    const currentYear = currentDate.getFullYear()
+    const currentMonth = currentDate.getMonth()
+    
+    // Get the day of month from joining date
+    const paymentDay = joinDate.getDate()
+    
+    // Create payment date for current month
+    const paymentDate = new Date(currentYear, currentMonth, paymentDay)
+    
+    // If payment date has passed this month, set for next month
+    if (paymentDate < currentDate) {
+      return new Date(currentYear, currentMonth + 1, paymentDay)
+    }
+    
+    return paymentDate
+  }
+
+  const getPaymentPriority = (salaryRecord) => {
+    const paymentDate = getPaymentDate(salaryRecord.joiningDate || new Date())
+    const currentDate = new Date()
+    const daysUntilPayment = Math.ceil((paymentDate - currentDate) / (1000 * 60 * 60 * 24))
+    
+    if (salaryRecord.status === 'paid') return 999 // Paid records go to bottom
+    if (daysUntilPayment < 0) return -1 // Overdue (highest priority)
+    if (daysUntilPayment <= 3) return 0 // Due within 3 days
+    if (daysUntilPayment <= 7) return 1 // Due within a week
+    return 2 // Future payments
+  }
+
+  const getWeekOptions = () => {
+    return [
+      { value: 'all', label: 'All Weeks', icon: Calendar },
+      { value: '1', label: 'Week 1 (1-7)', icon: Calendar },
+      { value: '2', label: 'Week 2 (8-14)', icon: Calendar },
+      { value: '3', label: 'Week 3 (15-21)', icon: Calendar },
+      { value: '4', label: 'Week 4 (22-31)', icon: Calendar }
+    ]
+  }
+
+  // Handle new employee salary form
+  const handleAddEmployeeSalary = () => {
+    setShowAddEmployeeSalaryModal(true)
+    setNewEmployeeSalaryData({
+      employeeId: '',
+      salary: ''
+    })
+  }
+
+  const handleSaveNewEmployeeSalary = () => {
+    // Validate required fields
+    if (!newEmployeeSalaryData.employeeId || !newEmployeeSalaryData.salary) {
+      alert('Please select an employee and enter salary amount')
+      return
+    }
+
+    // Find selected employee
+    const selectedEmployee = allUsers.find(user => user.id === parseInt(newEmployeeSalaryData.employeeId))
+    if (!selectedEmployee) {
+      alert('Selected employee not found')
+      return
+    }
+
+    const salary = parseFloat(newEmployeeSalaryData.salary) || 0
+
+    // Create salary record
+    const newSalaryRecord = {
+      id: Date.now(),
+      employeeId: selectedEmployee.employeeId || selectedEmployee.id.toString(),
+      employeeName: selectedEmployee.name,
+      department: selectedEmployee.department || 'General',
+      basicSalary: salary,
+      allowances: 0,
+      deductions: 0,
+      netSalary: salary,
+      paymentMethod: 'bank_transfer',
+      bankAccount: '',
+      status: 'pending',
+      month: selectedSalaryMonth,
+      joiningDate: selectedEmployee.joiningDate || selectedEmployee.dateOfBirth || new Date().toISOString().split('T')[0],
+      paymentDate: getPaymentDate(selectedEmployee.joiningDate || selectedEmployee.dateOfBirth || new Date().toISOString().split('T')[0]),
+      paymentWeek: getWeekOfMonth(getPaymentDate(selectedEmployee.joiningDate || selectedEmployee.dateOfBirth || new Date().toISOString().split('T')[0])),
+      remarks: '',
+      createdAt: new Date().toISOString()
+    }
+
+    // Add to existing salary data
+    setSalaryData(prev => [...prev, newSalaryRecord])
+
+    // Close modal and reset form
+    setShowAddEmployeeSalaryModal(false)
+    setNewEmployeeSalaryData({
+      employeeId: '',
+      salary: ''
+    })
+
+    alert(`Salary set successfully for ${selectedEmployee.name}!`)
+  }
+
+  const handleNewEmployeeSalaryInputChange = (field, value) => {
+    setNewEmployeeSalaryData(prev => ({
+      ...prev,
+      [field]: value
+    }))
   }
 
 
@@ -2577,26 +2751,64 @@ const Admin_hr_management = () => {
                   <h2 className="text-2xl font-bold text-gray-900">Salary Management</h2>
                   <p className="text-gray-600 mt-1">Manage employee salaries and track payment status</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="month"
-                    value={selectedSalaryMonth}
-                    onChange={(e) => setSelectedSalaryMonth(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <Combobox
-                    options={[
-                      { value: 'all', label: 'All Departments' },
-                      { value: 'nodejs', label: 'Node.js' },
-                      { value: 'flutter', label: 'Flutter' },
-                      { value: 'web', label: 'Web' },
-                      { value: 'management', label: 'Management' }
-                    ]}
-                    value={selectedSalaryDepartment}
-                    onChange={(value) => setSelectedSalaryDepartment(value)}
-                    placeholder="Filter by department"
-                    className="w-48 h-10 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                  />
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  {/* Filters Section */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-2 shadow-sm">
+                      <Calendar className="h-4 w-4 text-gray-500" />
+                      <input
+                        type="month"
+                        value={selectedSalaryMonth}
+                        onChange={(e) => setSelectedSalaryMonth(e.target.value)}
+                        className="text-sm font-medium text-gray-700 bg-transparent border-none outline-none focus:ring-0"
+                      />
+                    </div>
+                    
+                    <Combobox
+                      options={[
+                        { value: 'all', label: 'All Departments', icon: Users },
+                        { value: 'nodejs', label: 'Node.js', icon: Code },
+                        { value: 'flutter', label: 'Flutter', icon: Code },
+                        { value: 'web', label: 'Web', icon: Code },
+                        { value: 'management', label: 'Management', icon: Shield },
+                        { value: 'sales', label: 'Sales', icon: TrendingUp }
+                      ]}
+                      value={selectedSalaryDepartment}
+                      onChange={(value) => setSelectedSalaryDepartment(value)}
+                      placeholder="Department"
+                      className="w-44 h-10 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 bg-white shadow-sm"
+                    />
+                    
+                    <Combobox
+                      options={getWeekOptions()}
+                      value={selectedSalaryWeek}
+                      onChange={(value) => setSelectedSalaryWeek(value)}
+                      placeholder="Week"
+                      className="w-40 h-10 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 bg-white shadow-sm"
+                    />
+                    
+                    <Combobox
+                      options={[
+                        { value: 'all', label: 'All Status', icon: Clock },
+                        { value: 'pending', label: 'Pending', icon: Clock },
+                        { value: 'paid', label: 'Paid', icon: CheckCircle2 },
+                        { value: 'overdue', label: 'Overdue', icon: AlertTriangle }
+                      ]}
+                      value={selectedPaymentStatus}
+                      onChange={(value) => setSelectedPaymentStatus(value)}
+                      placeholder="Status"
+                      className="w-36 h-10 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 bg-white shadow-sm"
+                    />
+                  </div>
+
+                  {/* Action Button */}
+                  <Button
+                    onClick={() => setShowAddEmployeeSalaryModal(true)}
+                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 font-semibold"
+                  >
+                    <Banknote className="h-5 w-5" />
+                    Set Employee Salary
+                  </Button>
                 </div>
               </div>
 
@@ -2690,73 +2902,117 @@ const Admin_hr_management = () => {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {getFilteredSalaryData().map((record, index) => (
-                    <Card key={index} className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500">
-                      <CardContent className="p-4">
-                        {/* Employee Header */}
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                              {record.employeeName.charAt(0)}
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-gray-900 text-sm">{record.employeeName}</h4>
-                              <p className="text-xs text-gray-500">{record.department}</p>
-                            </div>
-                          </div>
-                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSalaryStatusColor(record.status)}`}>
-                            {getSalaryStatusIcon(record.status)}
-                            {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                          </span>
-                        </div>
-
-                        {/* Salary Amount */}
-                        <div className="mb-3 p-3 bg-gray-50 rounded-lg">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Salary</span>
-                            <span className="text-lg font-bold text-green-600">{formatCurrency(record.basicSalary)}</span>
-                          </div>
-                        </div>
-
-                        {/* Salary Date */}
-                        <div className="mb-3 flex items-center gap-2 text-xs text-gray-500">
-                          <Calendar className="h-3 w-3" />
-                          <span>{new Date(record.salaryDate).toLocaleDateString()}</span>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => handleEditSalary(record)}
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 text-xs py-1 h-8"
-                          >
-                            <Edit3 className="h-3 w-3 mr-1" />
-                            Edit
-                          </Button>
-                          {record.status === 'pending' ? (
-                            <Button
-                              onClick={() => handleMarkSalaryPaid(record)}
-                              size="sm"
-                              className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-1 h-8"
-                            >
-                              <CreditCard className="h-3 w-3 mr-1" />
-                              Pay
-                            </Button>
-                          ) : (
-                            <div className="flex-1 text-xs text-gray-500 text-center py-1">
-                              <div className="flex items-center justify-center gap-1">
-                                <CheckCircle2 className="h-3 w-3 text-green-500" />
-                                <span>Paid</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {getFilteredSalaryData().map((record, index) => {
+                    const paymentDate = new Date(record.paymentDate || record.createdAt)
+                    const currentDate = new Date()
+                    const daysUntilPayment = Math.ceil((paymentDate - currentDate) / (1000 * 60 * 60 * 24))
+                    const isOverdue = daysUntilPayment < 0 && record.status !== 'paid'
+                    const isDueSoon = daysUntilPayment <= 3 && daysUntilPayment >= 0 && record.status !== 'paid'
+                    
+                    return (
+                      <Card key={index} className={`hover:shadow-lg transition-all duration-200 border-l-4 ${
+                        isOverdue ? 'border-l-red-500 bg-red-50' : 
+                        isDueSoon ? 'border-l-yellow-500 bg-yellow-50' : 
+                        record.status === 'paid' ? 'border-l-green-500 bg-green-50' : 
+                        'border-l-blue-500'
+                      }`}>
+                        <CardContent className="p-4">
+                          {/* Employee Header */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                                {record.employeeName.charAt(0)}
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-gray-900 text-sm">{record.employeeName}</h4>
+                                <p className="text-xs text-gray-500">{record.department}</p>
                               </div>
                             </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                            <div className="text-right">
+                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSalaryStatusColor(record.status)}`}>
+                                {getSalaryStatusIcon(record.status)}
+                                {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                              </span>
+                              {record.paymentWeek && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Week {record.paymentWeek}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Payment Date Info */}
+                          <div className="mb-3 p-2 bg-gray-100 rounded-lg">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-gray-600">Payment Date:</span>
+                              <span className="font-medium">
+                                {paymentDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                              </span>
+                            </div>
+                            {record.status !== 'paid' && (
+                              <div className="flex justify-between items-center text-xs mt-1">
+                                <span className="text-gray-600">Days:</span>
+                                <span className={`font-medium ${
+                                  isOverdue ? 'text-red-600' : 
+                                  isDueSoon ? 'text-yellow-600' : 
+                                  'text-gray-600'
+                                }`}>
+                                  {isOverdue ? `${Math.abs(daysUntilPayment)} overdue` : 
+                                   isDueSoon ? `${daysUntilPayment} days` : 
+                                   `${daysUntilPayment} days`}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Salary Amount */}
+                          <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Salary</span>
+                              <span className="text-lg font-bold text-green-600">{formatCurrency(record.basicSalary)}</span>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex gap-2">
+                            {record.status !== 'paid' && (
+                              <Button
+                                onClick={() => handleMarkSalaryPaid(record)}
+                                size="sm"
+                                className={`flex-1 text-xs py-1 h-8 ${
+                                  isOverdue ? 'bg-red-600 hover:bg-red-700' : 
+                                  isDueSoon ? 'bg-yellow-600 hover:bg-yellow-700' : 
+                                  'bg-green-600 hover:bg-green-700'
+                                } text-white`}
+                              >
+                                <CreditCard className="h-3 w-3 mr-1" />
+                                {isOverdue ? 'Pay Now' : isDueSoon ? 'Due Soon' : 'Pay'}
+                              </Button>
+                            )}
+                            <Button
+                              onClick={() => handleEditSalary(record)}
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 text-xs py-1 h-8"
+                              disabled={record.status === 'paid'}
+                            >
+                              <Edit3 className="h-3 w-3 mr-1" />
+                              Edit
+                            </Button>
+                            <Button
+                              onClick={() => handleDeleteSalary(record)}
+                              size="sm"
+                              variant="outline"
+                              className="text-xs py-1 h-8 px-2 text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
                 </div>
 
                 {/* Empty State */}
@@ -3751,68 +4007,82 @@ const Admin_hr_management = () => {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
                 onClick={() => setShowEditSalaryModal(false)}
               >
                 <motion.div
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.9, opacity: 0 }}
-                  className="bg-white rounded-xl p-4 max-w-sm w-full mx-4"
+                  className="bg-white rounded-2xl shadow-xl max-w-md w-full"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-gray-900">Edit Salary</h3>
-                    <button
-                      onClick={() => setShowEditSalaryModal(false)}
-                      className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full transition-colors"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white rounded-t-2xl">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold mb-1">Edit Employee Salary</h3>
+                        <p className="text-blue-100 text-sm">Update salary for {selectedSalaryRecord.employeeName}</p>
+                      </div>
+                      <button
+                        onClick={() => setShowEditSalaryModal(false)}
+                        className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="text-sm text-gray-600">{selectedSalaryRecord.employeeName}</div>
+                  <form onSubmit={(e) => { e.preventDefault(); handleSaveSalaryEdit(); }} className="p-6 space-y-6">
+                    {/* Employee Info */}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                          {selectedSalaryRecord.employeeName.charAt(0)}
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-gray-900">{selectedSalaryRecord.employeeName}</h4>
+                          <p className="text-sm text-gray-500">{selectedSalaryRecord.department}</p>
+                        </div>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Basic Salary</label>
+                    {/* Salary Amount */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700 flex items-center">
+                        Monthly Salary (₹) <span className="text-red-500 ml-1">*</span>
+                      </label>
                       <input
                         type="number"
                         value={editSalaryData.basicSalary}
                         onChange={(e) => setEditSalaryData({...editSalaryData, basicSalary: e.target.value})}
-                        className="w-full h-8 px-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter salary amount"
+                        className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                        placeholder="Enter monthly salary amount"
+                        required
+                        min="0"
+                        step="100"
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Remarks</label>
-                      <input
-                        type="text"
-                        value={editSalaryData.remarks}
-                        onChange={(e) => setEditSalaryData({...editSalaryData, remarks: e.target.value})}
-                        className="w-full h-8 px-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Optional remarks"
-                      />
+                    {/* Form Actions */}
+                    <div className="flex gap-3 pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowEditSalaryModal(false)}
+                        className="flex-1 h-12 rounded-lg border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        className="flex-1 h-12 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg transition-all duration-200"
+                      >
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Update Salary
+                      </Button>
                     </div>
-                  </div>
-
-                  <div className="flex items-center justify-end space-x-2 pt-4 border-t border-gray-200 mt-4">
-                    <button
-                      onClick={() => setShowEditSalaryModal(false)}
-                      className="px-3 py-1 text-sm text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSaveSalaryEdit}
-                      className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors font-semibold text-sm"
-                    >
-                      Save
-                    </button>
-                  </div>
+                  </form>
                 </motion.div>
               </motion.div>
             )}
@@ -4422,6 +4692,207 @@ const Admin_hr_management = () => {
                       </button>
                     </div>
                   </form>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Set Employee Salary Modal */}
+            {showAddEmployeeSalaryModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={() => setShowAddEmployeeSalaryModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white rounded-2xl shadow-xl max-w-md w-full"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-6 text-white rounded-t-2xl">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold mb-1">Set Employee Salary</h3>
+                        <p className="text-green-100 text-sm">Select employee and set their salary</p>
+                      </div>
+                      <button
+                        onClick={() => setShowAddEmployeeSalaryModal(false)}
+                        className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <form onSubmit={(e) => { e.preventDefault(); handleSaveNewEmployeeSalary(); }} className="p-6 space-y-6">
+                    {/* Employee Selection */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700 flex items-center">
+                        Select Employee <span className="text-red-500 ml-1">*</span>
+                      </label>
+                      <Combobox
+                        options={allUsers.map(user => ({
+                          value: user.id.toString(),
+                          label: `${user.name} - ${user.department || 'General'} (${user.role})`,
+                          icon: user.role === 'project-manager' ? Shield : Code
+                        }))}
+                        value={newEmployeeSalaryData.employeeId}
+                        onChange={(value) => handleNewEmployeeSalaryInputChange('employeeId', value)}
+                        placeholder="Choose an employee..."
+                        className="h-12 rounded-lg border-2 border-gray-200 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200"
+                      />
+                    </div>
+
+                    {/* Salary Amount */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700 flex items-center">
+                        Monthly Salary (₹) <span className="text-red-500 ml-1">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={newEmployeeSalaryData.salary}
+                        onChange={(e) => handleNewEmployeeSalaryInputChange('salary', e.target.value)}
+                        className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200"
+                        placeholder="Enter monthly salary amount"
+                        required
+                        min="0"
+                        step="100"
+                      />
+                    </div>
+
+                    {/* Form Actions */}
+                    <div className="flex gap-3 pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowAddEmployeeSalaryModal(false)}
+                        className="flex-1 h-12 rounded-lg border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        className="flex-1 h-12 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:shadow-lg transition-all duration-200"
+                      >
+                        <Banknote className="h-4 w-4 mr-2" />
+                        Set Salary
+                      </Button>
+                    </div>
+                  </form>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Delete Salary Confirmation Dialog */}
+            {showDeleteSalaryModal && salaryToDelete && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={() => setShowDeleteSalaryModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white rounded-2xl shadow-xl max-w-md w-full"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-red-600 to-red-700 p-6 text-white rounded-t-2xl">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold mb-1">Delete Salary Record</h3>
+                        <p className="text-red-100 text-sm">This action cannot be undone</p>
+                      </div>
+                      <button
+                        onClick={() => setShowDeleteSalaryModal(false)}
+                        className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-6">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                        <Trash2 className="h-6 w-6 text-red-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">Are you sure?</h4>
+                        <p className="text-sm text-gray-600">
+                          You are about to delete the salary record for <span className="font-semibold">{salaryToDelete.employeeName}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Salary Details */}
+                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Employee:</span>
+                          <div className="font-semibold">{salaryToDelete.employeeName}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Department:</span>
+                          <div className="font-semibold">{salaryToDelete.department}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Salary:</span>
+                          <div className="font-semibold text-green-600">{formatCurrency(salaryToDelete.basicSalary)}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Status:</span>
+                          <div className="font-semibold">
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSalaryStatusColor(salaryToDelete.status)}`}>
+                              {getSalaryStatusIcon(salaryToDelete.status)}
+                              {salaryToDelete.status.charAt(0).toUpperCase() + salaryToDelete.status.slice(1)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Warning Message */}
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <h5 className="font-semibold text-red-800 mb-1">Warning</h5>
+                          <p className="text-sm text-red-700">
+                            This will permanently delete the salary record. This action cannot be undone and will remove all associated payment history.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowDeleteSalaryModal(false)}
+                        className="flex-1 h-12 rounded-lg border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={confirmDeleteSalary}
+                        className="flex-1 h-12 rounded-lg bg-gradient-to-r from-red-600 to-red-700 text-white hover:shadow-lg transition-all duration-200"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Record
+                      </Button>
+                    </div>
+                  </div>
                 </motion.div>
               </motion.div>
             )}

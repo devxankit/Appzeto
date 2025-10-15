@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
@@ -1267,6 +1268,81 @@ const Admin_sales_management = () => {
     }
   ])
 
+  // Category Performance Calculations
+  const categoryPerformance = useMemo(() => {
+    return leadCategories.map(category => {
+      const categoryLeads = leads.filter(lead => lead.categoryId === category.id)
+      const totalLeads = categoryLeads.length
+      
+      // Calculate conversion rates based on lead status
+      const convertedLeads = categoryLeads.filter(lead => 
+        lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed'
+      ).length
+      
+      const hotLeads = categoryLeads.filter(lead => lead.status === 'hot' || lead.priority === 'high').length
+      const warmLeads = categoryLeads.filter(lead => lead.status === 'warm' || lead.priority === 'medium').length
+      const coldLeads = categoryLeads.filter(lead => lead.status === 'cold' || lead.priority === 'low').length
+      const lostLeads = categoryLeads.filter(lead => lead.status === 'lost' || lead.status === 'notInterested').length
+      
+      // Calculate revenue
+      const totalRevenue = categoryLeads.reduce((sum, lead) => sum + (lead.value || 0), 0)
+      const convertedRevenue = categoryLeads
+        .filter(lead => lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed')
+        .reduce((sum, lead) => sum + (lead.value || 0), 0)
+      
+      // Calculate conversion rate
+      const conversionRate = totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0
+      
+      // Calculate average deal value
+      const avgDealValue = convertedLeads > 0 ? convertedRevenue / convertedLeads : 0
+      
+      // Calculate response rate (leads with recent contact)
+      const recentContactLeads = categoryLeads.filter(lead => {
+        const lastContact = new Date(lead.lastContact)
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        return lastContact >= thirtyDaysAgo
+      }).length
+      
+      const responseRate = totalLeads > 0 ? (recentContactLeads / totalLeads) * 100 : 0
+      
+      return {
+        ...category,
+        totalLeads,
+        convertedLeads,
+        hotLeads,
+        warmLeads,
+        coldLeads,
+        lostLeads,
+        totalRevenue,
+        convertedRevenue,
+        conversionRate: Math.round(conversionRate * 100) / 100,
+        avgDealValue: Math.round(avgDealValue),
+        responseRate: Math.round(responseRate * 100) / 100,
+        unassignedLeads: categoryLeads.filter(lead => lead.assignedTo === 'Unassigned').length
+      }
+    })
+  }, [leads, leadCategories])
+
+  // Overall performance metrics
+  const overallPerformance = useMemo(() => {
+    const totalLeads = leads.length
+    const totalConverted = leads.filter(lead => 
+      lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed'
+    ).length
+    const totalRevenue = leads.reduce((sum, lead) => sum + (lead.value || 0), 0)
+    const convertedRevenue = leads
+      .filter(lead => lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed')
+      .reduce((sum, lead) => sum + (lead.value || 0), 0)
+    
+    return {
+      totalLeads,
+      totalConverted,
+      totalRevenue,
+      convertedRevenue,
+      overallConversionRate: totalLeads > 0 ? Math.round((totalConverted / totalLeads) * 100 * 100) / 100 : 0,
+      avgDealValue: totalConverted > 0 ? Math.round(convertedRevenue / totalConverted) : 0
+    }
+  }, [leads])
 
   // Load data function
   const loadData = async () => {
@@ -2062,7 +2138,8 @@ const Admin_sales_management = () => {
               {[
                 { key: 'leads', label: 'Leads', icon: FiUsers },
                 { key: 'sales-team', label: 'Sales Team', icon: FiUser },
-                { key: 'clients', label: 'Clients', icon: FiHome }
+                { key: 'clients', label: 'Clients', icon: FiHome },
+                { key: 'category-performance', label: 'Category Performance', icon: FiTrendingUp }
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -2454,6 +2531,149 @@ const Admin_sales_management = () => {
                 </div>
               )}
 
+              {activeTab === 'category-performance' && (
+                <div className="space-y-6">
+                  {/* Overall Performance Header */}
+                  <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-6 border border-purple-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900">Category Performance Breakdown</h3>
+                        <p className="text-gray-600 text-sm mt-1">Analyze lead conversion rates and performance by category</p>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <span className="font-semibold">{categoryPerformance.length}</span> categories analyzed
+                      </div>
+                    </div>
+                    
+                    {/* Overall Performance Metrics */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-white rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <FiUsers className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <div className="text-sm text-gray-600">Total Leads</div>
+                            <div className="text-lg font-bold text-gray-900">{overallPerformance.totalLeads}</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                            <FiCheckCircle className="h-5 w-5 text-green-600" />
+                          </div>
+                          <div>
+                            <div className="text-sm text-gray-600">Converted</div>
+                            <div className="text-lg font-bold text-gray-900">{overallPerformance.totalConverted}</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                            <FiTrendingUp className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <div className="text-sm text-gray-600">Conversion Rate</div>
+                            <div className="text-lg font-bold text-gray-900">{overallPerformance.overallConversionRate}%</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                            <FiCreditCard className="h-5 w-5 text-yellow-600" />
+                          </div>
+                          <div>
+                            <div className="text-sm text-gray-600">Avg Deal Value</div>
+                            <div className="text-lg font-bold text-gray-900">{formatCurrency(overallPerformance.avgDealValue)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category Performance Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    {categoryPerformance.map((category) => (
+                      <div key={category.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all duration-200 hover:scale-105">
+                        {/* Category Header */}
+                        <div className="flex items-center space-x-2 mb-3">
+                          <div 
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+                            style={{ backgroundColor: category.color }}
+                          >
+                            {category.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-bold text-gray-900 truncate">{category.name}</h4>
+                            <p className="text-xs text-gray-600 truncate">{category.description}</p>
+                          </div>
+                        </div>
+
+                        {/* Key Metrics */}
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <div className="bg-blue-50 rounded-lg p-2">
+                            <div className="text-xs text-blue-600 font-medium mb-1">Total Leads</div>
+                            <div className="text-lg font-bold text-blue-800">{category.totalLeads}</div>
+                          </div>
+                          <div className="bg-green-50 rounded-lg p-2">
+                            <div className="text-xs text-green-600 font-medium mb-1">Converted</div>
+                            <div className="text-lg font-bold text-green-800">{category.convertedLeads}</div>
+                          </div>
+                        </div>
+
+                        {/* Conversion Rate */}
+                        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-3 mb-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-xs text-purple-600 font-medium">Conversion Rate</div>
+                              <div className="text-lg font-bold text-purple-800">{category.conversionRate}%</div>
+                            </div>
+                            <div className="w-12 h-12 relative">
+                              <svg className="w-12 h-12 transform -rotate-90" viewBox="0 0 36 36">
+                                <path
+                                  className="text-gray-200"
+                                  stroke="currentColor"
+                                  strokeWidth="3"
+                                  fill="none"
+                                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                />
+                                <path
+                                  className="text-purple-600"
+                                  stroke="currentColor"
+                                  strokeWidth="3"
+                                  strokeDasharray={`${category.conversionRate}, 100`}
+                                  fill="none"
+                                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                />
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Total Revenue */}
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                              <FiCreditCard className="h-4 w-4 text-green-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-green-600 font-medium">Total Revenue</div>
+                              <div className="text-sm font-bold text-green-800 truncate">{formatCurrency(category.totalRevenue)}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                </div>
+              )}
 
               {/* Pagination */}
               <div className="flex items-center justify-between mt-6">
