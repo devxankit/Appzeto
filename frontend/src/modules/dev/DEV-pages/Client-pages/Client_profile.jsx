@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Client_navbar from '../../DEV-components/Client_navbar'
-import { FiUser as User, FiMail as Mail, FiCamera as Camera, FiSave as Save, FiX as X, FiCalendar as Calendar, FiAward as Award, FiBriefcase as Briefcase, FiPhone as Phone, FiMapPin as MapPin } from 'react-icons/fi'
+import { FiUser as User, FiMail as Mail, FiCamera as Camera, FiSave as Save, FiX as X, FiCalendar as Calendar, FiAward as Award, FiBriefcase as Briefcase, FiPhone as Phone, FiMapPin as MapPin, FiLogOut as LogOut } from 'react-icons/fi'
+import { logoutClient } from '../../DEV-services/clientAuthService'
+import { useToast } from '../../../../contexts/ToastContext'
 
 const Client_profile = () => {
+  const navigate = useNavigate()
+  const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const [profileData, setProfileData] = useState({
     fullName: '',
     email: '',
@@ -49,6 +55,27 @@ const Client_profile = () => {
     await new Promise(r => setTimeout(r, 500))
     setSaving(false)
     setIsEditing(false)
+  }
+
+  const handleLogout = async () => {
+    setLoggingOut(true)
+    try {
+      await logoutClient()
+      toast.logout('You have been logged out successfully', {
+        title: 'Logged Out',
+        duration: 3000
+      })
+      setTimeout(() => {
+        navigate('/client-login')
+      }, 1000)
+    } catch (error) {
+      toast.error('Failed to logout. Please try again.', {
+        title: 'Logout Failed',
+        duration: 4000
+      })
+    } finally {
+      setLoggingOut(false)
+    }
   }
 
   const formatCurrency = (amount) => {
@@ -117,6 +144,15 @@ const Client_profile = () => {
                     >
                       {isEditing ? <X className="h-5 w-5" /> : <User className="h-5 w-5" />}
                       <span>{isEditing ? 'Cancel' : 'Edit Profile'}</span>
+                    </button>
+                    
+                    <button 
+                      onClick={handleLogout}
+                      disabled={loggingOut}
+                      className="inline-flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <LogOut className="h-5 w-5" />
+                      <span>{loggingOut ? 'Logging out...' : 'Logout'}</span>
                     </button>
                   </div>
                 </div>

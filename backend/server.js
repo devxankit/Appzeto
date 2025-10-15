@@ -13,6 +13,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const pmRoutes = require('./routes/pmRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
+const clientRoutes = require('./routes/clientRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -55,6 +56,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/pm', pmRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/employee', employeeRoutes);
+app.use('/api/client', clientRoutes);
 
 // API routes placeholder
 app.get('/api', (req, res) => {
@@ -79,7 +81,12 @@ app.get('/api', (req, res) => {
       'POST /api/employee/login',
       'GET /api/employee/profile',
       'POST /api/employee/logout',
-      'POST /api/employee/create-demo'
+      'POST /api/employee/create-demo',
+      'POST /api/client/send-otp',
+      'POST /api/client/verify-otp',
+      'GET /api/client/profile',
+      'POST /api/client/logout',
+      'POST /api/client/create-demo'
     ]
   });
 });

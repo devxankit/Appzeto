@@ -96,8 +96,7 @@ const salesSchema = new mongoose.Schema({
 });
 
 // Index for better performance
-salesSchema.index({ email: 1 });
-salesSchema.index({ employeeId: 1 });
+// Indexes are automatically created by unique: true in schema definition
 
 // Virtual for account lock status
 salesSchema.virtual('isLocked').get(function() {

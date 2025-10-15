@@ -3,6 +3,7 @@ const Admin = require('../models/Admin');
 const PM = require('../models/PM');
 const Sales = require('../models/Sales');
 const Employee = require('../models/Employee');
+const Client = require('../models/Client');
 
 // @desc    Protect routes - verify JWT token
 // @access  Private
@@ -60,6 +61,14 @@ const protect = async (req, res, next) => {
       if (employee && employee.isActive) {
         req.employee = employee;
         req.userType = 'employee';
+        return next();
+      }
+
+      // Try to find Client if not admin, PM, Sales, or Employee
+      let client = await Client.findById(decoded.id);
+      if (client && client.isActive) {
+        req.client = client;
+        req.userType = 'client';
         return next();
       }
 

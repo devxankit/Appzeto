@@ -7,6 +7,9 @@ export { default as pmAuthService } from './pmAuthService';
 // Employee Authentication Service
 export { default as employeeAuthService } from './employeeAuthService';
 
+// Client Authentication Service
+export { default as clientAuthService } from './clientAuthService';
+
 // Base API Service (for internal use)
 export { default as baseApiService } from './baseApiService';
 
@@ -34,8 +37,24 @@ export {
   clearEmployeeData
 } from './employeeAuthService';
 
+// Re-export commonly used functions from Client auth service
+export {
+  sendOTP,
+  verifyOTP,
+  resendOTP,
+  getProfile,
+  updateProfile,
+  logoutClient,
+  createDemoClient,
+  checkSMSStatus,
+  isClientAuthenticated,
+  getStoredClientData,
+  clearClientData
+} from './clientAuthService';
+
 // Usage Examples:
-// import { pmAuthService, employeeAuthService } from '../DEV-services';
-// import { loginPM, loginEmployee, isPMAuthenticated, isEmployeeAuthenticated } from '../DEV-services';
+// import { pmAuthService, employeeAuthService, clientAuthService } from '../DEV-services';
+// import { loginPM, loginEmployee, sendOTP, verifyOTP, isPMAuthenticated, isEmployeeAuthenticated, isClientAuthenticated } from '../DEV-services';
 // import pmAuthService from '../DEV-services/pmAuthService';
 // import employeeAuthService from '../DEV-services/employeeAuthService';
+// import clientAuthService from '../DEV-services/clientAuthService';

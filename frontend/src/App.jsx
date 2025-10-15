@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ui/ProtectedRoute'
 import PMProtectedRoute from './components/ui/PMProtectedRoute'
 import SalesProtectedRoute from './components/ui/SalesProtectedRoute'
 import EmployeeProtectedRoute from './components/ui/EmployeeProtectedRoute'
+import ClientProtectedRoute from './components/ui/ClientProtectedRoute'
 import { ToastProvider } from './contexts/ToastContext'
 
 //SL pages start here //
@@ -383,15 +384,51 @@ function App() {
           } />
 
           //Client pages start here //
-        <Route path="/client-dashboard" element={<Client_dashboard />} />
-        <Route path="/client-projects" element={<Client_projects />} />
-        <Route path="/client-project-detail/:id" element={<Client_project_detail />} />
-        <Route path="/client-milestone-detail/:id" element={<Client_milestone_detail />} />
-        <Route path="/client-requests" element={<Client_requests />} />
-        <Route path="/client-wallet" element={<Client_wallet />} />
-        <Route path="/client-explore" element={<Client_explore />} />
-        <Route path="/client-profile" element={<Client_profile />} />
-        <Route path="/client-notifications" element={<Client_notification />} />
+        <Route path="/client-dashboard" element={
+          <ClientProtectedRoute>
+            <Client_dashboard />
+          </ClientProtectedRoute>
+        } />
+        <Route path="/client-projects" element={
+          <ClientProtectedRoute>
+            <Client_projects />
+          </ClientProtectedRoute>
+        } />
+        <Route path="/client-project-detail/:id" element={
+          <ClientProtectedRoute>
+            <Client_project_detail />
+          </ClientProtectedRoute>
+        } />
+        <Route path="/client-milestone-detail/:id" element={
+          <ClientProtectedRoute>
+            <Client_milestone_detail />
+          </ClientProtectedRoute>
+        } />
+        <Route path="/client-requests" element={
+          <ClientProtectedRoute>
+            <Client_requests />
+          </ClientProtectedRoute>
+        } />
+        <Route path="/client-wallet" element={
+          <ClientProtectedRoute>
+            <Client_wallet />
+          </ClientProtectedRoute>
+        } />
+        <Route path="/client-explore" element={
+          <ClientProtectedRoute>
+            <Client_explore />
+          </ClientProtectedRoute>
+        } />
+        <Route path="/client-profile" element={
+          <ClientProtectedRoute>
+            <Client_profile />
+          </ClientProtectedRoute>
+        } />
+        <Route path="/client-notifications" element={
+          <ClientProtectedRoute>
+            <Client_notification />
+          </ClientProtectedRoute>
+        } />
 
           //Admin pages start here //
           <Route path="/admin-dashboard" element={

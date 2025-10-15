@@ -1,13 +1,16 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FaPhoneAlt, FaShieldAlt, FaArrowRight, FaClock } from 'react-icons/fa'
+import { FaPhoneAlt, FaShieldAlt, FaArrowRight, FaClock, FaSpinner } from 'react-icons/fa'
 import { Button } from '../../../../components/ui/button'
 import { Input } from '../../../../components/ui/input'
 import logo from '../../../../assets/images/logo.png'
+import { sendOTP, verifyOTP, resendOTP, isClientAuthenticated } from '../../DEV-services/clientAuthService'
+import { useToast } from '../../../../contexts/ToastContext'
 
 const Client_login = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [formData, setFormData] = useState({
     phoneNumber: '',
     otp: ''
@@ -16,6 +19,13 @@ const Client_login = () => {
   const [isOtpSent, setIsOtpSent] = useState(false)
   const [otpTimer, setOtpTimer] = useState(0)
   const [errors, setErrors] = useState({})
+
+  // Check if user is already authenticated
+  useEffect(() => {
+    if (isClientAuthenticated()) {
+      navigate('/client-dashboard')
+    }
+  }, [navigate])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -66,27 +76,36 @@ const Client_login = () => {
     }
     
     setIsLoading(true)
+    setErrors({})
     
     try {
-      // Simulate API call to send OTP
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const response = await sendOTP(formData.phoneNumber)
       
-      setIsOtpSent(true)
-      setOtpTimer(60) // 60 seconds timer
-      
-      // Start countdown timer
-      const timer = setInterval(() => {
-        setOtpTimer(prev => {
-          if (prev <= 1) {
-            clearInterval(timer)
-            return 0
-          }
-          return prev - 1
+      if (response.success) {
+        setIsOtpSent(true)
+        setOtpTimer(60) // 60 seconds timer
+        
+        // Start countdown timer
+        const timer = setInterval(() => {
+          setOtpTimer(prev => {
+            if (prev <= 1) {
+              clearInterval(timer)
+              return 0
+            }
+            return prev - 1
+          })
+        }, 1000)
+        
+        toast.success('OTP sent successfully to your phone number', {
+          title: 'OTP Sent',
+          duration: 3000
         })
-      }, 1000)
+      }
       
     } catch (error) {
-      setErrors({ general: 'Failed to send OTP. Please try again.' })
+      const errorMessage = error.message || 'Failed to send OTP. Please try again.'
+      toast.error(errorMessage, { title: 'OTP Send Failed', duration: 4000 })
+      setErrors({ general: errorMessage })
     } finally {
       setIsLoading(false)
     }
@@ -105,26 +124,30 @@ const Client_login = () => {
     }
     
     setIsLoading(true)
+    setErrors({})
     
     try {
-      // Simulate API call to verify OTP
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      const response = await verifyOTP(formData.phoneNumber, formData.otp)
       
-      // For demo purposes, accept any 6-digit OTP
-      if (formData.otp && formData.otp.length === 6) {
-        // Store user session (in real app, this would be handled by backend)
-        localStorage.setItem('clientUser', JSON.stringify({
-          phoneNumber: formData.phoneNumber,
-          name: `Client ${formData.phoneNumber.slice(-4)}`,
-          role: 'client',
-          loginTime: new Date().toISOString()
+      if (response.success) {
+        localStorage.setItem('clientUser', JSON.stringify({ 
+          ...response.data, 
+          loginTime: new Date().toISOString() 
         }))
         
-        // Redirect to dashboard
-        navigate('/client-dashboard')
+        toast.login(`Welcome back, ${response.data.name}!`, {
+          title: 'Login Successful',
+          duration: 3000
+        })
+        
+        setTimeout(() => {
+          navigate('/client-dashboard')
+        }, 1000)
       }
     } catch (error) {
-      setErrors({ general: 'OTP verification failed. Please try again.' })
+      const errorMessage = error.message || 'OTP verification failed. Please try again.'
+      toast.error(errorMessage, { title: 'Verification Failed', duration: 4000 })
+      setErrors({ general: errorMessage })
     } finally {
       setIsLoading(false)
     }
@@ -133,8 +156,40 @@ const Client_login = () => {
   const resendOtp = async () => {
     if (otpTimer > 0) return
     
-    await sendOtp()
+    setIsLoading(true)
+    setErrors({})
+    
+    try {
+      const response = await resendOTP(formData.phoneNumber)
+      
+      if (response.success) {
+        setOtpTimer(60) // Reset timer
+        
+        // Start countdown timer
+        const timer = setInterval(() => {
+          setOtpTimer(prev => {
+            if (prev <= 1) {
+              clearInterval(timer)
+              return 0
+            }
+            return prev - 1
+          })
+        }, 1000)
+        
+        toast.success('OTP resent successfully', {
+          title: 'OTP Resent',
+          duration: 3000
+        })
+      }
+    } catch (error) {
+      const errorMessage = error.message || 'Failed to resend OTP. Please try again.'
+      toast.error(errorMessage, { title: 'Resend Failed', duration: 4000 })
+      setErrors({ general: errorMessage })
+    } finally {
+      setIsLoading(false)
+    }
   }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -351,21 +406,6 @@ const Client_login = () => {
           </motion.div>
         </div>
 
-        {/* Demo Credentials Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 1.0 }}
-          className="mt-6 bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/20 shadow-lg"
-        >
-          <div className="text-center">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Demo Credentials</h3>
-            <div className="space-y-1 text-xs text-gray-600">
-              <p><span className="font-medium">Phone:</span> 9876543210</p>
-              <p><span className="font-medium">OTP:</span> Any 6-digit number</p>
-            </div>
-          </div>
-        </motion.div>
       </motion.div>
     </div>
   )

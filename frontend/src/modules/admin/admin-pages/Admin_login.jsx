@@ -5,7 +5,7 @@ import { FaEye, FaEyeSlash, FaUser, FaLock, FaArrowRight } from 'react-icons/fa'
 import { Button } from '../../../components/ui/button'
 import { Input } from '../../../components/ui/input'
 import logo from '../../../assets/images/logo.png'
-import { loginAdmin, createDemoAdmin, isAdminAuthenticated } from '../admin-services/adminAuthService'
+import { loginAdmin, isAdminAuthenticated } from '../admin-services/adminAuthService'
 import { useToast } from '../../../contexts/ToastContext'
 
 const Admin_login = () => {
@@ -18,7 +18,6 @@ const Admin_login = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState({})
-  const [isCreatingDemo, setIsCreatingDemo] = useState(false)
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -109,38 +108,6 @@ const Admin_login = () => {
     }
   }
 
-  const handleCreateDemo = async () => {
-    setIsCreatingDemo(true)
-    setErrors({})
-    
-    try {
-      await createDemoAdmin()
-      
-      // Show success toast
-      toast.success('Demo admin created successfully! You can now login with admin@demo.com / password123', {
-        title: 'Demo Admin Created',
-        duration: 5000
-      })
-      
-      setErrors({ 
-        general: 'Demo admin created successfully! You can now login with admin@demo.com / password123' 
-      })
-    } catch (error) {
-      const errorMessage = error.message || 'Failed to create demo admin'
-      
-      // Show error toast
-      toast.error(errorMessage, {
-        title: 'Creation Failed',
-        duration: 4000
-      })
-      
-      setErrors({ 
-        general: errorMessage
-      })
-    } finally {
-      setIsCreatingDemo(false)
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -351,35 +318,6 @@ const Admin_login = () => {
           </motion.div>
         </div>
 
-        {/* Demo Credentials Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 1.0 }}
-          className="mt-6 bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/20 shadow-lg"
-        >
-          <div className="text-center">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Demo Credentials</h3>
-            <div className="space-y-1 text-xs text-gray-600 mb-3">
-              <p><span className="font-medium">Email:</span> admin@demo.com</p>
-              <p><span className="font-medium">Password:</span> password123</p>
-            </div>
-            <Button
-              onClick={handleCreateDemo}
-              disabled={isCreatingDemo}
-              className="w-full h-8 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-xs font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isCreatingDemo ? (
-                <div className="flex items-center justify-center space-x-1">
-                  <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Creating...</span>
-                </div>
-              ) : (
-                'Create Demo Admin'
-              )}
-            </Button>
-          </div>
-        </motion.div>
       </motion.div>
     </div>
   )

@@ -46,7 +46,7 @@ const adminSchema = new mongoose.Schema({
 });
 
 // Index for better performance
-adminSchema.index({ email: 1 });
+// Indexes are automatically created by unique: true in schema definition
 
 // Virtual for account lock status
 adminSchema.virtual('isLocked').get(function() {
