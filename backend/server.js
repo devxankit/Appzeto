@@ -2,20 +2,32 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
 // Import database connection
 const connectDB = require('./config/db');
+
+// Import routes
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(helmet()); // Security headers
-app.use(cors()); // Enable CORS
+app.use(cors({
+  origin: [
+    process.env.CORS_ORIGIN || 'http://localhost:3000',
+    'http://localhost:5173', // Vite default port
+    'http://localhost:3000'  // React default port
+  ],
+  credentials: true
+})); // Enable CORS with credentials
 app.use(morgan('combined')); // Logging
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+app.use(cookieParser()); // Parse cookies
 
 // Basic route
 app.get('/', (req, res) => {
@@ -35,6 +47,9 @@ app.get('/health', (req, res) => {
   });
 });
 
+// API routes
+app.use('/api/admin', adminRoutes);
+
 // API routes placeholder
 app.get('/api', (req, res) => {
   res.json({
@@ -42,7 +57,11 @@ app.get('/api', (req, res) => {
     availableRoutes: [
       'GET /',
       'GET /health',
-      'GET /api'
+      'GET /api',
+      'POST /api/admin/login',
+      'GET /api/admin/profile',
+      'POST /api/admin/logout',
+      'POST /api/admin/create-demo'
     ]
   });
 });

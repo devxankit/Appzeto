@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import ErrorBoundary from './components/ui/error-boundary'
 import NotFound from './components/ui/not-found'
+import ProtectedRoute from './components/ui/ProtectedRoute'
+import { ToastProvider } from './contexts/ToastContext'
 
 //SL pages start here //
 import SL_login from './modules/sells/SL-pages/SL_login'
@@ -95,8 +97,9 @@ import Admin_notice_board from './modules/admin/admin-pages/Admin_notice_board'
 function App() {
   return (
     <ErrorBoundary>
-      <Router>
-        <Routes>
+      <ToastProvider>
+        <Router>
+          <Routes>
           //Login pages start here //
           <Route path="/" element={<Navigate to="/admin-login" replace />} />
           <Route path="/sales-login" element={<SL_login />} />
@@ -176,20 +179,61 @@ function App() {
         <Route path="/client-notifications" element={<Client_notification />} />
 
           //Admin pages start here //
-          <Route path="/admin-dashboard" element={<Admin_dashboard />} />
-          <Route path="/admin-project-management" element={<Admin_project_management />} />
-          <Route path="/admin-finance-management" element={<Admin_finance_management />} />
-          <Route path="/admin-leaderboard" element={<Admin_leaderboard />} />
-          <Route path="/admin-reward-management" element={<Admin_reward_management />} />
-          <Route path="/admin-requests-management" element={<Admin_requests_management />} />
-          <Route path="/admin-sales-management" element={<Admin_sales_management />} />
-            <Route path="/admin-user-management" element={<Admin_user_management />} />
-            <Route path="/admin-hr-management" element={<Admin_hr_management />} />
-            <Route path="/admin-notice-board" element={<Admin_notice_board />} />
+          <Route path="/admin-dashboard" element={
+            <ProtectedRoute>
+              <Admin_dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin-project-management" element={
+            <ProtectedRoute>
+              <Admin_project_management />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin-finance-management" element={
+            <ProtectedRoute>
+              <Admin_finance_management />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin-leaderboard" element={
+            <ProtectedRoute>
+              <Admin_leaderboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin-reward-management" element={
+            <ProtectedRoute>
+              <Admin_reward_management />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin-requests-management" element={
+            <ProtectedRoute>
+              <Admin_requests_management />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin-sales-management" element={
+            <ProtectedRoute>
+              <Admin_sales_management />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin-user-management" element={
+            <ProtectedRoute>
+              <Admin_user_management />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin-hr-management" element={
+            <ProtectedRoute>
+              <Admin_hr_management />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin-notice-board" element={
+            <ProtectedRoute>
+              <Admin_notice_board />
+            </ProtectedRoute>
+          } />
          
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Router>
+          </Routes>
+        </Router>
+      </ToastProvider>
     </ErrorBoundary>
   )
 }
