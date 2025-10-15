@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
+const PM = require('../models/PM');
 
 // @desc    Protect routes - verify JWT token
 // @access  Private
@@ -28,27 +29,27 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
-      // Get admin from token
-      const admin = await Admin.findById(decoded.id);
-      
-      if (!admin) {
-        return res.status(401).json({
-          success: false,
-          message: 'No admin found with this token'
-        });
+      // Try to find admin first
+      let admin = await Admin.findById(decoded.id);
+      if (admin && admin.isActive) {
+        req.admin = admin;
+        req.userType = 'admin';
+        return next();
       }
 
-      // Check if admin is still active
-      if (!admin.isActive) {
-        return res.status(401).json({
-          success: false,
-          message: 'Admin account is deactivated'
-        });
+      // Try to find PM if not admin
+      let pm = await PM.findById(decoded.id);
+      if (pm && pm.isActive) {
+        req.pm = pm;
+        req.userType = 'pm';
+        return next();
       }
 
-      // Add admin to request object
-      req.admin = admin;
-      next();
+      // If neither admin nor PM found
+      return res.status(401).json({
+        success: false,
+        message: 'No user found with this token'
+      });
 
     } catch (error) {
       console.error('Token verification error:', error);

@@ -10,6 +10,7 @@ const connectDB = require('./config/db');
 
 // Import routes
 const adminRoutes = require('./routes/adminRoutes');
+const pmRoutes = require('./routes/pmRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -49,6 +50,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/admin', adminRoutes);
+app.use('/api/pm', pmRoutes);
 
 // API routes placeholder
 app.get('/api', (req, res) => {
@@ -61,7 +63,11 @@ app.get('/api', (req, res) => {
       'POST /api/admin/login',
       'GET /api/admin/profile',
       'POST /api/admin/logout',
-      'POST /api/admin/create-demo'
+      'POST /api/admin/create-demo',
+      'POST /api/pm/login',
+      'GET /api/pm/profile',
+      'POST /api/pm/logout',
+      'POST /api/pm/create-demo'
     ]
   });
 });

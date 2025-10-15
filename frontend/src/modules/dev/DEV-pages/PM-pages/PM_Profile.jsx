@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
-import { User, Mail, Camera, Edit3, Save, X, Loader2 } from 'lucide-react'
+import { User, Mail, Camera, Edit3, Save, X, Loader2, LogOut } from 'lucide-react'
+import { logoutPM, clearPMData, getStoredPMData } from '../../DEV-services/pmAuthService'
+import { useToast } from '../../../../contexts/ToastContext'
 
 const PM_Profile = () => {
+  const navigate = useNavigate()
+  const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const [profileData, setProfileData] = useState({
     fullName: '',
@@ -21,17 +27,30 @@ const PM_Profile = () => {
     skills: []
   })
 
-  // Mock load profile
+  // Load profile data from stored PM data
   useEffect(() => {
     const timer = setTimeout(() => {
-      setProfileData(prev => ({
-        ...prev,
-        fullName: 'Alex Johnson',
-        email: 'alex.johnson@example.com',
-        phone: '+1 (555) 123-4567',
-        location: 'San Francisco, CA',
-        skills: ['Leadership', 'Scrum', 'Roadmapping']
-      }))
+      const storedPMData = getStoredPMData()
+      if (storedPMData) {
+        setProfileData(prev => ({
+          ...prev,
+          fullName: storedPMData.name || 'PM User',
+          email: storedPMData.email || 'pm@example.com',
+          phone: storedPMData.phone || '+1 (555) 123-4567',
+          location: 'San Francisco, CA',
+          skills: storedPMData.skills || ['Leadership', 'Scrum', 'Roadmapping']
+        }))
+      } else {
+        // Fallback data if no stored data
+        setProfileData(prev => ({
+          ...prev,
+          fullName: 'PM User',
+          email: 'pm@example.com',
+          phone: '+1 (555) 123-4567',
+          location: 'San Francisco, CA',
+          skills: ['Leadership', 'Scrum', 'Roadmapping']
+        }))
+      }
       setLoading(false)
     }, 600)
     return () => clearTimeout(timer)
@@ -75,6 +94,48 @@ const PM_Profile = () => {
     }
   }
 
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true)
+      
+      // Call logout API
+      await logoutPM()
+      
+      // Clear local data
+      clearPMData()
+      
+      // Show success toast
+      toast.logout('You have been successfully logged out', {
+        title: 'Logged Out',
+        duration: 2000
+      })
+      
+      // Small delay to show the toast before redirect
+      setTimeout(() => {
+        navigate('/pm-login')
+      }, 800)
+      
+    } catch (error) {
+      console.error('Logout error:', error)
+      
+      // Even if API call fails, clear local data
+      clearPMData()
+      
+      // Show error toast
+      toast.error('Logout failed, but you have been logged out locally', {
+        title: 'Logout Error',
+        duration: 2000
+      })
+      
+      // Small delay to show the error toast before redirect
+      setTimeout(() => {
+        navigate('/pm-login')
+      }, 1000)
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
@@ -102,18 +163,32 @@ const PM_Profile = () => {
             <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-gray-900">Profile Information</h2>
-                <button
-                  onClick={() => setIsEditing(!isEditing)}
-                  className={`p-2 rounded-lg transition-all duration-200 ${
-                    isEditing ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-primary text-white hover:bg-primary-dark'
-                  }`}
-                >
-                  {isEditing ? (
-                    <X className="h-4 w-4" />
-                  ) : (
-                    <Edit3 className="h-4 w-4" />
-                  )}
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setIsEditing(!isEditing)}
+                    className={`p-2 rounded-lg transition-all duration-200 ${
+                      isEditing ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-primary text-white hover:bg-primary-dark'
+                    }`}
+                  >
+                    {isEditing ? (
+                      <X className="h-4 w-4" />
+                    ) : (
+                      <Edit3 className="h-4 w-4" />
+                    )}
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className="p-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Logout"
+                  >
+                    {isLoggingOut ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogOut className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Header */}

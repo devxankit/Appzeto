@@ -1,13 +1,16 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { FaEye, FaEyeSlash, FaUser, FaLock, FaArrowRight } from 'react-icons/fa'
 import { Button } from '../../../../components/ui/button'
 import { Input } from '../../../../components/ui/input'
 import logo from '../../../../assets/images/logo.png'
+import { loginPM, createDemoPM, isPMAuthenticated } from '../../DEV-services/pmAuthService'
+import { useToast } from '../../../../contexts/ToastContext'
 
 const PM_login = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -15,6 +18,7 @@ const PM_login = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState({})
+  const [isCreatingDemo, setIsCreatingDemo] = useState(false)
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -50,6 +54,13 @@ const PM_login = () => {
     return Object.keys(newErrors).length === 0
   }
 
+  // Check if user is already authenticated
+  useEffect(() => {
+    if (isPMAuthenticated()) {
+      navigate('/pm-dashboard')
+    }
+  }, [navigate])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
@@ -58,28 +69,76 @@ const PM_login = () => {
     }
     
     setIsLoading(true)
+    setErrors({})
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      const response = await loginPM(formData.email, formData.password)
       
-      // For demo purposes, accept any valid email/password combination
-      if (formData.email && formData.password) {
-        // Store user session (in real app, this would be handled by backend)
+      if (response.success) {
+        // Store PM data
         localStorage.setItem('pmUser', JSON.stringify({
-          email: formData.email,
-          name: formData.email.split('@')[0],
-          role: 'project_manager',
+          ...response.data.pm,
           loginTime: new Date().toISOString()
         }))
         
-        // Redirect to dashboard
-        navigate('/pm-dashboard')
+        // Show success toast
+        toast.login(`Welcome back, ${response.data.pm.name}!`, {
+          title: 'Login Successful',
+          duration: 3000
+        })
+        
+        // Small delay to show the toast before redirect
+        setTimeout(() => {
+          navigate('/pm-dashboard')
+        }, 1000)
       }
     } catch (error) {
-      setErrors({ general: 'Login failed. Please try again.' })
+      const errorMessage = error.message || 'Login failed. Please check your credentials and try again.'
+      
+      // Show error toast
+      toast.error(errorMessage, {
+        title: 'Login Failed',
+        duration: 4000
+      })
+      
+      setErrors({ 
+        general: errorMessage
+      })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleCreateDemo = async () => {
+    setIsCreatingDemo(true)
+    setErrors({})
+    
+    try {
+      await createDemoPM()
+      
+      // Show success toast
+      toast.success('Demo PM created successfully! You can now login with pm@demo.com / password123', {
+        title: 'Demo PM Created',
+        duration: 5000
+      })
+      
+      setErrors({ 
+        general: 'Demo PM created successfully! You can now login with pm@demo.com / password123' 
+      })
+    } catch (error) {
+      const errorMessage = error.message || 'Failed to create demo PM'
+      
+      // Show error toast
+      toast.error(errorMessage, {
+        title: 'Creation Failed',
+        duration: 4000
+      })
+      
+      setErrors({ 
+        general: errorMessage
+      })
+    } finally {
+      setIsCreatingDemo(false)
     }
   }
 
@@ -131,14 +190,24 @@ const PM_login = () => {
             <p className="text-gray-600 text-sm">Sign in to your project manager account</p>
           </motion.div>
 
-          {/* Error Message */}
+          {/* Error/Success Message */}
           {errors.general && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg"
+              className={`mb-4 p-3 rounded-lg border ${
+                errors.general.includes('successfully') 
+                  ? 'bg-green-50 border-green-200' 
+                  : 'bg-red-50 border-red-200'
+              }`}
             >
-              <p className="text-red-600 text-sm text-center">{errors.general}</p>
+              <p className={`text-sm text-center ${
+                errors.general.includes('successfully') 
+                  ? 'text-green-600' 
+                  : 'text-red-600'
+              }`}>
+                {errors.general}
+              </p>
             </motion.div>
           )}
 
@@ -291,10 +360,24 @@ const PM_login = () => {
         >
           <div className="text-center">
             <h3 className="text-sm font-semibold text-gray-700 mb-2">Demo Credentials</h3>
-            <div className="space-y-1 text-xs text-gray-600">
+            <div className="space-y-1 text-xs text-gray-600 mb-3">
               <p><span className="font-medium">Email:</span> pm@demo.com</p>
               <p><span className="font-medium">Password:</span> password123</p>
             </div>
+            <Button
+              onClick={handleCreateDemo}
+              disabled={isCreatingDemo}
+              className="w-full h-8 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-xs font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCreatingDemo ? (
+                <div className="flex items-center justify-center space-x-1">
+                  <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Creating...</span>
+                </div>
+              ) : (
+                'Create Demo PM'
+              )}
+            </Button>
           </div>
         </motion.div>
       </motion.div>

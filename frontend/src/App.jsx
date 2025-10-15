@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import ErrorBoundary from './components/ui/error-boundary'
 import NotFound from './components/ui/not-found'
 import ProtectedRoute from './components/ui/ProtectedRoute'
+import PMProtectedRoute from './components/ui/PMProtectedRoute'
 import { ToastProvider } from './contexts/ToastContext'
 
 //SL pages start here //
@@ -137,22 +138,86 @@ function App() {
           <Route path="/notice-board" element={<SL_notice_board />} />
          
          //PM pages start here //
-          <Route path="/pm-dashboard" element={<PM_dashboard />} />
-          <Route path="/pm-projects" element={<PM_projects />} />
-          <Route path="/pm-project/:id" element={<PM_project_detail />} />
-          <Route path="/pm-milestone/:id" element={<PM_milestone_detail />} />
-          <Route path="/pm-task/:id" element={<PM_task_detail />} />
-          <Route path="/pm-milestone" element={<PM_milestone />} />
-          <Route path="/pm-tasks" element={<PM_tasks />} />
-          <Route path="/pm-urgent-tasks" element={<PM_urgent_tasks />} />
-          <Route path="/pm-requests" element={<PM_request />} />
-          <Route path="/pm-notifications" element={<PM_notifications />} />
-          <Route path="/pm-leaderboard" element={<PM_leaderboard />} />
-          <Route path="/pm-profile" element={<PM_Profile />} />
-          <Route path="/pm-wallet" element={<PM_wallet />} />
-          <Route path="/pm-new-projects" element={<PM_new_projects />} />
-          <Route path="/pm-testing-projects" element={<PM_testing_projects />} />
-          <Route path="/pm-testing-milestones" element={<PM_testing_milestones />} />
+          <Route path="/pm-dashboard" element={
+            <PMProtectedRoute>
+              <PM_dashboard />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-projects" element={
+            <PMProtectedRoute>
+              <PM_projects />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-project/:id" element={
+            <PMProtectedRoute>
+              <PM_project_detail />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-milestone/:id" element={
+            <PMProtectedRoute>
+              <PM_milestone_detail />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-task/:id" element={
+            <PMProtectedRoute>
+              <PM_task_detail />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-milestone" element={
+            <PMProtectedRoute>
+              <PM_milestone />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-tasks" element={
+            <PMProtectedRoute>
+              <PM_tasks />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-urgent-tasks" element={
+            <PMProtectedRoute>
+              <PM_urgent_tasks />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-requests" element={
+            <PMProtectedRoute>
+              <PM_request />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-notifications" element={
+            <PMProtectedRoute>
+              <PM_notifications />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-leaderboard" element={
+            <PMProtectedRoute>
+              <PM_leaderboard />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-profile" element={
+            <PMProtectedRoute>
+              <PM_Profile />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-wallet" element={
+            <PMProtectedRoute>
+              <PM_wallet />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-new-projects" element={
+            <PMProtectedRoute>
+              <PM_new_projects />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-testing-projects" element={
+            <PMProtectedRoute>
+              <PM_testing_projects />
+            </PMProtectedRoute>
+          } />
+          <Route path="/pm-testing-milestones" element={
+            <PMProtectedRoute>
+              <PM_testing_milestones />
+            </PMProtectedRoute>
+          } />
 
           //Employee pages start here //
           <Route path="/employee-dashboard" element={<Employee_dashboard />} />
