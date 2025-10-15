@@ -1,0 +1,112 @@
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+require('dotenv').config();
+
+// Import database connection
+const connectDB = require('./config/db');
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(helmet()); // Security headers
+app.use(cors()); // Enable CORS
+app.use(morgan('combined')); // Logging
+app.use(express.json()); // Parse JSON bodies
+app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+
+// Basic route
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Welcome to Appzeto Backend API',
+    status: 'Server is running successfully',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Health check route
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API routes placeholder
+app.get('/api', (req, res) => {
+  res.json({
+    message: 'API endpoints will be available here',
+    availableRoutes: [
+      'GET /',
+      'GET /health',
+      'GET /api'
+    ]
+  });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    message: `Cannot ${req.method} ${req.originalUrl}`
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    error: 'Something went wrong!',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  });
+});
+
+// Connect to database and start server
+const startServer = async () => {
+  try {
+    // Connect to MongoDB
+    await connectDB();
+    
+    // Start server
+    const server = app.listen(PORT, () => {
+      console.log('='.repeat(50));
+      console.log('Appzeto Backend Server');
+      console.log('='.repeat(50));
+      console.log(`Port: ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`API Base URL: http://localhost:${PORT}`);
+      console.log(`Health Check: http://localhost:${PORT}/health`);
+      console.log('='.repeat(50));
+      console.log('Server started successfully');
+    });
+
+    // Graceful shutdown handling
+    process.on('SIGINT', () => {
+      console.log('\nReceived SIGINT (Ctrl+C). Shutting down gracefully...');
+      server.close(() => {
+        console.log('Server closed successfully');
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGTERM', () => {
+      console.log('\nReceived SIGTERM. Shutting down gracefully...');
+      server.close(() => {
+        console.log('Server closed successfully');
+        process.exit(0);
+      });
+    });
+
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Start the application
+startServer();
+
+module.exports = app;
