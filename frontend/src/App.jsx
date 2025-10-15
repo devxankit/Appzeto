@@ -3,6 +3,13 @@ import ErrorBoundary from './components/ui/error-boundary'
 import NotFound from './components/ui/not-found'
 
 //SL pages start here //
+import SL_login from './modules/sells/SL-pages/SL_login'
+
+//Login pages start here //
+import Employee_login from './modules/dev/DEV-pages/Employee-pages/Employee_login'
+import PM_login from './modules/dev/DEV-pages/PM-pages/PM_login'
+import Client_login from './modules/dev/DEV-pages/Client-pages/Client_login'
+import Admin_login from './modules/admin/admin-pages/Admin_login'
 import SL_dashboard from './modules/sells/SL-pages/SL_dashboard'
 import SL_leads from './modules/sells/SL-pages/SL_leads'
 import SL_profile from './modules/sells/SL-pages/SL_profile'
@@ -90,8 +97,15 @@ function App() {
     <ErrorBoundary>
       <Router>
         <Routes>
+          //Login pages start here //
+          <Route path="/" element={<Navigate to="/admin-login" replace />} />
+          <Route path="/sales-login" element={<SL_login />} />
+          <Route path="/employee-login" element={<Employee_login />} />
+          <Route path="/pm-login" element={<PM_login />} />
+          <Route path="/client-login" element={<Client_login />} />
+          <Route path="/admin-login" element={<Admin_login />} />
+          
           //SL pages start here //
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<SL_dashboard />} />
           <Route path="/leads" element={<SL_leads />} />
           <Route path="/wallet" element={<SL_wallet />} />
