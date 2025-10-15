@@ -3,6 +3,7 @@ import ErrorBoundary from './components/ui/error-boundary'
 import NotFound from './components/ui/not-found'
 import ProtectedRoute from './components/ui/ProtectedRoute'
 import PMProtectedRoute from './components/ui/PMProtectedRoute'
+import SalesProtectedRoute from './components/ui/SalesProtectedRoute'
 import { ToastProvider } from './contexts/ToastContext'
 
 //SL pages start here //
@@ -110,32 +111,136 @@ function App() {
           <Route path="/admin-login" element={<Admin_login />} />
           
           //SL pages start here //
-          <Route path="/dashboard" element={<SL_dashboard />} />
-          <Route path="/leads" element={<SL_leads />} />
-          <Route path="/wallet" element={<SL_wallet />} />
-          <Route path="/new-leads" element={<SL_newLeads />} />
-          <Route path="/connected" element={<SL_connected />} />
-          <Route path="/lead-profile/:id" element={<SL_leadProfile />} />
-          <Route path="/client-profile/:id" element={<SL_ClientProfile />} />
-          <Route path="/client-transaction/:id" element={<SL_client_transaction />} />
-          <Route path="/client-notes/:id" element={<SL_notes />} />
-          <Route path="/payments-recovery" element={<SL_payments_recovery />} />
-          <Route path="/demo-requests" element={<SL_demo_request />} />
-          <Route path="/tasks" element={<SL_tasks />} />
-          <Route path="/meetings" element={<SL_meetings />} />
-          <Route path="/hot-leads" element={<SL_hot_leads />} />
-          <Route path="/converted" element={<SL_converted />} />
-          <Route path="/not-picked" element={<SL_not_picked />} />
-          <Route path="/today-followup" element={<SL_today_followup />} />
-          <Route path="/quotation-sent" element={<SL_quotation_sent />} />
-          <Route path="/dq-sent" element={<SL_dq_sent />} />
-          <Route path="/app-client" element={<SL_app_client />} />
-          <Route path="/web" element={<SL_web />} />
-          <Route path="/lost" element={<SL_lost />} />
-          <Route path="/profile" element={<SL_profile />} />
-          <Route path="/notifications" element={<SL_notification />} />
-          <Route path="/requests" element={<SL_requests />} />
-          <Route path="/notice-board" element={<SL_notice_board />} />
+          <Route path="/dashboard" element={
+            <SalesProtectedRoute>
+              <SL_dashboard />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/leads" element={
+            <SalesProtectedRoute>
+              <SL_leads />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/wallet" element={
+            <SalesProtectedRoute>
+              <SL_wallet />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/new-leads" element={
+            <SalesProtectedRoute>
+              <SL_newLeads />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/connected" element={
+            <SalesProtectedRoute>
+              <SL_connected />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/lead-profile/:id" element={
+            <SalesProtectedRoute>
+              <SL_leadProfile />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/client-profile/:id" element={
+            <SalesProtectedRoute>
+              <SL_ClientProfile />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/client-transaction/:id" element={
+            <SalesProtectedRoute>
+              <SL_client_transaction />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/client-notes/:id" element={
+            <SalesProtectedRoute>
+              <SL_notes />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/payments-recovery" element={
+            <SalesProtectedRoute>
+              <SL_payments_recovery />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/demo-requests" element={
+            <SalesProtectedRoute>
+              <SL_demo_request />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/tasks" element={
+            <SalesProtectedRoute>
+              <SL_tasks />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/meetings" element={
+            <SalesProtectedRoute>
+              <SL_meetings />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/hot-leads" element={
+            <SalesProtectedRoute>
+              <SL_hot_leads />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/converted" element={
+            <SalesProtectedRoute>
+              <SL_converted />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/not-picked" element={
+            <SalesProtectedRoute>
+              <SL_not_picked />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/today-followup" element={
+            <SalesProtectedRoute>
+              <SL_today_followup />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/quotation-sent" element={
+            <SalesProtectedRoute>
+              <SL_quotation_sent />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/dq-sent" element={
+            <SalesProtectedRoute>
+              <SL_dq_sent />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/app-client" element={
+            <SalesProtectedRoute>
+              <SL_app_client />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/web" element={
+            <SalesProtectedRoute>
+              <SL_web />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/lost" element={
+            <SalesProtectedRoute>
+              <SL_lost />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <SalesProtectedRoute>
+              <SL_profile />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/notifications" element={
+            <SalesProtectedRoute>
+              <SL_notification />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/requests" element={
+            <SalesProtectedRoute>
+              <SL_requests />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/notice-board" element={
+            <SalesProtectedRoute>
+              <SL_notice_board />
+            </SalesProtectedRoute>
+          } />
          
          //PM pages start here //
           <Route path="/pm-dashboard" element={

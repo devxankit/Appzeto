@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
 const PM = require('../models/PM');
+const Sales = require('../models/Sales');
 
 // @desc    Protect routes - verify JWT token
 // @access  Private
@@ -45,7 +46,15 @@ const protect = async (req, res, next) => {
         return next();
       }
 
-      // If neither admin nor PM found
+      // Try to find Sales if not admin or PM
+      let sales = await Sales.findById(decoded.id);
+      if (sales && sales.isActive) {
+        req.sales = sales;
+        req.userType = 'sales';
+        return next();
+      }
+
+      // If no user found
       return res.status(401).json({
         success: false,
         message: 'No user found with this token'
