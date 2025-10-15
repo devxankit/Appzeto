@@ -98,8 +98,35 @@ export const pmStorage = {
   }
 };
 
+// Local storage utilities for Employee data
+export const employeeStorage = {
+  get: () => {
+    try {
+      const employeeData = localStorage.getItem('employeeUser');
+      return employeeData ? JSON.parse(employeeData) : null;
+    } catch (error) {
+      console.error('Error parsing stored Employee data:', error);
+      return null;
+    }
+  },
+  
+  set: (employeeData) => {
+    try {
+      localStorage.setItem('employeeUser', JSON.stringify(employeeData));
+    } catch (error) {
+      console.error('Error storing Employee data:', error);
+    }
+  },
+  
+  clear: () => {
+    removeAuthToken();
+    localStorage.removeItem('employeeUser');
+  }
+};
+
 export default {
   apiRequest,
   tokenUtils,
-  pmStorage
+  pmStorage,
+  employeeStorage
 };

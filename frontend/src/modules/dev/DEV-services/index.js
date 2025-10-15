@@ -4,6 +4,9 @@
 // PM Authentication Service
 export { default as pmAuthService } from './pmAuthService';
 
+// Employee Authentication Service
+export { default as employeeAuthService } from './employeeAuthService';
+
 // Base API Service (for internal use)
 export { default as baseApiService } from './baseApiService';
 
@@ -19,7 +22,20 @@ export {
   clearPMData
 } from './pmAuthService';
 
+// Re-export commonly used functions from Employee auth service
+export {
+  loginEmployee,
+  logoutEmployee,
+  getEmployeeProfile,
+  createDemoEmployee,
+  isEmployeeAuthenticated,
+  getStoredEmployeeData,
+  storeEmployeeData,
+  clearEmployeeData
+} from './employeeAuthService';
+
 // Usage Examples:
-// import { pmAuthService } from '../DEV-services';
-// import { loginPM, isPMAuthenticated } from '../DEV-services';
+// import { pmAuthService, employeeAuthService } from '../DEV-services';
+// import { loginPM, loginEmployee, isPMAuthenticated, isEmployeeAuthenticated } from '../DEV-services';
 // import pmAuthService from '../DEV-services/pmAuthService';
+// import employeeAuthService from '../DEV-services/employeeAuthService';

@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
-import { FiUser as User, FiMail as Mail, FiCamera as Camera, FiSave as Save, FiX as X, FiCalendar as Calendar, FiAward as Award, FiBriefcase as Briefcase } from 'react-icons/fi'
+import { FiUser as User, FiMail as Mail, FiCamera as Camera, FiSave as Save, FiX as X, FiCalendar as Calendar, FiAward as Award, FiBriefcase as Briefcase, FiLogOut as LogOut, FiLoader as Loader } from 'react-icons/fi'
+import { logoutEmployee, clearEmployeeData, getStoredEmployeeData } from '../../DEV-services/employeeAuthService'
+import { useToast } from '../../../../contexts/ToastContext'
 
 const Employee_profile = () => {
+  const navigate = useNavigate()
+  const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [profileData, setProfileData] = useState({
     fullName: '',
     email: '',
@@ -24,19 +30,39 @@ const Employee_profile = () => {
     const load = async () => {
       setLoading(true)
       await new Promise(r => setTimeout(r, 400))
-      setProfileData({
-        fullName: 'Employee Name',
-        email: 'employee@appzeto.com',
-        role: 'Engineer',
-        department: 'Development',
-        jobTitle: 'Frontend Developer',
-        workTitle: 'Frontend Developer',
-        joinDate: new Date(Date.now()-200*24*60*60*1000).toISOString(),
-        avatar: 'EM',
-        phone: '+91 90000 00000',
-        location: 'Indore, IN',
-        skills: ['React', 'Tailwind']
-      })
+      
+      // Load profile data from stored Employee data
+      const storedEmployeeData = getStoredEmployeeData()
+      if (storedEmployeeData) {
+        setProfileData({
+          fullName: storedEmployeeData.name || 'Employee Name',
+          email: storedEmployeeData.email || 'employee@example.com',
+          role: storedEmployeeData.role || 'employee',
+          department: storedEmployeeData.department || 'Development',
+          jobTitle: storedEmployeeData.position || 'Software Developer',
+          workTitle: storedEmployeeData.position || 'Software Developer',
+          joinDate: storedEmployeeData.joiningDate || new Date(Date.now()-200*24*60*60*1000).toISOString(),
+          avatar: 'EM',
+          phone: storedEmployeeData.phone || '+91 90000 00000',
+          location: 'Indore, IN',
+          skills: storedEmployeeData.skills || ['React', 'Tailwind']
+        })
+      } else {
+        // Fallback data if no stored data
+        setProfileData({
+          fullName: 'Employee Name',
+          email: 'employee@example.com',
+          role: 'employee',
+          department: 'Development',
+          jobTitle: 'Software Developer',
+          workTitle: 'Software Developer',
+          joinDate: new Date(Date.now()-200*24*60*60*1000).toISOString(),
+          avatar: 'EM',
+          phone: '+91 90000 00000',
+          location: 'Indore, IN',
+          skills: ['React', 'Tailwind']
+        })
+      }
       setLoading(false)
     }
     load()
@@ -51,6 +77,33 @@ const Employee_profile = () => {
     await new Promise(r => setTimeout(r, 500))
     setSaving(false)
     setIsEditing(false)
+  }
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true)
+      await logoutEmployee()
+      clearEmployeeData()
+      toast.logout('You have been successfully logged out', {
+        title: 'Logged Out',
+        duration: 2000
+      })
+      setTimeout(() => {
+        navigate('/employee-login')
+      }, 800)
+    } catch (error) {
+      console.error('Logout error:', error)
+      clearEmployeeData()
+      toast.error('Logout failed, but you have been logged out locally', {
+        title: 'Logout Error',
+        duration: 2000
+      })
+      setTimeout(() => {
+        navigate('/employee-login')
+      }, 1000)
+    } finally {
+      setIsLoggingOut(false)
+    }
   }
 
   if (loading) {
@@ -75,9 +128,23 @@ const Employee_profile = () => {
             <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-gray-900">Profile Information</h2>
-                <button onClick={() => setIsEditing(!isEditing)} className={`p-2 rounded-lg transition-all duration-200 ${isEditing ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-primary text-white hover:bg-primary-dark'}`}>
-                  {isEditing ? <X className="h-4 w-4" /> : 'Edit'}
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button onClick={() => setIsEditing(!isEditing)} className={`p-2 rounded-lg transition-all duration-200 ${isEditing ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-primary text-white hover:bg-primary-dark'}`}>
+                    {isEditing ? <X className="h-4 w-4" /> : 'Edit'}
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className="p-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Logout"
+                  >
+                    {isLoggingOut ? (
+                      <Loader className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogOut className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
               <div className="flex flex-col space-y-4">
                 <div className="flex items-center space-x-3">

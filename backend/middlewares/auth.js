@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
 const PM = require('../models/PM');
 const Sales = require('../models/Sales');
+const Employee = require('../models/Employee');
 
 // @desc    Protect routes - verify JWT token
 // @access  Private
@@ -51,6 +52,14 @@ const protect = async (req, res, next) => {
       if (sales && sales.isActive) {
         req.sales = sales;
         req.userType = 'sales';
+        return next();
+      }
+
+      // Try to find Employee if not admin, PM, or Sales
+      let employee = await Employee.findById(decoded.id);
+      if (employee && employee.isActive) {
+        req.employee = employee;
+        req.userType = 'employee';
         return next();
       }
 

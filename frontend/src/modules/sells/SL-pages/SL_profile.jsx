@@ -1,5 +1,5 @@
-import React from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { 
   FaWallet, 
   FaBell, 
@@ -9,11 +9,54 @@ import {
   FaUser,
   FaHeart,
   FaArrowRight,
-  FaClipboardList
+  FaClipboardList,
+  FaSpinner
 } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
+import { logoutSales, clearSalesData, getStoredSalesData } from '../SL-services/salesAuthService'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_profile = () => {
+  const navigate = useNavigate()
+  const { toast } = useToast()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [salesData, setSalesData] = useState(null)
+
+  // Load sales data from stored authentication data
+  useEffect(() => {
+    const storedSalesData = getStoredSalesData()
+    if (storedSalesData) {
+      setSalesData(storedSalesData)
+    }
+  }, [])
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true)
+      await logoutSales()
+      clearSalesData()
+      toast.logout('You have been successfully logged out', {
+        title: 'Logged Out',
+        duration: 2000
+      })
+      setTimeout(() => {
+        navigate('/sales-login')
+      }, 800)
+    } catch (error) {
+      console.error('Logout error:', error)
+      clearSalesData()
+      toast.error('Logout failed, but you have been logged out locally', {
+        title: 'Logout Error',
+        duration: 2000
+      })
+      setTimeout(() => {
+        navigate('/sales-login')
+      }, 1000)
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
       <SL_navbar />
@@ -31,8 +74,12 @@ const SL_profile = () => {
 
           {/* User Information */}
           <div>
-            <h1 className="text-xl font-bold text-gray-900 mb-1 tracking-tight">Abhishek Sen</h1>
-            <p className="text-gray-600 text-sm font-medium">abhishek@appzeto.com</p>
+            <h1 className="text-xl font-bold text-gray-900 mb-1 tracking-tight">
+              {salesData?.name || 'Sales User'}
+            </h1>
+            <p className="text-gray-600 text-sm font-medium">
+              {salesData?.email || 'sales@example.com'}
+            </p>
           </div>
         </div>
 
@@ -45,7 +92,9 @@ const SL_profile = () => {
               </div>
               <span className="text-gray-600 font-medium text-sm">Phone</span>
             </div>
-            <span className="text-gray-900 font-semibold text-sm">8874563452</span>
+            <span className="text-gray-900 font-semibold text-sm">
+              {salesData?.phone || '+1234567890'}
+            </span>
           </div>
         </div>
 
@@ -97,15 +146,24 @@ const SL_profile = () => {
           </Link>
 
           {/* Logout Card */}
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-red-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
+          <div 
+            onClick={handleLogout}
+            className="bg-white rounded-xl p-4 shadow-sm border border-red-200/50 cursor-pointer transition-all duration-200 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-red-100 to-red-200 rounded-lg flex items-center justify-center">
-                  <FaSignOutAlt className="text-red-600 text-base" />
+                  {isLoggingOut ? (
+                    <FaSpinner className="text-red-600 text-base animate-spin" />
+                  ) : (
+                    <FaSignOutAlt className="text-red-600 text-base" />
+                  )}
                 </div>
-                <span className="text-red-600 font-semibold text-base">Logout</span>
+                <span className="text-red-600 font-semibold text-base">
+                  {isLoggingOut ? 'Logging out...' : 'Logout'}
+                </span>
               </div>
-              <FaArrowRight className="text-red-400 text-sm" />
+              {!isLoggingOut && <FaArrowRight className="text-red-400 text-sm" />}
             </div>
           </div>
         </div>
@@ -135,8 +193,12 @@ const SL_profile = () => {
                 </div>
 
                 {/* User Information */}
-                <h1 className="text-lg font-bold text-gray-900 mb-1">Abhishek Sen</h1>
-                <p className="text-gray-600 text-sm">abhishek@appzeto.com</p>
+                <h1 className="text-lg font-bold text-gray-900 mb-1">
+                  {salesData?.name || 'Sales User'}
+                </h1>
+                <p className="text-gray-600 text-sm">
+                  {salesData?.email || 'sales@example.com'}
+                </p>
               </div>
             </div>
 
@@ -149,7 +211,9 @@ const SL_profile = () => {
                 </div>
                 <div>
                   <p className="text-gray-600 text-xs">Phone</p>
-                  <p className="text-gray-900 font-semibold text-sm">8874563452</p>
+                  <p className="text-gray-900 font-semibold text-sm">
+                    {salesData?.phone || '+1234567890'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -198,12 +262,21 @@ const SL_profile = () => {
               </Link>
 
               {/* Logout Card */}
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-red-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
+              <div 
+                onClick={handleLogout}
+                className="bg-white rounded-xl p-4 shadow-sm border border-red-200/50 cursor-pointer transition-all duration-200 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <div className="flex items-center space-x-3 mb-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-red-100 to-red-200 rounded-lg flex items-center justify-center">
-                    <FaSignOutAlt className="text-red-600 text-base" />
+                    {isLoggingOut ? (
+                      <FaSpinner className="text-red-600 text-base animate-spin" />
+                    ) : (
+                      <FaSignOutAlt className="text-red-600 text-base" />
+                    )}
                   </div>
-                  <span className="text-red-600 font-semibold text-base">Logout</span>
+                  <span className="text-red-600 font-semibold text-base">
+                    {isLoggingOut ? 'Logging out...' : 'Logout'}
+                  </span>
                 </div>
                 <p className="text-gray-600 text-xs">Sign out of your account</p>
               </div>

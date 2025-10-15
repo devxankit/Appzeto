@@ -12,6 +12,7 @@ const connectDB = require('./config/db');
 const adminRoutes = require('./routes/adminRoutes');
 const pmRoutes = require('./routes/pmRoutes');
 const salesRoutes = require('./routes/salesRoutes');
+const employeeRoutes = require('./routes/employeeRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -53,6 +54,7 @@ app.get('/health', (req, res) => {
 app.use('/api/admin', adminRoutes);
 app.use('/api/pm', pmRoutes);
 app.use('/api/sales', salesRoutes);
+app.use('/api/employee', employeeRoutes);
 
 // API routes placeholder
 app.get('/api', (req, res) => {
@@ -73,7 +75,11 @@ app.get('/api', (req, res) => {
       'POST /api/sales/login',
       'GET /api/sales/profile',
       'POST /api/sales/logout',
-      'POST /api/sales/create-demo'
+      'POST /api/sales/create-demo',
+      'POST /api/employee/login',
+      'GET /api/employee/profile',
+      'POST /api/employee/logout',
+      'POST /api/employee/create-demo'
     ]
   });
 });

@@ -4,6 +4,7 @@ import NotFound from './components/ui/not-found'
 import ProtectedRoute from './components/ui/ProtectedRoute'
 import PMProtectedRoute from './components/ui/PMProtectedRoute'
 import SalesProtectedRoute from './components/ui/SalesProtectedRoute'
+import EmployeeProtectedRoute from './components/ui/EmployeeProtectedRoute'
 import { ToastProvider } from './contexts/ToastContext'
 
 //SL pages start here //
@@ -325,17 +326,61 @@ function App() {
           } />
 
           //Employee pages start here //
-          <Route path="/employee-dashboard" element={<Employee_dashboard />} />
-          <Route path="/employee-projects" element={<Employee_projects />} />
-          <Route path="/employee-project/:id" element={<Employee_project_detail />} />
-          <Route path="/employee/milestone-details/:id" element={<Employee_milestone_details />} />
-          <Route path="/employee-notifications" element={<Employee_notification />} />
-          <Route path="/employee-tasks" element={<Employee_tasks />} />
-          <Route path="/employee-task/:id" element={<Employee_task_detail />} />
-          <Route path="/employee-requests" element={<Employee_request />} />
-          <Route path="/employee-leaderboard" element={<Employee_leaderboard />} />
-          <Route path="/employee-profile" element={<Employee_profile />} />
-          <Route path="/employee-wallet" element={<Employee_wallet />} />
+          <Route path="/employee-dashboard" element={
+            <EmployeeProtectedRoute>
+              <Employee_dashboard />
+            </EmployeeProtectedRoute>
+          } />
+          <Route path="/employee-projects" element={
+            <EmployeeProtectedRoute>
+              <Employee_projects />
+            </EmployeeProtectedRoute>
+          } />
+          <Route path="/employee-project/:id" element={
+            <EmployeeProtectedRoute>
+              <Employee_project_detail />
+            </EmployeeProtectedRoute>
+          } />
+          <Route path="/employee/milestone-details/:id" element={
+            <EmployeeProtectedRoute>
+              <Employee_milestone_details />
+            </EmployeeProtectedRoute>
+          } />
+          <Route path="/employee-notifications" element={
+            <EmployeeProtectedRoute>
+              <Employee_notification />
+            </EmployeeProtectedRoute>
+          } />
+          <Route path="/employee-tasks" element={
+            <EmployeeProtectedRoute>
+              <Employee_tasks />
+            </EmployeeProtectedRoute>
+          } />
+          <Route path="/employee-task/:id" element={
+            <EmployeeProtectedRoute>
+              <Employee_task_detail />
+            </EmployeeProtectedRoute>
+          } />
+          <Route path="/employee-requests" element={
+            <EmployeeProtectedRoute>
+              <Employee_request />
+            </EmployeeProtectedRoute>
+          } />
+          <Route path="/employee-leaderboard" element={
+            <EmployeeProtectedRoute>
+              <Employee_leaderboard />
+            </EmployeeProtectedRoute>
+          } />
+          <Route path="/employee-profile" element={
+            <EmployeeProtectedRoute>
+              <Employee_profile />
+            </EmployeeProtectedRoute>
+          } />
+          <Route path="/employee-wallet" element={
+            <EmployeeProtectedRoute>
+              <Employee_wallet />
+            </EmployeeProtectedRoute>
+          } />
 
           //Client pages start here //
         <Route path="/client-dashboard" element={<Client_dashboard />} />
