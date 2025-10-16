@@ -22,26 +22,47 @@ const employeeSchema = new mongoose.Schema({
     minlength: [6, 'Password must be at least 6 characters'],
     select: false // Don't include password in queries by default
   },
+  phone: {
+    type: String,
+    required: [true, 'Phone number is required'],
+    trim: true,
+    match: [/^[\+]?[1-9][\d]{0,15}$/, 'Please enter a valid phone number']
+  },
   role: {
     type: String,
     enum: ['employee'],
     default: 'employee'
   },
+  team: {
+    type: String,
+    enum: ['developer', 'sales'],
+    required: [true, 'Team is required']
+  },
   department: {
     type: String,
+    enum: ['full-stack', 'nodejs', 'web', 'app', 'sales'],
     required: [true, 'Department is required'],
     trim: true
   },
-  employeeId: {
-    type: String,
-    required: [true, 'Employee ID is required'],
-    unique: true,
-    trim: true
+  dateOfBirth: {
+    type: Date,
+    required: [true, 'Date of birth is required']
   },
-  phone: {
-    type: String,
-    trim: true,
-    match: [/^[\+]?[1-9][\d]{0,15}$/, 'Please enter a valid phone number']
+  joiningDate: {
+    type: Date,
+    required: [true, 'Joining date is required']
+  },
+  document: {
+    public_id: String,
+    secure_url: String,
+    originalName: String,
+    original_filename: String,
+    format: String,
+    size: Number,
+    bytes: Number,
+    width: Number,
+    height: Number,
+    resource_type: String
   },
   isActive: {
     type: Boolean,
@@ -62,10 +83,6 @@ const employeeSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Position is required'],
     trim: true
-  },
-  joiningDate: {
-    type: Date,
-    required: [true, 'Joining date is required']
   },
   salary: {
     type: Number,

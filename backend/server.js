@@ -10,6 +10,7 @@ const connectDB = require('./config/db');
 
 // Import routes
 const adminRoutes = require('./routes/adminRoutes');
+const adminUserRoutes = require('./routes/adminUserRoutes');
 const pmRoutes = require('./routes/pmRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
@@ -53,6 +54,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/pm', pmRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/employee', employeeRoutes);
@@ -70,6 +72,12 @@ app.get('/api', (req, res) => {
       'GET /api/admin/profile',
       'POST /api/admin/logout',
       'POST /api/admin/create-demo',
+      'GET /api/admin/users/statistics',
+      'GET /api/admin/users',
+      'GET /api/admin/users/:userType/:id',
+      'POST /api/admin/users',
+      'PUT /api/admin/users/:userType/:id',
+      'DELETE /api/admin/users/:userType/:id',
       'POST /api/pm/login',
       'GET /api/pm/profile',
       'POST /api/pm/logout',

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
+import CloudinaryUpload from '../../../components/ui/cloudinary-upload'
 import { 
   Users, 
   UserPlus, 
@@ -22,6 +23,7 @@ import {
   X,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
   Clock,
   Plus,
   RefreshCw,
@@ -32,9 +34,12 @@ import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Combobox } from '../../../components/ui/combobox'
 import Loading from '../../../components/ui/loading'
+import { adminUserService } from '../admin-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const Admin_user_management = () => {
   const [loading, setLoading] = useState(true)
+  const [usersLoading, setUsersLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('project-managers')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
@@ -59,321 +64,117 @@ const Admin_user_management = () => {
     confirmPassword: ''
   })
 
-  // Mock statistics data
+  // Statistics data
   const [statistics, setStatistics] = useState({
-    total: 187,
-    projectManagers: 12,
-    employees: 68,
-    clients: 107,
-    developers: 45,
-    salesTeam: 23,
-    active: 175,
-    inactive: 12
+    total: 0,
+    admins: 0,
+    hr: 0,
+    projectManagers: 0,
+    employees: 0,
+    clients: 0,
+    developers: 0,
+    salesTeam: 0,
+    active: 0,
+    inactive: 0
   })
 
-  // Mock users data
+  // Users data
   const [users, setUsers] = useState([])
+  const { addToast } = useToast()
 
   useEffect(() => {
     loadData()
   }, [])
 
+  // Reload users when filters change (without full page reload)
+  useEffect(() => {
+    if (!loading) {
+      loadUsersOnly()
+    }
+  }, [activeTab, selectedFilter, selectedDepartment, searchTerm])
+
   const loadData = async () => {
     setLoading(true)
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Load users and statistics
+      const [usersResponse, statisticsResponse] = await Promise.all([
+        adminUserService.getAllUsers({
+          role: activeTab === 'employees' ? 'employee' : 
+                activeTab === 'project-managers' ? 'project-manager' : 
+                activeTab === 'clients' ? 'client' : 
+                activeTab === 'admin-hr' ? 'admin-hr' : 'all',
+          team: activeTab === 'employees' && selectedDepartment !== 'all' ? selectedDepartment : undefined,
+          status: selectedFilter !== 'all' ? selectedFilter : undefined,
+          search: searchTerm || undefined
+        }),
+        adminUserService.getUserStatistics()
+      ])
+
+      // Format users for display
+      let filteredUsers = usersResponse.data;
       
-      // Mock users data with Indian context
-      const mockUsers = [
-        // Project Managers
-        {
-          id: 1,
-          name: "Priya Sharma",
-          email: "priya.sharma@appzeto.com",
-          phone: "+91 98765 43210",
-          role: "project-manager",
-          team: null,
-          status: "active",
-          joinDate: "2023-02-01",
-          lastActive: "2024-01-22",
-          projects: 8,
-          avatar: "PS"
-        },
-        {
-          id: 2,
-          name: "Rajesh Kumar",
-          email: "rajesh.kumar@appzeto.com",
-          phone: "+91 87654 32109",
-          role: "project-manager",
-          team: null,
-          status: "active",
-          joinDate: "2023-03-15",
-          lastActive: "2024-01-22",
-          projects: 6,
-          avatar: "RK"
-        },
-        {
-          id: 3,
-          name: "Anita Singh",
-          email: "anita.singh@appzeto.com",
-          phone: "+91 76543 21098",
-          role: "project-manager",
-          team: null,
-          status: "active",
-          joinDate: "2023-04-10",
-          lastActive: "2024-01-21",
-          projects: 7,
-          avatar: "AS"
-        },
-        {
-          id: 4,
-          name: "Vikram Patel",
-          email: "vikram.patel@appzeto.com",
-          phone: "+91 65432 10987",
-          role: "project-manager",
-          team: null,
-          status: "inactive",
-          joinDate: "2023-01-20",
-          lastActive: "2024-01-15",
-          projects: 5,
-          avatar: "VP"
-        },
-
-        // Developers
-        {
-          id: 5,
-          name: "Arjun Mehta",
-          email: "arjun.mehta@appzeto.com",
-          phone: "+91 54321 09876",
-          role: "employee",
-          team: "developer",
-          department: "full-stack",
-          status: "active",
-          joinDate: "2023-05-15",
-          lastActive: "2024-01-22",
-          projects: 4,
-          avatar: "AM"
-        },
-        {
-          id: 6,
-          name: "Sneha Reddy",
-          email: "sneha.reddy@appzeto.com",
-          phone: "+91 43210 98765",
-          role: "employee",
-          team: "developer",
-          department: "nodejs",
-          status: "active",
-          joinDate: "2023-06-01",
-          lastActive: "2024-01-22",
-          projects: 3,
-          avatar: "SR"
-        },
-        {
-          id: 7,
-          name: "Kiran Joshi",
-          email: "kiran.joshi@appzeto.com",
-          phone: "+91 32109 87654",
-          role: "employee",
-          team: "developer",
-          department: "web",
-          status: "active",
-          joinDate: "2023-07-10",
-          lastActive: "2024-01-21",
-          projects: 5,
-          avatar: "KJ"
-        },
-        {
-          id: 8,
-          name: "Rohit Gupta",
-          email: "rohit.gupta@appzeto.com",
-          phone: "+91 21098 76543",
-          role: "employee",
-          team: "developer",
-          department: "app",
-          status: "active",
-          joinDate: "2023-08-15",
-          lastActive: "2024-01-22",
-          projects: 2,
-          avatar: "RG"
-        },
-        {
-          id: 9,
-          name: "Deepika Agarwal",
-          email: "deepika.agarwal@appzeto.com",
-          phone: "+91 10987 65432",
-          role: "employee",
-          team: "developer",
-          department: "full-stack",
-          status: "inactive",
-          joinDate: "2023-09-01",
-          lastActive: "2024-01-10",
-          projects: 3,
-          avatar: "DA"
-        },
-
-        // Sales Team
-        {
-          id: 10,
-          name: "Manish Verma",
-          email: "manish.verma@appzeto.com",
-          phone: "+91 98765 43211",
-          role: "employee",
-          team: "sales",
-          department: "sales",
-          status: "active",
-          joinDate: "2023-03-01",
-          lastActive: "2024-01-22",
-          projects: 0,
-          avatar: "MV"
-        },
-        {
-          id: 11,
-          name: "Pooja Nair",
-          email: "pooja.nair@appzeto.com",
-          phone: "+91 87654 32110",
-          role: "employee",
-          team: "sales",
-          department: "sales",
-          status: "active",
-          joinDate: "2023-04-15",
-          lastActive: "2024-01-22",
-          projects: 0,
-          avatar: "PN"
-        },
-        {
-          id: 12,
-          name: "Amit Shah",
-          email: "amit.shah@appzeto.com",
-          phone: "+91 76543 21099",
-          role: "employee",
-          team: "sales",
-          department: "sales",
-          status: "active",
-          joinDate: "2023-05-20",
-          lastActive: "2024-01-21",
-          projects: 0,
-          avatar: "AS"
-        },
-        {
-          id: 13,
-          name: "Kavya Iyer",
-          email: "kavya.iyer@appzeto.com",
-          phone: "+91 65432 10988",
-          role: "employee",
-          team: "sales",
-          department: "sales",
-          status: "active",
-          joinDate: "2023-06-10",
-          lastActive: "2024-01-22",
-          projects: 0,
-          avatar: "KI"
-        },
-
-        // Clients
-        {
-          id: 14,
-          name: "Ravi Chandra",
-          email: "ravi.chandra@techcorp.in",
-          phone: "+91 54321 09877",
-          role: "client",
-          team: null,
-          status: "active",
-          joinDate: "2023-01-15",
-          lastActive: "2024-01-20",
-          projects: 3,
-          avatar: "RC"
-        },
-        {
-          id: 15,
-          name: "Sunita Agarwal",
-          email: "sunita.agarwal@startupxyz.in",
-          phone: "+91 43210 98766",
-          role: "client",
-          team: null,
-          status: "active",
-          joinDate: "2023-02-01",
-          lastActive: "2024-01-22",
-          projects: 2,
-          avatar: "SA"
-        },
-        {
-          id: 16,
-          name: "Gaurav Malhotra",
-          email: "gaurav.malhotra@globalcorp.in",
-          phone: "+91 32109 87655",
-          role: "client",
-          team: null,
-          status: "active",
-          joinDate: "2023-03-10",
-          lastActive: "2024-01-21",
-          projects: 4,
-          avatar: "GM"
-        },
-        {
-          id: 17,
-          name: "Meera Desai",
-          email: "meera.desai@enterprise.in",
-          phone: "+91 21098 76544",
-          role: "client",
-          team: null,
-          status: "active",
-          joinDate: "2023-04-05",
-          lastActive: "2024-01-19",
-          projects: 1,
-          avatar: "MD"
-        },
-        {
-          id: 18,
-          name: "Suresh Rao",
-          email: "suresh.rao@techstart.in",
-          phone: "+91 10987 65433",
-          role: "client",
-          team: null,
-          status: "inactive",
-          joinDate: "2023-05-15",
-          lastActive: "2024-01-10",
-          projects: 2,
-          avatar: "SR"
-        },
-        {
-          id: 19,
-          name: "Neha Kapoor",
-          email: "neha.kapoor@innovate.in",
-          phone: "+91 98765 43212",
-          role: "client",
-          team: null,
-          status: "active",
-          joinDate: "2023-06-20",
-          lastActive: "2024-01-22",
-          projects: 3,
-          avatar: "NK"
-        },
-        {
-          id: 20,
-          name: "Vishal Jain",
-          email: "vishal.jain@digital.in",
-          phone: "+91 87654 32111",
-          role: "client",
-          team: null,
-          status: "active",
-          joinDate: "2023-07-01",
-          lastActive: "2024-01-21",
-          projects: 2,
-          avatar: "VJ"
-        }
-      ]
-
-      setUsers(mockUsers)
+      // Filter based on active tab
+      if (activeTab === 'admin-hr') {
+        // Show only admin and hr users
+        filteredUsers = usersResponse.data.filter(user => user.role === 'admin' || user.role === 'hr');
+      } else {
+        // Exclude admin and hr users for other tabs
+        filteredUsers = usersResponse.data.filter(user => user.role !== 'admin' && user.role !== 'hr');
+      }
+      
+      const formattedUsers = filteredUsers.map(user => adminUserService.formatUserForDisplay(user))
+      
+      setUsers(formattedUsers)
+      setStatistics(statisticsResponse.data)
     } catch (error) {
       console.error('Error loading data:', error)
+      addToast({ type: 'error', message: 'Failed to load user data' })
     } finally {
       setLoading(false)
     }
   }
 
+  const loadUsersOnly = async () => {
+    setUsersLoading(true)
+    try {
+      // Load only users data
+      const usersResponse = await adminUserService.getAllUsers({
+        role: activeTab === 'employees' ? 'employee' : 
+              activeTab === 'project-managers' ? 'project-manager' : 
+              activeTab === 'clients' ? 'client' : 
+              activeTab === 'admin-hr' ? 'admin-hr' : 'all',
+        team: activeTab === 'employees' && selectedDepartment !== 'all' ? selectedDepartment : undefined,
+        status: selectedFilter !== 'all' ? selectedFilter : undefined,
+        search: searchTerm || undefined
+      })
+
+      // Format users for display
+      let filteredUsers = usersResponse.data;
+      
+      // Filter based on active tab
+      if (activeTab === 'admin-hr') {
+        // Show only admin and hr users
+        filteredUsers = usersResponse.data.filter(user => user.role === 'admin' || user.role === 'hr');
+      } else {
+        // Exclude admin and hr users for other tabs
+        filteredUsers = usersResponse.data.filter(user => user.role !== 'admin' && user.role !== 'hr');
+      }
+      
+      const formattedUsers = filteredUsers.map(user => adminUserService.formatUserForDisplay(user))
+      
+      setUsers(formattedUsers)
+    } catch (error) {
+      console.error('Error loading users:', error)
+      addToast({ type: 'error', message: 'Failed to load user data' })
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
   const getRoleColor = (role) => {
     switch (role) {
+      case 'admin': return 'bg-red-100 text-red-800 border-red-200'
+      case 'hr': return 'bg-orange-100 text-orange-800 border-orange-200'
       case 'project-manager': return 'bg-purple-100 text-purple-800 border-purple-200'
       case 'employee': return 'bg-blue-100 text-blue-800 border-blue-200'
       case 'client': return 'bg-green-100 text-green-800 border-green-200'
@@ -417,6 +218,8 @@ const Admin_user_management = () => {
           return user.role === 'project-manager'
         case 'clients':
           return user.role === 'client'
+        case 'admin-hr':
+          return user.role === 'admin' || user.role === 'hr'
         default:
           return user.role === activeTab
       }
@@ -491,48 +294,28 @@ const Admin_user_management = () => {
     setShowDeleteModal(true)
   }
 
-  const handleSaveUser = () => {
-    // Validation
-    if (showCreateModal && (!formData.password || !formData.confirmPassword)) {
-      alert('Please fill in both password fields')
+  const handleSaveUser = async () => {
+    try {
+      // Validate user data
+      const validationErrors = adminUserService.validateUserData(formData, showEditModal)
+      if (validationErrors.length > 0) {
+        addToast({ type: 'error', message: validationErrors[0] })
       return
     }
     
-    if (formData.password && formData.password !== formData.confirmPassword) {
-      alert('Passwords do not match')
-      return
-    }
-    
-    if (formData.password && formData.password.length < 6) {
-      alert('Password must be at least 6 characters long')
-      return
-    }
+      let response
+      if (showCreateModal) {
+        // Create new user
+        response = await adminUserService.createUser(formData)
+        addToast({ type: 'success', message: 'User created successfully' })
+      } else {
+        // Update existing user
+        const userType = selectedUser.userType
+        response = await adminUserService.updateUser(userType, selectedUser.id, formData)
+        addToast({ type: 'success', message: 'User updated successfully' })
+      }
 
-    // Validation for department field when role is employee and team is developer
-    if (formData.role === 'employee' && formData.team === 'developer' && !formData.department) {
-      alert('Please select a department for developer employees')
-      return
-    }
-
-    // Validation for required date fields
-    if (!formData.dateOfBirth) {
-      alert('Please select date of birth')
-      return
-    }
-
-    if (!formData.joiningDate) {
-      alert('Please select joining date')
-      return
-    }
-
-    // Validation for document field
-    if (!formData.document) {
-      alert('Please upload a document')
-      return
-    }
-
-    // Simulate API call
-    console.log('Saving user:', formData)
+      // Close modals and reset form
     setShowCreateModal(false)
     setShowEditModal(false)
     setSelectedUser(null)
@@ -550,13 +333,26 @@ const Admin_user_management = () => {
       password: '',
       confirmPassword: ''
     })
+
+      // Reload data
+      await loadUsersOnly()
+    } catch (error) {
+      console.error('Error saving user:', error)
+      addToast({ type: 'error', message: error.response?.data?.message || 'Failed to save user' })
+    }
   }
 
-  const confirmDelete = () => {
-    // Simulate API call
-    console.log('Deleting user:', selectedUser)
+  const confirmDelete = async () => {
+    try {
+      await adminUserService.deleteUser(selectedUser.userType, selectedUser.id)
+      addToast({ type: 'success', message: 'User deleted successfully' })
     setShowDeleteModal(false)
     setSelectedUser(null)
+      await loadUsersOnly()
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      addToast({ type: 'error', message: error.response?.data?.message || 'Failed to delete user' })
+    }
   }
 
   const closeModals = () => {
@@ -589,13 +385,16 @@ const Admin_user_management = () => {
   }, [activeTab])
 
   const tabs = [
-    { key: 'project-managers', label: 'Project Managers', icon: Shield, count: 4 },
-    { key: 'employees', label: 'Employees', icon: Code, count: 9 },
-    { key: 'clients', label: 'Clients', icon: Home, count: 7 }
+    { key: 'project-managers', label: 'Project Managers', icon: Shield, count: statistics.projectManagers || 0 },
+    { key: 'employees', label: 'Employees', icon: Code, count: statistics.employees || 0 },
+    { key: 'clients', label: 'Clients', icon: Home, count: statistics.clients || 0 },
+    { key: 'admin-hr', label: 'Admin & HR', icon: User, count: (statistics.admins || 0) + (statistics.hr || 0) }
   ]
 
   // Combobox options
   const roleOptions = [
+    { value: 'admin', label: 'Admin', icon: User },
+    { value: 'hr', label: 'HR', icon: User },
     { value: 'project-manager', label: 'Project Manager', icon: Shield },
     { value: 'employee', label: 'Employee', icon: Code },
     { value: 'client', label: 'Client', icon: Home }
@@ -660,13 +459,14 @@ const Admin_user_management = () => {
             </div>
             <div className="flex items-center space-x-3">
               <Button
-                onClick={loadData}
+                onClick={loadUsersOnly}
                 variant="outline"
                 size="sm"
                 className="gap-2"
+                disabled={usersLoading}
               >
-                <RefreshCw className="h-4 w-4" />
-                Refresh
+                <RefreshCw className={`h-4 w-4 ${usersLoading ? 'animate-spin' : ''}`} />
+                {usersLoading ? 'Refreshing...' : 'Refresh'}
               </Button>
               <Button
                 onClick={handleCreateUser}
@@ -683,7 +483,7 @@ const Admin_user_management = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4"
+            className="grid grid-cols-2 md:grid-cols-5 gap-4"
           >
             {/* Total Users */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-blue-200/50">
@@ -694,7 +494,9 @@ const Admin_user_management = () => {
                     <Users className="h-4 w-4 text-blue-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-blue-700">+12.5%</p>
+                    <p className="text-xs font-medium text-blue-700">
+                      {statistics.total > 0 ? `+${Math.round((statistics.total / 10) * 100) / 100}%` : '0%'}
+                    </p>
                     <p className="text-xs text-blue-600">this month</p>
                   </div>
                 </div>
@@ -714,7 +516,9 @@ const Admin_user_management = () => {
                     <Shield className="h-4 w-4 text-purple-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-purple-700">+8.2%</p>
+                    <p className="text-xs font-medium text-purple-700">
+                      {statistics.projectManagers > 0 ? `+${Math.round((statistics.projectManagers / 5) * 100) / 100}%` : '0%'}
+                    </p>
                     <p className="text-xs text-purple-600">this month</p>
                   </div>
                 </div>
@@ -734,7 +538,9 @@ const Admin_user_management = () => {
                     <Code className="h-4 w-4 text-emerald-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-emerald-700">+15.3%</p>
+                    <p className="text-xs font-medium text-emerald-700">
+                      {statistics.employees > 0 ? `+${Math.round((statistics.employees / 8) * 100) / 100}%` : '0%'}
+                    </p>
                     <p className="text-xs text-emerald-600">this month</p>
                   </div>
                 </div>
@@ -754,13 +560,37 @@ const Admin_user_management = () => {
                     <Home className="h-4 w-4 text-orange-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-orange-700">+22.1%</p>
+                    <p className="text-xs font-medium text-orange-700">
+                      {statistics.clients > 0 ? `+${Math.round((statistics.clients / 6) * 100) / 100}%` : '0%'}
+                    </p>
                     <p className="text-xs text-orange-600">this month</p>
                   </div>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-orange-700 mb-1">Clients</p>
                   <p className="text-lg font-bold text-orange-800">{statistics.clients}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Admin Users */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-red-500/10">
+                    <User className="h-4 w-4 text-red-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-red-700">
+                      {statistics.admins > 0 ? `+${Math.round((statistics.admins / 2) * 100) / 100}%` : '0%'}
+                    </p>
+                    <p className="text-xs text-red-600">this month</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-red-700 mb-1">Admin Users</p>
+                  <p className="text-lg font-bold text-red-800">{statistics.admins}</p>
                 </div>
               </div>
             </div>
@@ -771,7 +601,7 @@ const Admin_user_management = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4"
+            className="grid grid-cols-2 md:grid-cols-5 gap-4"
           >
             {/* Developers */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-50 to-blue-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-indigo-200/50">
@@ -782,7 +612,9 @@ const Admin_user_management = () => {
                     <Code className="h-4 w-4 text-indigo-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-indigo-700">+18.7%</p>
+                    <p className="text-xs font-medium text-indigo-700">
+                      {statistics.developers > 0 ? `+${Math.round((statistics.developers / 7) * 100) / 100}%` : '0%'}
+                    </p>
                     <p className="text-xs text-indigo-600">this month</p>
                   </div>
                 </div>
@@ -802,7 +634,9 @@ const Admin_user_management = () => {
                     <TrendingUp className="h-4 w-4 text-rose-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-rose-700">+25.4%</p>
+                    <p className="text-xs font-medium text-rose-700">
+                      {statistics.salesTeam > 0 ? `+${Math.round((statistics.salesTeam / 4) * 100) / 100}%` : '0%'}
+                    </p>
                     <p className="text-xs text-rose-600">this month</p>
                   </div>
                 </div>
@@ -822,13 +656,37 @@ const Admin_user_management = () => {
                     <CheckCircle className="h-4 w-4 text-teal-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-teal-700">+5.2%</p>
+                    <p className="text-xs font-medium text-teal-700">
+                      {statistics.active > 0 ? `+${Math.round((statistics.active / 15) * 100) / 100}%` : '0%'}
+                    </p>
                     <p className="text-xs text-teal-600">this month</p>
                   </div>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-teal-700 mb-1">Active Users</p>
                   <p className="text-lg font-bold text-teal-800">{statistics.active}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* HR Users */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 to-yellow-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-amber-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-amber-400/20 to-yellow-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-amber-500/10">
+                    <User className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-amber-700">
+                      {statistics.hr > 0 ? `+${Math.round((statistics.hr / 2) * 100) / 100}%` : '0%'}
+                    </p>
+                    <p className="text-xs text-amber-600">this month</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-amber-700 mb-1">HR Users</p>
+                  <p className="text-lg font-bold text-amber-800">{statistics.hr}</p>
                 </div>
               </div>
             </div>
@@ -842,7 +700,9 @@ const Admin_user_management = () => {
                     <AlertCircle className="h-4 w-4 text-gray-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-gray-700">-2.1%</p>
+                    <p className="text-xs font-medium text-gray-700">
+                      {statistics.inactive > 0 ? `-${Math.round((statistics.inactive / 3) * 100) / 100}%` : '0%'}
+                    </p>
                     <p className="text-xs text-gray-600">this month</p>
                   </div>
                 </div>
@@ -853,6 +713,7 @@ const Admin_user_management = () => {
               </div>
             </div>
           </motion.div>
+
 
           {/* Main Content Card */}
           <Card className="shadow-sm border border-gray-200">
@@ -932,94 +793,107 @@ const Admin_user_management = () => {
 
               {/* Users List */}
               <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {getCurrentUsers().map((user) => (
-                    <motion.div
-                      key={user.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 group"
-                    >
-                      {/* Header */}
-                      <div className="mb-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
-                            {user.avatar}
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <button
-                              onClick={() => handleViewUser(user)}
-                              className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-all duration-200"
-                            >
-                              <Eye className="h-3 w-3" />
-                            </button>
-                            <button
-                              onClick={() => handleEditUser(user)}
-                              className="text-gray-400 hover:text-green-600 p-1 rounded hover:bg-green-50 transition-all duration-200"
-                            >
-                              <Edit3 className="h-3 w-3" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUser(user)}
-                              className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-all duration-200"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-semibold text-gray-900 leading-tight mb-1">{user.name}</h3>
-                          <p className="text-xs text-gray-600 truncate">{user.email}</p>
-                        </div>
-                      </div>
-
-                      {/* Phone */}
-                      <div className="flex items-center space-x-1 mb-2">
-                        <Phone className="h-3 w-3 text-gray-400" />
-                        <span className="text-xs text-gray-600 truncate">{user.phone}</span>
-                      </div>
-
-                      {/* Role and Team Badges */}
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getRoleColor(user.role)}`}>
-                          {user.role === 'project-manager' ? 'PM' : 
-                           user.role === 'employee' ? 'Emp' : 'Client'}
-                        </span>
-                        {user.team && (
-                          <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full ${getTeamColor(user.team)}`}>
-                            {user.team === 'developer' ? 'Dev' : 'Sales'}
-                          </span>
-                        )}
-                        {user.department && user.role === 'employee' && (
-                          <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-800">
-                            {user.department === 'full-stack' ? 'Full Stack' : 
-                             user.department === 'nodejs' ? 'Node.js' :
-                             user.department === 'web' ? 'Web' :
-                             user.department === 'app' ? 'App' : 'Sales'}
-                          </span>
-                        )}
-                        <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(user.status)}`}>
-                          {user.status === 'active' ? 'Active' : 'Inactive'}
-                        </span>
-                      </div>
-
-                      {/* Bottom Info */}
-                      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="h-3 w-3 text-gray-400" />
-                          <span className="text-xs text-gray-500">{formatDate(user.joinDate)}</span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-
-                {getCurrentUsers().length === 0 && (
-                  <div className="text-center py-12">
-                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
-                    <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
+                {usersLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center space-x-3">
+                      <RefreshCw className="h-6 w-6 animate-spin text-blue-600" />
+                      <span className="text-gray-600">Loading users...</span>
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    {getCurrentUsers().length === 0 ? (
+                      <div className="text-center py-12">
+                        <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
+                        <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                        {getCurrentUsers().map((user) => (
+                          <motion.div
+                            key={user.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 group"
+                          >
+                            {/* Header */}
+                            <div className="mb-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
+                                  {user.avatar}
+                                </div>
+                                <div className="flex items-center space-x-1">
+                                  <button
+                                    onClick={() => handleViewUser(user)}
+                                    className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-all duration-200"
+                                  >
+                                    <Eye className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleEditUser(user)}
+                                    className="text-gray-400 hover:text-green-600 p-1 rounded hover:bg-green-50 transition-all duration-200"
+                                  >
+                                    <Edit3 className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteUser(user)}
+                                    className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-all duration-200"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-semibold text-gray-900 leading-tight mb-1">{user.name}</h3>
+                                <p className="text-xs text-gray-600 truncate">{user.email}</p>
+                              </div>
+                            </div>
+
+                            {/* Phone */}
+                            <div className="flex items-center space-x-1 mb-2">
+                              <Phone className="h-3 w-3 text-gray-400" />
+                              <span className="text-xs text-gray-600 truncate">{user.phone}</span>
+                            </div>
+
+                            {/* Role and Team Badges */}
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getRoleColor(user.role)}`}>
+                                {user.role === 'admin' ? 'Admin' : 
+                                 user.role === 'hr' ? 'HR' :
+                                 user.role === 'project-manager' ? 'PM' : 
+                                 user.role === 'employee' ? 'Emp' : 'Client'}
+                              </span>
+                              {user.team && (
+                                <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full ${getTeamColor(user.team)}`}>
+                                  {user.team === 'developer' ? 'Dev' : 'Sales'}
+                                </span>
+                              )}
+                              {user.department && user.role === 'employee' && (
+                                <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-800">
+                                  {user.department === 'full-stack' ? 'Full Stack' : 
+                                   user.department === 'nodejs' ? 'Node.js' :
+                                   user.department === 'web' ? 'Web' :
+                                   user.department === 'app' ? 'App' : 'Sales'}
+                                </span>
+                              )}
+                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(user.status)}`}>
+                                {user.status === 'active' ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+
+                            {/* Bottom Info */}
+                            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                              <div className="flex items-center space-x-1">
+                                <Calendar className="h-3 w-3 text-gray-400" />
+                                <span className="text-xs text-gray-500">{formatDate(user.joiningDate || user.joinDate)}</span>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </CardContent>
@@ -1256,23 +1130,24 @@ const Admin_user_management = () => {
                   <label className="text-sm font-semibold text-gray-700 flex items-center">
                     Document <span className="text-red-500 ml-1">*</span>
                   </label>
-                  <div className="relative">
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                      onChange={(e) => setFormData({...formData, document: e.target.files[0]})}
-                      className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                    />
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                      <Upload className="h-4 w-4 text-gray-400" />
-                    </div>
-                  </div>
-                  {formData.document && (
-                    <div className="flex items-center space-x-2 p-2 bg-green-50 rounded-lg border border-green-200">
-                      <FileText className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-700 font-medium">{formData.document.name}</span>
-                    </div>
-                  )}
+                  <CloudinaryUpload
+                    onUploadSuccess={(uploadData) => {
+                      setFormData({...formData, document: uploadData});
+                    }}
+                    onUploadError={(error) => {
+                      console.error('Upload error:', error);
+                    }}
+                    onRemoveExisting={() => {
+                      setFormData({...formData, document: null});
+                    }}
+                    folder="appzeto/users/documents"
+                    maxSize={10 * 1024 * 1024} // 10MB
+                    allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    placeholder="Click to upload document or drag and drop"
+                    showPreview={true}
+                    existingDocument={formData.document}
+                  />
                   <p className="text-xs text-gray-500">Supported formats: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 10MB)</p>
                 </motion.div>
 
@@ -1293,7 +1168,8 @@ const Admin_user_management = () => {
                   />
                 </motion.div>
 
-                {/* Password Fields Grid */}
+                {/* Password Fields Grid - Only for non-client users */}
+                {formData.role !== 'client' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
@@ -1342,6 +1218,7 @@ const Admin_user_management = () => {
                     )}
                   </motion.div>
                 </div>
+                )}
 
                 {/* Form Actions */}
                 <motion.div 
@@ -1418,7 +1295,9 @@ const Admin_user_management = () => {
                     <p className="text-gray-600 mb-2">{selectedUser.email}</p>
                     <div className="flex flex-wrap gap-2">
                       <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full border ${getRoleColor(selectedUser.role)}`}>
-                        {selectedUser.role === 'project-manager' ? 'Project Manager' : 
+                        {selectedUser.role === 'admin' ? 'Admin' : 
+                         selectedUser.role === 'hr' ? 'HR' :
+                         selectedUser.role === 'project-manager' ? 'Project Manager' : 
                          selectedUser.role === 'employee' ? 'Employee' : 'Client'}
                       </span>
                       {selectedUser.team && (
@@ -1464,16 +1343,45 @@ const Admin_user_management = () => {
                       <Calendar className="h-4 w-4 text-gray-500" />
                       <div>
                         <p className="text-sm font-medium text-gray-700">Joined Date</p>
-                        <p className="text-gray-900">{formatDate(selectedUser.joinDate)}</p>
+                        <p className="text-gray-900">{formatDate(selectedUser.joiningDate || selectedUser.joinDate)}</p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
                       <Clock className="h-4 w-4 text-gray-500" />
                       <div>
                         <p className="text-sm font-medium text-gray-700">Last Active</p>
-                        <p className="text-gray-900">{formatDate(selectedUser.lastActive)}</p>
+                        <p className="text-gray-900">{selectedUser.lastLogin ? formatDate(selectedUser.lastLogin) : 'Never'}</p>
                       </div>
                     </div>
+                    {selectedUser.document && (
+                      <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                        <FileText className="h-4 w-4 text-gray-500" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-700">Document</p>
+                          <div className="flex items-center space-x-2">
+                            {selectedUser.document.secure_url && selectedUser.document.secure_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                              <img
+                                src={selectedUser.document.secure_url}
+                                alt="User Document"
+                                className="w-12 h-12 object-cover rounded-lg border border-gray-200"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                                <FileText className="h-6 w-6 text-gray-500" />
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-sm text-gray-900 font-medium">
+                                {selectedUser.document.originalName || selectedUser.document.original_filename || 'Document'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {selectedUser.document.size ? `${Math.round(selectedUser.document.size / 1024)} KB` : 'Document'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
 

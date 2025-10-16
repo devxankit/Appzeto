@@ -55,6 +55,9 @@
   - `jsonwebtoken` for JWT authentication
   - `bcryptjs` for password hashing
   - `cookie-parser` for cookie handling
+  - `multer` for file upload handling
+  - `cloudinary` for cloud-based file storage
+  - `multer-storage-cloudinary` for Cloudinary integration
 
 ### ✅ Database Models
 - [x] **Admin Model** (`models/Admin.js`)
@@ -71,9 +74,9 @@
   - Project Manager schema with validation
   - Password hashing with bcrypt (salt rounds: 12)
   - Account lockout after 5 failed attempts (2-hour lock)
-  - Role-based access (PM - simplified single role)
+  - Role-based access (project-manager - standardized role)
   - JWT token support
-  - PM-specific fields (department, employeeId, skills, experience)
+  - PM-specific fields (department, employeeId, skills, experience, dateOfBirth, joiningDate, document)
   - Virtual fields and methods
   - Password comparison method
   - Login attempt tracking
@@ -230,7 +233,8 @@
 ### ✅ PM User Creation
 - [x] **PM Creation Script** (`scripts/creating_pm.js`)
   - Command-line script for creating PM users
-  - Simplified to create single PM user with "PM" role
+  - Creates PM user with standardized "project-manager" role
+  - Includes all required fields (dateOfBirth, joiningDate, document support)
   - Password hashing and validation
   - Duplicate user checking
   - Professional console output
@@ -259,6 +263,101 @@
   - Duplicate user checking
   - Professional console output
 
+### ✅ Comprehensive User Update System
+- [x] **User Update Script** (`scripts/update_existing_users.js`)
+  - Comprehensive script to update all existing users to new model structure
+  - Updates Admin users with phone, dateOfBirth, joiningDate, document fields
+  - Updates PM users with standardized "project-manager" role and new fields
+  - Updates Sales users with "employee" role and team/department structure
+  - Updates Employee users with team/department assignments
+  - Updates Client users with dateOfBirth, joiningDate, document fields
+  - Validates user data and provides detailed statistics
+  - Handles missing fields with sensible defaults
+  - Professional console output with progress tracking
+
+### ✅ Admin/HR User Management Tab
+- [x] **New Admin/HR Tab**
+  - Added dedicated "Admin & HR" tab in user management interface
+  - Combined count display for Admin and HR users
+  - Special role filtering for admin-hr users
+  - Visual distinction with unique colors (Red for Admin, Orange for HR)
+
+- [x] **Enhanced Statistics**
+  - Added Admin and HR user counts to statistics
+  - Separate statistics cards for Admin and HR users
+  - Real-time count updates in tab badges
+  - Comprehensive user statistics across all roles
+
+- [x] **Backend API Enhancement**
+  - Special handling for 'admin-hr' role filtering
+  - Separate database queries for admin and hr user counts
+  - Enhanced statistics calculation with admin/hr breakdown
+  - Optimized role-based filtering logic
+
+- [x] **Frontend Integration**
+  - Updated role options to include Admin and HR
+  - Enhanced role color coding system
+  - Improved user card display for Admin/HR users
+  - Smart filtering logic for tab-based user display
+
+### ✅ Statistics Cards Layout Optimized
+- [x] **5-Card Per Row Layout**
+  - Rearranged statistics cards into two rows of 5 cards each
+  - First row: Total Users, Project Managers, Employees, Clients, Admin Users
+  - Second row: Developers, Sales Team, Active Users, HR Users, Inactive Users
+  - More compact and visually appealing layout
+  - Better space utilization on larger screens
+
+- [x] **Card Position Optimization**
+  - Moved Admin Users card to first row for better organization
+  - Swapped HR Users and Inactive Users positions in second row
+  - HR Users now appears before Inactive Users for logical grouping
+  - Improved visual hierarchy and user experience
+
+### ✅ Tab Switching Optimization
+- [x] **Optimized Tab Switching Performance**
+  - Implemented separate loading states for user list vs. full page
+  - Added `usersLoading` state to manage user list loading independently
+  - Created `loadUsersOnly()` function for efficient user data fetching
+  - Prevents full page reload when switching between tabs
+  - Maintains statistics and other page elements during tab changes
+
+- [x] **Enhanced User Experience**
+  - Localized loading indicator for user list section only
+  - Refresh button shows spinning animation during user data loading
+  - Statistics cards remain visible and interactive during tab switches
+  - Smooth transitions between different user role tabs
+  - Improved performance with targeted data fetching
+
+- [x] **Smart Data Management**
+  - Tab changes trigger only user data refresh, not full page reload
+  - Statistics data loaded once and maintained across tab switches
+  - Efficient filtering and search functionality preserved
+  - Optimized API calls to reduce unnecessary data fetching
+  - Better memory management and reduced server load
+
+### ✅ Syntax Error Resolution & Code Quality
+- [x] **Critical Syntax Error Fixes**
+  - Fixed missing closing parenthesis error in Admin_user_management.jsx
+  - Resolved unexpected token error with proper JSX structure
+  - Corrected malformed conditional rendering logic
+  - Implemented proper ternary operator structure for better readability
+  - Added React Fragment wrapper for cleaner component structure
+
+- [x] **Code Structure Improvements**
+  - Restructured conditional rendering from separate conditions to ternary operator
+  - Improved JSX bracket placement and syntax compliance
+  - Enhanced code readability and maintainability
+  - Fixed React best practices compliance issues
+  - Optimized component rendering logic
+
+- [x] **Build Verification & Testing**
+  - Verified frontend builds successfully without compilation errors
+  - Confirmed no linter errors remain in the codebase
+  - Tested component functionality after syntax fixes
+  - Validated proper handling of empty states and user data
+  - Ensured all React patterns follow modern best practices
+
 ### ✅ Created Users
 - [x] **Admin User**
   - Email: `appzeto@gmail.com`
@@ -273,7 +372,7 @@
 - [x] **PM User**
   - Email: `pm@appzeto.com`
   - Password: `PM@123`
-  - Role: `PM`
+  - Role: `project-manager`
 
 - [x] **Sales User**
   - Email: `sales@appzeto.com`
@@ -435,10 +534,11 @@
 ## 🔄 Phase 7: Recent Updates & Improvements
 
 ### ✅ PM System Enhancements
-- [x] **PM Role Simplification**
-  - Updated PM model to use single "PM" role instead of multiple roles
-  - Simplified PM creation script for single role structure
-  - Removed Senior PM functionality for cleaner architecture
+- [x] **PM Role Standardization**
+  - Updated PM model to use standardized "project-manager" role
+  - Updated PM creation script to use consistent role format
+  - Updated existing PM users in database to new role format
+  - Ensured role consistency across all PM-related functionality
 
 - [x] **PM Profile Enhancement**
   - Added logout button to PM profile page
@@ -451,9 +551,9 @@
   - Enhanced security for PM dashboard and all PM pages
   - Consistent protection pattern across admin and PM systems
 
-- [x] **Database Cleanup**
-  - Removed old PM users with outdated role structure
-  - Created new PM user with simplified role system
+- [x] **Database Consistency**
+  - Updated existing PM users to use standardized "project-manager" role
+  - Ensured role consistency across all PM-related functionality
   - Clean database state for production readiness
 
 ### ✅ Sales System Implementation
@@ -543,6 +643,87 @@
   - Cleaned up unused state variables and handlers
   - Optimized login page performance
 
+### ✅ PM Role Consistency Implementation
+- [x] **PM Role Standardization**
+  - Updated PM model to use standardized "project-manager" role instead of "PM"
+  - Updated PM controller demo creation to use consistent role format
+  - Updated PM creation script to use standardized role
+  - Updated existing PM users in database to new role format
+  - Ensured role consistency across all PM-related functionality
+
+- [x] **Database Migration**
+  - Created migration script to update existing PM users
+  - Updated PM user from old "PM" role to new "project-manager" role
+  - Added missing required fields (dateOfBirth, joiningDate) to existing PM user
+  - Verified PM login functionality works with new role format
+
+- [x] **Code Consistency Verification**
+  - Verified admin user management system uses correct role format
+  - Confirmed frontend displays "PM" in UI while backend uses "project-manager"
+  - Ensured all PM-related API endpoints work with new role
+  - Validated PM authentication and authorization systems
+
+### ✅ Admin User Management System Implementation
+- [x] **Comprehensive User Models Update**
+  - Updated Admin model with phone, dateOfBirth, joiningDate, document fields
+  - Updated PM model with comprehensive fields and role standardization
+  - Updated Sales model with team/department structure and employee role
+  - Updated Employee model with team/department enum validation
+  - Updated Client model with dateOfBirth, joiningDate, document fields
+  - All models now support file upload for documents
+  - Consistent field structure across all user types
+
+- [x] **Admin User Management Controller**
+  - Complete CRUD operations for all user types
+  - Advanced filtering and search functionality
+  - Pagination support for large datasets
+  - File upload handling with multer
+  - User statistics calculation
+  - Role-based user creation logic
+  - Client users without password requirement
+  - Department validation for developer employees
+  - Document management with file cleanup
+
+- [x] **Admin User Management Routes**
+  - RESTful API endpoints for user management
+  - File upload support with multer configuration
+  - Authentication and authorization middleware
+  - File type validation (PDF, DOC, DOCX, JPG, JPEG, PNG)
+  - File size limits (10MB maximum)
+  - Error handling for file uploads
+
+- [x] **Frontend Admin User Management Service**
+  - Complete API integration service
+  - FormData handling for file uploads
+  - User data validation and formatting
+  - Error handling and user feedback
+  - Helper methods for dropdown options
+  - Avatar generation from user names
+  - Client-specific form handling (no password fields)
+
+- [x] **Admin User Management Interface**
+  - Real-time user statistics dashboard
+  - Advanced filtering by role, team, department, status
+  - Search functionality across all user fields
+  - Professional user cards with action buttons
+  - Modal-based user creation and editing
+  - File upload support in forms
+  - Client users without password fields
+  - Toast notifications for all operations
+  - Responsive design with animations
+
+- [x] **User Management Features**
+  - Create users with role-based validation
+  - Update user information and documents
+  - Delete users with confirmation
+  - View detailed user information
+  - Filter users by multiple criteria
+  - Search users by name, email, phone
+  - Pagination for large user lists
+  - Real-time statistics updates
+  - File upload and management
+  - Professional UI with smooth animations
+
 ---
 
 ## 🔧 Technical Specifications
@@ -560,6 +741,9 @@
   "bcryptjs": "^2.x.x",
   "cookie-parser": "^1.x.x",
   "axios": "^1.x.x",
+  "multer": "^1.4.5-lts.1",
+  "cloudinary": "^2.x.x",
+  "multer-storage-cloudinary": "^5.x.x",
   "nodemon": "^3.1.10"
 }
 ```
@@ -570,6 +754,12 @@ POST /api/admin/login          - Admin login
 GET  /api/admin/profile        - Get admin profile (protected)
 POST /api/admin/logout         - Admin logout (protected)
 POST /api/admin/create-demo    - Create demo admin (development)
+GET  /api/admin/users/statistics - Get user statistics (protected)
+GET  /api/admin/users          - Get all users with filtering (protected)
+GET  /api/admin/users/:userType/:id - Get single user (protected)
+POST /api/admin/users          - Create new user (protected)
+PUT  /api/admin/users/:userType/:id - Update user (protected)
+DELETE /api/admin/users/:userType/:id - Delete user (protected)
 POST /api/pm/login             - PM login
 GET  /api/pm/profile           - Get PM profile (protected)
 POST /api/pm/logout            - PM logout (protected)
@@ -608,6 +798,17 @@ SMS_INDIA_ENABLED=false
 SMS_INDIA_API_KEY=your_sms_india_api_key_here
 SMS_INDIA_SENDER_ID=APPZET
 SMS_INDIA_BASE_URL=https://api.sms-india.in/api/v3
+
+# Cloudinary Configuration
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+
+# Frontend Cloudinary Configuration
+VITE_CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+VITE_CLOUDINARY_API_KEY=your_cloudinary_api_key
+VITE_CLOUDINARY_UPLOAD_PRESET=your_cloudinary_upload_preset
+VITE_CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 ```
 
 ---
@@ -618,14 +819,14 @@ SMS_INDIA_BASE_URL=https://api.sms-india.in/api/v3
 - [x] Backend server setup and configuration
 - [x] MongoDB database connection
 - [x] Admin authentication system
-- [x] PM authentication system (simplified role structure)
+- [x] PM authentication system (standardized project-manager role)
 - [x] Sales authentication system
 - [x] Employee authentication system
 - [x] Client authentication system (OTP-based)
 - [x] JWT token management
 - [x] Role-based access control
 - [x] Admin user creation
-- [x] PM user creation (single role)
+- [x] PM user creation (standardized project-manager role)
 - [x] Sales user creation
 - [x] Employee user creation
 - [x] Client user creation
@@ -636,14 +837,150 @@ SMS_INDIA_BASE_URL=https://api.sms-india.in/api/v3
 - [x] SMS service integration (SMS India)
 - [x] Professional UI/UX
 - [x] Production-ready login interfaces (demo sections removed)
+- [x] **Admin User Management System**
+  - [x] Comprehensive user models with all required fields
+  - [x] Admin user management controller with CRUD operations
+  - [x] Admin user management routes with file upload support
+  - [x] Frontend admin user management service
+  - [x] Real-time user statistics and filtering
+  - [x] File upload support for user documents
+  - [x] Role-based user creation (Admin, HR, project-manager, Employee, Client)
+  - [x] Client users without password requirement (OTP-based)
+  - [x] Department and team management for employees
+  - [x] User status management (active/inactive)
+  - [x] Search and filter functionality
+  - [x] Pagination support
+  - [x] Professional user management interface
+  - [x] PM role consistency across all systems
+  - [x] **Cloudinary File Management System**
+    - [x] Universal Cloudinary integration for both frontend and backend
+    - [x] Professional document upload component with drag-and-drop
+    - [x] Secure file upload with validation and preview
+    - [x] Automatic file cleanup and management
+    - [x] Support for multiple file types (images, documents)
+    - [x] Organized folder structure in Cloudinary
+    - [x] Admin user management document uploads via Cloudinary
+    - [x] React 19 compatibility and import error fixes
+    - [x] Toast notification integration and error handling
+  - [x] **Database Migration & User Update System**
+    - [x] Comprehensive user update script for model structure changes
+    - [x] Automatic field addition for all user types
+    - [x] Role standardization (PM to project-manager)
+    - [x] Data validation and statistics reporting
+    - [x] Safe migration with sensible defaults
+  - [x] **Admin/HR User Management Tab**
+    - [x] Dedicated Admin & HR tab with combined user display
+    - [x] Enhanced statistics with separate Admin and HR counts
+    - [x] Special role filtering and backend API enhancements
+    - [x] Improved frontend integration with role color coding
+  - [x] **Statistics Cards Layout Optimization**
+    - [x] 5-card per row layout (2 rows of 5 cards each)
+    - [x] Optimized card positioning and visual hierarchy
+    - [x] Better space utilization and compact design
+  - [x] **Tab Switching Performance Optimization**
+    - [x] Separate loading states for user list vs. full page
+    - [x] Efficient data fetching with `loadUsersOnly()` function
+    - [x] Prevents full page reload during tab switches
+    - [x] Enhanced user experience with localized loading indicators
+  - [x] **Syntax Error Resolution & Code Quality**
+    - [x] Fixed critical JSX syntax errors and malformed structures
+    - [x] Improved conditional rendering with ternary operators
+    - [x] Enhanced code readability and React best practices compliance
+    - [x] Verified build success and linter error resolution
+
+### ✅ Cloudinary Integration & File Management
+- [x] **Backend Cloudinary Setup**
+  - Installed Cloudinary SDK and multer-storage-cloudinary
+  - Created Cloudinary configuration with connection testing
+  - Implemented universal Cloudinary service for file operations
+  - Added file upload, delete, and management functions
+  - Integrated with admin user management system
+
+- [x] **Frontend Cloudinary Integration**
+  - Installed Cloudinary core package for React compatibility
+  - Created universal Cloudinary service for frontend operations
+  - Built reusable CloudinaryUpload component with drag-and-drop
+  - Integrated with admin user management document uploads
+  - Added file validation and preview functionality
+  - Fixed import errors and React 19 compatibility issues
+  - Resolved toast notification integration problems
+
+- [x] **Admin User Management Cloudinary Integration**
+  - Updated admin user creation to use Cloudinary for document uploads
+  - Modified admin user update to handle Cloudinary document management
+  - Implemented automatic cleanup of old documents when updating
+  - Added proper error handling for upload failures
+  - Enhanced user interface with professional upload component
+
+- [x] **Universal File Management System**
+  - Created reusable Cloudinary services for both frontend and backend
+  - Implemented secure file upload with validation
+  - Added support for multiple file types (images, documents)
+  - Built file preview and management capabilities
+  - Established organized folder structure in Cloudinary
+  - Resolved all import and compatibility issues
+  - Streamlined service architecture for better maintainability
+
+### ✅ Database Migration & User Update System
+- [x] **Comprehensive User Update Script**
+  - Created `update_existing_users.js` script for database migration
+  - Updates all existing users to match new model structure
+  - Handles missing required fields with sensible defaults
+  - Validates data integrity and provides detailed reporting
+  - Safe migration process with rollback capabilities
+
+- [x] **User Model Structure Updates**
+  - Added phone, dateOfBirth, joiningDate, document fields to all users
+  - Standardized PM role from 'PM' to 'project-manager'
+  - Updated Sales role to 'employee' with team/department structure
+  - Added team/department assignments for Employee users
+  - Ensured all users comply with updated model requirements
+
+- [x] **Data Validation & Statistics**
+  - Comprehensive validation of user data integrity
+  - Detailed statistics reporting for all user types
+  - Missing field detection and automatic correction
+  - Professional console output with progress tracking
+  - Database connection management and error handling
+
+### ✅ Critical Bug Fixes & System Stability
+- [x] **Multer Dependency Installation**
+  - Installed missing `multer` package for file upload functionality
+  - Fixed backend server crash due to missing dependency
+  - Enabled proper file upload support for admin user management
+  - Server now starts successfully without errors
+
+- [x] **Frontend Import Error Resolution**
+  - Fixed `adminUserService.js` import error with `baseApiService`
+  - Updated import statement from `{ baseApiService }` to `{ apiRequest }`
+  - Corrected all API call methods to use proper `apiRequest` function
+  - Resolved "Cannot find module" error in frontend
+
+- [x] **PM Login Functionality Restoration**
+  - Fixed PM login connection refused error
+  - Backend server now running successfully on port 5000
+  - Frontend can now connect to backend API endpoints
+  - PM login works correctly with standardized `project-manager` role
+
+- [x] **System Integration Verification**
+  - Verified backend and frontend servers running simultaneously
+  - Confirmed API endpoints are accessible and responding
+  - Tested PM login functionality with updated role system
+  - All authentication systems now fully operational
+
+- [x] **Cloudinary Integration Bug Fixes**
+  - Fixed frontend Cloudinary service import error with cloudinary-core
+  - Resolved CloudinaryUpload component toast import issues
+  - Updated component to use proper useToast hook instead of direct toast import
+  - Corrected all toast notifications to use addToast function
+  - Fixed URL generation functions to work without external SDK dependencies
+  - Streamlined Cloudinary service for better React 19 compatibility
 
 ### 🔄 Next Steps (Future Development)
-- [ ] User management system
 - [ ] Project management APIs
 - [ ] Finance management APIs
 - [ ] HR management APIs
 - [ ] Sales management APIs
-- [ ] File upload system
 - [ ] Email notification system
 - [ ] API documentation
 - [ ] Unit testing
@@ -678,5 +1015,5 @@ SMS_INDIA_BASE_URL=https://api.sms-india.in/api/v3
 ---
 
 **Last Updated**: December 2024  
-**Version**: 1.6.0  
-**Status**: Production Ready for Admin, PM, Sales, Employee & Client Authentication with SMS Integration and Clean Login Interfaces
+**Version**: 1.11.0  
+**Status**: Production Ready for Admin, PM, Sales, Employee & Client Authentication with SMS Integration, Clean Login Interfaces, Complete Admin User Management System, Standardized PM Role Consistency, Critical Bug Fixes Applied, Universal Cloudinary File Management System, React 19 Compatibility Fixes, Comprehensive Database Migration System, Optimized Tab Switching Performance, Statistics Cards Layout Optimization, and Syntax Error Resolution

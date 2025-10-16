@@ -22,26 +22,36 @@ const pmSchema = new mongoose.Schema({
     minlength: [6, 'Password must be at least 6 characters'],
     select: false // Don't include password in queries by default
   },
-  role: {
-    type: String,
-    enum: ['PM'],
-    default: 'PM'
-  },
-  department: {
-    type: String,
-    required: [true, 'Department is required'],
-    trim: true
-  },
-  employeeId: {
-    type: String,
-    required: [true, 'Employee ID is required'],
-    unique: true,
-    trim: true
-  },
   phone: {
     type: String,
+    required: [true, 'Phone number is required'],
     trim: true,
     match: [/^[\+]?[1-9][\d]{0,15}$/, 'Please enter a valid phone number']
+  },
+  role: {
+    type: String,
+    enum: ['project-manager'],
+    default: 'project-manager'
+  },
+  dateOfBirth: {
+    type: Date,
+    required: [true, 'Date of birth is required']
+  },
+  joiningDate: {
+    type: Date,
+    required: [true, 'Joining date is required']
+  },
+  document: {
+    public_id: String,
+    secure_url: String,
+    originalName: String,
+    original_filename: String,
+    format: String,
+    size: Number,
+    bytes: Number,
+    width: Number,
+    height: Number,
+    resource_type: String
   },
   isActive: {
     type: Boolean,

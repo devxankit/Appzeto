@@ -196,10 +196,12 @@ const createDemoPM = async (req, res) => {
       name: 'Demo Project Manager',
       email: 'pm@demo.com',
       password: 'password123',
-      role: 'PM',
+      role: 'project-manager',
       department: 'Development',
       employeeId: 'PM001',
       phone: '+1234567890',
+      dateOfBirth: new Date('1990-01-01'),
+      joiningDate: new Date(),
       skills: ['Project Management', 'Agile', 'Scrum'],
       experience: 3
     });

@@ -27,6 +27,26 @@ const clientSchema = new mongoose.Schema({
     enum: ['client'],
     default: 'client'
   },
+  dateOfBirth: {
+    type: Date,
+    required: [true, 'Date of birth is required']
+  },
+  joiningDate: {
+    type: Date,
+    required: [true, 'Joining date is required']
+  },
+  document: {
+    public_id: String,
+    secure_url: String,
+    originalName: String,
+    original_filename: String,
+    format: String,
+    size: Number,
+    bytes: Number,
+    width: Number,
+    height: Number,
+    resource_type: String
+  },
   isActive: {
     type: Boolean,
     default: true

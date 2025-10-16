@@ -48,10 +48,12 @@ const createPMUser = async () => {
       name: 'Appzeto PM',
       email: 'pm@appzeto.com',
       password: 'PM@123',
-      role: 'PM',
+      role: 'project-manager',
       department: 'Development',
       employeeId: 'PM001',
       phone: '+1234567890',
+      dateOfBirth: new Date('1985-01-01'),
+      joiningDate: new Date(),
       skills: ['Project Management', 'Agile', 'Scrum', 'Team Leadership'],
       experience: 5,
       isActive: true
@@ -74,7 +76,7 @@ const createPMUser = async () => {
     console.log('\nLogin credentials:');
     console.log('Email: pm@appzeto.com');
     console.log('Password: PM@123');
-    console.log('Role: PM');
+    console.log('Role: project-manager');
     
   } catch (error) {
     console.error('Error creating PM user:', error.message);
