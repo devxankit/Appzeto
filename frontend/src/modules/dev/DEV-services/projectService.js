@@ -206,5 +206,15 @@ export const projectService = {
       console.error('Project service error:', error);
       throw error;
     }
+  },
+
+  // Get project team members
+  getProjectTeamMembers: async (projectId) => {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/team`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
   }
 };

@@ -10,7 +10,8 @@ const {
   getProjectStatistics,
   uploadProjectAttachment,
   removeProjectAttachment,
-  updateProjectRevisionStatus
+  updateProjectRevisionStatus,
+  getProjectTeamMembers
 } = require('../controllers/projectController');
 const { protect, authorize } = require('../middlewares/auth');
 const upload = require('../middlewares/upload');
@@ -37,5 +38,8 @@ router.delete('/:id/attachments/:attachmentId', removeProjectAttachment);
 
 // Project revision routes
 router.patch('/:id/revisions/:revisionType', updateProjectRevisionStatus);
+
+// Project team routes
+router.get('/:id/team', getProjectTeamMembers);
 
 module.exports = router;

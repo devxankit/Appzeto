@@ -176,6 +176,15 @@ projectSchema.methods.removeTeamMember = function(employeeId) {
   return this.save();
 };
 
+// Method to add milestone
+projectSchema.methods.addMilestone = function(milestoneId) {
+  if (!this.milestones.includes(milestoneId)) {
+    this.milestones.push(milestoneId);
+    return this.save();
+  }
+  return Promise.resolve(this);
+};
+
 // Method to add attachment
 projectSchema.methods.addAttachment = function(attachmentData) {
   this.attachments.push(attachmentData);
@@ -254,11 +263,22 @@ projectSchema.pre('save', function(next) {
 
 // Pre-save middleware to update progress if milestones are modified
 projectSchema.pre('save', async function(next) {
-  if (this.isModified('milestones')) {
+  if (this.isModified('milestones') && !this.isNew) {
     try {
-      await this.updateProgress();
+      // Calculate progress based on milestones without calling save again
+      const milestones = await this.constructor.model('Milestone').find({ 
+        project: this._id 
+      });
+      
+      if (milestones.length === 0) {
+        this.progress = 0;
+      } else {
+        const totalProgress = milestones.reduce((sum, milestone) => sum + milestone.progress, 0);
+        this.progress = Math.round(totalProgress / milestones.length);
+      }
     } catch (error) {
-      return next(error);
+      console.error('Error calculating project progress:', error.message);
+      // Don't fail the save operation
     }
   }
   next();

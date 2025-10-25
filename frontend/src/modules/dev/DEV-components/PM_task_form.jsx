@@ -7,10 +7,11 @@ import { Input } from '../../../components/ui/input'
 import { Textarea } from '../../../components/ui/textarea'
 import { Combobox } from '../../../components/ui/combobox'
 import { DatePicker } from '../../../components/ui/date-picker'
-import CloudinaryUpload from '../../../components/ui/cloudinary-upload'
-import { teamService, projectService, milestoneService } from '../DEV-services'
+import { teamService, projectService, milestoneService, taskService } from '../DEV-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => {
+  const { toast } = useToast()
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -32,16 +33,29 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
   const [projects, setProjects] = useState([])
   const [milestones, setMilestones] = useState([])
 
-  // Mock loaders
+  // Load data when form opens
   useEffect(() => {
     if (isOpen) {
-      loadProjects()
       if (projectId) {
-        loadTeamMembers(projectId)
+        // Load the specific project data
+        loadSingleProject(projectId)
+        // Pre-select the project
+        setFormData(prev => ({ ...prev, project: projectId }))
+        // Load milestones for the project
         loadMilestones(projectId)
+        
+        // If milestoneId is provided, pre-select it and load its team members
+        if (milestoneId) {
+          setFormData(prev => ({ ...prev, milestone: milestoneId }))
+          loadTeamMembers(projectId, milestoneId)
+        }
+        // DO NOT load team members here - wait for milestone selection
+      } else {
+        // Load all projects if no specific project is provided (PM tasks page)
+        loadProjects()
       }
     }
-  }, [isOpen, projectId])
+  }, [isOpen, projectId, milestoneId])
 
   useEffect(() => {
     if (formData.project) {
@@ -50,15 +64,53 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
     }
   }, [formData.project])
 
+  useEffect(() => {
+    if (formData.milestone) {
+      loadTeamMembers(formData.project, formData.milestone)
+      setFormData(prev => ({ ...prev, assignedTo: '' }))
+    } else {
+      // Clear team members when milestone is cleared
+      setTeamMembers([])
+      setFormData(prev => ({ ...prev, assignedTo: '' }))
+    }
+  }, [formData.milestone])
+
   const loadProjects = async () => {
     try {
       setIsLoadingProjects(true)
-      // Get PM ID from token or user data
-      const pmId = localStorage.getItem('pmId') || 'current-pm'
-      const response = await projectService.getProjectsByPM(pmId, { limit: 100 })
-      setProjects(response.data)
+      // Try to get PM ID from token or user data
+      const pmId = localStorage.getItem('pmId') || localStorage.getItem('pmToken') || 'current-pm'
+      
+      // If we have a real PM ID, try to load projects
+      if (pmId && pmId !== 'current-pm') {
+        const response = await projectService.getProjectsByPM(pmId, { limit: 100 })
+        // Handle both response.data and response directly
+        const projectsData = response?.data || response || []
+        setProjects(Array.isArray(projectsData) ? projectsData : [])
+      } else {
+        // If no PM ID, just set empty array
+        setProjects([])
+      }
     } catch (error) {
       console.error('Error loading projects:', error)
+      setProjects([])
+    } finally {
+      setIsLoadingProjects(false)
+    }
+  }
+
+  const loadSingleProject = async (pid) => {
+    if (!pid) return
+    try {
+      setIsLoadingProjects(true)
+      const response = await projectService.getProjectById(pid)
+      
+      // Handle both response.data and response directly
+      const projectData = response?.data || response
+      // Set as array with single project
+      setProjects(projectData ? [projectData] : [])
+    } catch (error) {
+      console.error('Error loading single project:', error)
       setProjects([])
     } finally {
       setIsLoadingProjects(false)
@@ -70,7 +122,9 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
     try {
       setIsLoadingMilestones(true)
       const response = await milestoneService.getMilestonesByProject(pid)
-      setMilestones(response.data)
+      // Handle both response.data and response directly
+      const milestonesData = response?.data || response || []
+      setMilestones(Array.isArray(milestonesData) ? milestonesData : [])
     } catch (error) {
       console.error('Error loading milestones:', error)
       setMilestones([])
@@ -79,12 +133,15 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
     }
   }
 
-  const loadTeamMembers = async (pid) => {
+  const loadTeamMembers = async (pid, mid = null) => {
     if (!pid) { setTeamMembers([]); return }
     try {
       setIsLoadingTeamMembers(true)
-      const response = await teamService.getEmployeesForTask(pid)
-      setTeamMembers(response.data)
+      const response = await teamService.getEmployeesForTask(pid, mid)
+      
+      // Handle both response.data and response directly
+      const teamData = response?.data || response || []
+      setTeamMembers(Array.isArray(teamData) ? teamData : [])
     } catch (error) {
       console.error('Error loading team members:', error)
       setTeamMembers([])
@@ -98,7 +155,9 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
     if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }))
     if (field === 'project' && value) {
       loadMilestones(value)
-      loadTeamMembers(value)
+      // Clear milestone and team when project changes
+      setFormData(prev => ({ ...prev, milestone: '', assignedTo: '' }))
+      setTeamMembers([])
     }
   }
 
@@ -155,7 +214,9 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
     e.preventDefault()
     if (!validateForm()) return
     setIsSubmitting(true)
+    
     try {
+      // Prepare task data
       const taskData = {
         title: formData.title.trim(),
         description: formData.description.trim(),
@@ -166,11 +227,46 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
         milestone: formData.milestone,
         project: formData.project
       }
-      await new Promise(r => setTimeout(r, 700))
-      onSubmit && onSubmit(taskData)
+
+      // Create task
+      const createdTask = await taskService.createTask(taskData)
+      
+      // Upload attachments if any
+      if (formData.attachments && formData.attachments.length > 0) {
+        toast.info(`Uploading ${formData.attachments.length} attachment(s)...`)
+        
+        for (const attachment of formData.attachments) {
+          try {
+            // Check if attachment has a file property, otherwise use the attachment directly
+            const file = attachment.file || attachment
+            
+            // Upload to backend
+            await taskService.uploadTaskAttachment(createdTask._id, file)
+            
+            toast.success(`Attachment ${attachment.name} uploaded successfully`)
+          } catch (error) {
+            console.error('Attachment upload error:', error)
+            toast.error(`Failed to upload ${attachment.name}`)
+          }
+        }
+      }
+
+      // Success feedback
+      toast.success('Task created successfully!')
+      
+      // Call parent callback with created task
+      onSubmit && onSubmit(createdTask)
+      
+      // Close form
       handleClose()
-    } catch (err) {
-      console.error('Error creating task:', err)
+      
+    } catch (error) {
+      console.error('Error creating task:', error)
+      
+      // Show specific error message
+      const errorMessage = error.message || 'Failed to create task. Please try again.'
+      toast.error(errorMessage)
+      
     } finally {
       setIsSubmitting(false)
     }
@@ -198,6 +294,11 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
   const projectOptions = (projects || []).map(p => ({ value: p._id, label: p.name }))
   const milestoneOptions = (milestones || []).map(m => ({ value: m._id, label: m.title }))
   const teamMemberOptions = (teamMembers || []).map(m => ({ value: m._id, label: m.position ? `${m.name} - ${m.position}` : m.name }))
+  
+  // Get selected project and milestone names for display
+  const selectedProject = (projects || []).find(p => p._id === formData.project)
+  const selectedMilestone = (milestones || []).find(m => m._id === formData.milestone)
+  
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -207,6 +308,18 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
           <DialogHeader className="space-y-2">
             <DialogTitle className="text-2xl font-bold">Create New Task</DialogTitle>
             <DialogDescription className="text-primary-foreground/80">Fill in the task details below. Fields marked with * are required.</DialogDescription>
+            {selectedProject && (
+              <div className="mt-3 p-3 bg-white/10 rounded-lg">
+                <div className="text-sm text-primary-foreground/90">
+                  <span className="font-medium">Project:</span> {selectedProject.name}
+                </div>
+                {selectedMilestone && (
+                  <div className="text-sm text-primary-foreground/90 mt-1">
+                    <span className="font-medium">Milestone:</span> {selectedMilestone.title}
+                  </div>
+                )}
+              </div>
+            )}
           </DialogHeader>
         </div>
 
@@ -250,7 +363,7 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
                 <div className="flex items-center space-x-3 text-gray-500 bg-gray-50 p-4 rounded-lg"><Loader2 className="h-5 w-5 animate-spin" /><span>Loading projects...</span></div>
               ) : (
                 <>
-                  <Combobox options={projectOptions} value={formData.project} onChange={(v) => handleInputChange('project', v)} placeholder="Select project" />
+                  <Combobox options={projectOptions} value={formData.project} onChange={(v) => handleInputChange('project', v)} placeholder="Select project" disabled={!!projectId} />
                   {projectOptions.length === 0 && (<p className="text-sm text-gray-500">No projects available</p>)}
                 </>
               )}
@@ -316,7 +429,12 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
             ) : (
               <>
                 <Combobox options={teamMemberOptions} value={formData.assignedTo} onChange={(v) => handleInputChange('assignedTo', v)} placeholder="Select team member" />
-                {teamMemberOptions.length === 0 && formData.project && (<p className="text-sm text-gray-500">No team member available for this project</p>)}
+                {!formData.milestone && teamMembers.length === 0 && (
+                  <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                    Please select a milestone first to see available team members
+                  </p>
+                )}
+                {teamMemberOptions.length === 0 && formData.project && formData.milestone && (<p className="text-sm text-gray-500">No team member available for this milestone</p>)}
               </>
             )}
           </motion.div>
@@ -324,32 +442,21 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
           {/* Attachments */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} className="space-y-2">
             <label className="text-sm font-semibold text-gray-700">Attachments</label>
-            <CloudinaryUpload
-              onUploadSuccess={(uploadData) => {
-                const newAttachments = Array.isArray(uploadData) ? uploadData : [uploadData];
-                setFormData(prev => ({ 
-                  ...prev, 
-                  attachments: [...prev.attachments, ...newAttachments.map(data => ({
-                    id: data.public_id,
-                    name: data.original_filename,
-                    size: data.bytes,
-                    type: data.format,
-                    url: data.secure_url,
-                    public_id: data.public_id
-                  }))]
-                }));
-              }}
-              onUploadError={(error) => {
-                console.error('Upload error:', error);
-              }}
-              folder="appzeto/tasks/attachments"
-              maxSize={10 * 1024 * 1024} // 10MB
-              allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'video/mp4', 'video/avi', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'text/plain', 'application/zip', 'application/x-rar-compressed']}
-              accept=".jpg,.jpeg,.png,.gif,.mp4,.avi,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
-              placeholder="Click to upload files or drag and drop"
-              showPreview={true}
-              multiple={true}
-            />
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary transition-colors">
+              <input
+                type="file"
+                id="attachments"
+                multiple
+                accept=".jpg,.jpeg,.png,.gif,.mp4,.avi,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <label htmlFor="attachments" className="cursor-pointer">
+                <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-600 mb-1">Click to upload files</p>
+                <p className="text-xs text-gray-500">Images, videos, PDFs, documents</p>
+              </label>
+            </div>
 
             {formData.attachments.length > 0 && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3">

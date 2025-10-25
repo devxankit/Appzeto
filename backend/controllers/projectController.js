@@ -597,6 +597,32 @@ const updateProjectRevisionStatus = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get project team members
+// @route   GET /api/projects/:id/team
+// @access  PM only
+const getProjectTeamMembers = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  
+  const project = await Project.findById(id)
+    .populate('assignedTeam', 'name email position department employeeId')
+    .populate('projectManager', 'name email')
+    .select('assignedTeam name projectManager');
+  
+  if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
+  
+  // Check if user is the project manager
+  if (!project.projectManager || !project.projectManager._id.equals(req.user.id)) {
+    return next(new ErrorResponse('Not authorized to access this project', 403));
+  }
+  
+  res.status(200).json({
+    success: true,
+    data: project.assignedTeam
+  });
+});
+
 module.exports = {
   createProject,
   getAllProjects,
@@ -608,5 +634,6 @@ module.exports = {
   getProjectStatistics,
   uploadProjectAttachment,
   removeProjectAttachment,
-  updateProjectRevisionStatus
+  updateProjectRevisionStatus,
+  getProjectTeamMembers // Export the new function
 };

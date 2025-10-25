@@ -7,6 +7,11 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "status": "node scripts/display-status.js",
+    "test-milestone": "node scripts/test_milestone_creation.js",
+    "test-task": "node scripts/test_task_creation.js",
+    "add-tasks": "node scripts/add_tasks_to_milestones.js",
+    "add-tasks-standalone": "node scripts/add_tasks_to_milestones_standalone.js",
+    "test-progress": "node scripts/test_milestone_progress.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

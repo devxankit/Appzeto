@@ -19,7 +19,6 @@ const milestoneSchema = new mongoose.Schema({
   },
   sequence: {
     type: Number,
-    required: [true, 'Sequence number is required'],
     min: 1
   },
   dueDate: {
@@ -144,18 +143,36 @@ milestoneSchema.methods.removeAssignee = function(employeeId) {
 };
 
 // Method to add task
-milestoneSchema.methods.addTask = function(taskId) {
+milestoneSchema.methods.addTask = async function(taskId) {
   if (!this.tasks.includes(taskId)) {
     this.tasks.push(taskId);
-    return this.save();
+    await this.save();
+    
+    // Update progress after adding task
+    try {
+      await this.updateProgress();
+    } catch (error) {
+      console.error('Error updating milestone progress:', error.message);
+      // Don't throw error, just log it
+    }
   }
-  return Promise.resolve(this);
+  return this;
 };
 
 // Method to remove task
-milestoneSchema.methods.removeTask = function(taskId) {
+milestoneSchema.methods.removeTask = async function(taskId) {
   this.tasks = this.tasks.filter(id => !id.equals(taskId));
-  return this.save();
+  await this.save();
+  
+  // Update progress after removing task
+  try {
+    await this.updateProgress();
+  } catch (error) {
+    console.error('Error updating milestone progress:', error.message);
+    // Don't throw error, just log it
+  }
+  
+  return this;
 };
 
 // Method to add attachment
@@ -172,16 +189,30 @@ milestoneSchema.methods.removeAttachment = function(attachmentId) {
 
 // Pre-save middleware to ensure unique sequence within project
 milestoneSchema.pre('save', async function(next) {
-  if (this.isModified('sequence') || this.isNew) {
+  if (this.isNew || this.isModified('sequence') || this.isModified('project')) {
     try {
-      const existingMilestone = await this.constructor.findOne({
-        project: this.project,
-        sequence: this.sequence,
-        _id: { $ne: this._id }
-      });
-      
-      if (existingMilestone) {
-        return next(new Error('Sequence number already exists for this project'));
+      // Only auto-assign sequence if none provided or invalid
+      if (!this.sequence || this.sequence <= 0) {
+        // Find the highest sequence number for this project
+        const lastMilestone = await this.constructor.findOne({
+          project: this.project
+        }).sort({ sequence: -1 });
+        
+        this.sequence = lastMilestone ? lastMilestone.sequence + 1 : 1;
+      } else {
+        // Check if the provided sequence number already exists
+        const existingMilestone = await this.constructor.findOne({
+          project: this.project,
+          sequence: this.sequence,
+          _id: { $ne: this._id }
+        });
+        
+        if (existingMilestone) {
+          // If sequence conflicts, throw an error instead of auto-assigning
+          const error = new Error(`Sequence number ${this.sequence} already exists for this project`);
+          error.name = 'ValidationError';
+          return next(error);
+        }
       }
     } catch (error) {
       return next(error);
@@ -192,11 +223,22 @@ milestoneSchema.pre('save', async function(next) {
 
 // Pre-save middleware to update progress if tasks are modified
 milestoneSchema.pre('save', async function(next) {
-  if (this.isModified('tasks')) {
+  if (this.isModified('tasks') && !this.isNew) {
     try {
-      await this.updateProgress();
+      // Calculate progress based on tasks without calling save again
+      const tasks = await this.constructor.model('Task').find({ 
+        milestone: this._id 
+      });
+      
+      if (tasks.length === 0) {
+        this.progress = 0;
+      } else {
+        const completedTasks = tasks.filter(task => task.status === 'completed').length;
+        this.progress = Math.round((completedTasks / tasks.length) * 100);
+      }
     } catch (error) {
-      return next(error);
+      console.error('Error calculating milestone progress:', error.message);
+      // Don't fail the save operation
     }
   }
   next();

@@ -144,12 +144,38 @@ export const teamService = {
     try {
       let employees = [];
       
-      if (projectId) {
-        // Get employees assigned to the project
-        const projectResponse = await apiRequest(`/api/projects/${projectId}`);
-        const project = projectResponse.data.data;
+      if (milestoneId) {
+        // Get employees assigned to the specific milestone
+        const milestoneResponse = await apiRequest(`/milestones/${milestoneId}`);
+        const milestone = milestoneResponse?.data?.data;
         
-        if (project.assignedTeam && project.assignedTeam.length > 0) {
+        if (milestone && milestone.assignedTo && milestone.assignedTo.length > 0) {
+          // Use employees assigned to the milestone
+          employees = milestone.assignedTo;
+        } else if (projectId) {
+          // Fallback to project team if milestone has no assigned team
+          const projectResponse = await apiRequest(`/projects/${projectId}`);
+          const project = projectResponse?.data?.data;
+          
+          if (project && project.assignedTeam && project.assignedTeam.length > 0) {
+            const devEmployees = project.assignedTeam.filter(emp => emp.team === 'developer');
+            employees = devEmployees;
+          } else {
+            // Final fallback to all active developer employees
+            const allEmployees = await teamService.getAllEmployees({ isActive: true });
+            employees = (allEmployees?.data || []).filter(emp => emp.team === 'developer');
+          }
+        } else {
+          // Final fallback to all active developer employees
+          const allEmployees = await teamService.getAllEmployees({ isActive: true });
+          employees = (allEmployees?.data || []).filter(emp => emp.team === 'developer');
+        }
+      } else if (projectId) {
+        // Get employees assigned to the project
+        const projectResponse = await apiRequest(`/projects/${projectId}`);
+        const project = projectResponse?.data?.data;
+        
+        if (project && project.assignedTeam && project.assignedTeam.length > 0) {
           // Filter assigned team for developer employees only
           employees = project.assignedTeam.filter(emp => emp.team === 'developer');
         } else {

@@ -31,6 +31,23 @@ const createMilestone = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Not authorized to create milestones for this project', 403));
   }
 
+  // Check for sequence conflict before creating milestone
+  let sequenceConflict = false;
+  let originalSequence = sequence;
+  
+  if (sequence && sequence > 0) {
+    const existingMilestone = await Milestone.findOne({
+      project: project,
+      sequence: sequence
+    });
+    
+    if (existingMilestone) {
+      sequenceConflict = true;
+      // Return error for sequence conflict instead of auto-assigning
+      return next(new ErrorResponse(`Sequence number ${sequence} already exists for this project. Please choose a different sequence number.`, 400));
+    }
+  }
+
   // Create milestone
   const milestone = await Milestone.create({
     title,

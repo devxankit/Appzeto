@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, FileText, Calendar as CalIcon, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { Upload, FileText, Calendar as CalIcon, AlertCircle, CheckCircle, Loader2, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../../components/ui/dialog'
 import { Button } from '../../../components/ui/button'
 import { Input } from '../../../components/ui/input'
@@ -8,27 +8,56 @@ import { Textarea } from '../../../components/ui/textarea'
 import { Combobox } from '../../../components/ui/combobox'
 import { MultiSelect } from '../../../components/ui/multi-select'
 import { DatePicker } from '../../../components/ui/date-picker'
+import { projectService, milestoneService } from '../DEV-services'
+import { uploadToCloudinary, validateFile } from '../../../services/cloudinaryService'
+import { useToast } from '../../../contexts/ToastContext'
 
 const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
-  const [formData, setFormData] = useState({
-    title: '', description: '', dueDate: '', assignees: [], status: 'pending', project: projectId || '', priority: 'normal', sequence: 1, attachments: []
+  // Initialize with consistent values to prevent controlled input warnings
+  const getInitialFormData = () => ({
+    title: '', 
+    description: '', 
+    dueDate: '', 
+    assignees: [], 
+    status: 'pending', 
+    project: projectId || '', 
+    priority: 'normal', 
+    sequence: 1,
+    attachments: []
   })
+
+  const [formData, setFormData] = useState(getInitialFormData())
+
+  // Reset form when dialog opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(getInitialFormData())
+      setErrors({})
+    }
+  }, [isOpen, projectId])
   const [errors, setErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [teamMembers, setTeamMembers] = useState([])
+  const [uploadingFiles, setUploadingFiles] = useState([])
+  const { toast } = useToast()
 
   useEffect(() => { if (isOpen) loadTeamMembers() }, [isOpen, projectId])
 
   const loadTeamMembers = async () => {
+    if (!projectId) return
+    
     setIsLoading(true)
-    await new Promise(r => setTimeout(r, 400))
-    setTeamMembers([
-      { _id: 'u-001', fullName: 'John Doe' },
-      { _id: 'u-002', fullName: 'Jane Smith' },
-      { _id: 'u-003', fullName: 'Mike Johnson' }
-    ])
-    setIsLoading(false)
+    try {
+      const response = await projectService.getProjectTeamMembers(projectId)
+      setTeamMembers(response || [])
+    } catch (error) {
+      console.error('Error loading team members:', error)
+      toast.error('Failed to load team members')
+      setTeamMembers([])
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const statusOptions = [
@@ -50,10 +79,53 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
     if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }))
   }
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files)
-    const newAttachments = files.map(file => ({ id: Date.now() + Math.random(), name: file.name, size: file.size, type: file.type, file }))
-    setFormData(prev => ({ ...prev, attachments: [...prev.attachments, ...newAttachments] }))
+    
+    for (const file of files) {
+      // Validate file
+      const validation = validateFile(file)
+      if (!validation.isValid) {
+        toast.error(`Invalid file ${file.name}: ${validation.errors.join(', ')}`)
+        continue
+      }
+      
+      const fileId = Date.now() + Math.random()
+      
+      // Add to uploading files
+      setUploadingFiles(prev => [...prev, fileId])
+      
+      try {
+        // Upload to Cloudinary for preview
+        const cloudinaryResult = await uploadToCloudinary(file, 'milestones/preview')
+        
+        if (cloudinaryResult.success) {
+          const newAttachment = {
+            id: fileId,
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            file,
+            cloudinaryUrl: cloudinaryResult.data.secure_url,
+            publicId: cloudinaryResult.data.public_id
+          }
+          
+          setFormData(prev => ({ 
+            ...prev, 
+            attachments: [...prev.attachments, newAttachment] 
+          }))
+          
+          toast.success(`File ${file.name} uploaded successfully`)
+        } else {
+          toast.error(`Failed to upload ${file.name}`)
+        }
+      } catch (error) {
+        console.error('Upload error:', error)
+        toast.error(`Failed to upload ${file.name}`)
+      } finally {
+        setUploadingFiles(prev => prev.filter(id => id !== fileId))
+      }
+    }
   }
 
   const removeAttachment = (id) => {
@@ -79,7 +151,9 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
     e.preventDefault()
     if (!validateForm()) return
     setIsSubmitting(true)
+    
     try {
+      // Create milestone first
       const milestoneData = {
         title: formData.title,
         description: formData.description,
@@ -87,23 +161,47 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
         assignedTo: formData.assignees,
         status: formData.status,
         priority: formData.priority,
-        sequence: parseInt(formData.sequence),
-        projectId
+        project: projectId
       }
-      await new Promise(r => setTimeout(r, 700))
-      onSubmit && onSubmit(milestoneData)
+      
+      const milestone = await milestoneService.createMilestone(milestoneData)
+      
+      toast.success('Milestone created successfully!')
+      
+      // Upload attachments to backend
+      if (formData.attachments.length > 0) {
+        toast.info(`Uploading ${formData.attachments.length} attachment(s)...`)
+        
+        for (const attachment of formData.attachments) {
+          try {
+            await milestoneService.uploadMilestoneAttachment(milestone._id, attachment.file)
+            toast.success(`Attachment ${attachment.name} uploaded successfully`)
+          } catch (error) {
+            console.error('Attachment upload error:', error)
+            toast.error(`Failed to upload ${attachment.name}`)
+          }
+        }
+      }
+      
+      onSubmit && onSubmit(milestone)
       handleClose()
+    } catch (error) {
+      console.error('Milestone creation error:', error)
+      toast.error('Failed to create milestone')
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const handleClose = () => {
-    setFormData({ title: '', description: '', dueDate: '', assignees: [], status: 'pending', project: projectId || '', priority: 'normal', sequence: 1, attachments: [] })
+    setFormData(getInitialFormData())
     setErrors({}); onClose && onClose()
   }
 
-  const teamMemberOptions = (teamMembers || []).map(m => ({ value: m._id, label: m.fullName }))
+  const teamMemberOptions = (teamMembers || []).map(m => ({ 
+    value: m._id, 
+    label: m.name || m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || 'Unknown Member'
+  }))
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -170,8 +268,48 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
               <div className="space-y-2">
                 {formData.attachments.map((att) => (
                   <div key={att.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3"><div className="p-1 bg-primary/10 rounded"><FileText className="h-4 w-4 text-primary" /></div><div><p className="text-sm font-medium text-gray-900">{att.name}</p><p className="text-xs text-gray-500">{formatFileSize(att.size)}</p></div></div>
-                    <button type="button" onClick={() => removeAttachment(att.id)} className="p-1 text-gray-400 hover:text-red-600 transition-colors duration-200">×</button>
+                    <div className="flex items-center space-x-3">
+                      <div className="p-1 bg-primary/10 rounded">
+                        <FileText className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{att.name}</p>
+                        <p className="text-xs text-gray-500">{formatFileSize(att.size)}</p>
+                        {att.cloudinaryUrl && (
+                          <a 
+                            href={att.cloudinaryUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:text-blue-800"
+                          >
+                            Preview
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => removeAttachment(att.id)} 
+                      className="p-1 text-gray-400 hover:text-red-600 transition-colors duration-200"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {uploadingFiles.length > 0 && (
+              <div className="space-y-2">
+                {uploadingFiles.map((fileId) => (
+                  <div key={fileId} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                      <div>
+                        <p className="text-sm font-medium text-blue-900">Uploading...</p>
+                        <p className="text-xs text-blue-600">Please wait</p>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

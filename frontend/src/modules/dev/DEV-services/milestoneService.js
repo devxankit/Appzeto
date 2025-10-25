@@ -10,7 +10,7 @@ export const milestoneService = {
         method: 'POST',
         body: JSON.stringify(milestoneData)
       });
-      return response.data;
+      return response.data; // Return just the data
     } catch (error) {
       throw error;
     }

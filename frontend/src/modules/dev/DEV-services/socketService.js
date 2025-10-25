@@ -71,7 +71,6 @@ class SocketService {
 
     // Connection events
     this.socket.on('connect', () => {
-      console.log('Socket connected:', this.socket.id);
       this.isConnected = true;
       this.reconnectAttempts = 0;
       this.emit('connection_status', { connected: true });

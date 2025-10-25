@@ -778,8 +778,29 @@ const PM_project_detail = () => {
         </div>
       </main>
 
-      <PM_milestone_form isOpen={isMilestoneFormOpen} onClose={() => setIsMilestoneFormOpen(false)} onSubmit={() => { setIsMilestoneFormOpen(false); }} projectId={project?._id} />
-      <PM_task_form isOpen={isTaskFormOpen} onClose={() => setIsTaskFormOpen(false)} onSubmit={() => { setIsTaskFormOpen(false); }} projectId={project?._id} />
+      <PM_milestone_form 
+        isOpen={isMilestoneFormOpen} 
+        onClose={() => setIsMilestoneFormOpen(false)} 
+        onSubmit={(milestone) => { 
+          setIsMilestoneFormOpen(false);
+          // Reload milestones after creation
+          loadMilestones();
+          toast.success('Milestone created successfully!');
+        }} 
+        projectId={project?._id} 
+      />
+      <PM_task_form 
+        isOpen={isTaskFormOpen} 
+        onClose={() => setIsTaskFormOpen(false)} 
+        onSubmit={(createdTask) => { 
+          setIsTaskFormOpen(false);
+          // Reload tasks after creation
+          loadTasks();
+          toast.success('Task created successfully!');
+        }} 
+        projectId={project?._id}
+        milestoneId={null} // Let user select milestone
+      />
 
       {/* Revision Status Dialog */}
       {showRevisionDialog && selectedRevision && (
