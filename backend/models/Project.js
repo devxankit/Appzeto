@@ -89,7 +89,22 @@ const projectSchema = new mongoose.Schema({
   tags: [{
     type: String,
     trim: true
-  }]
+  }],
+  revisions: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {
+      firstRevision: {
+        status: 'pending',
+        completedDate: null,
+        feedback: null
+      },
+      secondRevision: {
+        status: 'pending',
+        completedDate: null,
+        feedback: null
+      }
+    }
+  }
 }, {
   timestamps: true
 });
@@ -172,6 +187,70 @@ projectSchema.methods.removeAttachment = function(attachmentId) {
   this.attachments = this.attachments.filter(att => att._id.toString() !== attachmentId);
   return this.save();
 };
+
+// Method to update revision status
+projectSchema.methods.updateRevisionStatus = function(revisionType, status, feedback) {
+  if (!['firstRevision', 'secondRevision'].includes(revisionType)) {
+    throw new Error('Invalid revision type');
+  }
+  
+  // Validate status
+  if (!['pending', 'completed'].includes(status)) {
+    throw new Error('Invalid status value');
+  }
+  
+  // Ensure revisions object exists
+  if (!this.revisions) {
+    this.revisions = {
+      firstRevision: { status: 'pending', completedDate: null, feedback: null },
+      secondRevision: { status: 'pending', completedDate: null, feedback: null }
+    };
+  }
+  
+  // Ensure the specific revision object exists
+  if (!this.revisions[revisionType]) {
+    this.revisions[revisionType] = { status: 'pending', completedDate: null, feedback: null };
+  }
+  
+  // Update the revision status
+  this.revisions[revisionType].status = status;
+  
+  if (status === 'completed') {
+    this.revisions[revisionType].completedDate = new Date();
+  } else {
+    this.revisions[revisionType].completedDate = null;
+  }
+  
+  if (feedback) {
+    this.revisions[revisionType].feedback = feedback;
+  }
+  
+  // Mark the revisions field as modified
+  this.markModified('revisions');
+  
+  return this.save();
+};
+
+// Pre-save middleware to ensure revisions object is initialized
+projectSchema.pre('save', function(next) {
+  // Initialize revisions object if it doesn't exist
+  if (!this.revisions) {
+    this.revisions = {
+      firstRevision: { status: 'pending', completedDate: null, feedback: null },
+      secondRevision: { status: 'pending', completedDate: null, feedback: null }
+    };
+  }
+  
+  // Ensure each revision has the required structure
+  if (!this.revisions.firstRevision) {
+    this.revisions.firstRevision = { status: 'pending', completedDate: null, feedback: null };
+  }
+  if (!this.revisions.secondRevision) {
+    this.revisions.secondRevision = { status: 'pending', completedDate: null, feedback: null };
+  }
+  
+  next();
+});
 
 // Pre-save middleware to update progress if milestones are modified
 projectSchema.pre('save', async function(next) {

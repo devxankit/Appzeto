@@ -191,5 +191,20 @@ export const projectService = {
     } catch (error) {
       throw error;
     }
+  },
+
+  // Update project revision status
+  updateProjectRevisionStatus: async (projectId, revisionType, statusData) => {
+    try {
+      
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/revisions/${revisionType}`, {
+        method: 'PATCH',
+        body: JSON.stringify(statusData)
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Project service error:', error);
+      throw error;
+    }
   }
 };

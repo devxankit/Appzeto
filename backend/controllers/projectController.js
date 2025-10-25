@@ -536,6 +536,67 @@ const removeProjectAttachment = asyncHandler(async (req, res, next) => {
   }
 });
 
+// @desc    Update project revision status
+// @route   PATCH /api/projects/:id/revisions/:revisionType
+// @access  PM only
+const updateProjectRevisionStatus = asyncHandler(async (req, res, next) => {
+  const { id, revisionType } = req.params;
+  const { status, feedback } = req.body;
+  
+  // Validate revisionType
+  if (!['firstRevision', 'secondRevision'].includes(revisionType)) {
+    return next(new ErrorResponse('Invalid revision type', 400));
+  }
+  
+  // Validate status
+  if (!['pending', 'completed'].includes(status)) {
+    return next(new ErrorResponse('Invalid status value', 400));
+  }
+  
+  const project = await Project.findById(id);
+  if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
+  
+  // Check if user is the project manager
+  if (!project.projectManager.equals(req.user.id)) {
+    return next(new ErrorResponse('Not authorized', 403));
+  }
+  
+  // Ensure revisions object exists before updating
+  if (!project.revisions) {
+    project.revisions = {
+      firstRevision: { status: 'pending', completedDate: null, feedback: null },
+      secondRevision: { status: 'pending', completedDate: null, feedback: null }
+    };
+  }
+  
+  // Update revision status using the model method
+  await project.updateRevisionStatus(revisionType, status, feedback);
+  
+  // Log activity
+  await Activity.logProjectActivity(
+    project._id,
+    'revision_status_updated',
+    req.user.id,
+    'PM',
+    `Revision status updated to "${status}" for ${revisionType} in project "${project.name}"`,
+    { revisionType, status }
+  );
+  
+  // Emit WebSocket event
+  socketService.emitToProjectRoom(id, 'project_revision_updated', {
+    revisionType,
+    status,
+    completedDate: project.revisions[revisionType].completedDate
+  });
+  
+  res.status(200).json({
+    success: true,
+    data: project.revisions
+  });
+});
+
 module.exports = {
   createProject,
   getAllProjects,
@@ -546,5 +607,6 @@ module.exports = {
   getProjectsByPM,
   getProjectStatistics,
   uploadProjectAttachment,
-  removeProjectAttachment
+  removeProjectAttachment,
+  updateProjectRevisionStatus
 };

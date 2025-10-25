@@ -797,6 +797,7 @@ GET    /api/projects/pm/:pmId           - Get PM projects
 GET    /api/projects/statistics         - Project statistics
 POST   /api/projects/:id/attachments    - Upload attachment
 DELETE /api/projects/:id/attachments/:attachmentId - Remove attachment
+PATCH  /api/projects/:id/revisions/:revisionType - Update project revision status (PM only)
 ```
 
 #### PM Module - Milestone Management
@@ -1472,6 +1473,96 @@ VITE_CLOUDINARY_API_SECRET=your_cloudinary_api_secret
   - Professional logging for debugging
   - Clear error messages and guidance
 
+## 🚀 Phase 10: Simplified Project Revisions System (COMPLETED)
+
+### ✅ Backend - Project Model Updates
+- [x] **Embedded Revision Structure** (`backend/models/Project.js`)
+  - Replaced complex revisions array with embedded `firstRevision` and `secondRevision` objects
+  - Each revision has `status`, `completedDate`, and `feedback` fields
+  - Added `updateRevisionStatus()` method for easy status updates
+  - Used `mongoose.Schema.Types.Mixed` for flexible nested object handling
+  - Added pre-save middleware to ensure revisions object initialization
+  - Enhanced validation and error handling for revision status updates
+
+### ✅ Backend - Project Controller Enhancement
+- [x] **Revision Status Update Controller** (`backend/controllers/projectController.js`)
+  - Added `updateProjectRevisionStatus()` function for PM-only revision updates
+  - Validates revision types (`firstRevision`, `secondRevision`) and status values
+  - Includes authorization checks to ensure only project managers can update
+  - Emits WebSocket events for real-time updates to connected clients
+  - Logs activity for audit trail and project history
+  - Enhanced error handling with comprehensive validation
+
+### ✅ Backend - Project Routes Enhancement
+- [x] **Revision Status Update Route** (`backend/routes/projectRoutes.js`)
+  - Added `PATCH /:id/revisions/:revisionType` route for revision status updates
+  - Integrated with existing PM authorization middleware
+  - Clean API endpoint structure for frontend integration
+
+### ✅ Frontend - Project Service Enhancement
+- [x] **Revision Status Update Service** (`frontend/src/modules/dev/DEV-services/projectService.js`)
+  - Added `updateProjectRevisionStatus()` method for API communication
+  - Simple and clean API call structure for status updates
+  - Proper error handling and response processing
+
+### ✅ Frontend - PM Project Detail UI Restoration
+- [x] **Original 2-Card Revision UI** (`frontend/src/modules/dev/DEV-pages/PM-pages/PM_project_detail.jsx`)
+  - Restored original 2-card layout for "First Revision" and "Second Revision"
+  - Simplified status management with only `pending` and `completed` options
+  - Real-time updates via WebSocket integration for live status changes
+  - Status dialog with clean interface for PM to change revision status
+  - Visual indicators with color-coded status badges and completion dates
+  - Enhanced error handling and user feedback
+
+### ✅ Frontend - Team Rendering Error Fix
+- [x] **Team Member Data Validation** (`frontend/src/modules/dev/DEV-pages/PM-pages/PM_project_detail.jsx`)
+  - Fixed `TypeError: Cannot read properties of undefined (reading 'split')` error
+  - Added comprehensive checks for different possible name fields (`fullName`, `name`, `firstName + lastName`)
+  - Added fallback to "Unknown Member" if no name is found
+  - Added array validation to ensure `assignedTeam` is actually an array
+  - Robust initials generation with try-catch error handling
+  - Added filtering to remove invalid team members
+  - Enhanced error handling with comprehensive null/undefined checks
+
+### ✅ Database Migration & Schema Updates
+- [x] **Existing Project Data Migration**
+  - Created and ran migration script to update existing projects
+  - Converted old array-based revisions to new embedded object structure
+  - Ensured all projects have proper `firstRevision` and `secondRevision` objects
+  - Fixed schema compatibility issues with Mongoose Mixed type
+
+### ✅ System Cleanup & Optimization
+- [x] **Removed Complex Revision System**
+  - Deleted `backend/models/Revision.js` (no longer needed)
+  - Deleted `backend/controllers/revisionController.js` (functionality moved to project controller)
+  - Deleted `backend/routes/revisionRoutes.js` (routes moved to project routes)
+  - Deleted `backend/scripts/creating_revision.js` (no longer needed)
+  - Removed revision routes from `backend/server.js`
+  - Cleaned up `backend/package.json` scripts
+
+- [x] **Frontend Cleanup**
+  - Deleted `frontend/src/modules/dev/DEV-services/revisionService.js` (functionality moved to project service)
+  - Removed revisionService export from `frontend/src/modules/dev/DEV-services/index.js`
+  - Streamlined service architecture for better maintainability
+
+### ✅ Key Features Delivered
+- [x] **2 Predefined Revisions**: "First Revision" and "Second Revision" per project
+- [x] **Simple Status Management**: PM can toggle between `pending` and `completed`
+- [x] **Real-time Updates**: WebSocket events notify clients of status changes
+- [x] **Embedded Data**: Revision data stored directly in Project model (no separate collection)
+- [x] **PM Authorization**: Only project managers can update revision status
+- [x] **Activity Logging**: All status changes are logged for audit trail
+- [x] **Clean UI/UX**: Original 2-card layout restored with modern design
+- [x] **Error Handling**: Comprehensive error handling for team member data and revision updates
+
+### ✅ Technical Improvements
+- [x] **Schema Optimization**: Mixed type allows for flexible nested object handling
+- [x] **Data Migration**: All existing projects updated to new structure
+- [x] **Robust Validation**: Multiple validation layers prevent invalid data
+- [x] **Error Handling**: Proper error messages and handling for edge cases
+- [x] **Backward Compatibility**: System works with both old and new data structures
+- [x] **Performance**: Simplified system with better performance than complex revision model
+
 ### 🔄 Next Steps (Future Development)
 - [ ] Finance management APIs
 - [ ] HR management APIs
@@ -1510,5 +1601,5 @@ VITE_CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 ---
 
 **Last Updated**: December 2024  
-**Version**: 2.1.0  
-**Status**: Production Ready with Complete PM Module Backend System, WebSocket Real-Time Integration, Role-Based API Separation, File Upload & Cloudinary Integration, Analytics & Statistics System, Admin User Management System, Standardized PM Role Consistency, Critical Bug Fixes Applied, Universal Cloudinary File Management System, React 19 Compatibility Fixes, Comprehensive Database Migration System, Optimized Tab Switching Performance, Statistics Cards Layout Optimization, Syntax Error Resolution, Complete Frontend-Backend Integration, and Enhanced Terminal Experience with Professional Logging
+**Version**: 2.2.0  
+**Status**: Production Ready with Complete PM Module Backend System, WebSocket Real-Time Integration, Role-Based API Separation, File Upload & Cloudinary Integration, Analytics & Statistics System, Admin User Management System, Standardized PM Role Consistency, Critical Bug Fixes Applied, Universal Cloudinary File Management System, React 19 Compatibility Fixes, Comprehensive Database Migration System, Optimized Tab Switching Performance, Statistics Cards Layout Optimization, Syntax Error Resolution, Complete Frontend-Backend Integration, Enhanced Terminal Experience with Professional Logging, Simplified Project Revisions System with Embedded Data Structure, Team Rendering Error Fixes, and Comprehensive Error Handling for Production Stability

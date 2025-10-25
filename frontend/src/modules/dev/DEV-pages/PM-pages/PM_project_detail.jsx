@@ -4,6 +4,7 @@ import PM_navbar from '../../DEV-components/PM_navbar'
 import PM_milestone_form from '../../DEV-components/PM_milestone_form'
 import PM_task_form from '../../DEV-components/PM_task_form'
 import { projectService, milestoneService, taskService } from '../../DEV-services'
+import socketService from '../../DEV-services/socketService'
 import { useToast } from '../../../../contexts/ToastContext'
 import { FolderKanban, Calendar, Users, CheckSquare, TrendingUp, Clock, Target, User, Plus, Loader2, FileText, Paperclip, Upload, Eye, Download, X } from 'lucide-react'
 
@@ -21,164 +22,114 @@ const PM_project_detail = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const [newAttachment, setNewAttachment] = useState(null)
-  const [revisions, setRevisions] = useState([])
   const [showRevisionDialog, setShowRevisionDialog] = useState(false)
   const [selectedRevision, setSelectedRevision] = useState(null)
 
   useEffect(() => {
-    // mock load
-    const load = async () => {
+    loadProjectData()
+    setupWebSocket()
+    
+    return () => {
+      socketService.disconnect()
+    }
+  }, [id])
+
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('pmToken')
+    if (token) {
+      socketService.connect(token)
+      
+      // Listen for real-time updates
+      socketService.on('project_updated', () => {
+        loadProjectData()
+      })
+      
+      socketService.on('milestone_created', () => {
+        loadMilestones()
+      })
+      
+      socketService.on('milestone_updated', () => {
+        loadMilestones()
+      })
+      
+      socketService.on('milestone_deleted', () => {
+        loadMilestones()
+      })
+      
+      socketService.on('task_created', () => {
+        loadTasks()
+      })
+      
+      socketService.on('task_updated', () => {
+        loadTasks()
+      })
+      
+      socketService.on('task_deleted', () => {
+        loadTasks()
+      })
+      
+      socketService.on('project_revision_updated', () => {
+        loadProjectData()
+      })
+    }
+  }
+
+  const loadProjectData = async () => {
+    try {
       setIsLoading(true)
-      await new Promise(r => setTimeout(r, 500))
+      const response = await projectService.getProjectById(id)
       
-      // Mock data for projects from PM_new_projects
-      const mockProjects = {
-        '1': {
-          _id: '1',
-          name: 'E-commerce Platform',
-          description: 'Complete e-commerce platform with mobile app, payment integration, and admin dashboard.',
-          status: 'active',
-          priority: 'high',
-          progress: 45,
-          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          assignedTeam: [
-            { _id: 'u-001', fullName: 'John Doe', jobTitle: 'Developer' },
-            { _id: 'u-002', fullName: 'Jane Smith', jobTitle: 'Designer' },
-          ],
-          customer: { name: 'Sarah Wilson' },
-          startDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          attachments: [
-            { id: 'att-001', name: 'project-brief.pdf', size: 1024000, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
-            { id: 'att-002', name: 'wireframes.fig', size: 2048000, type: 'application/figma', url: '#', uploadedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
-          ]
-        },
-        '2': {
-          _id: '2',
-          name: 'Restaurant Management System',
-          description: 'Restaurant management system with online ordering, table booking, and kitchen management.',
-          status: 'active',
-          priority: 'normal',
-          progress: 25,
-          dueDate: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
-          assignedTeam: [
-            { _id: 'u-003', fullName: 'Mike Johnson', jobTitle: 'Developer' },
-            { _id: 'u-004', fullName: 'Sarah Wilson', jobTitle: 'Designer' },
-          ],
-          customer: { name: 'Michael Chen' },
-          startDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-          attachments: [
-            { id: 'att-003', name: 'requirements.docx', size: 512000, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', url: '#', uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
-          ]
-        },
-        '3': {
-          _id: '3',
-          name: 'Healthcare Portal',
-          description: 'Healthcare portal for patient management, appointment booking, and medical records.',
-          status: 'active',
-          priority: 'urgent',
-          progress: 60,
-          dueDate: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString(),
-          assignedTeam: [
-            { _id: 'u-005', fullName: 'David Brown', jobTitle: 'Developer' },
-            { _id: 'u-006', fullName: 'Lisa Davis', jobTitle: 'Designer' },
-          ],
-          customer: { name: 'Emily Rodriguez' },
-          startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-          attachments: [
-            { id: 'att-004', name: 'healthcare-specs.pdf', size: 3584000, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString() },
-            { id: 'att-005', name: 'compliance-docs.pdf', size: 2867200, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
-          ]
-        },
-        '4': {
-          _id: '4',
-          name: 'Fitness App',
-          description: 'Fitness tracking app with workout plans, nutrition tracking, and social features.',
-          status: 'active',
-          priority: 'high',
-          progress: 35,
-          dueDate: new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString(),
-          assignedTeam: [
-            { _id: 'u-007', fullName: 'Tom Wilson', jobTitle: 'Developer' },
-            { _id: 'u-008', fullName: 'Emma Taylor', jobTitle: 'Designer' },
-          ],
-          customer: { name: 'James Thompson' },
-          startDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-          attachments: [
-            { id: 'att-006', name: 'fitness-mockups.fig', size: 4403200, type: 'application/figma', url: '#', uploadedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
-          ]
-        },
-        '5': {
-          _id: '5',
-          name: 'Real Estate Portal',
-          description: 'Real estate portal with property listings, virtual tours, and agent management.',
-          status: 'active',
-          priority: 'normal',
-          progress: 15,
-          dueDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-          assignedTeam: [
-            { _id: 'u-001', fullName: 'John Doe', jobTitle: 'Developer' },
-            { _id: 'u-002', fullName: 'Jane Smith', jobTitle: 'Designer' },
-          ],
-          customer: { name: 'Lisa Anderson' },
-          startDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          attachments: [
-            { id: 'att-007', name: 'real-estate-brief.pdf', size: 3041280, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() },
-            { id: 'att-008', name: 'design-guidelines.pdf', size: 1572864, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() },
-          ]
-        }
-      }
-      
-      // Load project data based on ID
-      const projectData = mockProjects[id] || {
-        _id: id,
-        name: 'Website Redesign',
-        description: 'Complete overhaul of marketing site with CMS migration.',
-        status: 'active',
-        priority: 'high',
-        progress: 68,
-        dueDate: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
-        assignedTeam: [
-          { _id: 'u-001', fullName: 'John Doe', jobTitle: 'Developer' },
-          { _id: 'u-002', fullName: 'Jane Smith', jobTitle: 'Designer' },
-        ],
-        customer: { name: 'Acme Corp' },
-        startDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-        attachments: [
-          { id: 'att-001', name: 'project-brief.pdf', size: 1024000, type: 'application/pdf', url: '#', uploadedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
-          { id: 'att-002', name: 'wireframes.fig', size: 2048000, type: 'application/figma', url: '#', uploadedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
-          { id: 'att-003', name: 'requirements.docx', size: 512000, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', url: '#', uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
-        ]
+      // Transform the data to match component expectations
+      const projectData = {
+        _id: response.data?._id || response._id,
+        name: response.data?.name || response.name,
+        description: response.data?.description || response.description,
+        status: response.data?.status || response.status,
+        priority: response.data?.priority || response.priority,
+        progress: response.data?.progress || response.progress || 0,
+        dueDate: response.data?.dueDate || response.dueDate,
+        startDate: response.data?.startDate || response.startDate,
+        assignedTeam: response.data?.assignedTeam || response.assignedTeam || [],
+        customer: (response.data?.client || response.client) ? {
+          name: (response.data?.client || response.client)?.name || (response.data?.client || response.client)?.companyName
+        } : null,
+        attachments: response.data?.attachments || response.attachments || []
       }
       
       setProject(projectData)
-      setMilestones([
-        { _id: 'm-001', title: 'M1 - UI/UX', description: 'Wireframes and designs', status: 'in-progress', priority: 'high', sequence: 1, progress: 45, dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), assignedTo: [{ _id: 'u-002' }] },
-        { _id: 'm-002', title: 'M2 - Build', description: 'Frontend implementation', status: 'pending', priority: 'normal', sequence: 2, progress: 0, dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(), assignedTo: [] },
+      
+      // Load related data
+      await Promise.all([
+        loadMilestones(),
+        loadTasks()
       ])
-      setTasks([
-        { _id: 't-001', title: 'Hero section', status: 'in-progress', priority: 'high', assignedTo: [{ fullName: 'John Doe' }], dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() },
-        { _id: 't-002', title: 'CTA tracking', status: 'pending', priority: 'normal', assignedTo: [], dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString() }
-      ])
-      setRevisions([
-        {
-          _id: 'rev-001',
-          title: 'First Revision',
-          status: 'completed',
-          completedDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          description: 'Initial project delivery and client approval'
-        },
-        {
-          _id: 'rev-002',
-          title: 'Final Revision',
-          status: 'pending',
-          completedDate: null,
-          description: 'Final project delivery and client approval'
-        }
-      ])
+      
+    } catch (error) {
+      console.error('Error loading project:', error)
+      toast.error('Failed to load project details')
+    } finally {
       setIsLoading(false)
     }
-    load()
-  }, [id])
+  }
+
+  const loadMilestones = async () => {
+    try {
+      const response = await milestoneService.getMilestonesByProject(id)
+      setMilestones(response.data || response || [])
+    } catch (error) {
+      console.error('Error loading milestones:', error)
+    }
+  }
+
+  const loadTasks = async () => {
+    try {
+      const response = await taskService.getTasksByProject(id)
+      setTasks(response.data || response || [])
+    } catch (error) {
+      console.error('Error loading tasks:', error)
+    }
+  }
+
 
   useEffect(() => {
     if (!project?.dueDate) { setTimeLeft('No due date'); return }
@@ -234,16 +185,24 @@ const PM_project_detail = () => {
     if (diff < 0) return 'text-red-600'; if (days <= 1) return 'text-orange-600'; if (days <= 3) return 'text-yellow-600'; return 'text-blue-600'
   }
 
-  const handleUploadChange = (e) => {
+  const handleUploadChange = async (e) => {
     const file = e.target.files?.[0]
     if (file) {
       setNewAttachment(file)
       setIsUploading(true)
-      setTimeout(() => {
+      
+      try {
+        await projectService.uploadProjectAttachment(id, file)
+        toast.success('File uploaded successfully!')
+        // Reload project data to get updated attachments
+        loadProjectData()
+      } catch (error) {
+        console.error('Error uploading file:', error)
+        toast.error('Failed to upload file')
+      } finally {
         setIsUploading(false)
         setNewAttachment(null)
-        // In real app, upload file and add to project attachments
-      }, 1500)
+      }
     }
   }
 
@@ -267,32 +226,37 @@ const PM_project_detail = () => {
   const getRevisionStatusColor = (status) => {
     switch (status) {
       case 'completed': return 'bg-green-100 text-green-800 border-green-200'
+      case 'in-progress': return 'bg-blue-100 text-blue-800 border-blue-200'
       case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      case 'rejected': return 'bg-red-100 text-red-800 border-red-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
 
-  const handleRevisionClick = (revision) => {
-    setSelectedRevision(revision)
-    setShowRevisionDialog(true)
+  const handleRevisionClick = (revisionType, revisionData) => {
+    setSelectedRevision({ type: revisionType, data: revisionData });
+    setShowRevisionDialog(true);
   }
 
-  const handleRevisionStatusChange = (newStatus) => {
-    if (!selectedRevision) return
+  const handleRevisionStatusChange = async (newStatus) => {
+    if (!selectedRevision) return;
     
-    setRevisions(prevRevisions => 
-      prevRevisions.map(revision => 
-        revision._id === selectedRevision._id 
-          ? { 
-              ...revision, 
-              status: newStatus,
-              completedDate: newStatus === 'completed' ? new Date().toISOString() : null
-            }
-          : revision
-      )
-    )
-    setShowRevisionDialog(false)
-    setSelectedRevision(null)
+    
+    try {
+      await projectService.updateProjectRevisionStatus(
+        id, 
+        selectedRevision.type, 
+        { status: newStatus }
+      );
+      toast.success('Revision status updated successfully!');
+      loadProjectData(); // Reload project to get updated revision data
+    } catch (error) {
+      console.error('Error updating revision status:', error);
+      toast.error('Failed to update revision status');
+    } finally {
+      setShowRevisionDialog(false);
+      setSelectedRevision(null);
+    }
   }
 
   const renderOverview = () => (
@@ -401,20 +365,20 @@ const PM_project_detail = () => {
 
         {project.attachments && project.attachments.length > 0 ? (
           <div className="space-y-2">
-            {project.attachments.map((att) => (
-              <div key={att.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+            {project.attachments.map((att, index) => (
+              <div key={att._id || index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                 <div className="flex items-center space-x-2 min-w-0 flex-1">
-                  <span className="text-lg shrink-0">{getFileIcon(att.type)}</span>
+                  <span className="text-lg shrink-0">{getFileIcon(att.format || att.resource_type)}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-900 truncate">{att.name}</p>
+                    <p className="text-xs font-medium text-gray-900 truncate">{att.originalName || att.original_filename}</p>
                     <p className="text-xs text-gray-500">
-                      {formatFileSize(att.size)} ΓÇó {new Date(att.uploadedAt).toLocaleDateString()}
+                      {formatFileSize(att.size || att.bytes)} • {new Date(att.uploadedAt).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-1 shrink-0">
                   <a 
-                    href={att.url} 
+                    href={att.secure_url} 
                     target="_blank" 
                     rel="noopener noreferrer" 
                     className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
@@ -422,8 +386,8 @@ const PM_project_detail = () => {
                     <Eye className="h-3.5 w-3.5" />
                   </a>
                   <a 
-                    href={att.url} 
-                    download={att.name} 
+                    href={att.secure_url} 
+                    download={att.originalName || att.original_filename} 
                     className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
                   >
                     <Download className="h-3.5 w-3.5" />
@@ -492,44 +456,87 @@ const PM_project_detail = () => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {revisions.map((revision, index) => (
+          {/* First Revision Card */}
             <div 
-              key={revision._id} 
-              onClick={() => handleRevisionClick(revision)}
+            onClick={() => handleRevisionClick('firstRevision', project.revisions?.firstRevision)}
               className="group bg-white rounded-xl p-4 border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all duration-200 cursor-pointer"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                    revision.status === 'completed' 
+                  project.revisions?.firstRevision?.status === 'completed' 
                       ? 'bg-green-100 text-green-600' 
                       : 'bg-yellow-100 text-yellow-600'
                   }`}>
-                    {revision.status === 'completed' ? 'Γ£ô' : index + 1}
+                  {project.revisions?.firstRevision?.status === 'completed' ? '✓' : '1'}
                   </div>
                   <div>
                     <h4 className="text-sm font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">
-                      {revision.title}
+                    First Revision
                     </h4>
-                    <p className="text-xs text-gray-600 mt-0.5">{revision.description}</p>
+                  <p className="text-xs text-gray-600 mt-0.5">Initial review and feedback</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRevisionStatusColor(revision.status)}`}>
-                    {revision.status}
+                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                  project.revisions?.firstRevision?.status === 'completed'
+                    ? 'bg-green-100 text-green-800 border-green-200'
+                    : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                }`}>
+                  {project.revisions?.firstRevision?.status || 'pending'}
                   </span>
-                  <div className="text-purple-600 group-hover:text-purple-700 transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
                 </div>
               </div>
               
-              {revision.completedDate && (
+            {project.revisions?.firstRevision?.completedDate && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="text-xs text-gray-500">
+                  Completed: {new Date(project.revisions.firstRevision.completedDate).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Second Revision Card */}
+          <div 
+            onClick={() => handleRevisionClick('secondRevision', project.revisions?.secondRevision)}
+            className="group bg-white rounded-xl p-4 border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all duration-200 cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                  project.revisions?.secondRevision?.status === 'completed' 
+                    ? 'bg-green-100 text-green-600' 
+                    : 'bg-yellow-100 text-yellow-600'
+                }`}>
+                  {project.revisions?.secondRevision?.status === 'completed' ? '✓' : '2'}
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">
+                    Second Revision
+                  </h4>
+                  <p className="text-xs text-gray-600 mt-0.5">Final review and approval</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                  project.revisions?.secondRevision?.status === 'completed'
+                    ? 'bg-green-100 text-green-800 border-green-200'
+                    : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                }`}>
+                  {project.revisions?.secondRevision?.status || 'pending'}
+                </span>
+              </div>
+            </div>
+            
+            {project.revisions?.secondRevision?.completedDate && (
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <div className="text-xs text-gray-500">
-                    Completed: {new Date(revision.completedDate).toLocaleDateString('en-US', {
+                  Completed: {new Date(project.revisions.secondRevision.completedDate).toLocaleDateString('en-US', {
                       year: 'numeric',
                       month: 'short',
                       day: 'numeric'
@@ -538,7 +545,6 @@ const PM_project_detail = () => {
                 </div>
               )}
             </div>
-          ))}
         </div>
       </div>
     </div>
@@ -616,26 +622,54 @@ const PM_project_detail = () => {
     </div>
   )
 
-  const renderTeam = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {(project?.assignedTeam || []).length === 0 ? (
+  const renderTeam = () => {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {!project?.assignedTeam || !Array.isArray(project.assignedTeam) || project.assignedTeam.length === 0 ? (
         <div className="col-span-2 text-center py-8">
           <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No team members assigned</h3>
           <p className="text-gray-600">Team members will appear here when assigned to the project</p>
         </div>
       ) : (
-        project.assignedTeam.map((member) => (
-          <div key={member._id} className="group bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full flex items-center justify-center"><span className="text-base font-bold text-primary">{member.fullName.split(' ').map(w=>w[0]).join('').substring(0,2)}</span></div>
-              <div className="flex-1"><h3 className="text-base font-bold text-gray-900 group-hover:text-primary transition-colors duration-200">{member.fullName}</h3><p className="text-sm text-gray-600">{member.jobTitle || 'Team Member'}</p></div>
+        project.assignedTeam.filter(member => member && member._id).map((member) => {
+          // Handle different possible name fields and ensure we have a name
+          const memberName = member.fullName || member.name || 
+            (member.firstName && member.lastName ? `${member.firstName} ${member.lastName}` : null) || 
+            'Unknown Member';
+          
+          // Safely generate initials
+          let initials = 'UM';
+          if (memberName && memberName !== 'Unknown Member' && typeof memberName === 'string') {
+            try {
+              initials = memberName.split(' ').map(w => w[0]).join('').substring(0, 2);
+            } catch (error) {
+              console.warn('Error generating initials for member:', member, error);
+              initials = 'UM';
+            }
+          }
+          const jobTitle = member.jobTitle || member.position || member.role || 'Team Member';
+          
+          return (
+            <div key={member._id} className="group bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full flex items-center justify-center">
+                  <span className="text-base font-bold text-primary">{initials}</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-gray-900 group-hover:text-primary transition-colors duration-200">
+                    {memberName}
+                  </h3>
+                  <p className="text-sm text-gray-600">{jobTitle}</p>
+                </div>
+              </div>
             </div>
-          </div>
-        ))
+          );
+        })
       )}
-    </div>
-  )
+      </div>
+    );
+  }
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -758,7 +792,7 @@ const PM_project_detail = () => {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">Manage Revision</h3>
-                  <p className="text-sm text-gray-600">{selectedRevision.title}</p>
+                  <p className="text-sm text-gray-600">{selectedRevision.type === 'firstRevision' ? 'First Revision' : 'Second Revision'}</p>
                 </div>
               </div>
               <button
@@ -770,17 +804,26 @@ const PM_project_detail = () => {
             </div>
 
             <div className="mb-6">
-              <p className="text-sm text-gray-600 mb-4">{selectedRevision.description}</p>
+              <p className="text-sm text-gray-600 mb-4">
+                {selectedRevision.type === 'firstRevision' 
+                  ? 'Initial review and feedback for the project' 
+                  : 'Final review and approval for the project'
+                }
+              </p>
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-700">Current Status:</span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRevisionStatusColor(selectedRevision.status)}`}>
-                    {selectedRevision.status}
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    selectedRevision.data?.status === 'completed'
+                      ? 'bg-green-100 text-green-800 border-green-200'
+                      : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                  }`}>
+                    {selectedRevision.data?.status || 'pending'}
                   </span>
                 </div>
-                {selectedRevision.completedDate && (
+                {selectedRevision.data?.completedDate && (
                   <div className="text-xs text-gray-500">
-                    Completed: {new Date(selectedRevision.completedDate).toLocaleDateString('en-US', {
+                    Completed: {new Date(selectedRevision.data.completedDate).toLocaleDateString('en-US', {
                       year: 'numeric',
                       month: 'short',
                       day: 'numeric'
@@ -796,7 +839,7 @@ const PM_project_detail = () => {
                 <button
                   onClick={() => handleRevisionStatusChange('pending')}
                   className={`p-3 rounded-lg border-2 transition-all ${
-                    selectedRevision.status === 'pending'
+                    selectedRevision.data?.status === 'pending'
                       ? 'border-yellow-300 bg-yellow-50 text-yellow-800'
                       : 'border-gray-200 hover:border-yellow-300 hover:bg-yellow-50 text-gray-700'
                   }`}
@@ -809,7 +852,7 @@ const PM_project_detail = () => {
                 <button
                   onClick={() => handleRevisionStatusChange('completed')}
                   className={`p-3 rounded-lg border-2 transition-all ${
-                    selectedRevision.status === 'completed'
+                    selectedRevision.data?.status === 'completed'
                       ? 'border-green-300 bg-green-50 text-green-800'
                       : 'border-gray-200 hover:border-green-300 hover:bg-green-50 text-gray-700'
                   }`}
