@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PM_navbar from '../../DEV-components/PM_navbar';
 import PM_project_form from '../../DEV-components/PM_project_form';
+import { projectService, socketService, tokenUtils } from '../../DEV-services';
+import { useToast } from '../../../../contexts/ToastContext';
 import { FolderKanban, Plus, Search, Filter, Users, Calendar, TrendingUp, MoreVertical, Loader2 } from 'lucide-react';
 
 const PM_projects = () => {
@@ -10,104 +12,85 @@ const PM_projects = () => {
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
-  
-  // Mock projects data - replace with actual API calls
-  const mockProjects = [
-    {
-      _id: 'p-001',
-      name: 'Website Redesign',
-      description: 'Complete overhaul of marketing site with new brand guidelines and CMS migration.',
-      progress: 68,
-      status: 'active',
-      priority: 'high',
-      customer: { _id: 'c-001', company: 'Acme Corp' },
-      assignedTeam: [
-        { _id: 'u-001', fullName: 'John Doe' },
-        { _id: 'u-002', fullName: 'Jane Smith' }
-      ],
-      dueDate: '2025-10-30',
-    },
-    {
-      _id: 'p-002',
-      name: 'Mobile App v2',
-      description: 'Second major version including offline mode, push notifications, and analytics.',
-      progress: 35,
-      status: 'active',
-      priority: 'urgent',
-      customer: { _id: 'c-002', company: 'Globex' },
-      assignedTeam: [
-        { _id: 'u-003', fullName: 'Mike Johnson' }
-      ],
-      dueDate: '2025-12-12',
-    },
-    {
-      _id: 'p-003',
-      name: 'Data Warehouse Setup',
-      description: 'Migrate reporting to unified warehouse with dbt, Airflow, and Looker.',
-      progress: 100,
-      status: 'completed',
-      priority: 'normal',
-      customer: { _id: 'c-003', company: 'Initech' },
-      assignedTeam: [
-        { _id: 'u-004', fullName: 'Sarah Wilson' },
-        { _id: 'u-005', fullName: 'David Brown' }
-      ],
-      dueDate: '2025-10-15',
-    },
-    {
-      _id: 'p-004',
-      name: 'Customer Portal',
-      description: 'Build self-service portal for enterprise customers to manage subscriptions.',
-      progress: 20,
-      status: 'on-hold',
-      priority: 'low',
-      customer: { _id: 'c-004', company: 'Umbrella LLC' },
-      assignedTeam: [
-        { _id: 'u-006', fullName: 'Lisa Davis' }
-      ],
-      dueDate: '2026-01-15',
-    },
-    {
-      _id: 'p-005',
-      name: 'Security Hardening',
-      description: 'Company-wide security improvements, SSO rollout, and pentest remediations.',
-      progress: 55,
-      status: 'active',
-      priority: 'high',
-      customer: { _id: 'c-005', company: 'Soylent' },
-      assignedTeam: [
-        { _id: 'u-007', fullName: 'Tom Wilson' },
-        { _id: 'u-008', fullName: 'Emma Taylor' }
-      ],
-      dueDate: '2025-11-25',
-    },
-    {
-      _id: 'p-006',
-      name: 'Billing System Upgrade',
-      description: 'Move to usage-based billing with tiered pricing and better invoicing.',
-      progress: 12,
-      status: 'planning',
-      priority: 'normal',
-      customer: { _id: 'c-006', company: 'Stark Industries' },
-      assignedTeam: [],
-      dueDate: '2026-02-10',
-    },
-  ];
+  const { toast } = useToast();
 
   // Load projects on component mount
   useEffect(() => {
     loadProjects();
+    setupWebSocket();
+    
+    return () => {
+      socketService.disconnect();
+    };
   }, []);
+
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('pmToken');
+    if (token && tokenUtils.isAuthenticated()) {
+      try {
+        socketService.connect(token);
+        
+        // Listen for real-time updates
+        socketService.on('project_created', () => {
+          loadProjects();
+        });
+        
+        socketService.on('project_updated', () => {
+          loadProjects();
+        });
+        
+        socketService.on('project_deleted', () => {
+          loadProjects();
+        });
+      } catch (error) {
+        console.warn('WebSocket connection failed:', error);
+      }
+    } else {
+      console.warn('No valid PM token found, skipping WebSocket connection');
+    }
+  };
 
   const loadProjects = async () => {
     try {
       setIsLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setProjects(mockProjects);
+      setError(null);
+      
+      // Use getAllProjects instead of getProjectsByPM for better compatibility
+      const response = await projectService.getAllProjects({
+        page: 1,
+        limit: 100,
+        sortBy: 'createdAt',
+        sortOrder: 'desc'
+      });
+      
+      console.log('Projects response:', response);
+      console.log('Projects data:', response?.data);
+      
+      // Transform the data to match the expected format
+      const transformedProjects = (response?.data || []).map(project => ({
+        _id: project._id,
+        name: project.name,
+        description: project.description,
+        progress: project.progress || 0,
+        status: project.status,
+        priority: project.priority,
+        customer: project.client ? {
+          _id: project.client._id,
+          company: project.client.companyName || project.client.name
+        } : null,
+        assignedTeam: project.assignedTeam || [],
+        dueDate: project.dueDate,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt
+      }));
+      
+      setProjects(transformedProjects);
     } catch (error) {
       console.error('Error loading projects:', error);
+      setError('Failed to load projects. Please try again.');
+      // Keep existing projects on error
     } finally {
       setIsLoading(false);
     }
@@ -179,10 +162,18 @@ const PM_projects = () => {
     return matchesFilter && matchesSearch;
   });
 
-  const handleProjectSubmit = (projectData) => {
-    // Refresh projects list after creating a new project
-    loadProjects();
-    setIsFormOpen(false);
+  const handleProjectSubmit = async (projectData) => {
+    try {
+      await projectService.createProject(projectData);
+      toast.success('Project created successfully!');
+      // Refresh projects list after creating a new project
+      loadProjects();
+      setIsFormOpen(false);
+    } catch (error) {
+      console.error('Error creating project:', error);
+      toast.error('Failed to create project. Please try again.');
+      setError('Failed to create project. Please try again.');
+    }
   };
 
   return (
@@ -305,6 +296,21 @@ const PM_projects = () => {
               ))}
             </div>
           </div>
+
+          {/* Error State */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <div className="text-red-600 text-sm">{error}</div>
+                <button 
+                  onClick={() => setError(null)}
+                  className="ml-auto text-red-400 hover:text-red-600"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Loading State */}
           {isLoading && (

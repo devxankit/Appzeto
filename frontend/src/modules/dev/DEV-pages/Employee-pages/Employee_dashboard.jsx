@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
+import { taskService, analyticsService, socketService } from '../../DEV-services'
 import { 
   FiCheckSquare as CheckSquare,
   FiClock as Clock,
@@ -9,13 +10,15 @@ import {
   FiCalendar as Calendar,
   FiUser as User,
   FiFolder as FolderKanban,
-  FiFileText
+  FiFileText,
+  FiLoader
 } from 'react-icons/fi'
 
 const Employee_dashboard = () => {
   const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [tasks, setTasks] = useState([])
   const [stats, setStats] = useState({
     total: 0,
@@ -29,62 +32,68 @@ const Employee_dashboard = () => {
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      await new Promise(r => setTimeout(r, 400))
-      const mockTasks = [
-        {
-          _id: 't1',
-          title: 'Implement login flow',
-          description: 'Build login form and validation',
-          status: 'in-progress',
-          priority: 'high',
-          dueDate: new Date(Date.now() + 2*24*60*60*1000).toISOString(),
-          project: { name: 'Website Revamp' },
-          milestone: { title: 'Auth & Users' },
-          assignedTo: [{ fullName: 'You' }]
-        },
-        {
-          _id: 't2',
-          title: 'Prepare sprint summary',
-          description: 'Draft summary for sprint review',
-          status: 'pending',
-          priority: 'normal',
-          dueDate: new Date(Date.now() + 5*24*60*60*1000).toISOString(),
-          project: { name: 'Internal Ops' },
-          milestone: { title: 'Reporting' },
-          assignedTo: [{ fullName: 'You' }]
-        },
-        {
-          _id: 't3',
-          title: 'Fix navbar overlap',
-          description: 'Resolve layout shift on mobile',
-          status: 'completed',
-          priority: 'low',
-          dueDate: new Date(Date.now() - 1*24*60*60*1000).toISOString(),
-          project: { name: 'UI Polish' },
-          milestone: { title: 'Layout' },
-          assignedTo: [{ fullName: 'You' }]
-        }
-      ]
-      setTasks(mockTasks)
+    loadDashboardData()
+    setupWebSocket()
+    
+    return () => {
+      socketService.disconnect()
+    }
+  }, [])
 
-      const total = mockTasks.length
-      const completed = mockTasks.filter(t => t.status === 'completed').length
-      const inProgress = mockTasks.filter(t => t.status === 'in-progress').length
-      const pending = mockTasks.filter(t => t.status === 'pending').length
-      const dueSoon = mockTasks.filter(t => {
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('employeeToken')
+    if (token) {
+      socketService.connect(token)
+      
+      // Listen for real-time updates
+      socketService.on('task_updated', () => {
+        loadDashboardData()
+      })
+      
+      socketService.on('task_assigned', () => {
+        loadDashboardData()
+      })
+    }
+  }
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      // Get employee ID from token or user data
+      const employeeId = localStorage.getItem('employeeId') || 'current-employee'
+      
+      // Load employee tasks and performance data
+      const [tasksResponse, performanceResponse] = await Promise.all([
+        taskService.getTasksByEmployee(employeeId),
+        analyticsService.getEmployeePerformance(employeeId)
+      ])
+      
+      const employeeTasks = tasksResponse.data
+      setTasks(employeeTasks)
+
+      // Calculate statistics
+      const total = employeeTasks.length
+      const completed = employeeTasks.filter(t => t.status === 'completed').length
+      const inProgress = employeeTasks.filter(t => t.status === 'in-progress').length
+      const pending = employeeTasks.filter(t => t.status === 'pending').length
+      const dueSoon = employeeTasks.filter(t => {
         const diffDays = Math.ceil((new Date(t.dueDate) - new Date())/(1000*60*60*24))
         return diffDays <= 3 && diffDays >= 0 && t.status !== 'completed'
       }).length
-      const overdue = mockTasks.filter(t => new Date(t.dueDate) < new Date() && t.status !== 'completed').length
+      const overdue = employeeTasks.filter(t => new Date(t.dueDate) < new Date() && t.status !== 'completed').length
       const overallProgress = total > 0 ? Math.round((completed/total)*100) : 0
 
       setStats({ total, completed, inProgress, pending, dueSoon, overdue, overallProgress })
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+      setError('Failed to load dashboard data. Please try again.')
+      // Keep existing data on error
+    } finally {
       setLoading(false)
     }
-    load()
-  }, [])
+  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -126,12 +135,17 @@ const Employee_dashboard = () => {
   }, [tasks, filter])
 
   if (loading) {
-  return (
+    return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
         <Employee_navbar />
         <main className="pt-16 pb-24 md:pt-20 md:pb-8">
           <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
-            <div className="flex items-center justify-center h-64 text-gray-600">Loading dashboard...</div>
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <FiLoader className="animate-spin text-4xl text-primary mx-auto mb-4" />
+                <p className="text-gray-600">Loading dashboard...</p>
+              </div>
+            </div>
           </div>
         </main>
       </div>
@@ -143,6 +157,21 @@ const Employee_dashboard = () => {
       <Employee_navbar />
       <main className="pt-16 pb-24 md:pt-20 md:pb-8">
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+          {/* Error State */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <div className="text-red-600 text-sm">{error}</div>
+                <button 
+                  onClick={() => setError(null)}
+                  className="ml-auto text-red-400 hover:text-red-600"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mb-6 md:mb-8">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Welcome, Employee!</h1>
             <p className="text-sm text-gray-600 mt-1">Appzeto loves you!</p>

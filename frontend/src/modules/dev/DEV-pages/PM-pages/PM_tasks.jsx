@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import PM_task_form from '../../DEV-components/PM_task_form'
+import { taskService, socketService, tokenUtils } from '../../DEV-services'
 import { CheckSquare, Plus, Search, Filter, Calendar, User, MoreVertical, Loader2, AlertTriangle } from 'lucide-react'
 
 const PM_tasks = () => {
@@ -9,64 +10,79 @@ const PM_tasks = () => {
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
   const [tasks, setTasks] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
   const navigate = useNavigate()
-
-  // Mock tasks data - replace with API later
-  const mockTasks = [
-    {
-      _id: 't-001',
-      title: 'Design Landing Page',
-      description: 'Create hero, features, and CTA sections for new brand.',
-      status: 'In Progress',
-      priority: 'High',
-      project: { _id: 'p-001', name: 'Website Redesign' },
-      milestone: { _id: 'm-001', name: 'M1 - UI/UX' },
-      assignedTo: [{ _id: 'u-001', fullName: 'John Doe' }],
-      dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
-    },
-    {
-      _id: 't-002',
-      title: 'Implement Auth Flow',
-      description: 'Add login, logout, and token refresh with guards.',
-      status: 'Pending',
-      priority: 'Normal',
-      project: { _id: 'p-002', name: 'Mobile App v2' },
-      milestone: { _id: 'm-010', name: 'M2 - Core' },
-      assignedTo: [{ _id: 'u-002', fullName: 'Jane Smith' }],
-      dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString()
-    },
-    {
-      _id: 't-003',
-      title: 'Analytics Dashboard',
-      description: 'KPIs, charts, and alerts for executive overview.',
-      status: 'Completed',
-      priority: 'Low',
-      project: { _id: 'p-003', name: 'Data Warehouse Setup' },
-      milestone: { _id: 'm-020', name: 'M3 - Reporting' },
-      assignedTo: [{ _id: 'u-003', fullName: 'Mike Johnson' }],
-      dueDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-    }
-  ]
 
   useEffect(() => {
     loadTasks()
+    setupWebSocket()
+    
+    return () => {
+      socketService.disconnect()
+    }
   }, [])
+
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('pmToken')
+    if (token && tokenUtils.isAuthenticated()) {
+      try {
+        socketService.connect(token)
+        
+        // Listen for real-time updates
+        socketService.on('task_created', () => {
+          loadTasks()
+        })
+        
+        socketService.on('task_updated', () => {
+          loadTasks()
+        })
+        
+        socketService.on('task_deleted', () => {
+          loadTasks()
+        })
+      } catch (error) {
+        console.warn('WebSocket connection failed:', error)
+      }
+    } else {
+      console.warn('No valid PM token found, skipping WebSocket connection')
+    }
+  }
 
   const loadTasks = async () => {
     try {
       setIsLoading(true)
-      await new Promise(r => setTimeout(r, 600))
-      setTasks(mockTasks)
-    } catch (error) {
-      console.error('Error loading tasks:', error)
+      setError(null)
+      
+      const pmId = localStorage.getItem('pmId')
+      if (!pmId) {
+        throw new Error('PM ID not found')
+      }
+      
+      const response = await taskService.getTasksByPM(pmId, {
+        limit: 100,
+        sortBy: 'dueDate',
+        sortOrder: 'asc'
+      })
+      
+      setTasks(response.data || [])
+    } catch (err) {
+      console.error('Error loading tasks:', err)
+      setError(err.message || 'Failed to load tasks')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleTaskSubmit = () => {
-    loadTasks()
-    setIsTaskFormOpen(false)
+
+  const handleTaskSubmit = async (taskData) => {
+    try {
+      await taskService.createTask(taskData)
+      loadTasks()
+      setIsTaskFormOpen(false)
+    } catch (err) {
+      console.error('Error creating task:', err)
+      setError(err.message || 'Failed to create task')
+    }
   }
 
   const getStatusColor = (status) => {
@@ -98,6 +114,15 @@ const PM_tasks = () => {
       
       <main className="pt-16 pb-24 md:pt-20 md:pb-8">
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+          {/* Error Display */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
+                <p className="text-red-700">{error}</p>
+              </div>
+            </div>
+          )}
           {/* Mobile Layout - Creative Tile with Button */}
           <div className="md:hidden mb-6">
             <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/20">

@@ -76,12 +76,12 @@ const Employee_login = () => {
       if (response.success) {
         // Store Employee data
         localStorage.setItem('employeeUser', JSON.stringify({
-          ...response.data.employee,
+          ...response?.data?.employee,
           loginTime: new Date().toISOString()
         }))
         
         // Show success toast
-        toast.login(`Welcome back, ${response.data.employee.name}!`, {
+        toast.login(`Welcome back, ${response?.data?.employee?.name || 'Employee'}!`, {
           title: 'Login Successful',
           duration: 3000
         })

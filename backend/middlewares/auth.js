@@ -36,7 +36,9 @@ const protect = async (req, res, next) => {
       let admin = await Admin.findById(decoded.id);
       if (admin && admin.isActive) {
         req.admin = admin;
+        req.user = admin;
         req.userType = 'admin';
+        req.user.role = 'admin';
         return next();
       }
 
@@ -44,7 +46,9 @@ const protect = async (req, res, next) => {
       let pm = await PM.findById(decoded.id);
       if (pm && pm.isActive) {
         req.pm = pm;
+        req.user = pm;
         req.userType = 'pm';
+        req.user.role = 'pm';
         return next();
       }
 
@@ -52,7 +56,9 @@ const protect = async (req, res, next) => {
       let sales = await Sales.findById(decoded.id);
       if (sales && sales.isActive) {
         req.sales = sales;
+        req.user = sales;
         req.userType = 'sales';
+        req.user.role = 'sales';
         return next();
       }
 
@@ -60,7 +66,9 @@ const protect = async (req, res, next) => {
       let employee = await Employee.findById(decoded.id);
       if (employee && employee.isActive) {
         req.employee = employee;
+        req.user = employee;
         req.userType = 'employee';
+        req.user.role = 'employee';
         return next();
       }
 
@@ -68,7 +76,9 @@ const protect = async (req, res, next) => {
       let client = await Client.findById(decoded.id);
       if (client && client.isActive) {
         req.client = client;
+        req.user = client;
         req.userType = 'client';
+        req.user.role = 'client';
         return next();
       }
 
@@ -99,17 +109,18 @@ const protect = async (req, res, next) => {
 // @access  Private
 const authorize = (...roles) => {
   return (req, res, next) => {
-    if (!req.admin) {
+    if (!req.user) {
       return res.status(401).json({
         success: false,
         message: 'Not authorized to access this route'
       });
     }
 
-    if (!roles.includes(req.admin.role)) {
+    // Check if user role is in allowed roles
+    if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: `Admin role ${req.admin.role} is not authorized to access this route`
+        message: `User role ${req.user.role} is not authorized to access this route`
       });
     }
 
@@ -158,6 +169,158 @@ const isAdmin = (req, res, next) => {
   next();
 };
 
+// @desc    Check if user is PM
+// @access  Private
+const isPM = (req, res, next) => {
+  if (!req.pm) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authorized to access this route'
+    });
+  }
+
+  next();
+};
+
+// @desc    Check if user is Employee
+// @access  Private
+const isEmployee = (req, res, next) => {
+  if (!req.employee) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authorized to access this route'
+    });
+  }
+
+  next();
+};
+
+// @desc    Check if user is Client
+// @access  Private
+const isClient = (req, res, next) => {
+  if (!req.client) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authorized to access this route'
+    });
+  }
+
+  next();
+};
+
+// @desc    Check if user can access project
+// @access  Private
+const canAccessProject = async (req, res, next) => {
+  try {
+    const Project = require('../models/Project');
+    const projectId = req.params.projectId || req.params.id;
+    
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project ID is required'
+      });
+    }
+
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    // Check access permissions
+    if (req.userType === 'client' && !project.client.equals(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this project'
+      });
+    }
+
+    if (req.userType === 'employee' && !project.assignedTeam.some(member => member.equals(req.user.id))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this project'
+      });
+    }
+
+    if (req.userType === 'pm' && !project.projectManager.equals(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this project'
+      });
+    }
+
+    req.project = project;
+    next();
+  } catch (error) {
+    console.error('Project access check error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error in project access check'
+    });
+  }
+};
+
+// @desc    Check if user can access task
+// @access  Private
+const canAccessTask = async (req, res, next) => {
+  try {
+    const Task = require('../models/Task');
+    const Project = require('../models/Project');
+    const taskId = req.params.taskId || req.params.id;
+    
+    if (!taskId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Task ID is required'
+      });
+    }
+
+    const task = await Task.findById(taskId).populate('project');
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found'
+      });
+    }
+
+    const project = task.project;
+
+    // Check access permissions
+    if (req.userType === 'client' && !project.client.equals(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this task'
+      });
+    }
+
+    if (req.userType === 'employee' && !project.assignedTeam.some(member => member.equals(req.user.id))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this task'
+      });
+    }
+
+    if (req.userType === 'pm' && !project.projectManager.equals(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this task'
+      });
+    }
+
+    req.task = task;
+    next();
+  } catch (error) {
+    console.error('Task access check error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error in task access check'
+    });
+  }
+};
+
 // @desc    Optional auth - doesn't fail if no token
 // @access  Public/Private
 const optionalAuth = async (req, res, next) => {
@@ -203,5 +366,10 @@ module.exports = {
   authorize,
   canAccessHR,
   isAdmin,
+  isPM,
+  isEmployee,
+  isClient,
+  canAccessProject,
+  canAccessTask,
   optionalAuth
 };

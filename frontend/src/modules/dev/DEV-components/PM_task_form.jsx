@@ -7,6 +7,8 @@ import { Input } from '../../../components/ui/input'
 import { Textarea } from '../../../components/ui/textarea'
 import { Combobox } from '../../../components/ui/combobox'
 import { DatePicker } from '../../../components/ui/date-picker'
+import CloudinaryUpload from '../../../components/ui/cloudinary-upload'
+import { teamService, projectService, milestoneService } from '../DEV-services'
 
 const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => {
   const [formData, setFormData] = useState({
@@ -51,13 +53,13 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
   const loadProjects = async () => {
     try {
       setIsLoadingProjects(true)
-      await new Promise(r => setTimeout(r, 400))
-      // Mock projects
-      setProjects([
-        { _id: 'p-001', name: 'Website Redesign' },
-        { _id: 'p-002', name: 'Mobile App v2' },
-        { _id: 'p-003', name: 'Data Warehouse Setup' }
-      ])
+      // Get PM ID from token or user data
+      const pmId = localStorage.getItem('pmId') || 'current-pm'
+      const response = await projectService.getProjectsByPM(pmId, { limit: 100 })
+      setProjects(response.data)
+    } catch (error) {
+      console.error('Error loading projects:', error)
+      setProjects([])
     } finally {
       setIsLoadingProjects(false)
     }
@@ -67,14 +69,11 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
     if (!pid) { setMilestones([]); return }
     try {
       setIsLoadingMilestones(true)
-      await new Promise(r => setTimeout(r, 400))
-      // Mock milestones by project
-      const map = {
-        'p-001': [ { _id: 'm-001', title: 'M1 - UI/UX' }, { _id: 'm-002', title: 'M2 - Build' } ],
-        'p-002': [ { _id: 'm-010', title: 'M1 - Foundations' } ],
-        'p-003': [ { _id: 'm-020', title: 'M1 - Modeling' } ]
-      }
-      setMilestones(map[pid] || [])
+      const response = await milestoneService.getMilestonesByProject(pid)
+      setMilestones(response.data)
+    } catch (error) {
+      console.error('Error loading milestones:', error)
+      setMilestones([])
     } finally {
       setIsLoadingMilestones(false)
     }
@@ -84,13 +83,11 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
     if (!pid) { setTeamMembers([]); return }
     try {
       setIsLoadingTeamMembers(true)
-      await new Promise(r => setTimeout(r, 400))
-      // Mock members
-      setTeamMembers([
-        { _id: 'u-001', fullName: 'John Doe', jobTitle: 'Developer' },
-        { _id: 'u-002', fullName: 'Jane Smith', jobTitle: 'Designer' },
-        { _id: 'u-003', fullName: 'Mike Johnson', jobTitle: 'QA' }
-      ])
+      const response = await teamService.getEmployeesForTask(pid)
+      setTeamMembers(response.data)
+    } catch (error) {
+      console.error('Error loading team members:', error)
+      setTeamMembers([])
     } finally {
       setIsLoadingTeamMembers(false)
     }
@@ -200,7 +197,7 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
 
   const projectOptions = (projects || []).map(p => ({ value: p._id, label: p.name }))
   const milestoneOptions = (milestones || []).map(m => ({ value: m._id, label: m.title }))
-  const teamMemberOptions = (teamMembers || []).map(m => ({ value: m._id, label: m.jobTitle ? `${m.fullName} - ${m.jobTitle}` : m.fullName }))
+  const teamMemberOptions = (teamMembers || []).map(m => ({ value: m._id, label: m.position ? `${m.name} - ${m.position}` : m.name }))
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -327,25 +324,39 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
           {/* Attachments */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} className="space-y-2">
             <label className="text-sm font-semibold text-gray-700">Attachments</label>
-            <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-primary/50 transition-colors duration-200">
-              <input type="file" multiple onChange={handleFileChange} className="hidden" id="task-attachments" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" />
-              <label htmlFor="task-attachments" className="cursor-pointer flex flex-col items-center space-y-3 text-gray-500 hover:text-primary transition-colors duration-200">
-                <div className="p-3 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full">
-                  <Upload className="h-8 w-8" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-medium">Click to upload files or drag and drop</p>
-                  <p className="text-xs text-gray-400 mt-1">Images, videos, documents (max 10MB each)</p>
-                </div>
-              </label>
-            </div>
+            <CloudinaryUpload
+              onUploadSuccess={(uploadData) => {
+                const newAttachments = Array.isArray(uploadData) ? uploadData : [uploadData];
+                setFormData(prev => ({ 
+                  ...prev, 
+                  attachments: [...prev.attachments, ...newAttachments.map(data => ({
+                    id: data.public_id,
+                    name: data.original_filename,
+                    size: data.bytes,
+                    type: data.format,
+                    url: data.secure_url,
+                    public_id: data.public_id
+                  }))]
+                }));
+              }}
+              onUploadError={(error) => {
+                console.error('Upload error:', error);
+              }}
+              folder="appzeto/tasks/attachments"
+              maxSize={10 * 1024 * 1024} // 10MB
+              allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'video/mp4', 'video/avi', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'text/plain', 'application/zip', 'application/x-rar-compressed']}
+              accept=".jpg,.jpeg,.png,.gif,.mp4,.avi,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+              placeholder="Click to upload files or drag and drop"
+              showPreview={true}
+              multiple={true}
+            />
 
             {formData.attachments.length > 0 && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3">
                 <h4 className="text-sm font-semibold text-gray-800 flex items-center space-x-2"><CheckCircle className="h-4 w-4 text-green-500" /><span>Selected Files ({formData.attachments.length})</span></h4>
                 <div className="space-y-2">
                   {formData.attachments.map((attachment, index) => (
-                    <motion.div key={index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+                    <motion.div key={attachment.id || index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200">
                       <div className="flex items-center space-x-3">
                         <span className="text-2xl">📎</span>
                         <div>
@@ -353,7 +364,7 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
                           <p className="text-xs text-gray-500">{formatFileSize(attachment.size)}</p>
                         </div>
                       </div>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => removeAttachment(index)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => removeAttachment(attachment.id || index)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
                         <X className="h-4 w-4" />
                       </Button>
                     </motion.div>

@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import Client_navbar from '../../DEV-components/Client_navbar'
+import { projectService, socketService } from '../../DEV-services'
 import { 
   FiFolder, 
   FiCheckSquare, 
@@ -10,68 +11,80 @@ import {
   FiCalendar,
   FiArrowRight,
   FiEye,
-  FiFilter
+  FiFilter,
+  FiLoader
 } from 'react-icons/fi'
 
 const Client_projects = () => {
   const [activeFilter, setActiveFilter] = useState('all')
-
-  // Mock projects data
-  const [projectsData] = useState({
-    statistics: {
-      total: 3,
-      active: 2,
-      completed: 1,
-      overdue: 0
-    },
-    projects: [
-      {
-        id: 1,
-        name: "E-commerce Website",
-        description: "Modern e-commerce platform with payment integration and mobile responsiveness",
-        status: "active",
-        priority: "high",
-        progress: 65,
-        dueDate: "2024-02-15",
-        assignedTeam: ["John Doe (PM)", "Jane Smith (Developer)", "Mike Wilson (Designer)"],
-        totalTasks: 25,
-        completedTasks: 16,
-        awaitingClientFeedback: 2,
-        lastUpdate: "2024-01-22",
-        startDate: "2024-01-01"
-      },
-      {
-        id: 2,
-        name: "Mobile App Development",
-        description: "Cross-platform mobile application for iOS and Android with real-time features",
-        status: "active",
-        priority: "urgent",
-        progress: 45,
-        dueDate: "2024-01-30",
-        assignedTeam: ["Sarah Johnson (PM)", "David Brown (Developer)"],
-        totalTasks: 30,
-        completedTasks: 14,
-        awaitingClientFeedback: 1,
-        lastUpdate: "2024-01-21",
-        startDate: "2024-01-10"
-      },
-      {
-        id: 3,
-        name: "Database Migration",
-        description: "Migrate legacy database to modern cloud infrastructure with zero downtime",
-        status: "completed",
-        priority: "normal",
-        progress: 100,
-        dueDate: "2024-01-15",
-        assignedTeam: ["Lisa Chen (PM)", "Tom Wilson (DevOps)"],
-        totalTasks: 15,
-        completedTasks: 15,
-        awaitingClientFeedback: 0,
-        lastUpdate: "2024-01-15",
-        startDate: "2024-01-01"
-      }
-    ]
+  const [projects, setProjects] = useState([])
+  const [statistics, setStatistics] = useState({
+    total: 0,
+    active: 0,
+    completed: 0,
+    overdue: 0
   })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    loadProjects()
+    setupWebSocket()
+    
+    return () => {
+      socketService.disconnect()
+    }
+  }, [])
+
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('clientToken')
+    if (token) {
+      socketService.connect(token)
+      
+      // Listen for real-time updates
+      socketService.on('project_updated', () => {
+        loadProjects()
+      })
+      
+      socketService.on('project_created', () => {
+        loadProjects()
+      })
+    }
+  }
+
+  const loadProjects = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const clientId = localStorage.getItem('clientId')
+      if (!clientId) {
+        throw new Error('Client ID not found')
+      }
+      
+      const response = await projectService.getProjectsByClient(clientId, {
+        limit: 100,
+        sortBy: 'dueDate',
+        sortOrder: 'asc'
+      })
+      
+      setProjects(response.data || [])
+      
+      // Calculate statistics
+      const stats = {
+        total: response.data?.length || 0,
+        active: response.data?.filter(p => p.status === 'active').length || 0,
+        completed: response.data?.filter(p => p.status === 'completed').length || 0,
+        overdue: response.data?.filter(p => p.status === 'overdue').length || 0
+      }
+      setStatistics(stats)
+    } catch (err) {
+      console.error('Error loading projects:', err)
+      setError(err.message || 'Failed to load projects')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -116,14 +129,14 @@ const Client_projects = () => {
   }
 
   // Filter projects based on active filter
-  const filteredProjects = projectsData.projects.filter(project => {
+  const filteredProjects = projects.filter(project => {
     return activeFilter === 'all' || project.status === activeFilter
   })
 
   const filters = [
-    { key: 'all', label: 'All Projects', count: projectsData.statistics.total },
-    { key: 'active', label: 'Active', count: projectsData.statistics.active },
-    { key: 'completed', label: 'Completed', count: projectsData.statistics.completed }
+    { key: 'all', label: 'All Projects', count: statistics.total },
+    { key: 'active', label: 'Active', count: statistics.active },
+    { key: 'completed', label: 'Completed', count: statistics.completed }
   ]
 
   return (
@@ -133,6 +146,24 @@ const Client_projects = () => {
       {/* Main Content */}
       <main className="pt-16 lg:pt-16 pb-16 lg:pb-8">
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+          {/* Error Display */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <FiLoader className="h-5 w-5 text-red-500 mr-2" />
+                <p className="text-red-700">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <FiLoader className="h-8 w-8 text-primary animate-spin mr-2" />
+              <p className="text-gray-600">Loading projects...</p>
+            </div>
+          )}
+
           {/* Overview Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
             <div className="w-full bg-white rounded-2xl md:rounded-lg p-4 md:p-6 shadow-md border border-gray-100">

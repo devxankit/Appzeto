@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react'
+﻿import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import PM_milestone_form from '../../DEV-components/PM_milestone_form'
 import PM_task_form from '../../DEV-components/PM_task_form'
+import { projectService, milestoneService, taskService } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
 import { FolderKanban, Calendar, Users, CheckSquare, TrendingUp, Clock, Target, User, Plus, Loader2, FileText, Paperclip, Upload, Eye, Download, X } from 'lucide-react'
 
 const PM_project_detail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState('overview')
   const [timeLeft, setTimeLeft] = useState('')
   const [isMilestoneFormOpen, setIsMilestoneFormOpen] = useState(false)
@@ -253,12 +256,12 @@ const PM_project_detail = () => {
   }
 
   const getFileIcon = (type) => {
-    if (type.includes('pdf')) return '📄'
-    if (type.includes('image')) return '🖼️'
-    if (type.includes('video')) return '🎥'
-    if (type.includes('word') || type.includes('document')) return '📝'
-    if (type.includes('figma') || type.includes('fig')) return '🎨'
-    return '📎'
+    if (type.includes('pdf')) return '≡ƒôä'
+    if (type.includes('image')) return '≡ƒû╝∩╕Å'
+    if (type.includes('video')) return '≡ƒÄÑ'
+    if (type.includes('word') || type.includes('document')) return '≡ƒô¥'
+    if (type.includes('figma') || type.includes('fig')) return '≡ƒÄ¿'
+    return '≡ƒôÄ'
   }
 
   const getRevisionStatusColor = (status) => {
@@ -405,7 +408,7 @@ const PM_project_detail = () => {
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-gray-900 truncate">{att.name}</p>
                     <p className="text-xs text-gray-500">
-                      {formatFileSize(att.size)} • {new Date(att.uploadedAt).toLocaleDateString()}
+                      {formatFileSize(att.size)} ΓÇó {new Date(att.uploadedAt).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
@@ -502,7 +505,7 @@ const PM_project_detail = () => {
                       ? 'bg-green-100 text-green-600' 
                       : 'bg-yellow-100 text-yellow-600'
                   }`}>
-                    {revision.status === 'completed' ? '✓' : index + 1}
+                    {revision.status === 'completed' ? 'Γ£ô' : index + 1}
                   </div>
                   <div>
                     <h4 className="text-sm font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">

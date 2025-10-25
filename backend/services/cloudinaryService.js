@@ -47,26 +47,42 @@ const uploadFile = async (file, folder = 'appzeto', options = {}) => {
     const result = await cloudinary.uploader.upload(file.path, uploadOptions);
     
     return {
-      success: true,
-      data: {
-        public_id: result.public_id,
-        secure_url: result.secure_url,
-        original_filename: result.original_filename,
-        format: result.format,
-        bytes: result.bytes,
-        width: result.width,
-        height: result.height,
-        created_at: result.created_at
-      }
+      public_id: result.public_id,
+      secure_url: result.secure_url,
+      originalName: result.original_filename,
+      original_filename: result.original_filename,
+      format: result.format,
+      size: result.bytes,
+      bytes: result.bytes,
+      width: result.width,
+      height: result.height,
+      resource_type: result.resource_type,
+      uploadedAt: new Date()
     };
   } catch (error) {
     console.error('Cloudinary upload error:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    throw new Error(`Upload failed: ${error.message}`);
   }
 };
+
+// Upload to Cloudinary (for use in controllers) - using imported function
+// const uploadToCloudinary = async (file, folder = 'appzeto', options = {}) => {
+//   return await uploadFile(file, folder, options);
+// };
+
+// Delete from Cloudinary (for use in controllers) - using imported function
+// const deleteFromCloudinary = async (publicId) => {
+//   try {
+//     const result = await cloudinary.uploader.destroy(publicId);
+//     if (result.result !== 'ok') {
+//       throw new Error('Failed to delete file from Cloudinary');
+//     }
+//     return result;
+//   } catch (error) {
+//     console.error('Cloudinary delete error:', error);
+//     throw new Error(`Delete failed: ${error.message}`);
+//   }
+// };
 
 // Universal delete function
 const deleteFile = async (publicId) => {
@@ -85,21 +101,9 @@ const deleteFile = async (publicId) => {
   }
 };
 
-// Get file information
+// Get file information (wrapper for imported getFileInfo)
 const getFileDetails = async (publicId) => {
-  try {
-    const result = await cloudinary.api.resource(publicId);
-    return {
-      success: true,
-      data: result
-    };
-  } catch (error) {
-    console.error('Cloudinary get info error:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
+  return await getFileInfo(publicId);
 };
 
 // Upload multiple files
@@ -187,8 +191,11 @@ const generateSignedUploadUrl = (folder = 'appzeto', options = {}) => {
 module.exports = {
   upload,
   uploadFile,
+  uploadToCloudinary, // imported from config
   deleteFile,
+  deleteFromCloudinary, // imported from config
   getFileDetails,
+  getFileInfo, // imported from config
   uploadMultipleFiles,
   deleteMultipleFiles,
   generateSignedUploadUrl,

@@ -1,9 +1,18 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import PM_project_form from '../../DEV-components/PM_project_form'
 import PM_task_form from '../../DEV-components/PM_task_form'
+import { useToast } from '../../../../contexts/ToastContext'
+import { 
+  analyticsService, 
+  projectService, 
+  taskService, 
+  teamService, 
+  socketService, 
+  tokenUtils 
+} from '../../DEV-services'
 import { 
   FiFolder, 
   FiCheckSquare, 
@@ -16,74 +25,203 @@ import {
   FiClock,
   FiCheckCircle,
   FiPauseCircle,
-  FiFileText
+  FiFileText,
+  FiLoader
 } from 'react-icons/fi'
 
 const PM_dashboard = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false)
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [dashboardData, setDashboardData] = useState({
+    projectStats: { total: 0, active: 0, completed: 0, onHold: 0, overdue: 0 },
+    recentProjects: [],
+    teamStats: { totalMembers: 0, activeTasks: 0, completedTasks: 0, activeMilestones: 0 },
+    projectStatusData: [],
+    productivityMetrics: {}
+  })
+
+  // Load dashboard data
+  useEffect(() => {
+    loadDashboardData()
+    setupWebSocket()
+    
+    return () => {
+      socketService.disconnect()
+    }
+  }, [])
+
+  const setupWebSocket = async () => {
+    const token = localStorage.getItem('pmToken')
+    if (token && tokenUtils.isAuthenticated()) {
+      try {
+        await socketService.connect(token)
+        
+        // Listen for connection status
+        socketService.on('connection_status', (status) => {
+          if (status.connected) {
+            console.log('WebSocket connected successfully')
+          } else {
+            console.warn('WebSocket disconnected:', status.reason)
+          }
+        })
+        
+        // Listen for connection errors
+        socketService.on('connection_error', (error) => {
+          console.error('WebSocket connection error:', error)
+          // Don't show error to user, just log it
+        })
+        
+        // Listen for real-time updates
+        socketService.on('project_updated', () => {
+          loadDashboardData()
+        })
+        
+        socketService.on('task_updated', () => {
+          loadDashboardData()
+        })
+      } catch (error) {
+        console.warn('WebSocket connection failed:', error)
+        // Don't break the dashboard if WebSocket fails
+      }
+    } else {
+      console.warn('No valid PM token found, skipping WebSocket connection')
+    }
+  }
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true)
+      
+      // Load projects data first - this is the main source of truth
+      const [projectsResponse, teamStats, productivityMetrics] = await Promise.all([
+        projectService.getAllProjects({ limit: 100 }), // Get all projects for statistics
+        teamService.getTeamStatistics(),
+        analyticsService.getProductivityMetrics()
+      ])
+
+      // Debug logging
+      console.log('Dashboard data received:', {
+        projectsResponse,
+        teamStats,
+        productivityMetrics
+      })
+
+      // Get projects data
+      const allProjects = projectsResponse?.data || []
+      
+      // Calculate statistics from projects data (frontend-based calculation)
+      const projectStats = {
+        total: allProjects.length,
+        active: allProjects.filter(p => p.status === 'active').length,
+        completed: allProjects.filter(p => p.status === 'completed').length,
+        onHold: allProjects.filter(p => p.status === 'on-hold').length,
+        planning: allProjects.filter(p => p.status === 'planning').length,
+        testing: allProjects.filter(p => p.status === 'testing').length,
+        cancelled: allProjects.filter(p => p.status === 'cancelled').length,
+        overdue: allProjects.filter(p => {
+          if (!p.dueDate) return false
+          return new Date(p.dueDate) < new Date() && !['completed', 'cancelled'].includes(p.status)
+        }).length
+      }
+      
+      console.log('Calculated project stats:', projectStats)
+      
+      // Process recent projects (limit to 3 most recent)
+      const processedRecentProjects = allProjects
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, 3)
+        .map(project => ({
+          name: project.name,
+          progress: project.progress || 0,
+          status: project.status,
+          deadline: project.dueDate ? new Date(project.dueDate).toLocaleDateString() : 'No deadline',
+          team: project.assignedTeam?.length || 0
+        }))
+
+      // Process team statistics with safe access
+      const processedTeamStats = {
+        totalMembers: teamStats?.data?.totalEmployees || 0,
+        activeTasks: productivityMetrics?.data?.totalTasks || 0,
+        completedTasks: productivityMetrics?.data?.completedTasks || 0,
+        activeMilestones: 0 // Will be calculated from projects if needed
+      }
+
+      // Process project status data for chart
+      const projectStatusData = [
+        { name: 'In Progress', value: projectStats.active, color: '#10B981', count: `${projectStats.active} projects` },
+        { name: 'Completed', value: projectStats.completed, color: '#3B82F6', count: `${projectStats.completed} projects` },
+        { name: 'On Hold', value: projectStats.onHold, color: '#F59E0B', count: `${projectStats.onHold} project${projectStats.onHold !== 1 ? 's' : ''}` },
+        { name: 'Overdue', value: projectStats.overdue, color: '#EF4444', count: `${projectStats.overdue} project${projectStats.overdue !== 1 ? 's' : ''}` }
+      ]
+
+      setDashboardData({
+        projectStats,
+        recentProjects: processedRecentProjects,
+        teamStats: processedTeamStats,
+        projectStatusData,
+        productivityMetrics: productivityMetrics?.data || {}
+      })
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+      // Set fallback data on error
+      setDashboardData({
+        projectStats: { total: 0, active: 0, completed: 0, onHold: 0, overdue: 0 },
+        recentProjects: [],
+        teamStats: { totalMembers: 0, activeTasks: 0, completedTasks: 0, activeMilestones: 0 },
+        projectStatusData: [
+          { name: 'In Progress', value: 0, color: '#10B981', count: '0 projects' },
+          { name: 'Completed', value: 0, color: '#3B82F6', count: '0 projects' },
+          { name: 'On Hold', value: 0, color: '#F59E0B', count: '0 projects' },
+          { name: 'Overdue', value: 0, color: '#EF4444', count: '0 projects' }
+        ],
+        productivityMetrics: {}
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleProjectSubmit = async (data) => {
-    // TODO: integrate with API
-    setIsProjectFormOpen(false)
+    try {
+      await projectService.createProject(data)
+      toast.success('Project created successfully!')
+      setIsProjectFormOpen(false)
+      loadDashboardData() // Refresh data
+    } catch (error) {
+      console.error('Error creating project:', error)
+      toast.error('Failed to create project. Please try again.')
+    }
   }
 
   const handleTaskSubmit = async (data) => {
-    // TODO: integrate with API
-    setIsTaskFormOpen(false)
-  }
-  // Mock data for projects
-  const projectStats = {
-    total: 12,
-    active: 5,
-    completed: 6,
-    onHold: 1,
-    overdue: 2
-  }
-
-  // Recent projects data
-  const recentProjects = [
-    {
-      name: "Mobile App Development",
-      progress: 65,
-      status: "active",
-      deadline: "Dec 15, 2024",
-      team: 4
-    },
-    {
-      name: "Website Redesign",
-      progress: 90,
-      status: "near-completion",
-      deadline: "Dec 8, 2024", 
-      team: 3
-    },
-    {
-      name: "Database Migration",
-      progress: 30,
-      status: "active",
-      deadline: "Jan 20, 2025",
-      team: 2
+    try {
+      await taskService.createTask(data)
+      toast.success('Task created successfully!')
+      setIsTaskFormOpen(false)
+      loadDashboardData() // Refresh data
+    } catch (error) {
+      console.error('Error creating task:', error)
+      toast.error('Failed to create task. Please try again.')
     }
-  ]
+  }
 
-  // Chart data
-  const monthlyData = [
-    { month: 'Jan', completed: 3, active: 4 },
-    { month: 'Feb', completed: 5, active: 3 },
-    { month: 'Mar', completed: 7, active: 5 },
-    { month: 'Apr', completed: 4, active: 6 },
-    { month: 'May', completed: 6, active: 4 },
-    { month: 'Jun', completed: 8, active: 5 }
-  ]
-
-  // Project status donut chart data
-  const projectStatusData = [
-    { name: 'In Progress', value: 5, color: '#10B981', count: '5 projects' },
-    { name: 'Completed', value: 6, color: '#3B82F6', count: '6 projects' },
-    { name: 'On Hold', value: 1, color: '#F59E0B', count: '1 project' },
-    { name: 'Overdue', value: 2, color: '#EF4444', count: '2 projects' }
-  ]
+  // Show loading state
+  if (loading) {
+    return (
+      <div>
+        <PM_navbar />
+        <div className="pt-16 lg:pt-16 pb-20 lg:pb-0 min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <FiLoader className="animate-spin text-4xl text-teal-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading dashboard...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -161,7 +299,7 @@ const PM_dashboard = () => {
                 </div>
                 <span className="text-sm text-gray-600 font-medium">Active</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">5</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{dashboardData.projectStats.active}</div>
               <div className="text-sm text-gray-600">Projects</div>
             </div>
 
@@ -173,7 +311,7 @@ const PM_dashboard = () => {
                 </div>
                 <span className="text-sm text-gray-600 font-medium">Done</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">6</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{dashboardData.projectStats.completed}</div>
               <div className="text-sm text-gray-600">Completed</div>
             </div>
 
@@ -185,7 +323,7 @@ const PM_dashboard = () => {
                 </div>
                 <span className="text-sm text-gray-600 font-medium">Overdue</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">2</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{dashboardData.projectStats.overdue}</div>
               <div className="text-sm text-gray-600">Projects</div>
             </div>
 
@@ -197,7 +335,7 @@ const PM_dashboard = () => {
                 </div>
                 <span className="text-sm text-gray-600 font-medium">Active</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">24</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{dashboardData.teamStats.activeTasks}</div>
               <div className="text-sm text-gray-600">Tasks</div>
             </div>
           </div>
@@ -279,7 +417,7 @@ const PM_dashboard = () => {
             </div>
             
             <div className="space-y-2">
-              {recentProjects.map((project, index) => (
+              {dashboardData.recentProjects.map((project, index) => (
                 <div key={index} className="border border-gray-200 rounded-lg p-3">
                   <h3 className="font-medium text-gray-900 mb-2">{project.name}</h3>
                   <div className="flex justify-between text-sm mb-1">
@@ -386,11 +524,11 @@ const PM_dashboard = () => {
                 {/* Top Row - Key Metrics */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-3 bg-blue-50 rounded-lg">
-                    <div className="text-xl font-bold text-blue-600">8</div>
+                    <div className="text-xl font-bold text-blue-600">{dashboardData.teamStats.totalMembers}</div>
                     <div className="text-xs text-blue-700 font-medium">Team Members</div>
                   </div>
                   <div className="text-center p-3 bg-teal-50 rounded-lg">
-                    <div className="text-xl font-bold text-teal-600">24</div>
+                    <div className="text-xl font-bold text-teal-600">{dashboardData.teamStats.activeTasks}</div>
                     <div className="text-xs text-teal-700 font-medium">Active Tasks</div>
                   </div>
                 </div>
@@ -399,15 +537,15 @@ const PM_dashboard = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700 font-medium">Tasks Completed</span>
-                    <span className="text-sm font-bold text-green-600">89</span>
+                    <span className="text-sm font-bold text-green-600">{dashboardData.teamStats.completedTasks}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700 font-medium">Active Milestone Count</span>
-                    <span className="text-sm font-bold text-purple-600">12</span>
+                    <span className="text-sm font-bold text-purple-600">{dashboardData.teamStats.activeMilestones}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700 font-medium">Active Projects</span>
-                    <span className="text-sm font-bold text-orange-600">5</span>
+                    <span className="text-sm font-bold text-orange-600">{dashboardData.projectStats.active}</span>
                   </div>
                 </div>
               </div>
@@ -427,7 +565,7 @@ const PM_dashboard = () => {
                 <div className="relative">
                   <PieChart width={280} height={280}>
                     <Pie
-                      data={projectStatusData}
+                      data={dashboardData.projectStatusData}
                       cx="50%"
                       cy="50%"
                       innerRadius={80}
@@ -435,7 +573,7 @@ const PM_dashboard = () => {
                       paddingAngle={2}
                       dataKey="value"
                     >
-                      {projectStatusData.map((entry, index) => (
+                      {dashboardData.projectStatusData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -444,7 +582,7 @@ const PM_dashboard = () => {
                   {/* Center Text */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-3xl font-bold text-gray-900">{projectStats.total}</p>
+                      <p className="text-3xl font-bold text-gray-900">{dashboardData.projectStats.total}</p>
                       <p className="text-sm text-gray-600">Total Projects</p>
                     </div>
                   </div>
@@ -454,7 +592,7 @@ const PM_dashboard = () => {
               {/* Legend */}
               <div className="flex-1 lg:pl-8">
                 <div className="space-y-4">
-                  {projectStatusData.map((item, index) => (
+                  {dashboardData.projectStatusData.map((item, index) => (
                     <div key={index} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200/50 hover:shadow-md transition-all duration-300">
                       <div className="flex items-center space-x-4">
                         <div 
@@ -473,7 +611,7 @@ const PM_dashboard = () => {
                             className="h-full rounded-full transition-all duration-1000"
                             style={{ 
                               backgroundColor: item.color,
-                              width: `${(item.value / projectStats.total) * 100}%`
+                              width: `${(item.value / dashboardData.projectStats.total) * 100}%`
                             }}
                           ></div>
                         </div>
@@ -489,8 +627,8 @@ const PM_dashboard = () => {
                       <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
                       <p className="text-xs font-semibold text-emerald-700">Completion Rate</p>
                     </div>
-                    <p className="text-base font-bold text-emerald-900">50%</p>
-                    <p className="text-xs text-emerald-600">6/12 completed</p>
+                    <p className="text-base font-bold text-emerald-900">{Math.round((dashboardData.projectStats.completed / Math.max(dashboardData.projectStats.total, 1)) * 100)}%</p>
+                    <p className="text-xs text-emerald-600">{dashboardData.projectStats.completed}/{dashboardData.projectStats.total} completed</p>
                   </div>
                   
                   <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200/50">
@@ -498,8 +636,8 @@ const PM_dashboard = () => {
                       <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                       <p className="text-xs font-semibold text-blue-700">Active Rate</p>
                     </div>
-                    <p className="text-base font-bold text-blue-900">41.7%</p>
-                    <p className="text-xs text-blue-600">5/12 in progress</p>
+                    <p className="text-base font-bold text-blue-900">{Math.round((dashboardData.projectStats.active / Math.max(dashboardData.projectStats.total, 1)) * 100)}%</p>
+                    <p className="text-xs text-blue-600">{dashboardData.projectStats.active}/{dashboardData.projectStats.total} in progress</p>
                   </div>
                 </div>
               </div>

@@ -10,6 +10,8 @@ import { DatePicker } from '../../../components/ui/date-picker';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Building2, AlertCircle, Star, Clock, CheckCircle, X, ArrowLeft, Loader2, Upload, FileText } from 'lucide-react';
 import PM_navbar from './PM_navbar';
+import CloudinaryUpload from '../../../components/ui/cloudinary-upload';
+import { teamService, projectService } from '../DEV-services';
 
 const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
   const { id } = useParams();
@@ -80,58 +82,36 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
   const loadUsersData = async () => {
     setIsLoading(true);
     try {
-      // Simulate API call with mock data
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Mock clients data - including clients from PM_new_projects
-      const mockClients = [
-        { _id: 'c-001', company: 'Acme Corp', fullName: 'John Smith', avatar: 'JS' },
-        { _id: 'c-002', company: 'Globex', fullName: 'Jane Doe', avatar: 'JD' },
-        { _id: 'c-003', company: 'Initech', fullName: 'Mike Johnson', avatar: 'MJ' },
-        { _id: 'c-004', company: 'Umbrella LLC', fullName: 'Sarah Wilson', avatar: 'SW' },
-        { _id: 'c-005', company: 'Soylent', fullName: 'David Brown', avatar: 'DB' },
-        { _id: 'c-006', company: 'Stark Industries', fullName: 'Lisa Davis', avatar: 'LD' },
-        // Add customers from PM_new_projects
-        { _id: 'c-007', company: 'Tech Solutions Inc.', fullName: 'Sarah Wilson', avatar: 'SW' },
-        { _id: 'c-008', company: 'Digital Marketing Pro', fullName: 'Michael Chen', avatar: 'MC' },
-        { _id: 'c-009', company: 'E-commerce Store', fullName: 'Emily Rodriguez', avatar: 'ER' },
-        { _id: 'c-010', company: 'Restaurant Chain', fullName: 'James Thompson', avatar: 'JT' },
-        { _id: 'c-011', company: 'Fitness Center', fullName: 'Lisa Anderson', avatar: 'LA' },
-      ];
-
-      // Mock team members data
-      const mockTeamMembers = [
-        { _id: 'u-001', fullName: 'John Doe', jobTitle: 'Developer', department: 'Engineering', avatar: 'JD' },
-        { _id: 'u-002', fullName: 'Jane Smith', jobTitle: 'Designer', department: 'Design', avatar: 'JS' },
-        { _id: 'u-003', fullName: 'Mike Johnson', jobTitle: 'QA Engineer', department: 'Engineering', avatar: 'MJ' },
-        { _id: 'u-004', fullName: 'Sarah Wilson', jobTitle: 'Project Manager', department: 'Management', avatar: 'SW' },
-        { _id: 'u-005', fullName: 'David Brown', jobTitle: 'DevOps Engineer', department: 'Engineering', avatar: 'DB' },
-        { _id: 'u-006', fullName: 'Lisa Davis', jobTitle: 'UX Designer', department: 'Design', avatar: 'LD' },
-        { _id: 'u-007', fullName: 'Tom Wilson', jobTitle: 'Security Engineer', department: 'Engineering', avatar: 'TW' },
-        { _id: 'u-008', fullName: 'Emma Taylor', jobTitle: 'Business Analyst', department: 'Business', avatar: 'ET' },
-      ];
+      // Load clients and team members from API
+      const [clientsResponse, teamResponse] = await Promise.all([
+        teamService.getClientsForProject(),
+        teamService.getTeamMembersForProject()
+      ]);
       
       // Format clients data - prioritize client names over company names
-      const formattedClients = mockClients.map(client => ({
+      const formattedClients = clientsResponse.data.map(client => ({
         value: client._id,
-        label: client.fullName, // Show client name as primary label
-        subtitle: client.company, // Show company as subtitle
+        label: client.name, // Show client name as primary label
+        subtitle: client.companyName, // Show company as subtitle
         icon: Building2,
-        avatar: client.avatar
+        avatar: client.name.substring(0, 2).toUpperCase()
       }));
       
       // Format team members data
-      const formattedTeamMembers = mockTeamMembers.map(member => ({
+      const formattedTeamMembers = teamResponse.data.map(member => ({
         value: member._id,
-        label: member.fullName,
-        subtitle: `${member.jobTitle} - ${member.department}`,
-        avatar: member.avatar
+        label: member.name,
+        subtitle: `${member.position} - ${member.department}`,
+        avatar: member.name.substring(0, 2).toUpperCase()
       }));
       
       setClients(formattedClients);
       setTeamMembers(formattedTeamMembers);
     } catch (error) {
       console.error('Error loading users data:', error);
+      // Fallback to empty arrays on error
+      setClients([]);
+      setTeamMembers([]);
     } finally {
       setIsLoading(false);
     }
@@ -140,34 +120,19 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
   const loadProjectData = async () => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Mock project data for edit mode
-      const mockProject = {
-        name: 'Sample Project',
-        description: 'This is a sample project for editing',
-        customer: 'c-001',
-        priority: 'high',
-        dueDate: '2025-12-31',
-        assignedTeam: ['u-001', 'u-002'],
-        status: 'active',
-        tags: ['web', 'mobile'],
-        attachments: [
-          { id: 'att-001', name: 'project-brief.pdf', size: 1024000, type: 'application/pdf' },
-          { id: 'att-002', name: 'wireframes.fig', size: 2048000, type: 'application/figma' },
-        ],
-      };
+      // Load project data from API
+      const response = await projectService.getProjectById(id);
+      const project = response.data;
       
       setFormData({
-        name: mockProject.name || '',
-        description: mockProject.description || '',
-        client: mockProject.client || '',
-        priority: mockProject.priority || 'normal',
-        dueDate: mockProject.dueDate || '',
-        assignedTeam: mockProject.assignedTeam || [],
-        status: mockProject.status || 'planning',
-        attachments: mockProject.attachments || [],
+        name: project.name || '',
+        description: project.description || '',
+        client: project.client?._id || '',
+        priority: project.priority || 'normal',
+        dueDate: project.dueDate || '',
+        assignedTeam: project.assignedTeam?.map(member => member._id) || [],
+        status: project.status || 'planning',
+        attachments: project.attachments || [],
       });
     } catch (error) {
       console.error('Error loading project:', error);
@@ -244,14 +209,16 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
       setIsSubmitting(true);
       
       try {
-        // Simulate API call with mock data
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        console.log('Creating project:', formData);
-        await onSubmit(formData);
+        if (isEditMode) {
+          // Update existing project
+          await projectService.updateProject(id, formData);
+        } else {
+          // Create new project
+          await onSubmit(formData);
+        }
         handleClose();
       } catch (error) {
-        console.error('Error creating project:', error);
+        console.error('Error saving project:', error);
       } finally {
         setIsSubmitting(false);
       }
@@ -467,21 +434,32 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
         className="space-y-2"
       >
         <label className="text-sm font-semibold text-gray-700">Attachments</label>
-        <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-primary/50 transition-colors duration-200">
-          <input 
-            type="file" 
-            multiple 
-            accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip,.rar" 
-            onChange={handleFileUpload} 
-            className="hidden" 
-            id="project-attachments" 
-          />
-          <label htmlFor="project-attachments" className="cursor-pointer">
-            <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-600 mb-1">Click to upload files</p>
-            <p className="text-xs text-gray-500">Images, videos, PDFs, documents</p>
-          </label>
-        </div>
+        <CloudinaryUpload
+          onUploadSuccess={(uploadData) => {
+            const newAttachments = Array.isArray(uploadData) ? uploadData : [uploadData];
+            setFormData(prev => ({ 
+              ...prev, 
+              attachments: [...prev.attachments, ...newAttachments.map(data => ({
+                id: data.public_id,
+                name: data.original_filename,
+                size: data.bytes,
+                type: data.format,
+                url: data.secure_url,
+                public_id: data.public_id
+              }))]
+            }));
+          }}
+          onUploadError={(error) => {
+            console.error('Upload error:', error);
+          }}
+          folder="appzeto/projects/attachments"
+          maxSize={10 * 1024 * 1024} // 10MB
+          allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'video/mp4', 'video/avi', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'application/zip', 'application/x-rar-compressed']}
+          accept=".jpg,.jpeg,.png,.gif,.mp4,.avi,.pdf,.doc,.docx,.txt,.zip,.rar"
+          placeholder="Click to upload files or drag and drop"
+          showPreview={true}
+          multiple={true}
+        />
         {formData.attachments.length > 0 && (
           <div className="space-y-2">
             {formData.attachments.map((att, index) => (

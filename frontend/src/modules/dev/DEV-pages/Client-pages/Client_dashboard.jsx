@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import Client_navbar from '../../DEV-components/Client_navbar'
+import { projectService, analyticsService, socketService } from '../../DEV-services'
 import { 
   FiFolder, 
   FiFileText, 
@@ -21,11 +22,13 @@ import {
   FiUpload,
   FiRefreshCw,
   FiVideo,
-  FiSettings
+  FiSettings,
+  FiLoader
 } from 'react-icons/fi'
 
 const Client_dashboard = () => {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [responseText, setResponseText] = useState('')
@@ -36,207 +39,129 @@ const Client_dashboard = () => {
   const [dashboardData, setDashboardData] = useState({
     statistics: {
       projects: {
-        total: 3,
-        active: 2,
-        completed: 1,
+        total: 0,
+        active: 0,
+        completed: 0,
         awaitingApproval: 0
       },
       requests: {
-        total: 8,
-        pendingResponse: 2,
-        responded: 5,
-        urgent: 1
+        total: 0,
+        pendingResponse: 0,
+        responded: 0,
+        urgent: 0
       },
       tasks: {
-        total: 45,
-        completed: 32,
-        awaitingClientInput: 3,
-        inProgress: 10
+        total: 0,
+        completed: 0,
+        awaitingClientInput: 0,
+        inProgress: 0
       },
-      overallProgress: 78
+      overallProgress: 0
     },
-    recentProjects: [
-      {
-        id: 1,
-        name: "E-commerce Website",
-        description: "Modern e-commerce platform with payment integration",
-        status: "active",
-        priority: "high",
-        progress: 65,
-        dueDate: "2024-02-15",
-        assignedTeam: ["John Doe (PM)", "Jane Smith (Developer)"],
-        totalTasks: 25,
-        completedTasks: 16,
-        awaitingClientFeedback: 2,
-        lastUpdate: "2024-01-22",
-        milestones: {
-          total: 5,
-          completed: 3,
-          progress: 60
-        }
-      },
-      {
-        id: 2,
-        name: "Mobile App Development",
-        description: "Cross-platform mobile application for iOS and Android",
-        status: "active",
-        priority: "urgent",
-        progress: 45,
-        dueDate: "2024-01-30",
-        assignedTeam: ["Mike Johnson (PM)", "Sarah Wilson (Developer)"],
-        totalTasks: 30,
-        completedTasks: 14,
-        awaitingClientFeedback: 1,
-        lastUpdate: "2024-01-21",
-        milestones: {
-          total: 4,
-          completed: 1,
-          progress: 25
-        }
-      },
-      {
-        id: 3,
-        name: "Database Migration",
-        description: "Migrate legacy database to modern cloud infrastructure",
-        status: "completed",
-        priority: "normal",
-        progress: 100,
-        dueDate: "2024-01-15",
-        assignedTeam: ["David Brown (PM)"],
-        totalTasks: 15,
-        completedTasks: 15,
-        awaitingClientFeedback: 0,
-        lastUpdate: "2024-01-15",
-        milestones: {
-          total: 3,
-          completed: 3,
-          progress: 100
-        }
-      }
-    ],
-    recentRequests: [
-      {
-        id: 1,
-        title: "Design Approval Required",
-        description: "Please review and approve the new homepage design mockups",
-        status: "pending",
-        priority: "high",
-        submittedDate: "2024-01-20",
-        submittedBy: "John Doe (PM)",
-        type: "approval"
-      },
-      {
-        id: 2,
-        title: "Content Review Needed",
-        description: "Please provide feedback on the product descriptions",
-        status: "pending",
-        priority: "normal",
-        submittedDate: "2024-01-18",
-        submittedBy: "Jane Smith (Developer)",
-        type: "feedback"
-      },
-      {
-        id: 3,
-        title: "Feature Requirements Confirmation",
-        description: "Please confirm the payment gateway integration requirements",
-        status: "responded",
-        priority: "urgent",
-        submittedDate: "2024-01-15",
-        submittedBy: "Mike Johnson (PM)",
-        type: "confirmation"
-      }
-    ],
-    recentActivities: [
-      {
-        id: 1,
-        type: "milestone_completed",
-        title: "Milestone Completed",
-        description: "Phase 1: Design & Planning milestone completed for E-commerce Website",
-        projectName: "E-commerce Website",
-        timestamp: "2024-01-22T10:30:00Z",
-        user: "John Doe (PM)",
-        icon: "check-circle",
-        color: "text-green-600"
-      },
-      {
-        id: 2,
-        type: "task_created",
-        title: "New Task Created",
-        description: "Payment gateway integration task added to Mobile App Development",
-        projectName: "Mobile App Development",
-        timestamp: "2024-01-22T09:15:00Z",
-        user: "Sarah Wilson (Developer)",
-        icon: "plus-circle",
-        color: "text-blue-600"
-      },
-      {
-        id: 3,
-        type: "file_uploaded",
-        title: "File Uploaded",
-        description: "New design mockups uploaded for client review",
-        projectName: "E-commerce Website",
-        timestamp: "2024-01-21T16:45:00Z",
-        user: "Jane Smith (Developer)",
-        icon: "upload",
-        color: "text-purple-600"
-      },
-      {
-        id: 4,
-        type: "comment_added",
-        title: "Comment Added",
-        description: "Added feedback on database migration progress",
-        projectName: "Database Migration",
-        timestamp: "2024-01-21T14:20:00Z",
-        user: "David Brown (PM)",
-        icon: "message-circle",
-        color: "text-orange-600"
-      },
-      {
-        id: 5,
-        type: "status_changed",
-        title: "Status Updated",
-        description: "Project status changed from 'In Progress' to 'Testing'",
-        projectName: "Mobile App Development",
-        timestamp: "2024-01-21T11:30:00Z",
-        user: "Mike Johnson (PM)",
-        icon: "refresh-cw",
-        color: "text-teal-600"
-      },
-      {
-        id: 6,
-        type: "deadline_updated",
-        title: "Deadline Updated",
-        description: "Project deadline extended to February 15, 2024",
-        projectName: "E-commerce Website",
-        timestamp: "2024-01-20T15:00:00Z",
-        user: "John Doe (PM)",
-        icon: "calendar",
-        color: "text-red-600"
-      },
-      {
-        id: 7,
-        type: "bug_fixed",
-        title: "Bug Fixed",
-        description: "Fixed login authentication issue in mobile app",
-        projectName: "Mobile App Development",
-        timestamp: "2024-01-20T13:45:00Z",
-        user: "Sarah Wilson (Developer)",
-        icon: "bug",
-        color: "text-green-600"
-      },
-      {
-        id: 8,
-        type: "meeting_scheduled",
-        title: "Meeting Scheduled",
-        description: "Client review meeting scheduled for January 25, 2024",
-        projectName: "E-commerce Website",
-        timestamp: "2024-01-20T10:00:00Z",
-        user: "John Doe (PM)",
-        icon: "video",
-        color: "text-indigo-600"
-      }
-    ]
+    recentProjects: [],
+    recentRequests: [],
+    recentActivities: []
   })
+
+  // Load dashboard data
+  useEffect(() => {
+    loadDashboardData()
+    setupWebSocket()
+    
+    return () => {
+      socketService.disconnect()
+    }
+  }, [])
+
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('clientToken')
+    if (token) {
+      socketService.connect(token)
+      
+      // Listen for real-time updates
+      socketService.on('project_updated', () => {
+        loadDashboardData()
+      })
+      
+      socketService.on('task_updated', () => {
+        loadDashboardData()
+      })
+    }
+  }
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      // Get client ID from token or user data
+      const clientId = localStorage.getItem('clientId') || 'current-client'
+      
+      // Load client project statistics and recent projects
+      const [clientStatsResponse, projectsResponse] = await Promise.all([
+        analyticsService.getClientProjectStats(clientId),
+        projectService.getProjectsByClient(clientId, { limit: 5 })
+      ])
+      
+      const clientStats = clientStatsResponse.data
+      const recentProjects = projectsResponse.data
+      
+      // Transform the data to match the expected format
+      const transformedProjects = recentProjects.map(project => ({
+        id: project._id,
+        name: project.name,
+        description: project.description,
+        status: project.status,
+        priority: project.priority,
+        progress: project.progress || 0,
+        dueDate: project.dueDate,
+        assignedTeam: project.assignedTeam?.map(member => `${member.name} (${member.position})`) || [],
+        totalTasks: project.taskCount || 0,
+        completedTasks: project.completedTaskCount || 0,
+        awaitingClientFeedback: 0, // This would need to be calculated based on actual data
+        lastUpdate: project.updatedAt,
+        milestones: {
+          total: project.milestoneCount || 0,
+          completed: 0, // This would need to be calculated
+          progress: project.progress || 0
+        }
+      }))
+
+      setDashboardData(prevData => ({
+        ...prevData,
+        statistics: {
+          projects: {
+            total: clientStats.projects?.total || 0,
+            active: clientStats.projects?.active || 0,
+            completed: clientStats.projects?.completed || 0,
+            awaitingApproval: 0
+          },
+          requests: {
+            total: 0, // This would need to be implemented
+            pendingResponse: 0,
+            responded: 0,
+            urgent: 0
+          },
+          tasks: {
+            total: clientStats.tasks?.total || 0,
+            completed: clientStats.tasks?.completed || 0,
+            awaitingClientInput: 0,
+            inProgress: clientStats.tasks?.inProgress || 0
+          },
+          overallProgress: clientStats.projects?.avgProgress || 0
+        },
+        recentProjects: transformedProjects,
+        recentRequests: [], // This would need to be implemented
+        recentActivities: [] // This would need to be implemented
+      }))
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+      setError('Failed to load dashboard data. Please try again.')
+      // Keep existing data on error
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getStatusColor = (status) => {
     switch (status) {

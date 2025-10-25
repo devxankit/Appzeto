@@ -131,11 +131,11 @@ const Client_login = () => {
       
       if (response.success) {
         localStorage.setItem('clientUser', JSON.stringify({ 
-          ...response.data, 
+          ...response?.data, 
           loginTime: new Date().toISOString() 
         }))
         
-        toast.login(`Welcome back, ${response.data.name}!`, {
+        toast.login(`Welcome back, ${response?.data?.name || 'Client'}!`, {
           title: 'Login Successful',
           duration: 3000
         })

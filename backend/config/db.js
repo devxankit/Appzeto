@@ -4,20 +4,39 @@ const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI);
 
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-    console.log(`Database Name: ${conn.connection.name}`);
+    // Beautiful database connection display
+    console.log('');
+    console.log('🗄️ ' + '='.repeat(50));
+    console.log('   🎯 DATABASE CONNECTION ESTABLISHED');
+    console.log('🗄️ ' + '='.repeat(50));
+    console.log(`   🌐 Host: ${conn.connection.host}`);
+    console.log(`   📊 Database: ${conn.connection.name}`);
+    console.log(`   🔗 Connection State: ${conn.connection.readyState === 1 ? 'CONNECTED' : 'CONNECTING'}`);
+    console.log(`   ⚡ Mongoose Version: ${mongoose.version}`);
+    console.log('🗄️ ' + '='.repeat(50));
+    console.log('');
     
     // Connection event listeners
     mongoose.connection.on('connected', () => {
-      console.log('Mongoose connected to MongoDB');
+      console.log('   ✅ Database: CONNECTED');
     });
 
     mongoose.connection.on('error', (err) => {
-      console.error('Mongoose connection error:', err);
+      console.log('');
+      console.log('❌ ' + '='.repeat(50));
+      console.log('   🚨 DATABASE CONNECTION ERROR');
+      console.log('❌ ' + '='.repeat(50));
+      console.error('   Error:', err.message);
+      console.log('❌ ' + '='.repeat(50));
+      console.log('');
     });
 
     mongoose.connection.on('disconnected', () => {
-      console.log('Mongoose disconnected from MongoDB');
+      console.log('');
+      console.log('🔌 ' + '='.repeat(50));
+      console.log('   ⚠️  DATABASE DISCONNECTED');
+      console.log('🔌 ' + '='.repeat(50));
+      console.log('');
     });
 
     // Graceful shutdown
@@ -28,7 +47,14 @@ const connectDB = async () => {
     });
 
   } catch (error) {
-    console.error('Database connection failed:', error.message);
+    console.log('');
+    console.log('❌ ' + '='.repeat(50));
+    console.log('   🚨 DATABASE CONNECTION FAILED');
+    console.log('❌ ' + '='.repeat(50));
+    console.error('   Error:', error.message);
+    console.log('   🔧 Please check your MongoDB connection string and try again.');
+    console.log('❌ ' + '='.repeat(50));
+    console.log('');
     process.exit(1);
   }
 };

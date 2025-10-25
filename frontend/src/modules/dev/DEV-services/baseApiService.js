@@ -16,21 +16,30 @@ const removeAuthToken = () => {
 };
 
 // Helper function to get auth headers
-const getAuthHeaders = () => {
+const getAuthHeaders = (isFormData = false) => {
   const token = getAuthToken();
-  return {
-    'Content-Type': 'application/json',
+  const headers = {
     ...(token && { Authorization: `Bearer ${token}` })
   };
+  
+  // Only set Content-Type for JSON, not for FormData
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+  
+  return headers;
 };
 
 // Base API request helper
 export const apiRequest = async (url, options = {}) => {
   try {
+    // Check if body is FormData
+    const isFormData = options.body instanceof FormData;
+    
     const response = await fetch(getApiUrl(url), {
       ...options,
       headers: {
-        ...getAuthHeaders(),
+        ...getAuthHeaders(isFormData),
         ...options.headers
       },
       credentials: 'include' // Include cookies for CORS

@@ -744,11 +744,14 @@
   "multer": "^1.4.5-lts.1",
   "cloudinary": "^2.x.x",
   "multer-storage-cloudinary": "^5.x.x",
+  "socket.io": "^4.x.x",
   "nodemon": "^3.1.10"
 }
 ```
 
 ### API Endpoints
+
+#### Authentication & User Management
 ```
 POST /api/admin/login          - Admin login
 GET  /api/admin/profile        - Get admin profile (protected)
@@ -780,8 +783,103 @@ PUT  /api/client/profile       - Update Client profile (protected)
 POST /api/client/logout        - Client logout (protected)
 POST /api/client/create-demo   - Create demo Client (development)
 GET  /api/client/sms-status    - Check SMS service status
+```
+
+#### PM Module - Project Management
+```
+POST   /api/projects                    - Create project (PM only)
+GET    /api/projects                    - Get all projects (filtered)
+GET    /api/projects/:id                - Get project by ID
+PUT    /api/projects/:id                - Update project (PM only)
+DELETE /api/projects/:id                - Delete project (PM only)
+GET    /api/projects/client/:clientId   - Get client projects
+GET    /api/projects/pm/:pmId           - Get PM projects
+GET    /api/projects/statistics         - Project statistics
+POST   /api/projects/:id/attachments    - Upload attachment
+DELETE /api/projects/:id/attachments/:attachmentId - Remove attachment
+```
+
+#### PM Module - Milestone Management
+```
+POST   /api/milestones                  - Create milestone (PM only)
+GET    /api/milestones/project/:projectId - Get project milestones
+GET    /api/milestones/:id              - Get milestone by ID
+PUT    /api/milestones/:id              - Update milestone (PM only)
+DELETE /api/milestones/:id              - Delete milestone (PM only)
+PATCH  /api/milestones/:id/progress     - Update progress
+POST   /api/milestones/:id/attachments  - Upload attachment
+```
+
+#### PM Module - Task Management
+```
+POST   /api/tasks                       - Create task (PM only)
+POST   /api/tasks/urgent                - Create urgent task (PM only)
+GET    /api/tasks/milestone/:milestoneId - Get milestone tasks
+GET    /api/tasks/project/:projectId    - Get project tasks
+GET    /api/tasks/employee/:employeeId  - Get employee tasks
+GET    /api/tasks/urgent                - Get urgent tasks (PM only)
+GET    /api/tasks/:id                   - Get task by ID
+PUT    /api/tasks/:id                   - Update task
+DELETE /api/tasks/:id                   - Delete task (PM only)
+PATCH  /api/tasks/:id/status            - Update task status
+PATCH  /api/tasks/:id/assign            - Assign/reassign task
+POST   /api/tasks/:id/comments          - Add comment to task
+POST   /api/tasks/:id/attachments       - Upload attachment
+```
+
+#### PM Module - Payment Tracking
+```
+POST   /api/payments                    - Create payment record (PM/Admin only)
+GET    /api/payments/project/:projectId - Get project payments
+GET    /api/payments/client/:clientId   - Get client payments
+PUT    /api/payments/:id                - Update payment status
+GET    /api/payments/statistics         - Payment statistics
+```
+
+#### PM Module - Analytics & Statistics
+```
+GET    /api/analytics/pm/dashboard      - PM dashboard statistics
+GET    /api/analytics/project/:projectId - Project analytics
+GET    /api/analytics/employee/:employeeId - Employee performance
+GET    /api/analytics/client/:clientId  - Client project statistics
+GET    /api/analytics/productivity      - Productivity metrics
+```
+
+#### PM Module - Team Management
+```
+GET    /api/pm/team/employees           - Get PM team employees
+GET    /api/pm/team/clients             - Get PM team clients
+GET    /api/pm/team/members             - Get PM team members
+GET    /api/pm/team/statistics          - Get PM team statistics
+```
+
+#### Role-Based API Separation
+```
+# Admin-Specific Routes
+GET    /api/admin/projects              - Admin project management
+GET    /api/admin/analytics             - Admin analytics
+
+# Employee-Specific Routes
+GET    /api/employee/projects           - Employee project access
+GET    /api/employee/tasks              - Employee task management
+
+# Client-Specific Routes
+GET    /api/client/projects             - Client project visibility
+GET    /api/client/payments             - Client payment tracking
+```
+
+#### System Endpoints
+```
 GET  /health                   - Health check
+GET  /status                   - Comprehensive server status with WebSocket and database info
 GET  /api                      - API information
+```
+
+### Frontend Dependencies (New)
+```json
+{
+  "socket.io-client": "^4.x.x"
+}
 ```
 
 ### Environment Variables
@@ -804,7 +902,8 @@ CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
 CLOUDINARY_API_KEY=your_cloudinary_api_key
 CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 
-# Frontend Cloudinary Configuration
+# Frontend Configuration
+VITE_API_BASE_URL=http://localhost:5000/api
 VITE_CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
 VITE_CLOUDINARY_API_KEY=your_cloudinary_api_key
 VITE_CLOUDINARY_UPLOAD_PRESET=your_cloudinary_upload_preset
@@ -837,6 +936,11 @@ VITE_CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 - [x] SMS service integration (SMS India)
 - [x] Professional UI/UX
 - [x] Production-ready login interfaces (demo sections removed)
+- [x] **Complete PM Module Backend System**
+- [x] **WebSocket Real-Time Integration**
+- [x] **Role-Based API Separation**
+- [x] **File Upload & Cloudinary Integration**
+- [x] **Analytics & Statistics System**
 - [x] **Admin User Management System**
   - [x] Comprehensive user models with all required fields
   - [x] Admin user management controller with CRUD operations
@@ -976,8 +1080,399 @@ VITE_CLOUDINARY_API_SECRET=your_cloudinary_api_secret
   - Fixed URL generation functions to work without external SDK dependencies
   - Streamlined Cloudinary service for better React 19 compatibility
 
+## 🚀 Phase 8: PM Module Backend Development (COMPLETED)
+
+### ✅ Database Models & Schema Design
+- [x] **Project Model** (`backend/models/Project.js`)
+  - Complete schema with all required fields (name, description, client, projectManager, status, priority, dueDate, startDate, assignedTeam, budget, estimatedHours, actualHours, progress, milestones, attachments, tags)
+  - Virtual fields for completion percentage calculation
+  - Methods: updateProgress(), isOverdue()
+  - Indexes: client, projectManager, status, priority, dueDate
+  - Fixed duplicate isOverdue method conflict
+
+- [x] **Milestone Model** (`backend/models/Milestone.js`)
+  - Complete schema with sequence ordering and progress tracking
+  - Fields: title, description, project, sequence, dueDate, status, priority, assignedTo, tasks, progress, attachments
+  - Virtual field for task completion percentage
+  - Methods: updateProgress(), isOverdue()
+  - Indexes: project, status, sequence, dueDate
+  - Fixed duplicate isOverdue method conflict
+
+- [x] **Task Model** (`backend/models/Task.js`)
+  - Complete schema with urgent flag, comments, and status tracking
+  - Fields: title, description, project, milestone, assignedTo, status, priority, isUrgent, dueDate, startDate, completedDate, estimatedHours, actualHours, attachments, comments, createdBy
+  - Methods: markComplete(), isOverdue(), addComment()
+  - Indexes: project, milestone, assignedTo, status, isUrgent, dueDate
+  - Fixed duplicate isOverdue method conflict
+
+- [x] **Payment Model** (`backend/models/Payment.js`)
+  - Payment tracking model (no payment processing)
+  - Fields: project, client, milestone, amount, currency, paymentType, status, transactionId, paymentMethod, paidAt, notes
+  - Methods: markPaid(), markFailed()
+  - Indexes: project, client, status, paymentType
+  - Fixed duplicate isOverdue method conflict
+
+- [x] **Activity Model** (`backend/models/Activity.js`)
+  - Audit trail and comments tracking
+  - Fields: entityType, entityId, activityType, user, userModel, message, metadata
+  - Indexes: entityType, entityId, createdAt
+
+### ✅ Controllers & Business Logic
+- [x] **Project Controller** (`backend/controllers/projectController.js`)
+  - Complete CRUD operations (create, read, update, delete)
+  - File upload and attachment management
+  - Project statistics and analytics
+  - WebSocket integration for real-time updates
+  - Role-based access control
+
+- [x] **Milestone Controller** (`backend/controllers/milestoneController.js`)
+  - Complete CRUD operations with sequence management
+  - Progress tracking and calculation
+  - File upload support
+  - WebSocket integration for real-time updates
+  - Role-based access control
+
+- [x] **Task Controller** (`backend/controllers/taskController.js`)
+  - Complete CRUD operations including urgent tasks
+  - Task assignment and reassignment
+  - Status updates and progress tracking
+  - Comment system integration
+  - File upload support
+  - WebSocket integration for real-time updates
+  - Role-based access control
+
+- [x] **Payment Controller** (`backend/controllers/paymentController.js`)
+  - Payment record creation and management
+  - Payment status tracking
+  - Payment statistics and analytics
+  - WebSocket integration for real-time updates
+  - Role-based access control
+
+- [x] **Analytics Controller** (`backend/controllers/analyticsController.js`)
+  - PM dashboard statistics
+  - Project analytics and performance metrics
+  - Employee performance tracking
+  - Client project statistics
+  - Productivity metrics calculation
+
+### ✅ Routes & API Endpoints
+- [x] **Project Routes** (`backend/routes/projectRoutes.js`)
+  - Complete RESTful API endpoints
+  - File upload support with multer
+  - Role-based authorization (PM only)
+  - Statistics and analytics endpoints
+
+- [x] **Milestone Routes** (`backend/routes/milestoneRoutes.js`)
+  - Complete CRUD endpoints
+  - Progress update endpoints
+  - File upload support
+  - Role-based authorization (PM only)
+
+- [x] **Task Routes** (`backend/routes/taskRoutes.js`)
+  - Complete CRUD endpoints including urgent tasks
+  - Assignment and status update endpoints
+  - Comment system endpoints
+  - File upload support
+  - Role-based authorization (PM only)
+
+- [x] **Payment Routes** (`backend/routes/paymentRoutes.js`)
+  - Payment tracking endpoints
+  - Statistics and analytics endpoints
+  - Role-based authorization (PM and Admin)
+
+- [x] **Analytics Routes** (`backend/routes/analyticsRoutes.js`)
+  - Dashboard statistics endpoints
+  - Performance metrics endpoints
+  - Role-based authorization (PM and Admin)
+
+### ✅ Role-Based API Separation
+- [x] **Admin-Specific Controllers & Routes**
+  - `backend/controllers/admin/adminProjectController.js` - Admin project management
+  - `backend/controllers/admin/adminAnalyticsController.js` - Admin analytics
+  - `backend/routes/admin/adminProjectRoutes.js` - Admin project routes
+  - `backend/routes/admin/adminAnalyticsRoutes.js` - Admin analytics routes
+
+- [x] **Employee-Specific Controllers & Routes**
+  - `backend/controllers/employee/employeeProjectController.js` - Employee project access
+  - `backend/controllers/employee/employeeTaskController.js` - Employee task management
+  - `backend/routes/employee/employeeProjectRoutes.js` - Employee project routes
+  - `backend/routes/employee/employeeTaskRoutes.js` - Employee task routes
+
+- [x] **Client-Specific Controllers & Routes**
+  - `backend/controllers/client/clientProjectController.js` - Client project visibility
+  - `backend/controllers/client/clientPaymentController.js` - Client payment tracking
+  - `backend/routes/client/clientProjectRoutes.js` - Client project routes
+  - `backend/routes/client/clientPaymentRoutes.js` - Client payment routes
+
+- [x] **PM Team Management**
+  - `backend/controllers/pmTeamController.js` - PM team data access
+  - PM-specific team routes in `backend/routes/pmRoutes.js`
+  - Team statistics and member management
+
+### ✅ WebSocket Integration for Real-Time Updates
+- [x] **Socket.io Server Setup** (`backend/services/socketService.js`)
+  - Socket.io server configuration with CORS support
+  - Authentication middleware for WebSocket connections
+  - Room management for projects, milestones, and tasks
+  - Event handlers for connection, disconnect, and errors
+
+- [x] **Real-Time Events Integration**
+  - Project created/updated/deleted events
+  - Milestone created/updated/completed events
+  - Task assigned/updated/status changed events
+  - Comment added to task events
+  - Team member added/removed from project events
+  - Progress updates (project/milestone) events
+
+- [x] **Frontend WebSocket Client** (`frontend/src/modules/dev/DEV-services/socketService.js`)
+  - Socket.io client with authentication
+  - Connection status monitoring
+  - Error handling and reconnection logic
+  - Server health check before connection
+  - Graceful fallback when WebSocket unavailable
+
+### ✅ Middleware & Security Enhancements
+- [x] **Enhanced Auth Middleware** (`backend/middlewares/auth.js`)
+  - Fixed authorize middleware to check req.user.role instead of req.admin.role
+  - Role-based authorization for PM, Employee, Client, Admin
+  - Project and task access control
+  - WebSocket authentication support
+
+- [x] **Upload Middleware** (`backend/middlewares/upload.js`)
+  - Multer configuration for file uploads
+  - Cloudinary storage integration
+  - File type and size validation
+  - Error handling for upload failures
+
+- [x] **Validation Middleware**
+  - Input validation for all CRUD operations
+  - File upload validation
+  - Role-based access validation
+
+### ✅ File Upload & Cloudinary Integration
+- [x] **Enhanced Cloudinary Service** (`backend/services/cloudinaryService.js`)
+  - Fixed duplicate function declarations
+  - Universal file upload and management
+  - File deletion and cleanup
+  - Organized folder structure
+  - Error handling and logging
+
+- [x] **File Upload Support**
+  - Project attachments
+  - Milestone attachments
+  - Task attachments
+  - User document uploads
+  - File preview and management
+
+### ✅ Frontend API Services Integration
+- [x] **Complete API Service Architecture**
+  - `frontend/src/modules/dev/DEV-services/projectService.js` - Project API calls
+  - `frontend/src/modules/dev/DEV-services/milestoneService.js` - Milestone API calls
+  - `frontend/src/modules/dev/DEV-services/taskService.js` - Task API calls
+  - `frontend/src/modules/dev/DEV-services/paymentService.js` - Payment API calls
+  - `frontend/src/modules/dev/DEV-services/analyticsService.js` - Analytics API calls
+  - `frontend/src/modules/dev/DEV-services/teamService.js` - Team management API calls
+  - `frontend/src/modules/dev/DEV-services/socketService.js` - WebSocket client
+
+- [x] **Base API Service Enhancement** (`frontend/src/modules/dev/DEV-services/baseApiService.js`)
+  - Fixed FormData handling
+  - Removed double /api path issues
+  - Enhanced error handling
+  - Token management utilities
+
+- [x] **Mock Data Replacement**
+  - PM Dashboard with real API integration
+  - PM Projects list with real data
+  - Employee Dashboard with real API integration
+  - Client Dashboard with real API integration
+  - All forms with real data loading
+  - WebSocket real-time updates integration
+
+### ✅ Demo Data & Testing Scripts
+- [x] **Demo Data Creation Scripts**
+  - `backend/scripts/creating_milestone.js` - Demo milestone data
+  - `backend/scripts/creating_task.js` - Demo task data
+  - Enhanced existing project creation scripts
+  - Realistic test data for development
+
+- [x] **Status & Monitoring Scripts**
+  - `backend/scripts/display-status.js` - Beautiful server status dashboard
+  - `npm run status` command for quick server overview
+  - Real-time metrics display and monitoring
+  - Professional status formatting and presentation
+
+### ✅ Critical Bug Fixes & System Stability
+- [x] **WebSocket Connection Issues**
+  - Fixed WebSocket connection warnings
+  - Added server health check before connection
+  - Enhanced error handling and reconnection logic
+  - Graceful fallback when WebSocket unavailable
+  - Optimized reconnection settings
+
+- [x] **API Service Integration Issues**
+  - Fixed import/export errors in service files
+  - Corrected axios-style method calls to fetch-based apiRequest
+  - Fixed FormData handling in all services
+  - Resolved double /api path issues
+  - Fixed process.env to import.meta.env for Vite compatibility
+
+- [x] **Authentication & Authorization Issues**
+  - Fixed 401 Unauthorized errors for admin routes
+  - Implemented proper role-based access control
+  - Created separate controllers and routes for each role
+  - Fixed authorize middleware to check correct user role
+  - Enhanced PM team management with dedicated endpoints
+
+- [x] **Data Access & Error Handling**
+  - Fixed "Cannot read properties of undefined" errors
+  - Implemented safe navigation (?.') in all frontend components
+  - Added comprehensive fallback data for all API responses
+  - Enhanced error handling in dashboard components
+  - Added debug logging for troubleshooting
+
+- [x] **Missing Backend Endpoints**
+  - Created missing /api/analytics/productivity endpoint
+  - Added PM team management endpoints
+  - Implemented all required analytics endpoints
+  - Enhanced statistics calculation in both frontend and backend
+
+- [x] **Enhanced Terminal Experience & Logging**
+  - Beautiful server startup display with clear console and professional headers
+  - Enhanced WebSocket connection logging with user details and timestamps
+  - Improved database connection logging with connection details and status
+  - Real-time connection tracking with user information and role display
+  - Enhanced room management logging for projects, milestones, and tasks
+  - Professional event broadcasting logs with room sizes and user counts
+  - Beautiful disconnection handling with remaining connection counts
+  - Server status dashboard with comprehensive metrics and information
+  - Graceful shutdown handling with professional goodbye messages
+  - Status command (`npm run status`) for quick server overview
+  - Enhanced error handling with helpful guidance and professional formatting
+
+## 🎨 Phase 9: Enhanced Terminal Experience & Professional Logging (COMPLETED)
+
+### ✅ Beautiful Server Startup Display
+- [x] **Enhanced Server Startup** (`backend/server.js`)
+  - Clear console on startup for clean display
+  - Professional ASCII art headers with emojis and borders
+  - Comprehensive server status indicators (Server, Database, WebSocket)
+  - Configuration display (Port, Environment, API URLs, Endpoints)
+  - Available modules overview with feature descriptions
+  - Success confirmation with ready status
+  - Enhanced error handling with professional error displays
+
+- [x] **Server Status Dashboard**
+  - New `/status` endpoint with comprehensive server information
+  - Server metrics: uptime, memory usage, status
+  - WebSocket metrics: connection count, active rooms, server state
+  - Database metrics: connection status, host information
+  - Real-time timestamp and system information
+  - JSON response format for API consumption
+
+### ✅ Enhanced WebSocket Connection Logging
+- [x] **WebSocket Initialization Display** (`backend/services/socketService.js`)
+  - Beautiful WebSocket server setup information
+  - CORS configuration details and allowed origins
+  - Authentication middleware status
+  - Event handlers registration confirmation
+  - Real-time features readiness indicator
+
+- [x] **User Connection Tracking**
+  - Detailed user connection logs with timestamps
+  - User information display (Name, Role, Socket ID)
+  - Connection count tracking and display
+  - Professional connection status formatting
+  - Role-based user identification (PM, Employee, Client, Admin)
+
+- [x] **Room Management Logging**
+  - Enhanced project room joining with project names
+  - Milestone room joining with milestone titles
+  - Task room joining with task titles
+  - User role display in room activities
+  - Professional room activity formatting
+
+- [x] **Real-Time Event Broadcasting**
+  - Detailed event emission logging with room sizes
+  - User count tracking for each broadcast
+  - Event type identification and logging
+  - Professional broadcasting status display
+  - Room-specific event tracking
+
+- [x] **Disconnection Handling**
+  - Beautiful disconnection logs with user details
+  - Remaining connection count tracking
+  - Professional disconnection status formatting
+  - User information preservation during disconnect
+  - Clean disconnection process logging
+
+### ✅ Enhanced Database Connection Logging
+- [x] **Database Connection Display** (`backend/config/db.js`)
+  - Beautiful database connection establishment display
+  - Connection details: Host, Database name, Connection state
+  - Mongoose version information
+  - Connection status indicators
+  - Professional connection formatting
+
+- [x] **Database Event Logging**
+  - Enhanced connection event logging
+  - Professional error display with helpful messages
+  - Disconnection event logging
+  - Connection state monitoring
+  - Error handling with guidance
+
+### ✅ Status Management & Commands
+- [x] **Status Display Script** (`backend/scripts/display-status.js`)
+  - Beautiful server status dashboard
+  - Real-time metrics display
+  - WebSocket connection information
+  - Database status monitoring
+  - Memory usage and uptime tracking
+  - Professional status formatting
+
+- [x] **Package.json Scripts** (`backend/package.json`)
+  - Added `npm run status` command for quick server overview
+  - Status script integration with main package
+  - Easy-to-use developer commands
+  - Professional command structure
+
+### ✅ Graceful Shutdown & Error Handling
+- [x] **Enhanced Shutdown Handling** (`backend/server.js`)
+  - Beautiful shutdown messages with emojis
+  - Professional SIGINT and SIGTERM handling
+  - Clean exit messages with goodbye
+  - Graceful server closure process
+  - Professional shutdown formatting
+
+- [x] **Error Handling Enhancement**
+  - Professional error displays with helpful guidance
+  - Error context and troubleshooting information
+  - Beautiful error formatting with borders
+  - User-friendly error messages
+  - Professional error logging structure
+
+### ✅ Terminal Experience Features
+- [x] **Visual Enhancements**
+  - Professional emoji usage for better visual appeal
+  - Clean ASCII borders for section separation
+  - Consistent formatting and alignment
+  - Color-coded status indicators
+  - Clear information hierarchy
+
+- [x] **Information Display**
+  - Real-time server status monitoring
+  - WebSocket connection tracking
+  - Database connection monitoring
+  - User activity logging
+  - System metrics display
+
+- [x] **Developer Experience**
+  - Easy-to-use status commands
+  - Comprehensive server information
+  - Real-time monitoring capabilities
+  - Professional logging for debugging
+  - Clear error messages and guidance
+
 ### 🔄 Next Steps (Future Development)
-- [ ] Project management APIs
 - [ ] Finance management APIs
 - [ ] HR management APIs
 - [ ] Sales management APIs
@@ -1015,5 +1510,5 @@ VITE_CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 ---
 
 **Last Updated**: December 2024  
-**Version**: 1.11.0  
-**Status**: Production Ready for Admin, PM, Sales, Employee & Client Authentication with SMS Integration, Clean Login Interfaces, Complete Admin User Management System, Standardized PM Role Consistency, Critical Bug Fixes Applied, Universal Cloudinary File Management System, React 19 Compatibility Fixes, Comprehensive Database Migration System, Optimized Tab Switching Performance, Statistics Cards Layout Optimization, and Syntax Error Resolution
+**Version**: 2.1.0  
+**Status**: Production Ready with Complete PM Module Backend System, WebSocket Real-Time Integration, Role-Based API Separation, File Upload & Cloudinary Integration, Analytics & Statistics System, Admin User Management System, Standardized PM Role Consistency, Critical Bug Fixes Applied, Universal Cloudinary File Management System, React 19 Compatibility Fixes, Comprehensive Database Migration System, Optimized Tab Switching Performance, Statistics Cards Layout Optimization, Syntax Error Resolution, Complete Frontend-Backend Integration, and Enhanced Terminal Experience with Professional Logging

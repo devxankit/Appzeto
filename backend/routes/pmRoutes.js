@@ -5,7 +5,15 @@ const {
   logoutPM,
   createDemoPM
 } = require('../controllers/pmController');
-const { protect } = require('../middlewares/auth');
+
+// Import team-related controllers
+const {
+  getPMTeamMembers,
+  getPMClients,
+  getPMEmployees,
+  getPMTeamStatistics
+} = require('../controllers/pmTeamController');
+const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
 
@@ -15,13 +23,15 @@ router.post('/create-demo', createDemoPM); // Remove in production
 
 // Protected routes
 router.use(protect); // All routes below this middleware are protected
+router.use(authorize('pm')); // All routes below this middleware are PM-only
 
 router.get('/profile', getPMProfile);
 router.post('/logout', logoutPM);
 
-// Future PM-specific routes can be added here
-// router.get('/projects', getPMProjects);
-// router.get('/tasks', getPMTasks);
-// router.get('/team', getPMTeam);
+// PM team management routes
+router.get('/team/employees', getPMEmployees);
+router.get('/team/clients', getPMClients);
+router.get('/team/members', getPMTeamMembers);
+router.get('/team/statistics', getPMTeamStatistics);
 
 module.exports = router;

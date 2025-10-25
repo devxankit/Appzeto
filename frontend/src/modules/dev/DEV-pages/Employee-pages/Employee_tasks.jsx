@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
+import { taskService, socketService } from '../../DEV-services'
 import { CheckSquare, Search, Filter, Calendar, User, MoreVertical, Loader2, Clock, AlertTriangle } from 'lucide-react'
 
 const Employee_tasks = () => {
@@ -8,91 +9,61 @@ const Employee_tasks = () => {
   const [filter, setFilter] = useState('all')
   const [tasks, setTasks] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
   const navigate = useNavigate()
 
-  // Mock tasks data for employee - replace with API later
-  const mockTasks = [
-    {
-      _id: 't-001',
-      title: 'Design Landing Page',
-      description: 'Create hero, features, and CTA sections for new brand.',
-      status: 'In Progress',
-      priority: 'High',
-      project: { _id: 'p-001', name: 'Website Redesign' },
-      milestone: { _id: 'm-001', name: 'M1 - UI/UX' },
-      assignedTo: [{ _id: 'u-001', fullName: 'John Doe' }],
-      dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
-    },
-    {
-      _id: 't-002',
-      title: 'Implement Auth Flow',
-      description: 'Add login, logout, and token refresh with guards.',
-      status: 'Pending',
-      priority: 'Normal',
-      project: { _id: 'p-002', name: 'Mobile App v2' },
-      milestone: { _id: 'm-010', name: 'M2 - Core' },
-      assignedTo: [{ _id: 'u-002', fullName: 'Jane Smith' }],
-      dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-    },
-    {
-      _id: 't-003',
-      title: 'Analytics Dashboard',
-      description: 'KPIs, charts, and alerts for executive overview.',
-      status: 'Completed',
-      priority: 'Low',
-      project: { _id: 'p-003', name: 'Data Warehouse Setup' },
-      milestone: { _id: 'm-020', name: 'M3 - Reporting' },
-      assignedTo: [{ _id: 'u-003', fullName: 'Mike Johnson' }],
-      dueDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      completedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-    },
-    {
-      _id: 't-004',
-      title: 'Fix Critical Security Vulnerability',
-      description: 'Immediate patch required for authentication bypass issue.',
-      status: 'In Progress',
-      priority: 'Urgent',
-      project: { _id: 'p-004', name: 'Security Update' },
-      milestone: { _id: 'm-030', name: 'M1 - Critical Fixes' },
-      assignedTo: [{ _id: 'u-004', fullName: 'Sarah Wilson' }],
-      dueDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      isUrgent: true
-    },
-    {
-      _id: 't-005',
-      title: 'Database Optimization',
-      description: 'Optimize queries and improve performance for better user experience.',
-      status: 'Pending',
-      priority: 'Medium',
-      project: { _id: 'p-005', name: 'Performance Enhancement' },
-      milestone: { _id: 'm-040', name: 'M1 - Optimization' },
-      assignedTo: [{ _id: 'u-005', fullName: 'David Brown' }],
-      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-    }
-  ]
 
   useEffect(() => {
     loadTasks()
+    setupWebSocket()
     
     // Check for filter parameter in URL
     const urlFilter = searchParams.get('filter')
     if (urlFilter) {
       setFilter(urlFilter)
     }
+    
+    return () => {
+      socketService.disconnect()
+    }
   }, [searchParams])
+
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('employeeToken')
+    if (token) {
+      socketService.connect(token)
+      
+      // Listen for real-time updates
+      socketService.on('task_updated', () => {
+        loadTasks()
+      })
+      
+      socketService.on('task_assigned', () => {
+        loadTasks()
+      })
+    }
+  }
 
   const loadTasks = async () => {
     try {
       setIsLoading(true)
-      await new Promise(r => setTimeout(r, 600))
-      setTasks(mockTasks)
-    } catch (error) {
-      console.error('Error loading tasks:', error)
+      setError(null)
+      
+      const employeeId = localStorage.getItem('employeeId')
+      if (!employeeId) {
+        throw new Error('Employee ID not found')
+      }
+      
+      const response = await taskService.getTasksByEmployee(employeeId, {
+        limit: 100,
+        sortBy: 'dueDate',
+        sortOrder: 'asc'
+      })
+      
+      setTasks(response.data || [])
+    } catch (err) {
+      console.error('Error loading tasks:', err)
+      setError(err.message || 'Failed to load tasks')
     } finally {
       setIsLoading(false)
     }
@@ -145,6 +116,15 @@ const Employee_tasks = () => {
       
       <main className="pt-16 pb-24 md:pt-20 md:pb-8">
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+          {/* Error Display */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
+                <p className="text-red-700">{error}</p>
+              </div>
+            </div>
+          )}
           {/* Mobile Layout - Header */}
           <div className="md:hidden mb-6">
             <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/20">

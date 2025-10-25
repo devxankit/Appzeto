@@ -11,7 +11,16 @@ export { default as employeeAuthService } from './employeeAuthService';
 export { default as clientAuthService } from './clientAuthService';
 
 // Base API Service (for internal use)
-export { default as baseApiService } from './baseApiService';
+export { apiRequest, tokenUtils, pmStorage, employeeStorage } from './baseApiService';
+
+// PM Module Services
+export { projectService } from './projectService';
+export { milestoneService } from './milestoneService';
+export { taskService } from './taskService';
+export { paymentService } from './paymentService';
+export { analyticsService } from './analyticsService';
+export { teamService } from './teamService';
+export { default as socketService } from './socketService';
 
 // Re-export commonly used functions from PM auth service
 export {
@@ -53,8 +62,21 @@ export {
 } from './clientAuthService';
 
 // Usage Examples:
+// Authentication Services:
 // import { pmAuthService, employeeAuthService, clientAuthService } from '../DEV-services';
 // import { loginPM, loginEmployee, sendOTP, verifyOTP, isPMAuthenticated, isEmployeeAuthenticated, isClientAuthenticated } from '../DEV-services';
+
+// PM Module Services:
+// import { projectService, milestoneService, taskService, paymentService, analyticsService, teamService, socketService } from '../DEV-services';
+
+// Individual Service Imports:
 // import pmAuthService from '../DEV-services/pmAuthService';
 // import employeeAuthService from '../DEV-services/employeeAuthService';
 // import clientAuthService from '../DEV-services/clientAuthService';
+// import { projectService } from '../DEV-services/projectService';
+// import { milestoneService } from '../DEV-services/milestoneService';
+// import { taskService } from '../DEV-services/taskService';
+// import { paymentService } from '../DEV-services/paymentService';
+// import { analyticsService } from '../DEV-services/analyticsService';
+// import { teamService } from '../DEV-services/teamService';
+// import socketService from '../DEV-services/socketService';
