@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
+import { adminProjectService } from '../admin-services/adminProjectService'
 import { 
   FiUsers, 
   FiFolder, 
@@ -55,7 +56,7 @@ const Admin_project_management = () => {
 
   // PM Options for Combobox
   const getPMOptions = () => {
-    return projectManagers
+    return pmOptions.length > 0 ? pmOptions : projectManagers
       .filter(pm => pm.status === 'active')
       .map(pm => ({
         value: pm.id.toString(),
@@ -117,12 +118,18 @@ const Admin_project_management = () => {
   const [employees, setEmployees] = useState([])
   const [clients, setClients] = useState([])
   const [projectManagers, setProjectManagers] = useState([])
+  const [pmOptions, setPMOptions] = useState([])
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     loadData()
   }, [])
 
-  const loadData = async () => {
+  useEffect(() => {
+    loadTabData()
+  }, [activeTab, selectedFilter, searchTerm, currentPage])
+
+  const loadMockData = async () => {
     setLoading(true)
     try {
       // Simulate API calls
@@ -494,10 +501,122 @@ const Admin_project_management = () => {
       setEmployees(mockEmployees)
       setClients(mockClients)
       setProjectManagers(mockPMs)
+      
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      // Load statistics
+      const statsResponse = await adminProjectService.getProjectManagementStatistics()
+      if (statsResponse.success) {
+        setStatistics(statsResponse.data)
+      }
+
+      // Load PM options for assignment
+      const pmOptionsResponse = await adminProjectService.getPMsForAssignment()
+      if (pmOptionsResponse.success) {
+        setPMOptions(pmOptionsResponse.data)
+      }
+
+      // Load data based on active tab
+      await loadTabData()
+      
+    } catch (error) {
+      console.error('Error loading data:', error)
+      setError('Failed to load data. Please try again.')
+      // Keep existing mock data as fallback
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadTabData = async () => {
+    try {
+      switch (activeTab) {
+        case 'pending-projects':
+          const pendingResponse = await adminProjectService.getPendingProjects({
+            priority: selectedFilter !== 'all' ? selectedFilter : undefined,
+            search: searchTerm || undefined,
+            page: currentPage,
+            limit: itemsPerPage
+          })
+          if (pendingResponse.success) {
+            setPendingProjects(pendingResponse.data)
+          }
+          break
+
+        case 'active-projects':
+          const activeResponse = await adminProjectService.getActiveProjects({
+            priority: selectedFilter !== 'all' ? selectedFilter : undefined,
+            search: searchTerm || undefined,
+            page: currentPage,
+            limit: itemsPerPage
+          })
+          if (activeResponse.success) {
+            setProjects(activeResponse.data)
+          }
+          break
+
+        case 'completed-projects':
+          const completedResponse = await adminProjectService.getCompletedProjects({
+            priority: selectedFilter !== 'all' ? selectedFilter : undefined,
+            search: searchTerm || undefined,
+            page: currentPage,
+            limit: itemsPerPage
+          })
+          if (completedResponse.success) {
+            setCompletedProjects(completedResponse.data)
+          }
+          break
+
+        case 'employees':
+          const employeesResponse = await adminProjectService.getEmployees({
+            status: selectedFilter !== 'all' ? selectedFilter : undefined,
+            search: searchTerm || undefined,
+            page: currentPage,
+            limit: itemsPerPage
+          })
+          if (employeesResponse.success) {
+            setEmployees(employeesResponse.data)
+          }
+          break
+
+        case 'clients':
+          const clientsResponse = await adminProjectService.getClients({
+            status: selectedFilter !== 'all' ? selectedFilter : undefined,
+            search: searchTerm || undefined,
+            page: currentPage,
+            limit: itemsPerPage
+          })
+          if (clientsResponse.success) {
+            setClients(clientsResponse.data)
+          }
+          break
+
+        case 'project-managers':
+          const pmsResponse = await adminProjectService.getPMs({
+            status: selectedFilter !== 'all' ? selectedFilter : undefined,
+            search: searchTerm || undefined,
+            page: currentPage,
+            limit: itemsPerPage
+          })
+          if (pmsResponse.success) {
+            setProjectManagers(pmsResponse.data)
+          }
+          break
+
+        default:
+          break
+      }
+    } catch (error) {
+      console.error(`Error loading ${activeTab} data:`, error)
+      setError(`Failed to load ${activeTab} data. Please try again.`)
     }
   }
 
@@ -525,6 +644,7 @@ const Admin_project_management = () => {
   }
 
   const formatCurrency = (amount) => {
+    if (!amount || amount === 0) return '₹0';
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR'
@@ -532,6 +652,7 @@ const Admin_project_management = () => {
   }
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -554,7 +675,7 @@ const Admin_project_management = () => {
   const filteredData = getCurrentData().filter(item => {
     const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          item.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.client?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (typeof item.client === 'string' ? item.client : item.client?.name || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          item.clientContact?.toLowerCase().includes(searchTerm.toLowerCase())
     
     let matchesFilter = true
@@ -643,51 +764,51 @@ const Admin_project_management = () => {
     setShowPendingDetailsModal(true)
   }
 
-  const confirmPMAssignment = () => {
+  const confirmPMAssignment = async () => {
     if (!selectedPM || !selectedPendingProject) return
 
-    const selectedPMData = projectManagers.find(pm => pm.id.toString() === selectedPM)
-    if (!selectedPMData) return
-
-    // Create new project from pending project
-    const newProject = {
-      id: Date.now(), // Generate new ID
-      name: selectedPendingProject.name,
-      client: selectedPendingProject.client,
-      status: "active",
-      progress: 0,
-      priority: selectedPendingProject.priority,
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
-      teamSize: 3, // Default team size
-      budget: selectedPendingProject.budget,
-      pm: selectedPMData.name,
-      startDate: new Date().toISOString().split('T')[0],
-      clientContact: selectedPendingProject.clientContact,
-      clientPhone: selectedPendingProject.clientPhone,
-      clientEmail: selectedPendingProject.clientEmail,
-      requirements: selectedPendingProject.requirements,
-      submittedBy: selectedPendingProject.submittedBy
-    }
-
-    // Add to projects list
-    setProjects(prev => [...prev, newProject])
-    
-    // Remove from pending projects
-    setPendingProjects(prev => prev.filter(p => p.id !== selectedPendingProject.id))
-    
-    // Update statistics
-    setStatistics(prev => ({
-      ...prev,
-      projects: {
-        ...prev.projects,
-        total: prev.projects.total + 1,
-        active: prev.projects.active + 1,
-        thisMonth: prev.projects.thisMonth + 1
+    try {
+      setLoading(true)
+      
+      // Call API to assign PM to pending project
+      const response = await adminProjectService.assignPMToProject(
+        selectedPendingProject._id || selectedPendingProject.id, 
+        selectedPM
+      )
+      
+      if (response.success) {
+        // Remove from pending projects
+        setPendingProjects(prev => 
+          prev.filter(p => (p._id || p.id) !== (selectedPendingProject._id || selectedPendingProject.id))
+        )
+        
+        // Add to active projects
+        setProjects(prev => [...prev, response.data])
+        
+        // Update statistics
+        setStatistics(prev => ({
+          ...prev,
+          projects: {
+            ...prev.projects,
+            pending: prev.projects.pending - 1,
+            active: prev.projects.active + 1
+          }
+        }))
+        
+        // Show success message
+        console.log('PM assigned successfully:', response.message)
+        setError(null) // Clear any previous errors
+      } else {
+        setError('Failed to assign PM. Please try again.')
       }
-    }))
-
-    // Close modal
-    closeModals()
+      
+    } catch (error) {
+      console.error('Error assigning PM:', error)
+      setError('Failed to assign PM. Please try again.')
+    } finally {
+      setLoading(false)
+      closeModals()
+    }
   }
 
   if (loading) {
@@ -715,6 +836,35 @@ const Admin_project_management = () => {
       {/* Main Content */}
       <div className="ml-64 pt-20 p-8">
         <div className="max-w-7xl mx-auto">
+          {/* Error Display */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">Error</h3>
+                  <div className="mt-2 text-sm text-red-700">
+                    <p>{error}</p>
+                  </div>
+                  <div className="mt-4">
+                    <div className="-mx-2 -my-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setError(null)}
+                        className="bg-red-50 px-2 py-1.5 rounded-md text-sm font-medium text-red-800 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-red-50 focus:ring-red-600"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
@@ -973,7 +1123,12 @@ const Admin_project_management = () => {
                             <div className="flex items-start justify-between">
                               <div className="flex-1 min-w-0 pr-2">
                                 <h4 className="text-sm font-bold text-gray-900 truncate mb-0.5">{pendingProject.name}</h4>
-                                <p className="text-xs text-gray-600 font-medium truncate">{pendingProject.client}</p>
+                                <p className="text-xs text-gray-600 font-medium truncate">
+                                  {typeof pendingProject.client === 'string' 
+                                    ? pendingProject.client 
+                                    : pendingProject.client?.name || 'Unknown Client'
+                                  }
+                                </p>
                               </div>
                               <span className={`inline-flex px-2 py-0.5 text-xs font-bold rounded-full ${getPriorityColor(pendingProject.priority)} flex-shrink-0`}>
                                 {pendingProject.priority}
@@ -1015,7 +1170,12 @@ const Admin_project_management = () => {
                                 </div>
                                 <div className="text-right">
                                   <div className="text-xs text-gray-600 font-medium">By</div>
-                                  <div className="text-xs font-semibold text-gray-900 truncate max-w-16">{pendingProject.submittedBy.split(' - ')[1] || pendingProject.submittedBy}</div>
+                                  <div className="text-xs font-semibold text-gray-900 truncate max-w-16">
+                                    {typeof pendingProject.submittedBy === 'string' 
+                                      ? pendingProject.submittedBy.split(' - ')[1] || pendingProject.submittedBy
+                                      : pendingProject.submittedBy?.name || 'Unknown'
+                                    }
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -1108,8 +1268,18 @@ const Admin_project_management = () => {
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1 min-w-0">
                               <h3 className="text-sm font-bold text-gray-900 truncate mb-1">{project.name}</h3>
-                              <p className="text-xs text-gray-600 font-medium mb-1">{project.client}</p>
-                              <p className="text-xs text-gray-400">PM: {project.pm}</p>
+                              <p className="text-xs text-gray-600 font-medium mb-1">
+                                {typeof project.client === 'string' 
+                                  ? project.client 
+                                  : project.client?.name || 'Unknown Client'
+                                }
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                PM: {typeof project.pm === 'string' 
+                                  ? project.pm 
+                                  : project.pm?.name || 'Unassigned'
+                                }
+                              </p>
                             </div>
                             <div className="flex flex-col space-y-1 ml-2">
                               <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border ${getStatusColor(project.status)}`}>
@@ -1267,8 +1437,18 @@ const Admin_project_management = () => {
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1 min-w-0">
                               <h3 className="text-sm font-bold text-gray-900 truncate mb-1">{project.name}</h3>
-                              <p className="text-xs text-gray-600 font-medium mb-1">{project.client}</p>
-                              <p className="text-xs text-gray-400">PM: {project.pm}</p>
+                              <p className="text-xs text-gray-600 font-medium mb-1">
+                                {typeof project.client === 'string' 
+                                  ? project.client 
+                                  : project.client?.name || 'Unknown Client'
+                                }
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                PM: {typeof project.pm === 'string' 
+                                  ? project.pm 
+                                  : project.pm?.name || 'Unassigned'
+                                }
+                              </p>
                             </div>
                             <div className="flex flex-col space-y-1 ml-2">
                               <span className="inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border bg-green-100 text-green-800 border-green-200">
@@ -1591,11 +1771,11 @@ const Admin_project_management = () => {
                         {/* Activity Status */}
                         <div className="bg-gray-50 rounded-lg p-2 mb-3">
                           <div className="text-xs text-gray-600 font-medium mb-1">Last Activity</div>
-                          <div className="text-xs font-bold text-gray-800">{formatDate(client.lastActivity)}</div>
+                          <div className="text-xs font-bold text-gray-800">{formatDate(client.lastActive)}</div>
                         </div>
 
                         {/* Footer */}
-                        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                        <div className="flex items-center justify-end pt-3 border-t border-gray-100">
                           <div className="flex items-center space-x-1">
                             <button 
                               onClick={() => handleView(client, 'client')}
@@ -1615,9 +1795,6 @@ const Admin_project_management = () => {
                             >
                               <FiTrash2 className="h-3 w-3" />
                             </button>
-                          </div>
-                          <div className="text-xs text-gray-400 font-medium">
-                            ID: #{client.id}
                           </div>
                         </div>
                       </div>
@@ -2317,7 +2494,7 @@ const Admin_project_management = () => {
                       </div>
                       <div className="bg-gray-50 rounded-lg p-4">
                         <div className="text-sm text-gray-600 font-medium mb-1">Last Activity</div>
-                        <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.lastActivity)}</div>
+                        <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.lastActive)}</div>
                       </div>
                     </div>
                   </div>

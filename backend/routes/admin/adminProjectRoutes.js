@@ -5,7 +5,11 @@ const {
   createProject,
   updateProject,
   deleteProject,
-  getProjectStatistics
+  getProjectStatistics,
+  getProjectManagementStatistics,
+  getPendingProjects,
+  assignPMToPendingProject,
+  getPMsForAssignment
 } = require('../../controllers/admin/adminProjectController');
 const { protect, authorize } = require('../../middlewares/auth');
 
@@ -18,8 +22,12 @@ router.use(authorize('admin'));
 // Admin project routes
 router.get('/', getAllProjects);
 router.get('/statistics', getProjectStatistics);
+router.get('/management-statistics', getProjectManagementStatistics);
+router.get('/pending', getPendingProjects);
+router.get('/pms-for-assignment', getPMsForAssignment);
 router.get('/:id', getProjectById);
 router.post('/', createProject);
+router.post('/pending/:id/assign-pm', assignPMToPendingProject);
 router.put('/:id', updateProject);
 router.delete('/:id', deleteProject);
 

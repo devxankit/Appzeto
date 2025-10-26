@@ -3,6 +3,8 @@ const PM = require('../models/PM');
 const Sales = require('../models/Sales');
 const Employee = require('../models/Employee');
 const Client = require('../models/Client');
+const Project = require('../models/Project');
+const Payment = require('../models/Payment');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { uploadFile, deleteFile } = require('../services/cloudinaryService');
@@ -11,7 +13,7 @@ const { uploadFile, deleteFile } = require('../services/cloudinaryService');
 // @route   GET /api/admin/users
 // @access  Private (Admin only)
 const getAllUsers = asyncHandler(async (req, res, next) => {
-  const { role, team, department, status, search, page = 1, limit = 20 } = req.query;
+  const { role, team, department, status, search, page = 1, limit = 20, includeStats = false } = req.query;
   
   // Build filter object
   let filter = {};
@@ -56,22 +58,81 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
   const limitNum = parseInt(limit);
   const skip = (pageNum - 1) * limitNum;
 
-  // Get users from all collections
+  // Get users from all collections with enhanced data
   const [admins, pms, sales, employees, clients] = await Promise.all([
     Admin.find(filter).select('-password -loginAttempts -lockUntil').skip(skip).limit(limitNum),
-    PM.find(filter).select('-password -loginAttempts -lockUntil').skip(skip).limit(limitNum),
+    PM.find(filter).select('-password -loginAttempts -lockUntil').populate('projectsManaged', 'name status').skip(skip).limit(limitNum),
     Sales.find(filter).select('-password -loginAttempts -lockUntil').skip(skip).limit(limitNum),
-    Employee.find(filter).select('-password -loginAttempts -lockUntil').skip(skip).limit(limitNum),
+    Employee.find(filter).select('-password -loginAttempts -lockUntil').populate('projectsAssigned', 'name status').populate('tasksAssigned', 'name status').skip(skip).limit(limitNum),
     Client.find(filter).select('-otp -otpExpires -otpAttempts -otpLockUntil -loginAttempts -lockUntil').skip(skip).limit(limitNum)
   ]);
 
-  // Combine all users
+  // Process clients with project data
+  const clientsWithProjects = await Promise.all(clients.map(async user => {
+    const userObj = user.toObject();
+    
+    // Get projects for this client
+    const clientProjects = await Project.find({ client: user._id }).select('name status budget');
+    const totalProjects = clientProjects.length;
+    const activeProjects = clientProjects.filter(p => 
+      ['untouched', 'started', 'active'].includes(p.status)
+    ).length;
+    const totalSpent = clientProjects.reduce((sum, p) => sum + (p.budget || 0), 0);
+    
+    return {
+      ...userObj,
+      userType: 'client',
+      projects: totalProjects,
+      totalSpent,
+      lastActivity: user.lastLogin || user.updatedAt
+    };
+  }));
+
+  // Combine all users with enhanced statistics
   let allUsers = [
     ...admins.map(user => ({ ...user.toObject(), userType: 'admin' })),
-    ...pms.map(user => ({ ...user.toObject(), userType: 'project-manager' })),
+    ...pms.map(user => {
+      const userObj = user.toObject();
+      const activeProjects = user.projectsManaged.filter(p => 
+        ['untouched', 'started', 'active'].includes(p.status)
+      ).length;
+      const completedProjects = user.projectsManaged.filter(p => 
+        p.status === 'completed'
+      ).length;
+      const totalProjects = user.projectsManaged.length;
+      const completionRate = totalProjects > 0 ? 
+        Math.round((completedProjects / totalProjects) * 100) : 0;
+      
+      return {
+        ...userObj,
+        userType: 'project-manager',
+        projects: activeProjects,
+        completionRate,
+        performance: Math.min(100, Math.max(0, completionRate + (activeProjects < 5 ? 10 : 0))),
+        teamSize: user.projectsManaged.reduce((sum, p) => sum + (p.assignedTeam?.length || 0), 0)
+      };
+    }),
     ...sales.map(user => ({ ...user.toObject(), userType: 'sales' })),
-    ...employees.map(user => ({ ...user.toObject(), userType: 'employee' })),
-    ...clients.map(user => ({ ...user.toObject(), userType: 'client' }))
+    ...employees.map(user => {
+      const userObj = user.toObject();
+      const activeProjects = user.projectsAssigned.filter(p => 
+        ['untouched', 'started', 'active'].includes(p.status)
+      ).length;
+      const activeTasks = user.tasksAssigned.filter(t => 
+        ['pending', 'in-progress'].includes(t.status)
+      ).length;
+      
+      return {
+        ...userObj,
+        userType: 'employee',
+        projects: activeProjects,
+        tasks: activeTasks,
+        performance: Math.min(100, Math.max(0, 
+          (activeTasks > 0 ? 85 : 70) + (activeProjects > 0 ? 10 : 0)
+        ))
+      };
+    }),
+    ...clientsWithProjects
   ];
 
   // Get total counts for statistics

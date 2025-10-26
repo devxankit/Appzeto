@@ -13,6 +13,10 @@ const {
   getPMEmployees,
   getPMTeamStatistics
 } = require('../controllers/pmTeamController');
+
+// Import PM project controllers
+const pmProjectRoutes = require('./pm/pmProjectRoutes');
+
 const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
@@ -33,5 +37,8 @@ router.get('/team/employees', getPMEmployees);
 router.get('/team/clients', getPMClients);
 router.get('/team/members', getPMTeamMembers);
 router.get('/team/statistics', getPMTeamStatistics);
+
+// PM project management routes
+router.use('/', pmProjectRoutes);
 
 module.exports = router;

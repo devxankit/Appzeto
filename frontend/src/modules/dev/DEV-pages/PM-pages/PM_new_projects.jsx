@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import { projectService } from '../../DEV-services/projectService'
 import { 
   FiFolder, 
   FiUsers, 
@@ -42,163 +43,34 @@ const PM_new_projects = () => {
   const [selectedProjectForMeeting, setSelectedProjectForMeeting] = useState(null)
   const [selectedMeetingStatus, setSelectedMeetingStatus] = useState('pending')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [newProjects, setNewProjects] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
-  // Mock new projects data from sales team
-  const newProjectsData = [
-    {
-      id: 1,
-      name: 'E-commerce Platform',
-      client: {
-        name: 'Sarah Wilson',
-        company: 'Tech Solutions Inc.',
-        phone: '9845637236',
-        email: 'sarah@techsolutions.com'
-      },
-      package: 'Premium Web + App',
-      amount: 45000,
-      convertedDate: '2024-01-15',
-      salesRep: 'John Smith',
-      description: 'Complete e-commerce platform with mobile app, payment integration, and admin dashboard.',
-      requirements: [
-        'Mobile responsive design',
-        'Payment gateway integration',
-        'Inventory management',
-        'Order tracking system',
-        'Admin dashboard'
-      ],
-       status: 'untouched',
-       priority: 'high',
-       estimatedDuration: '3 months',
-       progress: 0,
-       meetingStatus: 'pending',
-      attachments: [
-        { name: 'project-brief.pdf', size: '2.1 MB' },
-        { name: 'wireframes.fig', size: '1.8 MB' }
-      ]
-    },
-    {
-      id: 2,
-      name: 'Restaurant Management System',
-      client: {
-        name: 'Michael Chen',
-        company: 'Digital Marketing Pro',
-        phone: '9876543210',
-        email: 'michael@digitalpro.com'
-      },
-      package: 'Basic Web Package',
-      amount: 25000,
-      convertedDate: '2024-01-12',
-      salesRep: 'Jane Doe',
-      description: 'Restaurant management system with online ordering, table booking, and kitchen management.',
-      requirements: [
-        'Online ordering system',
-        'Table reservation',
-        'Kitchen display system',
-        'Customer management',
-        'Analytics dashboard'
-      ],
-       status: 'untouched',
-       priority: 'normal',
-       estimatedDuration: '2 months',
-       progress: 0,
-       meetingStatus: 'done',
-      attachments: [
-        { name: 'requirements.docx', size: '1.2 MB' }
-      ]
-    },
-    {
-      id: 3,
-      name: 'Healthcare Portal',
-      client: {
-        name: 'Emily Rodriguez',
-        company: 'E-commerce Store',
-        phone: '9087654321',
-        email: 'emily@ecommerce.com'
-      },
-      package: 'E-commerce Solution',
-      amount: 35000,
-      convertedDate: '2024-01-10',
-      salesRep: 'Mike Johnson',
-      description: 'Healthcare portal for patient management, appointment booking, and medical records.',
-      requirements: [
-        'Patient registration',
-        'Appointment scheduling',
-        'Medical records management',
-        'Prescription management',
-        'Telemedicine features'
-      ],
-       status: 'started',
-       priority: 'urgent',
-       estimatedDuration: '4 months',
-       progress: 15,
-       meetingStatus: 'done',
-      attachments: [
-        { name: 'healthcare-specs.pdf', size: '3.5 MB' },
-        { name: 'compliance-docs.pdf', size: '2.8 MB' }
-      ]
-    },
-    {
-      id: 4,
-      name: 'Fitness App',
-      client: {
-        name: 'James Thompson',
-        company: 'Restaurant Chain',
-        phone: '8765432109',
-        email: 'james@restaurant.com'
-      },
-      package: 'Restaurant App',
-      amount: 30000,
-      convertedDate: '2024-01-08',
-      salesRep: 'Sarah Wilson',
-      description: 'Fitness tracking app with workout plans, nutrition tracking, and social features.',
-      requirements: [
-        'Workout tracking',
-        'Nutrition logging',
-        'Social features',
-        'Progress analytics',
-        'Personal trainer integration'
-      ],
-       status: 'started',
-       priority: 'high',
-       estimatedDuration: '3 months',
-       progress: 25,
-       meetingStatus: 'pending',
-      attachments: [
-        { name: 'fitness-mockups.fig', size: '4.2 MB' }
-      ]
-    },
-    {
-      id: 5,
-      name: 'Real Estate Portal',
-      client: {
-        name: 'Lisa Anderson',
-        company: 'Fitness Center',
-        phone: '7654321098',
-        email: 'lisa@fitness.com'
-      },
-      package: 'Fitness App + Web',
-      amount: 40000,
-      convertedDate: '2024-01-05',
-      salesRep: 'David Brown',
-      description: 'Real estate portal with property listings, virtual tours, and agent management.',
-      requirements: [
-        'Property listings',
-        'Virtual tour integration',
-        'Agent profiles',
-        'Search and filters',
-        'Lead management'
-      ],
-       status: 'started',
-       priority: 'normal',
-       estimatedDuration: '5 months',
-       progress: 35,
-       meetingStatus: 'done',
-      attachments: [
-        { name: 'real-estate-brief.pdf', size: '2.9 MB' },
-        { name: 'design-guidelines.pdf', size: '1.5 MB' }
-      ]
+  useEffect(() => {
+    loadNewProjects()
+  }, [activeTab, selectedFilter, searchTerm])
+
+  const loadNewProjects = async () => {
+    setLoading(true)
+    try {
+      const response = await projectService.getNewProjects({
+        status: activeTab !== 'all' ? activeTab : undefined,
+        priority: selectedFilter !== 'all' ? selectedFilter : undefined,
+        search: searchTerm || undefined
+      })
+      
+      if (response.success) {
+        setNewProjects(response.data)
+      }
+    } catch (error) {
+      console.error('Error loading new projects:', error)
+      setError('Failed to load new projects')
+      setNewProjects([])
+    } finally {
+      setLoading(false)
     }
-  ]
+  }
 
   const projectStatuses = [
     { value: 'untouched', label: 'Untouched', color: 'bg-gray-100 text-gray-800', icon: FiClock },
@@ -218,10 +90,10 @@ const PM_new_projects = () => {
     { id: 'week', label: 'This Week' }
   ]
 
-  const filteredProjects = newProjectsData.filter(project => {
+  const filteredProjects = newProjects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         project.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.client.company.toLowerCase().includes(searchTerm.toLowerCase())
+                         (project.client?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (project.client?.companyName || '').toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesStatus = activeTab === 'all' || project.status === activeTab
     
@@ -268,10 +140,60 @@ const PM_new_projects = () => {
   ]
 
   const handleEditProject = (projectId) => {
-    const project = newProjectsData.find(p => p.id === projectId)
+    const project = newProjects.find(p => (p._id || p.id) === projectId)
     if (project) {
       setEditingProject(project)
       setIsProjectFormOpen(true)
+    }
+  }
+
+  const handleStartProject = async (projectId) => {
+    try {
+      setLoading(true)
+      
+      const response = await projectService.startProject(projectId)
+      
+      if (response.success) {
+        // Update the project status in local state
+        setNewProjects(prev => 
+          prev.map(project => 
+            (project._id || project.id) === projectId
+              ? { ...project, status: 'started' }
+              : project
+          )
+        )
+        
+        console.log('Project started successfully:', response.message)
+      }
+    } catch (error) {
+      console.error('Error starting project:', error)
+      setError('Failed to start project')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleActivateProject = async (projectId, projectData) => {
+    try {
+      setLoading(true)
+      
+      const response = await projectService.activateProject(projectId, projectData)
+      
+      if (response.success) {
+        // Remove from new projects (it's now active)
+        setNewProjects(prev => 
+          prev.filter(project => (project._id || project.id) !== projectId)
+        )
+        
+        console.log('Project activated successfully:', response.message)
+        setIsProjectFormOpen(false)
+        setEditingProject(null)
+      }
+    } catch (error) {
+      console.error('Error activating project:', error)
+      setError('Failed to activate project')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -286,11 +208,17 @@ const PM_new_projects = () => {
     }
   }
 
-  const handleProjectFormSubmit = (formData) => {
+  const handleProjectFormSubmit = async (formData) => {
     console.log('Project form submitted:', formData)
-    // Here you would typically update the project data
-    setIsProjectFormOpen(false)
-    setEditingProject(null)
+    
+    if (editingProject) {
+      // This is project activation (started → active)
+      await handleActivateProject(editingProject._id || editingProject.id, formData)
+    } else {
+      // This is a new project creation
+      console.log('Creating new project:', formData)
+      setIsProjectFormOpen(false)
+    }
   }
 
   const handleProjectFormClose = () => {
@@ -299,7 +227,7 @@ const PM_new_projects = () => {
   }
 
   const handleStartMeeting = (projectId) => {
-    const project = newProjectsData.find(p => p.id === projectId)
+    const project = newProjects.find(p => (p._id || p.id) === projectId)
     if (project) {
       setSelectedProjectForMeeting(project)
       setSelectedMeetingStatus('pending') // Set default to pending
@@ -308,12 +236,34 @@ const PM_new_projects = () => {
     }
   }
 
-  const handleMeetingStatusUpdate = () => {
+  const handleMeetingStatusUpdate = async () => {
     if (selectedProjectForMeeting) {
-      // Update the project's meeting status
-      const updatedProject = { ...selectedProjectForMeeting, meetingStatus: selectedMeetingStatus }
-      console.log('Meeting status updated:', updatedProject)
-      // Here you would typically update the project data in your backend
+      try {
+        setLoading(true)
+        
+        const response = await projectService.updateMeetingStatus(
+          selectedProjectForMeeting._id || selectedProjectForMeeting.id,
+          selectedMeetingStatus
+        )
+        
+        if (response.success) {
+          // Update the project in the local state
+          setNewProjects(prev => 
+            prev.map(project => 
+              (project._id || project.id) === (selectedProjectForMeeting._id || selectedProjectForMeeting.id)
+                ? { ...project, meetingStatus: selectedMeetingStatus }
+                : project
+            )
+          )
+          
+          console.log('Meeting status updated successfully:', response.message)
+        }
+      } catch (error) {
+        console.error('Error updating meeting status:', error)
+        setError('Failed to update meeting status')
+      } finally {
+        setLoading(false)
+      }
     }
     setIsMeetingDialogOpen(false)
     setSelectedProjectForMeeting(null)
@@ -370,13 +320,13 @@ const PM_new_projects = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4.5 19.5a7.5 7.5 0 0115 0" />
                 </svg>
-                <span className="truncate">Client: {project.client.name}</span>
+                <span className="truncate">Client: {project.client?.name || 'Unknown'}</span>
               </div>
               <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-600">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 text-teal-600">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
                 </svg>
-                <span className="truncate">{project.client.phone}</span>
+                <span className="truncate">{project.client?.phoneNumber || project.client?.phone || 'N/A'}</span>
               </div>
             </div>
           </div>
@@ -418,7 +368,7 @@ const PM_new_projects = () => {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 text-teal-600">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 7V3m8 4V3M3.75 8.25h16.5M5 21h14a2 2 0 002-2V8.25H3v10.75A2 2 0 005 21z" />
             </svg>
-            <span className="font-medium whitespace-nowrap">Due: {project.convertedDate}</span>
+            <span className="font-medium whitespace-nowrap">Due: {project.dueDate ? new Date(project.dueDate).toLocaleDateString() : 'TBD'}</span>
           </div>
           
           {/* Action Buttons */}
@@ -493,17 +443,17 @@ const PM_new_projects = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4.5 19.5a7.5 7.5 0 0115 0" />
                 </svg>
-                <span className="truncate">Client: {project.client.name}</span>
+                <span className="truncate">Client: {project.client?.name || 'Unknown'}</span>
               </div>
               <div className="mt-1 flex items-center gap-1 text-sm text-gray-600">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 text-teal-600">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
                 </svg>
-                <span className="truncate">{project.client.phone}</span>
+                <span className="truncate">{project.client?.phoneNumber || project.client?.phone || 'N/A'}</span>
               </div>
               <div className="mt-1 text-xs text-gray-600">
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">
-                  {project.package}
+                  {project.package || 'Standard Package'}
                 </span>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(project.priority)}`}>
                   {project.priority}
@@ -549,7 +499,7 @@ const PM_new_projects = () => {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 text-teal-600">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 7V3m8 4V3M3.75 8.25h16.5M5 21h14a2 2 0 002-2V8.25H3v10.75A2 2 0 005 21z" />
             </svg>
-            <span className="font-medium whitespace-nowrap">Due: {project.convertedDate}</span>
+            <span className="font-medium whitespace-nowrap">Due: {project.dueDate ? new Date(project.dueDate).toLocaleDateString() : 'TBD'}</span>
           </div>
           
           {/* Action Buttons */}
@@ -714,7 +664,7 @@ const PM_new_projects = () => {
             className="mb-4"
           >
             <p className="text-gray-600 text-sm">
-              Showing {filteredProjects.length} of {newProjectsData.length} projects
+              Showing {filteredProjects.length} of {newProjects.length} projects
             </p>
           </motion.div>
 
@@ -955,19 +905,19 @@ const PM_new_projects = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700 text-sm font-medium">Total Projects</span>
-                    <span className="text-gray-900 text-xl font-bold">{newProjectsData.length}</span>
+                    <span className="text-gray-900 text-xl font-bold">{newProjects.length}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700 text-sm font-medium">Untouched</span>
-                    <span className="text-gray-900 text-xl font-bold">{newProjectsData.filter(p => p.status === 'untouched').length}</span>
+                    <span className="text-gray-900 text-xl font-bold">{newProjects.filter(p => p.status === 'untouched').length}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700 text-sm font-medium">Started</span>
-                    <span className="text-gray-900 text-xl font-bold">{newProjectsData.filter(p => p.status === 'started').length}</span>
+                    <span className="text-gray-900 text-xl font-bold">{newProjects.filter(p => p.status === 'started').length}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700 text-sm font-medium">Total Value</span>
-                    <span className="text-green-600 text-xl font-bold">₹{newProjectsData.reduce((sum, p) => sum + p.amount, 0).toLocaleString()}</span>
+                    <span className="text-green-600 text-xl font-bold">₹{newProjects.reduce((sum, p) => sum + (p.budget || 0), 0).toLocaleString()}</span>
                   </div>
                 </div>
               </motion.div>
@@ -1037,11 +987,11 @@ const PM_new_projects = () => {
                  <div className="bg-gray-50 rounded-lg p-4">
                    <div className="flex items-center justify-between mb-2">
                      <span className="text-sm font-medium text-gray-700">Client:</span>
-                     <span className="text-sm text-gray-900">{selectedProjectForMeeting.client.name}</span>
+                     <span className="text-sm text-gray-900">{selectedProjectForMeeting.client?.name || 'Unknown'}</span>
                    </div>
                    <div className="flex items-center justify-between mb-2">
                      <span className="text-sm font-medium text-gray-700">Company:</span>
-                     <span className="text-sm text-gray-900">{selectedProjectForMeeting.client.company}</span>
+                     <span className="text-sm text-gray-900">{selectedProjectForMeeting.client?.companyName || 'N/A'}</span>
                    </div>
                    <div className="flex items-center justify-between mb-2">
                      <span className="text-sm font-medium text-gray-700">Phone:</span>
@@ -1049,7 +999,7 @@ const PM_new_projects = () => {
                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 text-teal-600">
                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
                        </svg>
-                       <span className="text-sm text-gray-900 font-mono">{selectedProjectForMeeting.client.phone}</span>
+                       <span className="text-sm text-gray-900 font-mono">{selectedProjectForMeeting.client?.phoneNumber || selectedProjectForMeeting.client?.phone || 'N/A'}</span>
                      </div>
                    </div>
                    <div className="flex items-center justify-between">

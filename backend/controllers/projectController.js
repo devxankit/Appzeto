@@ -2,6 +2,7 @@ const Project = require('../models/Project');
 const Milestone = require('../models/Milestone');
 const Task = require('../models/Task');
 const Activity = require('../models/Activity');
+const PM = require('../models/PM');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../services/cloudinaryService');
 const socketService = require('../services/socketService');
 const asyncHandler = require('../middlewares/asyncHandler');
@@ -30,6 +31,7 @@ const createProject = asyncHandler(async (req, res, next) => {
     description,
     client,
     projectManager: req.user.id,
+    status: 'active', // PM-created projects are immediately active
     priority,
     dueDate,
     startDate,
@@ -38,6 +40,13 @@ const createProject = asyncHandler(async (req, res, next) => {
     estimatedHours,
     tags
   });
+
+  // Update PM's projectsManaged array
+  const pm = await PM.findById(req.user.id);
+  if (pm && !pm.projectsManaged.includes(project._id)) {
+    pm.projectsManaged.push(project._id);
+    await pm.save();
+  }
 
   // Populate the project with related data
   await project.populate([

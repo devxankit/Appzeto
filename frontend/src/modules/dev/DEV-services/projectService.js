@@ -216,5 +216,66 @@ export const projectService = {
     } catch (error) {
       throw error;
     }
+  },
+
+  // PM New Projects functionality
+  // Get new projects assigned to PM
+  getNewProjects: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      if (params.status) queryParams.append('status', params.status);
+      if (params.priority) queryParams.append('priority', params.priority);
+      if (params.search) queryParams.append('search', params.search);
+      if (params.page) queryParams.append('page', params.page);
+      if (params.limit) queryParams.append('limit', params.limit);
+
+      const response = await apiRequest(`/pm/new-projects?${queryParams}`);
+      return response;
+    } catch (error) {
+      console.error('Error fetching new projects:', error);
+      throw error;
+    }
+  },
+
+  // Update meeting status for a project
+  updateMeetingStatus: async (projectId, meetingStatus) => {
+    try {
+      const response = await apiRequest(`/pm/projects/${projectId}/meeting-status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ meetingStatus })
+      });
+      return response;
+    } catch (error) {
+      console.error('Error updating meeting status:', error);
+      throw error;
+    }
+  },
+
+  // Start a project (convert untouched → started)
+  startProject: async (projectId) => {
+    try {
+      const response = await apiRequest(`/pm/projects/${projectId}/start`, {
+        method: 'PATCH'
+      });
+      return response;
+    } catch (error) {
+      console.error('Error starting project:', error);
+      throw error;
+    }
+  },
+
+  // Activate a project (convert started → active with full details)
+  activateProject: async (projectId, projectData) => {
+    try {
+      const response = await apiRequest(`/pm/projects/${projectId}/activate`, {
+        method: 'PATCH',
+        body: JSON.stringify(projectData)
+      });
+      return response;
+    } catch (error) {
+      console.error('Error activating project:', error);
+      throw error;
+    }
   }
 };

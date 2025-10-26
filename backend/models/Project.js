@@ -21,12 +21,12 @@ const projectSchema = new mongoose.Schema({
   projectManager: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'PM',
-    required: [true, 'Project manager is required']
+    required: false // Made optional for pending projects
   },
   status: {
     type: String,
-    enum: ['planning', 'active', 'on-hold', 'testing', 'completed', 'cancelled'],
-    default: 'planning'
+    enum: ['pending-assignment', 'untouched', 'started', 'active', 'on-hold', 'testing', 'completed', 'cancelled'],
+    default: 'pending-assignment' // Default for sales-submitted projects; PM-created projects should explicitly set 'active'
   },
   priority: {
     type: String,
@@ -35,7 +35,7 @@ const projectSchema = new mongoose.Schema({
   },
   dueDate: {
     type: Date,
-    required: [true, 'Due date is required']
+    required: false // Made optional for pending projects
   },
   startDate: {
     type: Date,
@@ -90,6 +90,25 @@ const projectSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
+  // New fields for sales-to-admin-to-PM workflow
+  meetingStatus: {
+    type: String,
+    enum: ['pending', 'done', 'not-applicable'],
+    default: 'not-applicable'
+  },
+  submittedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Sales'
+  },
+  requirements: {
+    type: String,
+    trim: true,
+    maxlength: [2000, 'Requirements cannot exceed 2000 characters']
+  },
+  package: {
+    type: String,
+    trim: true
+  },
   revisions: {
     type: mongoose.Schema.Types.Mixed,
     default: {
@@ -256,6 +275,16 @@ projectSchema.pre('save', function(next) {
   }
   if (!this.revisions.secondRevision) {
     this.revisions.secondRevision = { status: 'pending', completedDate: null, feedback: null };
+  }
+  
+  // Custom validation: projectManager is required unless status is 'pending-assignment'
+  if (this.status !== 'pending-assignment' && !this.projectManager) {
+    return next(new Error('Project manager is required for projects with status other than pending-assignment'));
+  }
+  
+  // Custom validation: dueDate is required unless status is 'pending-assignment'
+  if (this.status !== 'pending-assignment' && !this.dueDate) {
+    return next(new Error('Due date is required for projects with status other than pending-assignment'));
   }
   
   next();

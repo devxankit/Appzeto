@@ -147,7 +147,7 @@ export const teamService = {
       if (milestoneId) {
         // Get employees assigned to the specific milestone
         const milestoneResponse = await apiRequest(`/milestones/${milestoneId}`);
-        const milestone = milestoneResponse?.data?.data;
+        const milestone = milestoneResponse?.data;
         
         if (milestone && milestone.assignedTo && milestone.assignedTo.length > 0) {
           // Use employees assigned to the milestone
@@ -155,7 +155,7 @@ export const teamService = {
         } else if (projectId) {
           // Fallback to project team if milestone has no assigned team
           const projectResponse = await apiRequest(`/projects/${projectId}`);
-          const project = projectResponse?.data?.data;
+          const project = projectResponse?.data;
           
           if (project && project.assignedTeam && project.assignedTeam.length > 0) {
             const devEmployees = project.assignedTeam.filter(emp => emp.team === 'developer');
@@ -173,7 +173,7 @@ export const teamService = {
       } else if (projectId) {
         // Get employees assigned to the project
         const projectResponse = await apiRequest(`/projects/${projectId}`);
-        const project = projectResponse?.data?.data;
+        const project = projectResponse?.data;
         
         if (project && project.assignedTeam && project.assignedTeam.length > 0) {
           // Filter assigned team for developer employees only
