@@ -8,6 +8,8 @@ class SocketService {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000;
+    this.connectionRefs = 0; // Track how many components are using the connection
+    this.isManualDisconnect = false; // Track if disconnect was manual
   }
 
   // Check if server is available
@@ -27,6 +29,9 @@ class SocketService {
 
   // Initialize socket connection
   async connect(token) {
+    // Increment reference count
+    this.connectionRefs++;
+    
     if (this.socket && this.isConnected) {
       return this.socket;
     }
@@ -35,6 +40,7 @@ class SocketService {
     const serverAvailable = await this.checkServerAvailability();
     if (!serverAvailable) {
       console.warn('Backend server not available, skipping WebSocket connection');
+      this.connectionRefs--; // Decrement if connection failed
       return null;
     }
 
@@ -56,9 +62,11 @@ class SocketService {
       });
 
       this.setupEventListeners();
+      this.isManualDisconnect = false;
       return this.socket;
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
+      this.connectionRefs--; // Decrement if connection failed
       return null;
     }
   }
@@ -78,8 +86,8 @@ class SocketService {
       this.isConnected = false;
       this.emit('connection_status', { connected: false, reason });
       
-      // Attempt to reconnect if not manually disconnected
-      if (reason !== 'io client disconnect' && this.reconnectAttempts < this.maxReconnectAttempts) {
+      // Only attempt to reconnect if not manually disconnected and we still have references
+      if (reason !== 'io client disconnect' && !this.isManualDisconnect && this.connectionRefs > 0 && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.attemptReconnect();
       }
     });
@@ -264,8 +272,25 @@ class SocketService {
     }
   }
 
-  // Disconnect socket
+  // Disconnect socket (with reference counting)
   disconnect() {
+    this.connectionRefs--;
+    
+    // Only actually disconnect if no more references
+    if (this.connectionRefs <= 0 && this.socket) {
+      this.isManualDisconnect = true;
+      this.socket.disconnect();
+      this.socket = null;
+      this.isConnected = false;
+      this.eventListeners.clear();
+      this.connectionRefs = 0; // Reset to 0
+    }
+  }
+
+  // Force disconnect (for logout, etc.)
+  forceDisconnect() {
+    this.isManualDisconnect = true;
+    this.connectionRefs = 0;
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;

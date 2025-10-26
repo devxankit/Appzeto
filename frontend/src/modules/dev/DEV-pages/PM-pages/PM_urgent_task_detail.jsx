@@ -47,7 +47,9 @@ const PM_urgent_task_detail = () => {
     }
     
     return () => {
-      socketService.disconnect()
+      // Only cleanup event listeners, not the connection itself
+      socketService.off('task_updated')
+      socketService.off('task_status_updated')
     }
   }, [id])
 

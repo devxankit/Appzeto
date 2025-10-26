@@ -32,7 +32,12 @@ const PM_project_detail = () => {
     }
     
     return () => {
-      socketService.disconnect()
+      // Only cleanup event listeners, not the connection itself
+      socketService.off('project_updated')
+      socketService.off('milestone_created')
+      socketService.off('milestone_updated')
+      socketService.off('task_created')
+      socketService.off('task_updated')
     }
   }, [id])
 

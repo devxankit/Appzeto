@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import { User, Mail, Camera, Edit3, Save, X, Loader2, LogOut } from 'lucide-react'
 import { logoutPM, clearPMData, getStoredPMData } from '../../DEV-services/pmAuthService'
+import { socketService } from '../../DEV-services'
 import { useToast } from '../../../../contexts/ToastContext'
 
 const PM_Profile = () => {
@@ -100,6 +101,9 @@ const PM_Profile = () => {
       
       // Call logout API
       await logoutPM()
+      
+      // Force disconnect WebSocket
+      socketService.forceDisconnect()
       
       // Clear local data
       clearPMData()

@@ -22,7 +22,10 @@ const PM_projects = () => {
     setupWebSocket();
     
     return () => {
-      socketService.disconnect();
+      // Only cleanup event listeners, not the connection itself
+      socketService.off('project_created')
+      socketService.off('project_updated')
+      socketService.off('project_deleted')
     };
   }, []);
 

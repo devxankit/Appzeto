@@ -49,8 +49,14 @@ const PM_dashboard = () => {
     loadDashboardData()
     setupWebSocket()
     
+    // Don't disconnect WebSocket when navigating between PM pages
+    // The WebSocket connection will be managed globally
     return () => {
-      socketService.disconnect()
+      // Only cleanup event listeners, not the connection itself
+      socketService.off('connection_status')
+      socketService.off('connection_error')
+      socketService.off('project_updated')
+      socketService.off('task_updated')
     }
   }, [])
 

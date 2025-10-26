@@ -20,7 +20,11 @@ const PM_tasks = () => {
     setupWebSocket()
     
     return () => {
-      socketService.disconnect()
+      // Only cleanup event listeners, not the connection itself
+      socketService.off('task_created')
+      socketService.off('task_updated')
+      socketService.off('task_deleted')
+      socketService.off('task_status_updated')
     }
   }, [])
 
