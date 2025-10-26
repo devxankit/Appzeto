@@ -23,7 +23,7 @@ router.post('/create-demo', createDemoPM); // Remove in production
 
 // Protected routes
 router.use(protect); // All routes below this middleware are protected
-router.use(authorize('pm')); // All routes below this middleware are PM-only
+router.use(authorize('project-manager')); // All routes below this middleware are PM-only
 
 router.get('/profile', getPMProfile);
 router.post('/logout', logoutPM);

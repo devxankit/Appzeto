@@ -70,7 +70,7 @@ class SocketService {
         user = await PM.findById(decoded.id);
         if (user && user.isActive) {
           socket.userId = user._id.toString();
-          socket.userType = 'pm';
+          socket.userType = 'project-manager';
           socket.user = user;
           return next();
         }
@@ -290,7 +290,7 @@ class SocketService {
       return true; // Admin has access to everything
     }
 
-    if (socket.userType === 'pm' && project.projectManager.equals(socket.userId)) {
+    if (socket.userType === 'project-manager' && project.projectManager.equals(socket.userId)) {
       return true; // PM has access to their projects
     }
 

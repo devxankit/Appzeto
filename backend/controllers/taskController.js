@@ -243,6 +243,63 @@ const getTasksByProject = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get all tasks for authenticated PM
+// @route   GET /api/tasks
+// @access  PM only
+const getAllTasks = asyncHandler(async (req, res, next) => {
+  const {
+    status,
+    priority,
+    project,
+    page = 1,
+    limit = 100,
+    sortBy = 'createdAt',
+    sortOrder = 'desc'
+  } = req.query;
+
+  // Build filter object - only tasks from PM's projects
+  const filter = {};
+  
+  // Get all projects managed by this PM
+  const pmProjects = await Project.find({ projectManager: req.user.id }).select('_id');
+  const projectIds = pmProjects.map(p => p._id);
+  
+  // Filter tasks by PM's projects
+  filter.project = { $in: projectIds };
+  
+  // Apply additional filters
+  if (status) filter.status = status;
+  if (priority) filter.priority = priority;
+  if (project) filter.project = project;
+
+  // Calculate pagination
+  const skip = (page - 1) * limit;
+
+  // Build sort object
+  const sort = {};
+  sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+  const tasks = await Task.find(filter)
+    .populate('project', 'name status')
+    .populate('milestone', 'title sequence')
+    .populate('assignedTo', 'name email position')
+    .populate('createdBy', 'name email')
+    .sort(sort)
+    .skip(skip)
+    .limit(parseInt(limit));
+
+  const total = await Task.countDocuments(filter);
+
+  res.json({
+    success: true,
+    count: tasks.length,
+    total,
+    page: parseInt(page),
+    pages: Math.ceil(total / limit),
+    data: tasks
+  });
+});
+
 // @desc    Get tasks by employee
 // @route   GET /api/tasks/employee/:employeeId
 // @access  Employee (own tasks only), PM
@@ -275,7 +332,7 @@ const getUrgentTasks = asyncHandler(async (req, res, next) => {
   const filter = { isUrgent: true };
 
   // If PM, only show urgent tasks from their projects
-  if (req.user.role === 'pm') {
+  if (req.user.role === 'project-manager') {
     const pmProjects = await Project.find({ projectManager: req.user.id }).select('_id');
     filter.project = { $in: pmProjects.map(p => p._id) };
   }
@@ -704,6 +761,7 @@ const removeTaskAttachment = asyncHandler(async (req, res, next) => {
 module.exports = {
   createTask,
   createUrgentTask,
+  getAllTasks,
   getTasksByMilestone,
   getTasksByProject,
   getTasksByEmployee,

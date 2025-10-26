@@ -100,7 +100,7 @@ const getAllProjects = asyncHandler(async (req, res, next) => {
 
   // Build filter object
   const filter = {};
-  if (status) filter.status = status;
+  if (status && status !== 'all') filter.status = status;
   if (priority) filter.priority = priority;
   if (client) filter.client = client;
   if (projectManager) filter.projectManager = projectManager;
@@ -110,6 +110,8 @@ const getAllProjects = asyncHandler(async (req, res, next) => {
     filter.client = req.user.id;
   } else if (req.user.role === 'employee') {
     filter.assignedTeam = req.user.id;
+  } else if (req.user.role === 'project-manager') {
+    filter.projectManager = req.user.id;
   }
 
   // Calculate pagination
@@ -341,7 +343,7 @@ const getProjectsByPM = asyncHandler(async (req, res, next) => {
   const { page = 1, limit = 10 } = req.query;
 
   // Check access permissions
-  if (req.user.role === 'pm' && req.user.id !== pmId) {
+  if (req.user.role === 'project-manager' && req.user.id !== pmId) {
     return next(new ErrorResponse('Not authorized to access these projects', 403));
   }
 
@@ -377,7 +379,7 @@ const getProjectStatistics = asyncHandler(async (req, res, next) => {
   const filter = {};
   
   // Role-based filtering
-  if (req.user.role === 'pm') {
+  if (req.user.role === 'project-manager') {
     filter.projectManager = req.user.id;
   } else if (req.user.role === 'client') {
     filter.client = req.user.id;

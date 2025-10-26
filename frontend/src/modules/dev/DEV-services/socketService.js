@@ -40,8 +40,6 @@ class SocketService {
 
     const serverUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
     
-    console.log('Attempting to connect to WebSocket server:', serverUrl);
-    
     try {
       this.socket = io(serverUrl, {
         auth: {
@@ -77,7 +75,6 @@ class SocketService {
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('Socket disconnected:', reason);
       this.isConnected = false;
       this.emit('connection_status', { connected: false, reason });
       
@@ -107,93 +104,76 @@ class SocketService {
 
     // Project events
     this.socket.on('project_updated', (data) => {
-      console.log('Project updated:', data);
       this.emit('project_updated', data);
     });
 
     this.socket.on('project_created', (data) => {
-      console.log('Project created:', data);
       this.emit('project_created', data);
     });
 
     this.socket.on('project_deleted', (data) => {
-      console.log('Project deleted:', data);
       this.emit('project_deleted', data);
     });
 
     // Milestone events
     this.socket.on('milestone_updated', (data) => {
-      console.log('Milestone updated:', data);
       this.emit('milestone_updated', data);
     });
 
     this.socket.on('milestone_created', (data) => {
-      console.log('Milestone created:', data);
       this.emit('milestone_created', data);
     });
 
     this.socket.on('milestone_deleted', (data) => {
-      console.log('Milestone deleted:', data);
       this.emit('milestone_deleted', data);
     });
 
     // Task events
     this.socket.on('task_updated', (data) => {
-      console.log('Task updated:', data);
       this.emit('task_updated', data);
     });
 
     this.socket.on('task_created', (data) => {
-      console.log('Task created:', data);
       this.emit('task_created', data);
     });
 
     this.socket.on('task_deleted', (data) => {
-      console.log('Task deleted:', data);
       this.emit('task_deleted', data);
     });
 
     this.socket.on('task_status_changed', (data) => {
-      console.log('Task status changed:', data);
       this.emit('task_status_changed', data);
     });
 
     this.socket.on('task_assigned', (data) => {
-      console.log('Task assigned:', data);
       this.emit('task_assigned', data);
     });
 
     // Comment events
     this.socket.on('comment_added', (data) => {
-      console.log('Comment added:', data);
       this.emit('comment_added', data);
     });
 
     // Team events
     this.socket.on('team_member_added', (data) => {
-      console.log('Team member added:', data);
       this.emit('team_member_added', data);
     });
 
     this.socket.on('team_member_removed', (data) => {
-      console.log('Team member removed:', data);
       this.emit('team_member_removed', data);
     });
 
     // Progress events
     this.socket.on('progress_updated', (data) => {
-      console.log('Progress updated:', data);
       this.emit('progress_updated', data);
     });
 
     // Room events
     this.socket.on('joined_room', (data) => {
-      console.log('Joined room:', data);
       this.emit('joined_room', data);
     });
 
     this.socket.on('left_room', (data) => {
-      console.log('Left room:', data);
       this.emit('left_room', data);
     });
   }
@@ -202,8 +182,6 @@ class SocketService {
   attemptReconnect() {
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-    
-    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
     
     setTimeout(() => {
       if (this.socket && !this.isConnected) {

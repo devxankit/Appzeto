@@ -68,7 +68,7 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
   // Combine all users
   let allUsers = [
     ...admins.map(user => ({ ...user.toObject(), userType: 'admin' })),
-    ...pms.map(user => ({ ...user.toObject(), userType: 'pm' })),
+    ...pms.map(user => ({ ...user.toObject(), userType: 'project-manager' })),
     ...sales.map(user => ({ ...user.toObject(), userType: 'sales' })),
     ...employees.map(user => ({ ...user.toObject(), userType: 'employee' })),
     ...clients.map(user => ({ ...user.toObject(), userType: 'client' }))
@@ -240,7 +240,7 @@ const createUser = asyncHandler(async (req, res, next) => {
 
   res.status(201).json({
     success: true,
-    data: { ...user.toObject(), userType: role === 'employee' ? (team === 'sales' ? 'sales' : 'employee') : role === 'project-manager' ? 'pm' : role }
+    data: { ...user.toObject(), userType: role === 'employee' ? (team === 'sales' ? 'sales' : 'employee') : role === 'project-manager' ? 'project-manager' : role }
   });
 });
 

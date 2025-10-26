@@ -7,8 +7,11 @@ import { Input } from '../../../components/ui/input'
 import { Textarea } from '../../../components/ui/textarea'
 import { Combobox } from '../../../components/ui/combobox'
 import { DatePicker } from '../../../components/ui/date-picker'
+import { projectService, milestoneService, urgentTaskService, teamService, tokenUtils } from '../DEV-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const PM_urgent_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => {
+  const { toast } = useToast()
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -30,16 +33,29 @@ const PM_urgent_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId
   const [projects, setProjects] = useState([])
   const [milestones, setMilestones] = useState([])
 
-  // Mock loaders
+  // Load data when form opens
   useEffect(() => {
     if (isOpen) {
-      loadProjects()
       if (projectId) {
-        loadTeamMembers(projectId)
+        // Load the specific project data
+        loadSingleProject(projectId)
+        // Pre-select the project
+        setFormData(prev => ({ ...prev, project: projectId }))
+        // Load milestones for the project
         loadMilestones(projectId)
+        
+        // If milestoneId is provided, pre-select it and load its team members
+        if (milestoneId) {
+          setFormData(prev => ({ ...prev, milestone: milestoneId }))
+          loadTeamMembers(projectId, milestoneId)
+        }
+        // DO NOT load team members here - wait for milestone selection
+      } else {
+        // Load all projects if no specific project is provided (PM tasks page)
+        loadProjects()
       }
     }
-  }, [isOpen, projectId])
+  }, [isOpen, projectId, milestoneId])
 
   useEffect(() => {
     if (formData.project) {
@@ -48,17 +64,56 @@ const PM_urgent_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId
     }
   }, [formData.project])
 
+  useEffect(() => {
+    if (formData.milestone) {
+      loadTeamMembers(formData.project, formData.milestone)
+      setFormData(prev => ({ ...prev, assignedTo: '' }))
+    } else {
+      // Clear team members when milestone is cleared
+      setTeamMembers([])
+      setFormData(prev => ({ ...prev, assignedTo: '' }))
+    }
+  }, [formData.milestone])
+
   const loadProjects = async () => {
     try {
       setIsLoadingProjects(true)
-      await new Promise(r => setTimeout(r, 400))
-      // Mock projects
-      setProjects([
-        { _id: 'p-001', name: 'Security Update' },
-        { _id: 'p-002', name: 'Infrastructure' },
-        { _id: 'p-003', name: 'Data Recovery' },
-        { _id: 'p-004', name: 'E-commerce Platform' }
-      ])
+      
+      // Check if PM is authenticated (same method as PM_tasks page)
+      if (!tokenUtils.isAuthenticated()) {
+        setProjects([])
+        return
+      }
+      
+      // Get all projects for this PM (automatically filtered by backend)
+      const response = await projectService.getAllProjects({
+        limit: 100,
+        status: 'all' // Get all projects regardless of status
+      })
+      
+      const projectsData = response?.data || []
+      setProjects(Array.isArray(projectsData) ? projectsData : [])
+    } catch (error) {
+      console.error('❌ Error loading projects:', error)
+      setProjects([])
+    } finally {
+      setIsLoadingProjects(false)
+    }
+  }
+
+  const loadSingleProject = async (pid) => {
+    if (!pid) return
+    try {
+      setIsLoadingProjects(true)
+      const response = await projectService.getProjectById(pid)
+      
+      // Handle both response.data and response directly
+      const projectData = response?.data || response
+      // Set as array with single project
+      setProjects(projectData ? [projectData] : [])
+    } catch (error) {
+      console.error('Error loading single project:', error)
+      setProjects([])
     } finally {
       setIsLoadingProjects(false)
     }
@@ -68,32 +123,30 @@ const PM_urgent_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId
     if (!pid) { setMilestones([]); return }
     try {
       setIsLoadingMilestones(true)
-      await new Promise(r => setTimeout(r, 400))
-      // Mock milestones by project
-      const map = {
-        'p-001': [ { _id: 'm-001', title: 'M1 - Critical Fixes' }, { _id: 'm-002', title: 'M2 - Security Patch' } ],
-        'p-002': [ { _id: 'm-010', title: 'M1 - Emergency' }, { _id: 'm-011', title: 'M2 - Recovery' } ],
-        'p-003': [ { _id: 'm-020', title: 'M1 - Recovery' }, { _id: 'm-021', title: 'M2 - Backup' } ],
-        'p-004': [ { _id: 'm-030', title: 'M1 - Payment Fix' }, { _id: 'm-031', title: 'M2 - Integration' } ]
-      }
-      setMilestones(map[pid] || [])
+      const response = await milestoneService.getMilestonesByProject(pid)
+      // Handle both response.data and response directly
+      const milestonesData = response?.data || response || []
+      setMilestones(Array.isArray(milestonesData) ? milestonesData : [])
+    } catch (error) {
+      console.error('Error loading milestones:', error)
+      setMilestones([])
     } finally {
       setIsLoadingMilestones(false)
     }
   }
 
-  const loadTeamMembers = async (pid) => {
+  const loadTeamMembers = async (pid, mid = null) => {
     if (!pid) { setTeamMembers([]); return }
     try {
       setIsLoadingTeamMembers(true)
-      await new Promise(r => setTimeout(r, 400))
-      // Mock members
-      setTeamMembers([
-        { _id: 'u-001', fullName: 'John Doe', jobTitle: 'Security Expert' },
-        { _id: 'u-002', fullName: 'Jane Smith', jobTitle: 'DevOps Engineer' },
-        { _id: 'u-003', fullName: 'Mike Johnson', jobTitle: 'Data Recovery Specialist' },
-        { _id: 'u-004', fullName: 'Sarah Wilson', jobTitle: 'Backend Developer' }
-      ])
+      const response = await teamService.getEmployeesForTask(pid, mid)
+      
+      // Handle both response.data and response directly
+      const teamData = response?.data || response || []
+      setTeamMembers(Array.isArray(teamData) ? teamData : [])
+    } catch (error) {
+      console.error('Error loading team members:', error)
+      setTeamMembers([])
     } finally {
       setIsLoadingTeamMembers(false)
     }
@@ -104,7 +157,9 @@ const PM_urgent_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId
     if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }))
     if (field === 'project' && value) {
       loadMilestones(value)
-      loadTeamMembers(value)
+      // Clear milestone and team when project changes
+      setFormData(prev => ({ ...prev, milestone: '', assignedTo: '' }))
+      setTeamMembers([])
     }
   }
 
@@ -173,11 +228,36 @@ const PM_urgent_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId
         project: formData.project,
         isUrgent: true
       }
-      await new Promise(r => setTimeout(r, 700))
-      onSubmit && onSubmit(taskData)
+      
+      // Create urgent task
+      const createdTask = await urgentTaskService.createUrgentTask(taskData)
+      
+      // Upload attachments if any
+      if (formData.attachments && formData.attachments.length > 0) {
+        toast.info(`Uploading ${formData.attachments.length} attachment(s)...`)
+        
+        for (const attachment of formData.attachments) {
+          try {
+            // Check if attachment has a file property, otherwise use the attachment directly
+            const file = attachment.file || attachment
+            
+            // Upload to backend
+            await urgentTaskService.uploadUrgentTaskAttachment(createdTask._id, file)
+            
+            toast.success(`Attachment ${attachment.name} uploaded successfully`)
+          } catch (error) {
+            console.error('Attachment upload error:', error)
+            toast.error(`Failed to upload ${attachment.name}`)
+          }
+        }
+      }
+      
+      toast.success('Urgent task created successfully!')
+      onSubmit && onSubmit(createdTask)
       handleClose()
     } catch (err) {
       console.error('Error creating urgent task:', err)
+      toast.error(err.message || 'Failed to create urgent task')
     } finally {
       setIsSubmitting(false)
     }
@@ -204,7 +284,14 @@ const PM_urgent_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId
 
   const projectOptions = (projects || []).map(p => ({ value: p._id, label: p.name }))
   const milestoneOptions = (milestones || []).map(m => ({ value: m._id, label: m.title }))
-  const teamMemberOptions = (teamMembers || []).map(m => ({ value: m._id, label: m.jobTitle ? `${m.fullName} - ${m.jobTitle}` : m.fullName }))
+  const teamMemberOptions = (teamMembers || []).map(m => {
+    const name = m.fullName || m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim() || 'Unknown Member'
+    const jobTitle = m.jobTitle || m.position || m.department || ''
+    return { 
+      value: m._id, 
+      label: jobTitle ? `${name} - ${jobTitle}` : name 
+    }
+  })
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>

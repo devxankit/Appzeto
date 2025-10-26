@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import PM_task_form from '../../DEV-components/PM_task_form'
 import { taskService, socketService, tokenUtils } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
 import { CheckSquare, Plus, Search, Filter, Calendar, User, MoreVertical, Loader2, AlertTriangle } from 'lucide-react'
 
 const PM_tasks = () => {
+  const { toast } = useToast()
   const [filter, setFilter] = useState('all')
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
   const [tasks, setTasks] = useState([])
@@ -53,18 +55,21 @@ const PM_tasks = () => {
       setIsLoading(true)
       setError(null)
       
-      const pmId = localStorage.getItem('pmId')
-      if (!pmId) {
-        throw new Error('PM ID not found')
+      // Check if PM is authenticated
+      if (!tokenUtils.isAuthenticated()) {
+        throw new Error('PM not authenticated')
       }
       
-      const response = await taskService.getTasksByPM(pmId, {
+      // Get all tasks for this PM using the new endpoint
+      const tasksResponse = await taskService.getAllTasks({
         limit: 100,
-        sortBy: 'dueDate',
-        sortOrder: 'asc'
+        sortBy: 'createdAt',
+        sortOrder: 'desc'
       })
       
-      setTasks(response.data || [])
+      const allTasks = tasksResponse.data || []
+      
+      setTasks(allTasks)
     } catch (err) {
       console.error('Error loading tasks:', err)
       setError(err.message || 'Failed to load tasks')
@@ -76,35 +81,65 @@ const PM_tasks = () => {
 
   const handleTaskSubmit = async (taskData) => {
     try {
-      await taskService.createTask(taskData)
-      loadTasks()
+      // Create task
+      const createdTask = await taskService.createTask(taskData)
+      
+      // Upload attachments if any
+      if (taskData.attachments && taskData.attachments.length > 0) {
+        toast.info(`Uploading ${taskData.attachments.length} attachment(s)...`)
+        
+        for (const attachment of taskData.attachments) {
+          try {
+            // Check if attachment has a file property, otherwise use the attachment directly
+            const file = attachment.file || attachment
+            
+            // Upload to backend
+            await taskService.uploadTaskAttachment(createdTask._id, file)
+            
+            toast.success(`Attachment ${attachment.name} uploaded successfully`)
+          } catch (error) {
+            console.error('Attachment upload error:', error)
+            toast.error(`Failed to upload ${attachment.name}`)
+          }
+        }
+      }
+      
+      toast.success('Task created successfully!')
+      loadTasks() // Reload tasks to show the new one
       setIsTaskFormOpen(false)
     } catch (err) {
       console.error('Error creating task:', err)
+      toast.error(err.message || 'Failed to create task')
       setError(err.message || 'Failed to create task')
     }
   }
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Completed': return 'bg-green-100 text-green-800 border-green-200'
-      case 'In Progress': return 'bg-primary/10 text-primary border-primary/20'
-      case 'Pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      case 'completed': return 'bg-green-100 text-green-800 border-green-200'
+      case 'in-progress': return 'bg-primary/10 text-primary border-primary/20'
+      case 'testing': return 'bg-blue-100 text-blue-800 border-blue-200'
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
 
   const getPriorityColor = (priority) => {
     switch (priority) {
-      case 'High': return 'bg-red-100 text-red-800'
-      case 'Medium': return 'bg-yellow-100 text-yellow-800'
-      case 'Low': return 'bg-green-100 text-green-800'
+      case 'urgent': return 'bg-red-100 text-red-800'
+      case 'high': return 'bg-orange-100 text-orange-800'
+      case 'normal': return 'bg-blue-100 text-blue-800'
+      case 'low': return 'bg-green-100 text-green-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
 
   const filteredTasks = filter === 'all' ? tasks : tasks.filter(task => {
     const taskStatus = (task.status || '').toLowerCase()
+    if (filter === 'in progress') {
+      return taskStatus === 'in-progress'
+    }
     return taskStatus === filter.toLowerCase()
   })
 
@@ -201,7 +236,7 @@ const PM_tasks = () => {
               {[
                 { key: 'all', label: 'All', count: tasks.length },
                 { key: 'pending', label: 'Pending', count: tasks.filter(t => (t.status || '').toLowerCase() === 'pending').length },
-                { key: 'in progress', label: 'Active', count: tasks.filter(t => (t.status || '').toLowerCase() === 'in progress').length },
+                { key: 'in progress', label: 'Active', count: tasks.filter(t => (t.status || '').toLowerCase() === 'in-progress').length },
                 { key: 'completed', label: 'Done', count: tasks.filter(t => (t.status || '').toLowerCase() === 'completed').length }
               ].map(({ key, label, count }) => (
                 <button
@@ -228,7 +263,7 @@ const PM_tasks = () => {
               {[
                 { key: 'all', label: 'All', count: tasks.length },
                 { key: 'pending', label: 'Pending', count: tasks.filter(t => (t.status || '').toLowerCase() === 'pending').length },
-                { key: 'in progress', label: 'Active', count: tasks.filter(t => (t.status || '').toLowerCase() === 'in progress').length },
+                { key: 'in progress', label: 'Active', count: tasks.filter(t => (t.status || '').toLowerCase() === 'in-progress').length },
                 { key: 'completed', label: 'Done', count: tasks.filter(t => (t.status || '').toLowerCase() === 'completed').length }
               ].map(({ key, label, count }) => (
                 <button
@@ -309,7 +344,7 @@ const PM_tasks = () => {
                         <span className="text-primary font-semibold">{task.project?.name || 'No Project'}</span>
                       </div>
                       <div className="flex items-center space-x-1 text-gray-600">
-                        <span className="text-primary font-semibold">{task.milestone?.name || 'No Milestone'}</span>
+                        <span className="text-primary font-semibold">{task.milestone?.title || 'No Milestone'}</span>
                       </div>
                     </div>
                   </div>
@@ -319,7 +354,7 @@ const PM_tasks = () => {
                     <div className="flex items-center space-x-3">
                       <div className="flex items-center space-x-1.5 text-gray-500">
                         <User className="h-3.5 w-3.5" />
-                        <span className="text-xs">{task.assignedTo?.[0]?.fullName || 'Unassigned'}</span>
+                        <span className="text-xs">{task.assignedTo?.[0]?.name || task.assignedTo?.[0]?.fullName || 'Unassigned'}</span>
                       </div>
                       <div className="flex items-center space-x-1.5 text-gray-500">
                         <Calendar className="h-3.5 w-3.5" />
@@ -379,6 +414,8 @@ const PM_tasks = () => {
         isOpen={isTaskFormOpen}
         onClose={() => setIsTaskFormOpen(false)}
         onSubmit={handleTaskSubmit}
+        projectId={null} // No pre-selected project - PM needs to choose
+        milestoneId={null} // No pre-selected milestone
       />
     </div>
   )

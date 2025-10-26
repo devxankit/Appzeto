@@ -17,6 +17,7 @@ export { apiRequest, tokenUtils, pmStorage, employeeStorage } from './baseApiSer
 export { projectService } from './projectService';
 export { milestoneService } from './milestoneService';
 export { taskService } from './taskService';
+export { urgentTaskService } from './urgentTaskService';
 export { paymentService } from './paymentService';
 export { analyticsService } from './analyticsService';
 export { teamService } from './teamService';

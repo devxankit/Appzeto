@@ -2,109 +2,124 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import PM_urgent_task_form from '../../DEV-components/PM_urgent_task_form'
+import { urgentTaskService, socketService, tokenUtils } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
 import { CheckSquare, Plus, Search, Filter, Calendar, User, MoreVertical, Loader2, AlertTriangle, Clock, Zap } from 'lucide-react'
 
 const PM_urgent_tasks = () => {
+  const { toast } = useToast()
   const [filter, setFilter] = useState('all')
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
   const [tasks, setTasks] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
   const navigate = useNavigate()
-
-  // Mock urgent tasks data - replace with API later
-  const mockUrgentTasks = [
-    {
-      _id: 'ut-001',
-      title: 'Fix Critical Security Vulnerability',
-      description: 'Immediate patch required for authentication bypass issue.',
-      status: 'In Progress',
-      priority: 'Urgent',
-      project: { _id: 'p-001', name: 'Security Update' },
-      milestone: { _id: 'm-001', name: 'M1 - Critical Fixes' },
-      assignedTo: [{ _id: 'u-001', fullName: 'John Doe' }],
-      dueDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-      isUrgent: true
-    },
-    {
-      _id: 'ut-002',
-      title: 'Server Downtime Resolution',
-      description: 'Production server is down, affecting all users.',
-      status: 'Pending',
-      priority: 'Urgent',
-      project: { _id: 'p-002', name: 'Infrastructure' },
-      milestone: { _id: 'm-010', name: 'M1 - Emergency' },
-      assignedTo: [{ _id: 'u-002', fullName: 'Jane Smith' }],
-      dueDate: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours
-      isUrgent: true
-    },
-    {
-      _id: 'ut-003',
-      title: 'Client Data Recovery',
-      description: 'Critical client data needs immediate recovery from backup.',
-      status: 'Completed',
-      priority: 'Urgent',
-      project: { _id: 'p-003', name: 'Data Recovery' },
-      milestone: { _id: 'm-020', name: 'M1 - Recovery' },
-      assignedTo: [{ _id: 'u-003', fullName: 'Mike Johnson' }],
-      dueDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      isUrgent: true
-    },
-    {
-      _id: 'ut-004',
-      title: 'Payment Gateway Integration Fix',
-      description: 'Payment processing is failing for all transactions.',
-      status: 'In Progress',
-      priority: 'Urgent',
-      project: { _id: 'p-004', name: 'E-commerce Platform' },
-      milestone: { _id: 'm-030', name: 'M1 - Payment Fix' },
-      assignedTo: [{ _id: 'u-004', fullName: 'Sarah Wilson' }],
-      dueDate: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(), // 4 hours
-      isUrgent: true
-    }
-  ]
 
   useEffect(() => {
     loadUrgentTasks()
+    setupWebSocket()
+    
+    return () => {
+      socketService.disconnect()
+    }
   }, [])
+
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('pmToken')
+    if (token && tokenUtils.isAuthenticated()) {
+      try {
+        socketService.connect(token)
+        
+        // Listen for real-time updates
+        socketService.on('task_created', () => {
+          loadUrgentTasks()
+        })
+        
+        socketService.on('task_updated', () => {
+          loadUrgentTasks()
+        })
+        
+        socketService.on('task_deleted', () => {
+          loadUrgentTasks()
+        })
+        
+        socketService.on('task_status_updated', () => {
+          loadUrgentTasks()
+        })
+      } catch (error) {
+        console.warn('WebSocket connection failed:', error)
+      }
+    } else {
+      console.warn('No valid PM token found, skipping WebSocket connection')
+    }
+  }
 
   const loadUrgentTasks = async () => {
     try {
       setIsLoading(true)
-      await new Promise(r => setTimeout(r, 600))
-      setTasks(mockUrgentTasks)
-    } catch (error) {
-      console.error('Error loading urgent tasks:', error)
+      setError(null)
+      
+      // Check if PM is authenticated
+      if (!tokenUtils.isAuthenticated()) {
+        throw new Error('PM not authenticated')
+      }
+      
+      // Get urgent tasks for this PM
+      const response = await urgentTaskService.getUrgentTasks({
+        limit: 100,
+        sortBy: 'createdAt',
+        sortOrder: 'desc'
+      })
+      
+      const urgentTasks = response.data || []
+      setTasks(urgentTasks)
+    } catch (err) {
+      console.error('Error loading urgent tasks:', err)
+      setError(err.message || 'Failed to load urgent tasks')
+      toast.error(err.message || 'Failed to load urgent tasks')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleTaskSubmit = () => {
-    loadUrgentTasks()
-    setIsTaskFormOpen(false)
+  const handleTaskSubmit = async (taskData) => {
+    try {
+      // Task creation is handled in the form component
+      // Just reload the tasks to show the new one
+      await loadUrgentTasks()
+      setIsTaskFormOpen(false)
+    } catch (err) {
+      console.error('Error handling task submission:', err)
+      toast.error('Failed to refresh urgent tasks')
+    }
   }
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Completed': return 'bg-green-100 text-green-800 border-green-200'
-      case 'In Progress': return 'bg-red-100 text-red-800 border-red-200'
-      case 'Pending': return 'bg-orange-100 text-orange-800 border-orange-200'
+      case 'completed': return 'bg-green-100 text-green-800 border-green-200'
+      case 'in-progress': return 'bg-red-100 text-red-800 border-red-200'
+      case 'testing': return 'bg-blue-100 text-blue-800 border-blue-200'
+      case 'pending': return 'bg-orange-100 text-orange-800 border-orange-200'
+      case 'cancelled': return 'bg-gray-100 text-gray-800 border-gray-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
 
   const getPriorityColor = (priority) => {
     switch (priority) {
-      case 'Urgent': return 'bg-red-100 text-red-800'
-      case 'High': return 'bg-orange-100 text-orange-800'
-      case 'Medium': return 'bg-yellow-100 text-yellow-800'
-      case 'Low': return 'bg-green-100 text-green-800'
+      case 'urgent': return 'bg-red-100 text-red-800'
+      case 'high': return 'bg-orange-100 text-orange-800'
+      case 'normal': return 'bg-blue-100 text-blue-800'
+      case 'low': return 'bg-green-100 text-green-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
 
   const filteredTasks = filter === 'all' ? tasks : tasks.filter(task => {
     const taskStatus = (task.status || '').toLowerCase()
+    if (filter === 'in progress') {
+      return taskStatus === 'in-progress'
+    }
     return taskStatus === filter.toLowerCase()
   })
 
@@ -128,6 +143,15 @@ const PM_urgent_tasks = () => {
       
       <main className="pt-16 pb-24 md:pt-20 md:pb-8">
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+          {/* Error Display */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
+                <p className="text-red-700">{error}</p>
+              </div>
+            </div>
+          )}
           {/* Mobile Layout - Creative Tile with Button */}
           <div className="md:hidden mb-6">
             <div className="bg-white rounded-2xl p-6 border border-red-200">
@@ -190,7 +214,7 @@ const PM_urgent_tasks = () => {
               {[
                 { key: 'all', label: 'All', count: tasks.length },
                 { key: 'pending', label: 'Pending', count: tasks.filter(t => (t.status || '').toLowerCase() === 'pending').length },
-                { key: 'in progress', label: 'Active', count: tasks.filter(t => (t.status || '').toLowerCase() === 'in progress').length },
+                { key: 'in progress', label: 'Active', count: tasks.filter(t => (t.status || '').toLowerCase() === 'in-progress').length },
                 { key: 'completed', label: 'Done', count: tasks.filter(t => (t.status || '').toLowerCase() === 'completed').length }
               ].map(({ key, label, count }) => (
                 <button
@@ -217,7 +241,7 @@ const PM_urgent_tasks = () => {
               {[
                 { key: 'all', label: 'All', count: tasks.length },
                 { key: 'pending', label: 'Pending', count: tasks.filter(t => (t.status || '').toLowerCase() === 'pending').length },
-                { key: 'in progress', label: 'Active', count: tasks.filter(t => (t.status || '').toLowerCase() === 'in progress').length },
+                { key: 'in progress', label: 'Active', count: tasks.filter(t => (t.status || '').toLowerCase() === 'in-progress').length },
                 { key: 'completed', label: 'Done', count: tasks.filter(t => (t.status || '').toLowerCase() === 'completed').length }
               ].map(({ key, label, count }) => (
                 <button
@@ -298,7 +322,7 @@ const PM_urgent_tasks = () => {
                           <span className="text-red-600 font-semibold">{task.project?.name || 'No Project'}</span>
                         </div>
                         <div className="flex items-center space-x-1 text-red-600">
-                          <span className="text-red-600 font-semibold">{task.milestone?.name || 'No Milestone'}</span>
+                          <span className="text-red-600 font-semibold">{task.milestone?.title || 'No Milestone'}</span>
                         </div>
                       </div>
                     </div>
@@ -308,7 +332,13 @@ const PM_urgent_tasks = () => {
                       <div className="flex items-center space-x-3">
                         <div className="flex items-center space-x-1.5 text-gray-500">
                           <User className="h-3.5 w-3.5" />
-                          <span className="text-xs">{task.assignedTo?.[0]?.fullName || 'Unassigned'}</span>
+                          <span className="text-xs">
+                            {(() => {
+                              const member = task.assignedTo?.[0]
+                              if (!member) return 'Unassigned'
+                              return member.fullName || member.name || `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member'
+                            })()}
+                          </span>
                         </div>
                         <div className="flex items-center space-x-1.5 text-gray-500">
                           <Clock className="h-3.5 w-3.5" />

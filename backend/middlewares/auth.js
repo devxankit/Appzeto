@@ -47,8 +47,8 @@ const protect = async (req, res, next) => {
       if (pm && pm.isActive) {
         req.pm = pm;
         req.user = pm;
-        req.userType = 'pm';
-        req.user.role = 'pm';
+        req.userType = 'project-manager';
+        req.user.role = 'project-manager';
         return next();
       }
 
@@ -245,7 +245,7 @@ const canAccessProject = async (req, res, next) => {
       });
     }
 
-    if (req.userType === 'pm' && !project.projectManager.equals(req.user.id)) {
+    if (req.userType === 'project-manager' && !project.projectManager.equals(req.user.id)) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to access this project'
@@ -303,7 +303,7 @@ const canAccessTask = async (req, res, next) => {
       });
     }
 
-    if (req.userType === 'pm' && !project.projectManager.equals(req.user.id)) {
+    if (req.userType === 'project-manager' && !project.projectManager.equals(req.user.id)) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to access this task'

@@ -26,8 +26,10 @@ const PM_project_detail = () => {
   const [selectedRevision, setSelectedRevision] = useState(null)
 
   useEffect(() => {
-    loadProjectData()
-    setupWebSocket()
+    if (id && id !== 'null' && id !== null) {
+      loadProjectData()
+      setupWebSocket()
+    }
     
     return () => {
       socketService.disconnect()
@@ -41,40 +43,45 @@ const PM_project_detail = () => {
       
       // Listen for real-time updates
       socketService.on('project_updated', () => {
-        loadProjectData()
+        if (id && id !== 'null' && id !== null) loadProjectData()
       })
       
       socketService.on('milestone_created', () => {
-        loadMilestones()
+        if (id && id !== 'null' && id !== null) loadMilestones()
       })
       
       socketService.on('milestone_updated', () => {
-        loadMilestones()
+        if (id && id !== 'null' && id !== null) loadMilestones()
       })
       
       socketService.on('milestone_deleted', () => {
-        loadMilestones()
+        if (id && id !== 'null' && id !== null) loadMilestones()
       })
       
       socketService.on('task_created', () => {
-        loadTasks()
+        if (id && id !== 'null' && id !== null) loadTasks()
       })
       
       socketService.on('task_updated', () => {
-        loadTasks()
+        if (id && id !== 'null' && id !== null) loadTasks()
       })
       
       socketService.on('task_deleted', () => {
-        loadTasks()
+        if (id && id !== 'null' && id !== null) loadTasks()
       })
       
       socketService.on('project_revision_updated', () => {
-        loadProjectData()
+        if (id && id !== 'null' && id !== null) loadProjectData()
       })
     }
   }
 
   const loadProjectData = async () => {
+    if (!id || id === 'null' || id === null) {
+      console.warn('No project ID provided')
+      return
+    }
+    
     try {
       setIsLoading(true)
       const response = await projectService.getProjectById(id)
@@ -485,8 +492,8 @@ const PM_project_detail = () => {
                 }`}>
                   {project.revisions?.firstRevision?.status || 'pending'}
                   </span>
+                  </div>
                 </div>
-              </div>
               
             {project.revisions?.firstRevision?.completedDate && (
               <div className="mt-3 pt-3 border-t border-gray-100">
@@ -499,8 +506,8 @@ const PM_project_detail = () => {
                 </div>
               </div>
             )}
-          </div>
-
+              </div>
+              
           {/* Second Revision Card */}
           <div 
             onClick={() => handleRevisionClick('secondRevision', project.revisions?.secondRevision)}
@@ -624,7 +631,7 @@ const PM_project_detail = () => {
 
   const renderTeam = () => {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {!project?.assignedTeam || !Array.isArray(project.assignedTeam) || project.assignedTeam.length === 0 ? (
         <div className="col-span-2 text-center py-8">
           <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -651,23 +658,23 @@ const PM_project_detail = () => {
           const jobTitle = member.jobTitle || member.position || member.role || 'Team Member';
           
           return (
-            <div key={member._id} className="group bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200">
-              <div className="flex items-center space-x-4">
+          <div key={member._id} className="group bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200">
+            <div className="flex items-center space-x-4">
                 <div className="w-12 h-12 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full flex items-center justify-center">
                   <span className="text-base font-bold text-primary">{initials}</span>
-                </div>
+            </div>
                 <div className="flex-1">
                   <h3 className="text-base font-bold text-gray-900 group-hover:text-primary transition-colors duration-200">
                     {memberName}
                   </h3>
                   <p className="text-sm text-gray-600">{jobTitle}</p>
-                </div>
+          </div>
               </div>
             </div>
           );
         })
       )}
-      </div>
+    </div>
     );
   }
 
@@ -679,6 +686,24 @@ const PM_project_detail = () => {
       case 'team': return renderTeam()
       default: return renderOverview()
     }
+  }
+
+  if (!id) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
+        <PM_navbar />
+        <main className="pt-16 pb-24 md:pt-20 md:pb-8">
+          <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="text-red-500 text-lg font-medium mb-2">Invalid Project ID</div>
+                <div className="text-gray-600">No project ID provided in the URL</div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   if (isLoading || !project) {
@@ -792,11 +817,34 @@ const PM_project_detail = () => {
       <PM_task_form 
         isOpen={isTaskFormOpen} 
         onClose={() => setIsTaskFormOpen(false)} 
-        onSubmit={(createdTask) => { 
-          setIsTaskFormOpen(false);
-          // Reload tasks after creation
-          loadTasks();
-          toast.success('Task created successfully!');
+        onSubmit={async (taskData) => { 
+          try {
+            // Create task
+            const createdTask = await taskService.createTask(taskData)
+            
+            // Upload attachments if any
+            if (taskData.attachments && taskData.attachments.length > 0) {
+              toast.info(`Uploading ${taskData.attachments.length} attachment(s)...`)
+              
+              for (const attachment of taskData.attachments) {
+                try {
+                  const file = attachment.file || attachment
+                  await taskService.uploadTaskAttachment(createdTask._id, file)
+                  toast.success(`Attachment ${attachment.name} uploaded successfully`)
+                } catch (error) {
+                  console.error('Attachment upload error:', error)
+                  toast.error(`Failed to upload ${attachment.name}`)
+                }
+              }
+            }
+            
+            setIsTaskFormOpen(false);
+            loadTasks();
+            toast.success('Task created successfully!');
+          } catch (error) {
+            console.error('Error creating task:', error)
+            toast.error(error.message || 'Failed to create task')
+          }
         }} 
         projectId={project?._id}
         milestoneId={null} // Let user select milestone

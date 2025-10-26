@@ -65,9 +65,6 @@ const PM_projects = () => {
         sortOrder: 'desc'
       });
       
-      console.log('Projects response:', response);
-      console.log('Projects data:', response?.data);
-      
       // Transform the data to match the expected format
       const transformedProjects = (response?.data || []).map(project => ({
         _id: project._id,

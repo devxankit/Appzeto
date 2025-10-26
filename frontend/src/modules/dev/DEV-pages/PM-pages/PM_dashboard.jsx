@@ -61,9 +61,7 @@ const PM_dashboard = () => {
         
         // Listen for connection status
         socketService.on('connection_status', (status) => {
-          if (status.connected) {
-            console.log('WebSocket connected successfully')
-          } else {
+          if (!status.connected) {
             console.warn('WebSocket disconnected:', status.reason)
           }
         })
@@ -102,13 +100,6 @@ const PM_dashboard = () => {
         analyticsService.getProductivityMetrics()
       ])
 
-      // Debug logging
-      console.log('Dashboard data received:', {
-        projectsResponse,
-        teamStats,
-        productivityMetrics
-      })
-
       // Get projects data
       const allProjects = projectsResponse?.data || []
       
@@ -126,8 +117,6 @@ const PM_dashboard = () => {
           return new Date(p.dueDate) < new Date() && !['completed', 'cancelled'].includes(p.status)
         }).length
       }
-      
-      console.log('Calculated project stats:', projectStats)
       
       // Process recent projects (limit to 3 most recent)
       const processedRecentProjects = allProjects
@@ -196,9 +185,27 @@ const PM_dashboard = () => {
     }
   }
 
-  const handleTaskSubmit = async (data) => {
+  const handleTaskSubmit = async (taskData) => {
     try {
-      await taskService.createTask(data)
+      // Create task
+      const createdTask = await taskService.createTask(taskData)
+      
+      // Upload attachments if any
+      if (taskData.attachments && taskData.attachments.length > 0) {
+        toast.info(`Uploading ${taskData.attachments.length} attachment(s)...`)
+        
+        for (const attachment of taskData.attachments) {
+          try {
+            const file = attachment.file || attachment
+            await taskService.uploadTaskAttachment(createdTask._id, file)
+            toast.success(`Attachment ${attachment.name} uploaded successfully`)
+          } catch (error) {
+            console.error('Attachment upload error:', error)
+            toast.error(`Failed to upload ${attachment.name}`)
+          }
+        }
+      }
+      
       toast.success('Task created successfully!')
       setIsTaskFormOpen(false)
       loadDashboardData() // Refresh data

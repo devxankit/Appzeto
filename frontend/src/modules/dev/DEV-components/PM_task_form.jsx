@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Save, Upload, AlertCircle, CheckCircle, Loader2, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../../components/ui/dialog'
@@ -7,11 +7,12 @@ import { Input } from '../../../components/ui/input'
 import { Textarea } from '../../../components/ui/textarea'
 import { Combobox } from '../../../components/ui/combobox'
 import { DatePicker } from '../../../components/ui/date-picker'
-import { teamService, projectService, milestoneService, taskService } from '../DEV-services'
+import { teamService, projectService, milestoneService, taskService, tokenUtils } from '../DEV-services'
 import { useToast } from '../../../contexts/ToastContext'
 
 const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => {
   const { toast } = useToast()
+  const isSubmittingRef = useRef(false)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -78,21 +79,23 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
   const loadProjects = async () => {
     try {
       setIsLoadingProjects(true)
-      // Try to get PM ID from token or user data
-      const pmId = localStorage.getItem('pmId') || localStorage.getItem('pmToken') || 'current-pm'
       
-      // If we have a real PM ID, try to load projects
-      if (pmId && pmId !== 'current-pm') {
-        const response = await projectService.getProjectsByPM(pmId, { limit: 100 })
-        // Handle both response.data and response directly
-        const projectsData = response?.data || response || []
-        setProjects(Array.isArray(projectsData) ? projectsData : [])
-      } else {
-        // If no PM ID, just set empty array
+      // Check if PM is authenticated (same method as PM_tasks page)
+      if (!tokenUtils.isAuthenticated()) {
         setProjects([])
+        return
       }
+      
+      // Get all projects for this PM (automatically filtered by backend)
+      const response = await projectService.getAllProjects({
+        limit: 100,
+        status: 'all' // Get all projects regardless of status
+      })
+      
+      const projectsData = response?.data || []
+      setProjects(Array.isArray(projectsData) ? projectsData : [])
     } catch (error) {
-      console.error('Error loading projects:', error)
+      console.error('❌ Error loading projects:', error)
       setProjects([])
     } finally {
       setIsLoadingProjects(false)
@@ -212,7 +215,15 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    // Prevent double submission using ref
+    if (isSubmittingRef.current) {
+      return;
+    }
+    
     if (!validateForm()) return
+    
+    isSubmittingRef.current = true
     setIsSubmitting(true)
     
     try {
@@ -228,51 +239,27 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
         project: formData.project
       }
 
-      // Create task
-      const createdTask = await taskService.createTask(taskData)
-      
-      // Upload attachments if any
-      if (formData.attachments && formData.attachments.length > 0) {
-        toast.info(`Uploading ${formData.attachments.length} attachment(s)...`)
-        
-        for (const attachment of formData.attachments) {
-          try {
-            // Check if attachment has a file property, otherwise use the attachment directly
-            const file = attachment.file || attachment
-            
-            // Upload to backend
-            await taskService.uploadTaskAttachment(createdTask._id, file)
-            
-            toast.success(`Attachment ${attachment.name} uploaded successfully`)
-          } catch (error) {
-            console.error('Attachment upload error:', error)
-            toast.error(`Failed to upload ${attachment.name}`)
-          }
-        }
-      }
-
-      // Success feedback
-      toast.success('Task created successfully!')
-      
-      // Call parent callback with created task
-      onSubmit && onSubmit(createdTask)
+      // Call parent callback with task data (let parent handle API call)
+      onSubmit && onSubmit(taskData)
       
       // Close form
       handleClose()
       
     } catch (error) {
-      console.error('Error creating task:', error)
+      console.error('Error preparing task data:', error)
       
       // Show specific error message
-      const errorMessage = error.message || 'Failed to create task. Please try again.'
+      const errorMessage = error.message || 'Failed to prepare task data. Please try again.'
       toast.error(errorMessage)
       
     } finally {
+      isSubmittingRef.current = false
       setIsSubmitting(false)
     }
   }
 
   const handleClose = () => {
+    isSubmittingRef.current = false
     resetForm()
     onClose && onClose()
   }

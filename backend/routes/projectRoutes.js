@@ -20,7 +20,7 @@ const router = express.Router();
 
 // All routes are protected
 router.use(protect);
-router.use(authorize('pm')); // PM-only routes
+router.use(authorize('project-manager')); // PM-only routes
 
 // Project CRUD routes
 router.post('/', createProject);

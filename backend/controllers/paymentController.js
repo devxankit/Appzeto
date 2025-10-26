@@ -28,7 +28,7 @@ const createPaymentRecord = asyncHandler(async (req, res, next) => {
   }
 
   // Check if user is PM of this project or Admin
-  if (req.user.role === 'pm' && !projectDoc.projectManager.equals(req.user.id)) {
+  if (req.user.role === 'project-manager' && !projectDoc.projectManager.equals(req.user.id)) {
     return next(new ErrorResponse('Not authorized to create payment records for this project', 403));
   }
 
@@ -112,7 +112,7 @@ const getPaymentsByProject = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Not authorized to access these payments', 403));
   }
 
-  if (req.user.role === 'pm' && !project.projectManager.equals(req.user.id)) {
+  if (req.user.role === 'project-manager' && !project.projectManager.equals(req.user.id)) {
     return next(new ErrorResponse('Not authorized to access these payments', 403));
   }
 
@@ -168,7 +168,7 @@ const updatePaymentStatus = asyncHandler(async (req, res, next) => {
 
   // Verify user has access to this payment
   const project = await Project.findById(payment.project);
-  if (req.user.role === 'pm' && !project.projectManager.equals(req.user.id)) {
+  if (req.user.role === 'project-manager' && !project.projectManager.equals(req.user.id)) {
     return next(new ErrorResponse('Not authorized to update this payment', 403));
   }
 
@@ -216,7 +216,7 @@ const getPaymentStatistics = asyncHandler(async (req, res, next) => {
   const filter = {};
 
   // Role-based filtering
-  if (req.user.role === 'pm') {
+  if (req.user.role === 'project-manager') {
     const pmProjects = await Project.find({ projectManager: req.user.id }).select('_id');
     filter.project = { $in: pmProjects.map(p => p._id) };
   } else if (req.user.role === 'client') {
@@ -300,7 +300,7 @@ const getProjectPaymentStatistics = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Not authorized to access these statistics', 403));
   }
 
-  if (req.user.role === 'pm' && !project.projectManager.equals(req.user.id)) {
+  if (req.user.role === 'project-manager' && !project.projectManager.equals(req.user.id)) {
     return next(new ErrorResponse('Not authorized to access these statistics', 403));
   }
 

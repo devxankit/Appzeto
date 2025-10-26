@@ -1,39 +1,93 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
+import { urgentTaskService, projectService, socketService, tokenUtils } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
 import { ArrowLeft, CheckSquare, Calendar, User, Clock, FileText, Download, Eye, Users, Paperclip, AlertCircle, CheckCircle, Loader2, AlertTriangle } from 'lucide-react'
 
 const PM_urgent_task_detail = () => {
+  const { toast } = useToast()
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useState(() => new URLSearchParams(window.location.search))
   const projectId = searchParams.get('projectId')
   const [task, setTask] = useState(null)
+  const [project, setProject] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     const load = async () => {
       setIsLoading(true)
-      await new Promise(r => setTimeout(r, 500))
-      setTask({
-        _id: id,
-        title: 'Fix Critical Security Vulnerability',
-        description: 'Immediate patch required for authentication bypass issue. This is a critical security flaw that needs to be addressed immediately to prevent unauthorized access to user accounts.',
-        status: 'in-progress',
-        priority: 'urgent',
-        dueDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-        createdAt: new Date().toISOString(),
-        completedAt: null,
-        assignedTo: [{ _id: 'u-001', fullName: 'John Doe', email: 'john@example.com' }],
-        project: { _id: projectId, name: 'Security Update' },
-        milestone: { _id: 'm-001', title: 'M1 - Critical Fixes' },
-        attachments: [],
-        isUrgent: true
-      })
-      setIsLoading(false)
+      setError(null)
+      
+      try {
+        // Check if PM is authenticated
+        if (!tokenUtils.isAuthenticated()) {
+          throw new Error('PM not authenticated')
+        }
+        
+        // Load urgent task data
+        const taskData = await urgentTaskService.getUrgentTaskById(id)
+        setTask(taskData)
+        
+        // Load project data if available
+        if (taskData.project?._id) {
+          try {
+            const projectData = await projectService.getProjectById(taskData.project._id)
+            setProject(projectData)
+          } catch (projectError) {
+            console.warn('Failed to load project data:', projectError)
+            // Continue without project data
+          }
+        }
+        
+        // Setup WebSocket for real-time updates
+        setupWebSocket()
+        
+      } catch (err) {
+        console.error('Error loading urgent task:', err)
+        setError(err.message || 'Failed to load urgent task')
+        toast.error(err.message || 'Failed to load urgent task')
+      } finally {
+        setIsLoading(false)
+      }
     }
-    load()
-  }, [id, projectId])
+    
+    if (id && id !== 'null') {
+      load()
+    }
+    
+    return () => {
+      socketService.disconnect()
+    }
+  }, [id])
+
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('pmToken')
+    if (token && tokenUtils.isAuthenticated()) {
+      try {
+        socketService.connect(token)
+        
+        // Listen for task updates
+        socketService.on('task_updated', (data) => {
+          if (data.task._id === id) {
+            setTask(data.task)
+          }
+        })
+        
+        socketService.on('task_status_updated', (data) => {
+          if (data.task._id === id) {
+            setTask(data.task)
+            toast.info(`Task status updated to ${data.status}`)
+          }
+        })
+        
+      } catch (error) {
+        console.warn('WebSocket connection failed:', error)
+      }
+    }
+  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -79,10 +133,24 @@ const PM_urgent_task_detail = () => {
         <PM_navbar />
         <div className="pt-16 pb-24 md:pt-20 md:pb-8">
           <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="flex items-center space-x-3">
-              <Loader2 className="h-8 w-8 animate-spin text-red-500" />
-              <span className="text-lg text-gray-600">Loading urgent task details...</span>
-            </div>
+            {error ? (
+              <div className="text-center">
+                <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Task</h3>
+                <p className="text-gray-600 mb-4">{error}</p>
+                <button 
+                  onClick={() => window.location.reload()} 
+                  className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-3">
+                <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+                <span className="text-lg text-gray-600">Loading urgent task details...</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -231,17 +299,20 @@ const PM_urgent_task_detail = () => {
               </h3>
               {task.assignedTo && task.assignedTo.length > 0 ? (
                 <div className="space-y-3">
-                  {task.assignedTo.map(m => (
-                    <div key={m._id} className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-red-100 to-red-200 rounded-full flex items-center justify-center">
-                        <User className="h-4 w-4 text-red-600" />
+                  {task.assignedTo.map(m => {
+                    const name = m.fullName || m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim() || 'Unknown Member'
+                    return (
+                      <div key={m._id} className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-gradient-to-br from-red-100 to-red-200 rounded-full flex items-center justify-center">
+                          <User className="h-4 w-4 text-red-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{name}</p>
+                          <p className="text-xs text-gray-500">{m.email || 'No email'}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{m.fullName}</p>
-                        <p className="text-xs text-gray-500">{m.email}</p>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <p className="text-gray-500 text-sm">No team members assigned</p>
@@ -253,7 +324,7 @@ const PM_urgent_task_detail = () => {
               <div className="space-y-3">
                 <div>
                   <label className="text-sm font-medium text-gray-600">Project</label>
-                  <p className="text-base font-medium text-gray-900">{task.project?.name || 'Unknown Project'}</p>
+                  <p className="text-base font-medium text-gray-900">{project?.name || task.project?.name || 'Unknown Project'}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-600">Milestone</label>

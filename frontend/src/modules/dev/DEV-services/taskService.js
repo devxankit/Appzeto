@@ -79,6 +79,29 @@ export const taskService = {
     }
   },
 
+  // Get all tasks for authenticated PM
+  getAllTasks: async (filters = {}) => {
+    try {
+      const params = new URLSearchParams();
+      
+      if (filters.status) params.append('status', filters.status);
+      if (filters.priority) params.append('priority', filters.priority);
+      if (filters.project) params.append('project', filters.project);
+      if (filters.page) params.append('page', filters.page);
+      if (filters.limit) params.append('limit', filters.limit);
+      if (filters.sortBy) params.append('sortBy', filters.sortBy);
+      if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
+      
+      const queryString = params.toString();
+      const url = queryString ? `${API_BASE_URL}?${queryString}` : API_BASE_URL;
+      
+      const response = await apiRequest(url);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // Update task
   updateTask: async (taskId, taskData) => {
     try {

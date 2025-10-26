@@ -2,6 +2,7 @@ const express = require('express');
 const {
   createTask,
   createUrgentTask,
+  getAllTasks,
   getTasksByMilestone,
   getTasksByProject,
   getTasksByEmployee,
@@ -22,11 +23,12 @@ const router = express.Router();
 
 // All routes are protected
 router.use(protect);
-router.use(authorize('pm')); // PM-only routes
+router.use(authorize('project-manager')); // PM-only routes
 
 // Task CRUD routes
 router.post('/', createTask);
 router.post('/urgent', createUrgentTask);
+router.get('/', getAllTasks);
 router.get('/milestone/:milestoneId', getTasksByMilestone);
 router.get('/project/:projectId', getTasksByProject);
 router.get('/employee/:employeeId', getTasksByEmployee);

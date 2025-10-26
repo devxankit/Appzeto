@@ -14,7 +14,7 @@ const router = express.Router();
 
 // All routes are protected
 router.use(protect);
-router.use(authorize('pm', 'admin')); // PM and Admin routes
+router.use(authorize('project-manager', 'admin')); // PM and Admin routes
 
 // Payment CRUD routes
 router.post('/', createPaymentRecord);

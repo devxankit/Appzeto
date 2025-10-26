@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import { ArrowLeft, CheckSquare, Calendar, User, Clock, FileText, Download, Eye, Users, Paperclip, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { taskService } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
 
 const PM_task_detail = () => {
   const { id } = useParams()
@@ -10,29 +12,27 @@ const PM_task_detail = () => {
   const projectId = searchParams.get('projectId')
   const [task, setTask] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
 
   useEffect(() => {
-    const load = async () => {
+    const loadTask = async () => {
+      if (!id) return
+      
       setIsLoading(true)
-      await new Promise(r => setTimeout(r, 500))
-      setTask({
-        _id: id,
-        title: 'Hero section',
-        description: 'Build a responsive hero with CTA and analytics',
-        status: 'in-progress',
-        priority: 'high',
-        dueDate: new Date(Date.now()+2*24*60*60*1000).toISOString(),
-        createdAt: new Date().toISOString(),
-        completedAt: null,
-        assignedTo: [{ _id: 'u-001', fullName: 'John Doe', email: 'john@example.com' }],
-        project: { _id: projectId, name: 'Website Redesign' },
-        milestone: { _id: 'm-001', title: 'M1 - UI/UX' },
-        attachments: []
-      })
-      setIsLoading(false)
+      try {
+        const taskData = await taskService.getTaskById(id)
+        setTask(taskData)
+      } catch (error) {
+        console.error('Error loading task:', error)
+        toast.error('Failed to load task details')
+        navigate(-1) // Go back if task not found
+      } finally {
+        setIsLoading(false)
+      }
     }
-    load()
-  }, [id, projectId])
+    
+    loadTask()
+  }, [id, toast, navigate])
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -112,7 +112,7 @@ const PM_task_detail = () => {
             <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2"><Users className="h-5 w-5 text-primary" /><span>Assigned Team</span></h3>
               {task.assignedTo && task.assignedTo.length > 0 ? (
-                <div className="space-y-3">{task.assignedTo.map(m => (<div key={m._id} className="flex items-center space-x-3"><div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-primary/30 rounded-full flex items-center justify-center"><User className="h-4 w-4 text-primary" /></div><div><p className="text-sm font-medium text-gray-900">{m.fullName}</p><p className="text-xs text-gray-500">{m.email}</p></div></div>))}</div>
+                <div className="space-y-3">{task.assignedTo.map(m => (<div key={m._id} className="flex items-center space-x-3"><div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-primary/30 rounded-full flex items-center justify-center"><User className="h-4 w-4 text-primary" /></div><div><p className="text-sm font-medium text-gray-900">{m.name || m.fullName}</p><p className="text-xs text-gray-500">{m.email}</p></div></div>))}</div>
               ) : (<p className="text-gray-500 text-sm">No team members assigned</p>)}
             </div>
             <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100">
