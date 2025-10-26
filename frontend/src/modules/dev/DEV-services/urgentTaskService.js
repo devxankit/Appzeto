@@ -46,12 +46,13 @@ export const urgentTaskService = {
       const task = response.data;
       
       // Verify this is an urgent task
-      if (!task.isUrgent) {
+      if (!task.isUrgent && task.priority !== 'urgent') {
         throw new Error('Task is not marked as urgent');
       }
       
       return task;
     } catch (error) {
+      console.error('Error getting urgent task by ID:', error);
       throw error;
     }
   },

@@ -285,6 +285,11 @@ function App() {
               <PM_urgent_tasks />
             </PMProtectedRoute>
           } />
+          <Route path="/pm-urgent-task/:id" element={
+            <PMProtectedRoute>
+              <PM_urgent_task_detail />
+            </PMProtectedRoute>
+          } />
           <Route path="/pm-requests" element={
             <PMProtectedRoute>
               <PM_request />

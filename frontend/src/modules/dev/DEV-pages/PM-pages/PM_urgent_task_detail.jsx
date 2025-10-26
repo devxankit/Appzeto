@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
-import { urgentTaskService, projectService, socketService, tokenUtils } from '../../DEV-services'
+import { urgentTaskService, socketService, tokenUtils } from '../../DEV-services'
 import { useToast } from '../../../../contexts/ToastContext'
 import { ArrowLeft, CheckSquare, Calendar, User, Clock, FileText, Download, Eye, Users, Paperclip, AlertCircle, CheckCircle, Loader2, AlertTriangle } from 'lucide-react'
 
@@ -12,7 +12,6 @@ const PM_urgent_task_detail = () => {
   const [searchParams] = useState(() => new URLSearchParams(window.location.search))
   const projectId = searchParams.get('projectId')
   const [task, setTask] = useState(null)
-  const [project, setProject] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -30,17 +29,6 @@ const PM_urgent_task_detail = () => {
         // Load urgent task data
         const taskData = await urgentTaskService.getUrgentTaskById(id)
         setTask(taskData)
-        
-        // Load project data if available
-        if (taskData.project?._id) {
-          try {
-            const projectData = await projectService.getProjectById(taskData.project._id)
-            setProject(projectData)
-          } catch (projectError) {
-            console.warn('Failed to load project data:', projectError)
-            // Continue without project data
-          }
-        }
         
         // Setup WebSocket for real-time updates
         setupWebSocket()
@@ -324,7 +312,7 @@ const PM_urgent_task_detail = () => {
               <div className="space-y-3">
                 <div>
                   <label className="text-sm font-medium text-gray-600">Project</label>
-                  <p className="text-base font-medium text-gray-900">{project?.name || task.project?.name || 'Unknown Project'}</p>
+                  <p className="text-base font-medium text-gray-900">{task.project?.name || 'Unknown Project'}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-600">Milestone</label>

@@ -67,7 +67,6 @@ const PM_task_detail = () => {
       <PM_navbar />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24 md:pt-20 md:pb-8">
         <div className="mb-6 sm:mb-8">
-          <button onClick={() => navigate(`/pm-project/${projectId}`)} className="mb-4 text-gray-600 hover:text-gray-900 flex items-center"><ArrowLeft className="h-4 w-4 mr-2" />Back to Project</button>
           <div className="space-y-4">
             <div className="flex items-start space-x-4">
               <div className="p-3 bg-gradient-to-br from-primary/10 to-primary/20 rounded-2xl flex-shrink-0"><CheckSquare className="h-8 w-8 text-primary" /></div>
