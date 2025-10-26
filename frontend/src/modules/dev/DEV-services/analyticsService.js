@@ -107,6 +107,16 @@ export const analyticsService = {
     }
   },
 
+  // Get project growth analytics (monthly data)
+  getProjectGrowthAnalytics: async () => {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/pm/project-growth`);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // Get productivity metrics
   getProductivityMetrics: async (filters = {}) => {
     try {

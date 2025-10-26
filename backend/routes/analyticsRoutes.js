@@ -4,7 +4,8 @@ const {
   getProjectAnalytics,
   getEmployeePerformance,
   getClientProjectStats,
-  getProductivityMetrics
+  getProductivityMetrics,
+  getProjectGrowthAnalytics
 } = require('../controllers/analyticsController');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -16,6 +17,7 @@ router.use(authorize('project-manager', 'admin')); // PM and Admin routes
 
 // Analytics routes
 router.get('/pm/dashboard', getPMDashboardStats);
+router.get('/pm/project-growth', getProjectGrowthAnalytics);
 router.get('/project/:projectId', getProjectAnalytics);
 router.get('/employee/:employeeId', getEmployeePerformance);
 router.get('/client/:clientId', getClientProjectStats);

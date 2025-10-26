@@ -42,6 +42,7 @@ const PM_dashboard = () => {
     projectStatusData: [],
     productivityMetrics: {}
   })
+  const [projectGrowthData, setProjectGrowthData] = useState([])
 
   // Load dashboard data
   useEffect(() => {
@@ -94,11 +95,13 @@ const PM_dashboard = () => {
       setLoading(true)
       
       // Load projects data first - this is the main source of truth
-      const [projectsResponse, teamStats, productivityMetrics] = await Promise.all([
+      const [projectsResponse, teamStats, productivityMetrics, projectGrowth] = await Promise.all([
         projectService.getAllProjects({ limit: 100 }), // Get all projects for statistics
         teamService.getTeamStatistics(),
-        analyticsService.getProductivityMetrics()
+        analyticsService.getProductivityMetrics(),
+        analyticsService.getProjectGrowthAnalytics() // Add this
       ])
+
 
       // Get projects data
       const allProjects = projectsResponse?.data || []
@@ -153,8 +156,20 @@ const PM_dashboard = () => {
         projectStatusData,
         productivityMetrics: productivityMetrics?.data || {}
       })
+
+      // Process project growth data
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const processedGrowthData = projectGrowth?.data?.monthlyData?.map((item, index) => ({
+        month: monthNames[index],
+        projects: item.count,
+        color: `bg-teal-${Math.min(300 + (item.count * 50), 700)}`
+      })) || [];
+
+
+      setProjectGrowthData(processedGrowthData);
     } catch (error) {
       console.error('Error loading dashboard data:', error)
+      console.error('Project Growth API Error:', error)
       // Set fallback data on error
       setDashboardData({
         projectStats: { total: 0, active: 0, completed: 0, onHold: 0, overdue: 0 },
@@ -168,6 +183,7 @@ const PM_dashboard = () => {
         ],
         productivityMetrics: {}
       })
+      setProjectGrowthData([])
     } finally {
       setLoading(false)
     }
@@ -455,11 +471,11 @@ const PM_dashboard = () => {
               <div className="relative h-32 mb-4">
                 {/* Y-axis labels */}
                 <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2 z-10">
-                  <span>12</span>
-                  <span>9</span>
-                  <span>6</span>
-                  <span>3</span>
-                  <span>0</span>
+                  {(() => {
+                    const maxProjects = Math.max(...projectGrowthData.map(d => d.projects), 12);
+                    const yAxisLabels = [maxProjects, Math.floor(maxProjects * 0.75), Math.floor(maxProjects * 0.5), Math.floor(maxProjects * 0.25), 0];
+                    return yAxisLabels.map((label, i) => <span key={i}>{label}</span>);
+                  })()}
                 </div>
                 
                 {/* Scrollable Chart Area */}
@@ -475,25 +491,12 @@ const PM_dashboard = () => {
                     </div>
                     
                     {/* All 12 Months Bars */}
-                    {[
-                      { month: 'Jan', projects: 3, color: 'bg-teal-300' },
-                      { month: 'Feb', projects: 5, color: 'bg-teal-400' },
-                      { month: 'Mar', projects: 7, color: 'bg-teal-500' },
-                      { month: 'Apr', projects: 9, color: 'bg-teal-600' },
-                      { month: 'May', projects: 11, color: 'bg-teal-700' },
-                      { month: 'Jun', projects: 12, color: 'bg-teal-600' },
-                      { month: 'Jul', projects: 10, color: 'bg-teal-500' },
-                      { month: 'Aug', projects: 8, color: 'bg-teal-400' },
-                      { month: 'Sep', projects: 14, color: 'bg-teal-700' },
-                      { month: 'Oct', projects: 16, color: 'bg-teal-600' },
-                      { month: 'Nov', projects: 18, color: 'bg-teal-500' },
-                      { month: 'Dec', projects: 20, color: 'bg-teal-400' }
-                    ].map((data, index) => (
+                    {projectGrowthData.length > 0 ? projectGrowthData.map((data, index) => (
                       <div key={index} className="flex flex-col items-center group">
                         {/* Bar */}
                         <div 
                           className={`${data.color} w-6 mb-2 rounded-t-sm transition-all duration-300 hover:bg-teal-600 relative`}
-                          style={{ height: `${(data.projects / 20) * 90}px` }}
+                          style={{ height: `${(data.projects / Math.max(...projectGrowthData.map(d => d.projects), 1)) * 90}px` }}
                           title={`${data.month}: ${data.projects} projects`}
                         >
                           {/* Value label on hover */}
@@ -505,7 +508,9 @@ const PM_dashboard = () => {
                         {/* Month label */}
                         <div className="text-xs font-medium text-gray-600">{data.month}</div>
                       </div>
-                    ))}
+                    )) : (
+                      <div className="text-center text-gray-500 py-8">No data available</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -516,7 +521,12 @@ const PM_dashboard = () => {
                     <div className="w-3 h-3 bg-teal-500 rounded-full"></div>
                     <span className="text-sm text-gray-600">New Projects</span>
                   </div>
-                  <span className="text-sm font-medium text-teal-600">+150% growth</span>
+                  <span className="text-sm font-medium text-teal-600">
+                    {(() => {
+                      const totalThisYear = projectGrowthData.reduce((sum, d) => sum + d.projects, 0);
+                      return totalThisYear > 0 ? `${totalThisYear} projects this year` : 'No projects yet';
+                    })()}
+                  </span>
                 </div>
               </div>
             </div>

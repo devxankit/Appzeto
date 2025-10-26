@@ -545,6 +545,56 @@ const getClientProjectStats = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get project growth analytics (monthly creation data)
+// @route   GET /api/analytics/pm/project-growth
+// @access  PM only
+const getProjectGrowthAnalytics = asyncHandler(async (req, res, next) => {
+  const pmId = req.user.id;
+  const currentYear = new Date().getFullYear();
+
+  // Get projects created in current year, grouped by month
+  const projectGrowth = await Project.aggregate([
+    {
+      $match: {
+        projectManager: new mongoose.Types.ObjectId(pmId),
+        createdAt: {
+          $gte: new Date(`${currentYear}-01-01`),
+          $lte: new Date(`${currentYear}-12-31T23:59:59`)
+        }
+      }
+    },
+    {
+      $group: {
+        _id: { $month: '$createdAt' },
+        count: { $sum: 1 }
+      }
+    },
+    {
+      $sort: { _id: 1 }
+    }
+  ]);
+
+  // Create array for all 12 months with 0 as default
+  const monthlyData = Array.from({ length: 12 }, (_, i) => ({
+    month: i + 1,
+    count: 0
+  }));
+
+  // Fill in actual data
+  projectGrowth.forEach(item => {
+    monthlyData[item._id - 1].count = item.count;
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      year: currentYear,
+      monthlyData,
+      totalProjects: monthlyData.reduce((sum, m) => sum + m.count, 0)
+    }
+  });
+});
+
 // @desc    Get productivity metrics
 // @route   GET /api/analytics/productivity
 // @access  PM, Admin
@@ -634,5 +684,6 @@ module.exports = {
   getProjectAnalytics,
   getEmployeePerformance,
   getClientProjectStats,
-  getProductivityMetrics
+  getProductivityMetrics,
+  getProjectGrowthAnalytics
 };
