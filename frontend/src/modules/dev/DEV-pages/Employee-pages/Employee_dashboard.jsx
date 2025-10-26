@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
-import { taskService, analyticsService, socketService } from '../../DEV-services'
+import { employeeService, socketService } from '../../DEV-services'
 import { 
   FiCheckSquare as CheckSquare,
   FiClock as Clock,
@@ -11,7 +11,9 @@ import {
   FiUser as User,
   FiFolder as FolderKanban,
   FiFileText,
-  FiLoader
+  FiLoader,
+  FiStar as Star,
+  FiAward as Award
 } from 'react-icons/fi'
 
 const Employee_dashboard = () => {
@@ -20,14 +22,30 @@ const Employee_dashboard = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tasks, setTasks] = useState([])
-  const [stats, setStats] = useState({
-    total: 0,
-    completed: 0,
-    inProgress: 0,
-    pending: 0,
-    dueSoon: 0,
-    overdue: 0,
-    overallProgress: 0
+  const [dashboardStats, setDashboardStats] = useState({
+    tasks: {
+      total: 0,
+      completed: 0,
+      'in-progress': 0,
+      pending: 0,
+      urgent: 0,
+      overdue: 0,
+      dueSoon: 0
+    },
+    projects: {
+      total: 0,
+      active: 0,
+      completed: 0
+    },
+    points: {
+      current: 0,
+      rank: 0,
+      totalEmployees: 0,
+      tasksCompleted: 0,
+      tasksOnTime: 0,
+      tasksOverdue: 0
+    },
+    recentPointsHistory: []
   })
   const [filter, setFilter] = useState('all')
 
@@ -46,11 +64,17 @@ const Employee_dashboard = () => {
       socketService.connect(token)
       
       // Listen for real-time updates
-      socketService.on('task_updated', () => {
+      socketService.on('task_status_updated', () => {
         loadDashboardData()
       })
       
-      socketService.on('task_assigned', () => {
+      socketService.on('employee_points_updated', (data) => {
+        loadDashboardData()
+        // Show points notification
+        console.log(`Points updated: ${data.pointsAwarded > 0 ? '+' : ''}${data.pointsAwarded} points`)
+      })
+      
+      socketService.on('leaderboard_updated', () => {
         loadDashboardData()
       })
     }
@@ -61,35 +85,30 @@ const Employee_dashboard = () => {
       setLoading(true)
       setError(null)
       
-      // Get employee ID from token or user data
-      const employeeId = localStorage.getItem('employeeId') || 'current-employee'
-      
-      // Load employee tasks and performance data
-      const [tasksResponse, performanceResponse] = await Promise.all([
-        taskService.getTasksByEmployee(employeeId),
-        analyticsService.getEmployeePerformance(employeeId)
+      // Load dashboard statistics and tasks
+      const [dashboardResponse, tasksResponse] = await Promise.all([
+        employeeService.getEmployeeDashboardStats(),
+        employeeService.getEmployeeTasks({ limit: 10 })
       ])
       
-      const employeeTasks = tasksResponse.data
-      setTasks(employeeTasks)
-
-      // Calculate statistics
-      const total = employeeTasks.length
-      const completed = employeeTasks.filter(t => t.status === 'completed').length
-      const inProgress = employeeTasks.filter(t => t.status === 'in-progress').length
-      const pending = employeeTasks.filter(t => t.status === 'pending').length
-      const dueSoon = employeeTasks.filter(t => {
-        const diffDays = Math.ceil((new Date(t.dueDate) - new Date())/(1000*60*60*24))
-        return diffDays <= 3 && diffDays >= 0 && t.status !== 'completed'
-      }).length
-      const overdue = employeeTasks.filter(t => new Date(t.dueDate) < new Date() && t.status !== 'completed').length
-      const overallProgress = total > 0 ? Math.round((completed/total)*100) : 0
-
-      setStats({ total, completed, inProgress, pending, dueSoon, overdue, overallProgress })
+      setDashboardStats(dashboardResponse || {
+        tasks: { total: 0, completed: 0, 'in-progress': 0, pending: 0, urgent: 0, overdue: 0, dueSoon: 0 },
+        projects: { total: 0, active: 0, completed: 0 },
+        points: { current: 0, rank: 0, totalEmployees: 0, tasksCompleted: 0, tasksOnTime: 0, tasksOverdue: 0 },
+        recentPointsHistory: []
+      })
+      setTasks(tasksResponse?.data || [])
     } catch (error) {
       console.error('Error loading dashboard data:', error)
       setError('Failed to load dashboard data. Please try again.')
-      // Keep existing data on error
+      // Set default values on error
+      setDashboardStats({
+        tasks: { total: 0, completed: 0, 'in-progress': 0, pending: 0, urgent: 0, overdue: 0, dueSoon: 0 },
+        projects: { total: 0, active: 0, completed: 0 },
+        points: { current: 0, rank: 0, totalEmployees: 0, tasksCompleted: 0, tasksOnTime: 0, tasksOverdue: 0 },
+        recentPointsHistory: []
+      })
+      setTasks([])
     } finally {
       setLoading(false)
     }
@@ -116,7 +135,7 @@ const Employee_dashboard = () => {
   }
 
   const filteredTasks = useMemo(() => {
-    if (!tasks.length) return []
+    if (!tasks || !tasks.length) return []
     switch (filter) {
       case 'due-soon':
         return tasks.filter(task => {
@@ -133,6 +152,11 @@ const Employee_dashboard = () => {
         return tasks
     }
   }, [tasks, filter])
+
+  // Calculate overall progress
+  const overallProgress = dashboardStats.tasks.total > 0 
+    ? Math.round((dashboardStats.tasks.completed / dashboardStats.tasks.total) * 100) 
+    : 0
 
   if (loading) {
     return (
@@ -185,7 +209,7 @@ const Employee_dashboard = () => {
                 </div>
                 <span className="text-xs text-gray-500">Total</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              <p className="text-2xl font-bold text-gray-900">{dashboardStats.tasks.total}</p>
               <p className="text-xs text-gray-600">Tasks</p>
             </div>
             <div className="w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -195,7 +219,7 @@ const Employee_dashboard = () => {
                 </div>
                 <span className="text-xs text-gray-500">Done</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
+              <p className="text-2xl font-bold text-gray-900">{dashboardStats.tasks.completed}</p>
               <p className="text-xs text-gray-600">Tasks</p>
             </div>
             <div className="w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -205,7 +229,7 @@ const Employee_dashboard = () => {
                 </div>
                 <span className="text-xs text-gray-500">Due Soon</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.dueSoon}</p>
+              <p className="text-2xl font-bold text-gray-900">{dashboardStats.tasks.dueSoon}</p>
               <p className="text-xs text-gray-600">Tasks</p>
             </div>
             <div className="w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -215,7 +239,7 @@ const Employee_dashboard = () => {
                 </div>
                 <span className="text-xs text-gray-500">Overdue</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.overdue}</p>
+              <p className="text-2xl font-bold text-gray-900">{dashboardStats.tasks.overdue}</p>
               <p className="text-xs text-gray-600">Tasks</p>
             </div>
           </div>
@@ -237,7 +261,7 @@ const Employee_dashboard = () => {
                   </div>
                 </div>
                  <div className="bg-red-300 text-red-800 px-4 py-2 rounded-xl shadow-sm animate-pulse">
-                   <p className="text-2xl font-bold">{tasks.filter(t => t.priority === 'urgent' || t.priority === 'high').length}</p>
+                   <p className="text-2xl font-bold">{dashboardStats.tasks.urgent}</p>
                  </div>
               </div>
             </div>
@@ -274,10 +298,10 @@ const Employee_dashboard = () => {
             <div className="mb-6">
               <div className="flex justify-between items-center mb-3">
                 <span className="text-sm font-medium text-gray-700">Overall Completion</span>
-                <span className="text-sm font-bold text-primary">{stats.overallProgress}%</span>
+                <span className="text-sm font-bold text-primary">{overallProgress}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-4">
-                <div className="bg-gradient-to-r from-primary to-primary-dark h-4 rounded-full transition-all duration-700" style={{ width: `${stats.overallProgress}%` }} />
+                <div className="bg-gradient-to-r from-primary to-primary-dark h-4 rounded-full transition-all duration-700" style={{ width: `${overallProgress}%` }} />
               </div>
             </div>
           </div>
@@ -285,10 +309,10 @@ const Employee_dashboard = () => {
           <div className="md:hidden mb-6">
             <div className="grid grid-cols-2 gap-3">
               {[
-                { key: 'all', label: 'All', count: stats.total },
-                { key: 'done', label: 'Done', count: stats.completed },
-                { key: 'due-soon', label: 'Due Soon', count: stats.dueSoon },
-                { key: 'overdue', label: 'Overdue', count: stats.overdue }
+                { key: 'all', label: 'All', count: dashboardStats.tasks.total },
+                { key: 'done', label: 'Done', count: dashboardStats.tasks.completed },
+                { key: 'due-soon', label: 'Due Soon', count: dashboardStats.tasks.dueSoon },
+                { key: 'overdue', label: 'Overdue', count: dashboardStats.tasks.overdue }
               ].map(({ key, label, count }) => (
                 <button key={key} onClick={() => setFilter(key)} className={`p-4 rounded-2xl shadow-sm border transition-all ${filter === key ? 'bg-primary text-white border-primary shadow-md' : 'bg-white text-gray-600 border-gray-200 active:scale-95'}`}>
                   <div className="flex flex-col items-center space-y-1">
@@ -303,10 +327,10 @@ const Employee_dashboard = () => {
           <div className="hidden md:block mb-8">
             <div className="flex gap-2 flex-wrap">
               {[
-                { key: 'all', label: 'All', count: stats.total },
-                { key: 'done', label: 'Done', count: stats.completed },
-                { key: 'due-soon', label: 'Due Soon', count: stats.dueSoon },
-                { key: 'overdue', label: 'Overdue', count: stats.overdue }
+                { key: 'all', label: 'All', count: dashboardStats.tasks.total },
+                { key: 'done', label: 'Done', count: dashboardStats.tasks.completed },
+                { key: 'due-soon', label: 'Due Soon', count: dashboardStats.tasks.dueSoon },
+                { key: 'overdue', label: 'Overdue', count: dashboardStats.tasks.overdue }
               ].map(({ key, label, count }) => (
                 <button key={key} onClick={() => setFilter(key)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${filter === key ? 'bg-primary text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
                   {label} ({count})
@@ -385,3 +409,4 @@ const Employee_dashboard = () => {
 }
 
 export default Employee_dashboard
+

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   FiUsers, 
@@ -14,66 +14,129 @@ import {
   FiAlertTriangle, 
   FiBarChart, 
   FiCalendar,
-  FiStar
+  FiStar,
+  FiLoader
 } from 'react-icons/fi'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
+import { employeeService, socketService } from '../../DEV-services'
 
 const Employee_leaderboard = () => {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [filterOpen, setFilterOpen] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState('month')
   const [searchQuery, setSearchQuery] = useState('')
+  const [leaderboardData, setLeaderboardData] = useState([])
+  const [currentUser, setCurrentUser] = useState(null)
 
-  // Mock data for current user (employee perspective)
-  const currentUser = {
-    name: "Alex Johnson",
-    rank: 3,
-    score: 8750,
-    avatar: "AJ",
-    completedTasks: 45,
-    overdueTasks: 2,
-    missedDeadlines: 1,
-    onTimeTasks: 42,
-    completionRate: 93,
-    avgCompletionTime: "2.3 days",
-    department: "Development",
-    role: "Senior Developer"
+  useEffect(() => {
+    loadLeaderboardData()
+    setupWebSocket()
+    
+    return () => {
+      socketService.disconnect()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedPeriod) {
+      loadLeaderboardData()
+    }
+  }, [selectedPeriod])
+
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('employeeToken')
+    if (token) {
+      socketService.connect(token)
+      
+      // Listen for real-time leaderboard updates
+      socketService.on('leaderboard_updated', () => {
+        loadLeaderboardData()
+      })
+      
+      socketService.on('employee_points_updated', () => {
+        loadLeaderboardData()
+      })
+    }
   }
 
-  // Mock leaderboard data
-  const leaderboardData = [
-    { 
-      id: 1, name: "Sarah Chen", avatar: "SC", score: 9500, rank: 1,
-      completed: 52, overdue: 0, missed: 0, onTime: 52, rate: 98, 
-      trend: "up", trendValue: "+12%", department: "Development",
-      avgTime: "1.8 days", lastActive: "2 hours ago", projects: 8, role: "Senior Developer"
-    },
-    { 
-      id: 2, name: "Michael Brown", avatar: "MB", score: 9100, rank: 2,
-      completed: 48, overdue: 1, missed: 0, onTime: 47, rate: 96,
-      trend: "up", trendValue: "+8%", department: "Development",
-      avgTime: "2.1 days", lastActive: "1 hour ago", projects: 7, role: "Developer"
-    },
-    { 
-      id: 3, name: "Alex Johnson", avatar: "AJ", score: 8750, rank: 3,
-      completed: 45, overdue: 2, missed: 1, onTime: 42, rate: 93,
-      trend: "stable", trendValue: "0%", department: "Development",
-      avgTime: "2.3 days", lastActive: "30 mins ago", projects: 6, role: "Senior Developer",
-      isCurrentUser: true
-    },
-    { 
-      id: 4, name: "Emily Davis", avatar: "ED", score: 8400, rank: 4,
-      completed: 43, overdue: 3, missed: 1, onTime: 39, rate: 91,
-      trend: "down", trendValue: "-3%", department: "Design",
-      avgTime: "2.5 days", lastActive: "5 hours ago", projects: 5, role: "UI/UX Designer"
-    },
-    { 
-      id: 5, name: "James Wilson", avatar: "JW", score: 8200, rank: 5,
-      completed: 41, overdue: 2, missed: 2, onTime: 37, rate: 89,
-      trend: "up", trendValue: "+5%", department: "Development",
-      avgTime: "2.7 days", lastActive: "1 hour ago", projects: 6, role: "Frontend Developer"
-    },
-  ]
+  const loadLeaderboardData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await employeeService.getEmployeeLeaderboard({
+        page: 1,
+        limit: 50,
+        period: selectedPeriod
+      })
+      
+      // Transform API response to match interface
+      const transformedData = response.leaderboard?.map((emp, index) => ({
+        id: emp._id,
+        name: emp.name,
+        avatar: emp.name.split(' ').map(n => n[0]).join('').substring(0, 2),
+        score: emp.points || 0,
+        rank: index + 1,
+        completed: emp.statistics?.tasksCompleted || 0,
+        overdue: emp.statistics?.tasksOverdue || 0,
+        missed: emp.statistics?.tasksMissed || 0,
+        onTime: emp.statistics?.tasksOnTime || 0,
+        rate: emp.statistics?.completionRate || 0,
+        trend: emp.trend || "stable",
+        trendValue: emp.trendValue || "0%",
+        department: emp.department || "Development",
+        avgTime: emp.statistics?.averageCompletionTime ? `${emp.statistics.averageCompletionTime} days` : "2.0 days",
+        lastActive: emp.lastActive || "Recently",
+        projects: emp.projects?.length || 0,
+        role: emp.position || "Developer",
+        isCurrentUser: emp.isCurrentEmployee || false
+      })) || []
+
+      setLeaderboardData(transformedData)
+      
+      // Set current user data
+      const currentEmp = response.currentEmployee
+      if (currentEmp) {
+        setCurrentUser({
+          name: currentEmp.name,
+          rank: currentEmp.rank || 1,
+          score: currentEmp.points || 0,
+          avatar: currentEmp.name.split(' ').map(n => n[0]).join('').substring(0, 2),
+          completedTasks: currentEmp.statistics?.tasksCompleted || 0,
+          overdueTasks: currentEmp.statistics?.tasksOverdue || 0,
+          missedDeadlines: currentEmp.statistics?.tasksMissed || 0,
+          onTimeTasks: currentEmp.statistics?.tasksOnTime || 0,
+          completionRate: currentEmp.statistics?.completionRate || 0,
+          avgCompletionTime: currentEmp.statistics?.averageCompletionTime ? `${currentEmp.statistics.averageCompletionTime} days` : "2.0 days",
+          department: currentEmp.department || "Development",
+          role: currentEmp.position || "Developer"
+        })
+      }
+    } catch (error) {
+      console.error('Error loading leaderboard data:', error)
+      setError('Failed to load leaderboard data. Please try again.')
+      // Set default data on error
+      setLeaderboardData([])
+      setCurrentUser({
+        name: "Employee",
+        rank: 1,
+        score: 0,
+        avatar: "E",
+        completedTasks: 0,
+        overdueTasks: 0,
+        missedDeadlines: 0,
+        onTimeTasks: 0,
+        completionRate: 0,
+        avgCompletionTime: "0 days",
+        department: "Development",
+        role: "Developer"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredEmployees = leaderboardData.filter(emp => 
     emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -237,6 +300,24 @@ const Employee_leaderboard = () => {
     )
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 pb-20">
+        <Employee_navbar />
+        <div className="pt-16 pb-24 md:pt-20 md:pb-8">
+          <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <FiLoader className="animate-spin text-4xl text-primary mx-auto mb-4" />
+                <p className="text-gray-600">Loading leaderboard...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 pb-20">
       <Employee_navbar />
@@ -255,27 +336,44 @@ const Employee_leaderboard = () => {
           </div>
 
           {/* Current User Card */}
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/20">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm">
-                  {currentUser.avatar}
+          {currentUser && (
+            <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                    {currentUser.avatar}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white text-sm">{currentUser.name}</p>
+                    <p className="text-teal-100 text-xs">Your Rank: #{currentUser.rank}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-white text-sm">{currentUser.name}</p>
-                  <p className="text-teal-100 text-xs">Your Rank: #{currentUser.rank}</p>
+                <div className="text-right">
+                  <p className="text-yellow-300 text-lg font-bold">{currentUser.score}</p>
+                  <p className="text-teal-100 text-xs">Points</p>
                 </div>
-              </div>
-              <div className="text-right">
-                <p className="text-yellow-300 text-lg font-bold">{currentUser.score}</p>
-                <p className="text-teal-100 text-xs">Points</p>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-3 relative z-10">
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <div className="text-red-600 text-sm">{error}</div>
+              <button 
+                onClick={() => setError(null)}
+                className="ml-auto text-red-400 hover:text-red-600"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Period Selector */}
         <div className="mb-4">
           <div className="bg-white rounded-xl p-1 shadow-sm flex gap-1">
@@ -330,7 +428,7 @@ const Employee_leaderboard = () => {
                 <StatCard
                   icon={FiCheckCircle}
                   label="Completed"
-                  value={currentUser.completedTasks}
+                  value={currentUser?.completedTasks || 0}
                   subtext="This month"
                   color="text-green-600"
                   bgColor="bg-green-50"
@@ -338,7 +436,7 @@ const Employee_leaderboard = () => {
                 <StatCard
                   icon={FiTarget}
                   label="On Time"
-                  value={currentUser.onTimeTasks}
+                  value={currentUser?.onTimeTasks || 0}
                   subtext="Tasks delivered"
                   color="text-teal-600"
                   bgColor="bg-teal-50"
@@ -346,7 +444,7 @@ const Employee_leaderboard = () => {
                 <StatCard
                   icon={FiClock}
                   label="Overdue"
-                  value={currentUser.overdueTasks}
+                  value={currentUser?.overdueTasks || 0}
                   subtext="Needs attention"
                   color="text-orange-600"
                   bgColor="bg-orange-50"
@@ -354,7 +452,7 @@ const Employee_leaderboard = () => {
                 <StatCard
                   icon={FiAlertTriangle}
                   label="Missed"
-                  value={currentUser.missedDeadlines}
+                  value={currentUser?.missedDeadlines || 0}
                   subtext="Deadlines"
                   color="text-red-600"
                   bgColor="bg-red-50"
@@ -372,12 +470,12 @@ const Employee_leaderboard = () => {
                 <div>
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-gray-600">Completion Rate</span>
-                    <span className="font-bold text-gray-800">{currentUser.completionRate}%</span>
+                    <span className="font-bold text-gray-800">{currentUser?.completionRate || 0}%</span>
                   </div>
                   <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
                     <div
                       className="bg-gradient-to-r from-green-500 to-emerald-500 h-full rounded-full"
-                      style={{ width: `${currentUser.completionRate}%` }}
+                      style={{ width: `${currentUser?.completionRate || 0}%` }}
                     />
                   </div>
                 </div>
@@ -385,7 +483,7 @@ const Employee_leaderboard = () => {
 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600 text-sm">Total Points</span>
-                  <span className="font-bold text-teal-600 text-lg">{currentUser.score}</span>
+                  <span className="font-bold text-teal-600 text-lg">{currentUser?.score || 0}</span>
                 </div>
               </div>
             </div>
@@ -454,16 +552,18 @@ const Employee_leaderboard = () => {
             </div>
 
             {/* Motivational Card */}
-            <div className="bg-gradient-to-r from-teal-600 to-purple-600 rounded-xl p-4 text-white shadow-lg">
-              <h3 className="font-bold text-base mb-2">Keep Going! 🚀</h3>
-              <p className="text-white/90 text-sm mb-3">
-                You're only {leaderboardData[1].score - currentUser.score} points away from rank #{currentUser.rank - 1}. Complete your pending tasks to climb up!
-              </p>
-              <button className="bg-white text-teal-600 px-4 py-2 rounded-lg font-semibold text-sm hover:shadow-md transition-all flex items-center gap-2">
-                View Tasks
-                <FiChevronDown className="w-4 h-4 rotate-[-90deg]" />
-              </button>
-            </div>
+            {currentUser && leaderboardData.length > 1 && (
+              <div className="bg-gradient-to-r from-teal-600 to-purple-600 rounded-xl p-4 text-white shadow-lg">
+                <h3 className="font-bold text-base mb-2">Keep Going! 🚀</h3>
+                <p className="text-white/90 text-sm mb-3">
+                  You're only {leaderboardData[1]?.score - currentUser.score} points away from rank #{currentUser.rank - 1}. Complete your pending tasks to climb up!
+                </p>
+                <button className="bg-white text-teal-600 px-4 py-2 rounded-lg font-semibold text-sm hover:shadow-md transition-all flex items-center gap-2">
+                  View Tasks
+                  <FiChevronDown className="w-4 h-4 rotate-[-90deg]" />
+                </button>
+              </div>
+            )}
           </div>
         )}
         </div>
@@ -472,4 +572,3 @@ const Employee_leaderboard = () => {
 }
 
 export default Employee_leaderboard
-

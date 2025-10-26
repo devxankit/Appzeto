@@ -5,9 +5,13 @@ const {
   updateEmployeeTaskStatus,
   addEmployeeTaskComment,
   getEmployeeUrgentTasks,
-  getEmployeeTaskStatistics
+  getEmployeeTaskStatistics,
+  uploadEmployeeTaskAttachment,
+  getEmployeeTaskAttachments,
+  deleteEmployeeTaskAttachment
 } = require('../../controllers/employee/employeeTaskController');
 const { protect, authorize } = require('../../middlewares/auth');
+const upload = require('../../middlewares/upload');
 
 const router = express.Router();
 
@@ -22,5 +26,10 @@ router.get('/statistics', getEmployeeTaskStatistics);
 router.get('/:id', getEmployeeTaskById);
 router.patch('/:id/status', updateEmployeeTaskStatus);
 router.post('/:id/comments', addEmployeeTaskComment);
+
+// File upload routes
+router.post('/:id/attachments', upload.single('file'), uploadEmployeeTaskAttachment);
+router.get('/:id/attachments', getEmployeeTaskAttachments);
+router.delete('/:id/attachments/:attachmentId', deleteEmployeeTaskAttachment);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const Task = require('../../models/Task');
 const Project = require('../../models/Project');
 const Milestone = require('../../models/Milestone');
+const Employee = require('../../models/Employee');
 const asyncHandler = require('../../middlewares/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
 const socketService = require('../../services/socketService');
@@ -92,6 +93,8 @@ const updateEmployeeTaskStatus = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Task not found or you are not assigned to this task', 404));
   }
 
+  const previousStatus = task.status;
+
   // Update task status
   task.status = status;
   if (actualHours) task.actualHours = actualHours;
@@ -111,6 +114,29 @@ const updateEmployeeTaskStatus = asyncHandler(async (req, res, next) => {
     });
   }
 
+  // Calculate points if task is being completed
+  let pointsAwarded = 0;
+  let pointsReason = '';
+  
+  if (status === 'completed' && previousStatus !== 'completed') {
+    const pointsResult = task.calculatePoints();
+    pointsAwarded = pointsResult.points;
+    pointsReason = pointsResult.reason;
+    
+    // Update employee points
+    const employee = await Employee.findById(employeeId);
+    if (employee) {
+      if (pointsAwarded > 0) {
+        await employee.addPoints(task._id, pointsAwarded, pointsReason);
+      } else if (pointsAwarded < 0) {
+        await employee.deductPoints(task._id, Math.abs(pointsAwarded), pointsReason);
+      }
+      
+      // Update employee statistics
+      await employee.updateStatistics();
+    }
+  }
+
   await task.save();
 
   // Populate the updated task
@@ -120,11 +146,12 @@ const updateEmployeeTaskStatus = asyncHandler(async (req, res, next) => {
     .populate('assignedTo', 'name email department')
     .populate('createdBy', 'name email');
 
-  // Emit WebSocket event
+  // Emit WebSocket events
   socketService.emitToTask(task._id, 'task_status_updated', {
     task: updatedTask,
     updatedBy: req.user.name,
-    status: status
+    status: status,
+    pointsAwarded: pointsAwarded
   });
 
   // Also emit to project room
@@ -133,9 +160,28 @@ const updateEmployeeTaskStatus = asyncHandler(async (req, res, next) => {
     updatedBy: req.user.name
   });
 
+  // Emit points update event if points were awarded/deducted
+  if (pointsAwarded !== 0) {
+    socketService.emitToEmployee(employeeId, 'employee_points_updated', {
+      employeeId: employeeId,
+      pointsAwarded: pointsAwarded,
+      reason: pointsReason,
+      taskId: task._id,
+      taskTitle: task.title
+    });
+
+    // Emit leaderboard update to all employees
+    socketService.emitToAll('leaderboard_updated', {
+      employeeId: employeeId,
+      pointsChange: pointsAwarded
+    });
+  }
+
   res.json({
     success: true,
-    data: updatedTask
+    data: updatedTask,
+    pointsAwarded: pointsAwarded,
+    pointsReason: pointsReason
   });
 });
 
@@ -282,11 +328,139 @@ const getEmployeeTaskStatistics = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Upload attachment to task (Employee can upload files to assigned tasks)
+// @route   POST /api/employee/tasks/:id/attachments
+// @access  Employee only
+const uploadEmployeeTaskAttachment = asyncHandler(async (req, res, next) => {
+  const employeeId = req.user.id;
+
+  const task = await Task.findOne({
+    _id: req.params.id,
+    assignedTo: employeeId
+  });
+
+  if (!task) {
+    return next(new ErrorResponse('Task not found or you are not assigned to this task', 404));
+  }
+
+  if (!req.file) {
+    return next(new ErrorResponse('No file uploaded', 400));
+  }
+
+  // Add attachment to task
+  const attachmentData = {
+    public_id: req.file.public_id,
+    secure_url: req.file.secure_url,
+    originalName: req.file.originalname,
+    original_filename: req.file.originalname,
+    format: req.file.format,
+    size: req.file.size,
+    bytes: req.file.bytes,
+    width: req.file.width,
+    height: req.file.height,
+    resource_type: req.file.resource_type,
+    uploadedAt: new Date()
+  };
+
+  task.attachments.push(attachmentData);
+  await task.save();
+
+  // Populate the updated task
+  const updatedTask = await Task.findById(task._id)
+    .populate('project', 'name status')
+    .populate('milestone', 'title status')
+    .populate('assignedTo', 'name email department')
+    .populate('createdBy', 'name email');
+
+  // Emit WebSocket event
+  socketService.emitToTask(task._id, 'attachment_uploaded', {
+    task: updatedTask,
+    attachment: attachmentData,
+    uploadedBy: req.user.name
+  });
+
+  res.json({
+    success: true,
+    data: updatedTask,
+    attachment: attachmentData
+  });
+});
+
+// @desc    Get task attachments (Employee can view attachments of assigned tasks)
+// @route   GET /api/employee/tasks/:id/attachments
+// @access  Employee only
+const getEmployeeTaskAttachments = asyncHandler(async (req, res, next) => {
+  const employeeId = req.user.id;
+
+  const task = await Task.findOne({
+    _id: req.params.id,
+    assignedTo: employeeId
+  }).select('attachments');
+
+  if (!task) {
+    return next(new ErrorResponse('Task not found or you are not assigned to this task', 404));
+  }
+
+  res.json({
+    success: true,
+    data: task.attachments
+  });
+});
+
+// @desc    Delete task attachment (Employee can remove attachments from assigned tasks)
+// @route   DELETE /api/employee/tasks/:id/attachments/:attachmentId
+// @access  Employee only
+const deleteEmployeeTaskAttachment = asyncHandler(async (req, res, next) => {
+  const employeeId = req.user.id;
+  const { attachmentId } = req.params;
+
+  const task = await Task.findOne({
+    _id: req.params.id,
+    assignedTo: employeeId
+  });
+
+  if (!task) {
+    return next(new ErrorResponse('Task not found or you are not assigned to this task', 404));
+  }
+
+  // Find the attachment
+  const attachment = task.attachments.id(attachmentId);
+  if (!attachment) {
+    return next(new ErrorResponse('Attachment not found', 404));
+  }
+
+  // Remove attachment
+  task.attachments.pull(attachmentId);
+  await task.save();
+
+  // Populate the updated task
+  const updatedTask = await Task.findById(task._id)
+    .populate('project', 'name status')
+    .populate('milestone', 'title status')
+    .populate('assignedTo', 'name email department')
+    .populate('createdBy', 'name email');
+
+  // Emit WebSocket event
+  socketService.emitToTask(task._id, 'attachment_deleted', {
+    task: updatedTask,
+    attachmentId: attachmentId,
+    deletedBy: req.user.name
+  });
+
+  res.json({
+    success: true,
+    data: updatedTask
+  });
+});
+
 module.exports = {
   getEmployeeTasks,
   getEmployeeTaskById,
   updateEmployeeTaskStatus,
   addEmployeeTaskComment,
   getEmployeeUrgentTasks,
-  getEmployeeTaskStatistics
+  getEmployeeTaskStatistics,
+  uploadEmployeeTaskAttachment,
+  getEmployeeTaskAttachments,
+  deleteEmployeeTaskAttachment
 };

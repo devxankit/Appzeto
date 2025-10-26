@@ -28,6 +28,8 @@ const adminProjectRoutes = require('./routes/admin/adminProjectRoutes');
 const adminAnalyticsRoutes = require('./routes/admin/adminAnalyticsRoutes');
 const employeeProjectRoutes = require('./routes/employee/employeeProjectRoutes');
 const employeeTaskRoutes = require('./routes/employee/employeeTaskRoutes');
+const employeeAnalyticsRoutes = require('./routes/employee/employeeAnalyticsRoutes');
+const employeeMilestoneRoutes = require('./routes/employee/employeeMilestoneRoutes');
 const clientProjectRoutes = require('./routes/client/clientProjectRoutes');
 const clientPaymentRoutes = require('./routes/client/clientPaymentRoutes');
 
@@ -129,6 +131,8 @@ app.use('/api/admin/analytics', adminAnalyticsRoutes);
 // Employee routes
 app.use('/api/employee/projects', employeeProjectRoutes);
 app.use('/api/employee/tasks', employeeTaskRoutes);
+app.use('/api/employee/analytics', employeeAnalyticsRoutes);
+app.use('/api/employee/milestones', employeeMilestoneRoutes);
 
 // Client routes
 app.use('/api/client/projects', clientProjectRoutes);

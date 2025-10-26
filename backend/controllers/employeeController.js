@@ -205,14 +205,17 @@ const createDemoEmployee = async (req, res) => {
       email: 'employee@demo.com',
       password: 'password123',
       role: 'employee',
-      department: 'Development',
-      employeeId: 'EMP001',
+      team: 'developer',
+      department: 'full-stack',
       phone: '+1234567890',
-      position: 'Software Developer',
+      dateOfBirth: new Date('1995-01-15'),
       joiningDate: new Date('2023-01-15'),
+      position: 'Software Developer',
+      employeeId: 'EMP001',
       salary: 50000,
       skills: ['JavaScript', 'React', 'Node.js', 'MongoDB'],
-      experience: 2
+      experience: 2,
+      isActive: true
     });
 
     res.status(201).json({

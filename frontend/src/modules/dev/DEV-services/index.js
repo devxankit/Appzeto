@@ -23,6 +23,9 @@ export { analyticsService } from './analyticsService';
 export { teamService } from './teamService';
 export { default as socketService } from './socketService';
 
+// Employee Module Services
+export { default as employeeService } from './employeeService';
+
 // Re-export commonly used functions from PM auth service
 export {
   loginPM,
@@ -70,6 +73,9 @@ export {
 // PM Module Services:
 // import { projectService, milestoneService, taskService, paymentService, analyticsService, teamService, socketService } from '../DEV-services';
 
+// Employee Module Services:
+// import { employeeService } from '../DEV-services';
+
 // Individual Service Imports:
 // import pmAuthService from '../DEV-services/pmAuthService';
 // import employeeAuthService from '../DEV-services/employeeAuthService';
@@ -81,3 +87,4 @@ export {
 // import { analyticsService } from '../DEV-services/analyticsService';
 // import { teamService } from '../DEV-services/teamService';
 // import socketService from '../DEV-services/socketService';
+// import employeeService from '../DEV-services/employeeService';

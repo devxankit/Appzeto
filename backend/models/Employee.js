@@ -109,6 +109,26 @@ const employeeSchema = new mongoose.Schema({
   manager: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'PM'
+  },
+  // Points system fields
+  points: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  pointsHistory: [{
+    taskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
+    points: Number, // positive or negative
+    reason: String, // 'task_completed_on_time', 'task_overdue', etc.
+    timestamp: { type: Date, default: Date.now }
+  }],
+  statistics: {
+    tasksCompleted: { type: Number, default: 0 },
+    tasksOnTime: { type: Number, default: 0 },
+    tasksOverdue: { type: Number, default: 0 },
+    averageCompletionTime: { type: Number, default: 0 }, // in days
+    totalPointsEarned: { type: Number, default: 0 },
+    totalPointsDeducted: { type: Number, default: 0 }
   }
 }, {
   timestamps: true
@@ -172,6 +192,52 @@ employeeSchema.methods.resetLoginAttempts = function() {
     $unset: { loginAttempts: 1, lockUntil: 1 },
     $set: { lastLogin: new Date() }
   });
+};
+
+// Points management methods
+employeeSchema.methods.addPoints = function(taskId, points, reason) {
+  this.points += points;
+  this.statistics.totalPointsEarned += points;
+  
+  this.pointsHistory.push({
+    taskId: taskId,
+    points: points,
+    reason: reason,
+    timestamp: new Date()
+  });
+  
+  return this.save();
+};
+
+employeeSchema.methods.deductPoints = function(taskId, points, reason) {
+  const pointsToDeduct = Math.min(points, this.points); // Don't go below 0
+  this.points -= pointsToDeduct;
+  this.statistics.totalPointsDeducted += pointsToDeduct;
+  
+  this.pointsHistory.push({
+    taskId: taskId,
+    points: -pointsToDeduct,
+    reason: reason,
+    timestamp: new Date()
+  });
+  
+  return this.save();
+};
+
+employeeSchema.methods.updateStatistics = function() {
+  const completedTasks = this.pointsHistory.filter(h => 
+    h.reason === 'task_completed_on_time' || h.reason === 'task_overdue'
+  );
+  
+  this.statistics.tasksCompleted = completedTasks.length;
+  this.statistics.tasksOnTime = this.pointsHistory.filter(h => 
+    h.reason === 'task_completed_on_time'
+  ).length;
+  this.statistics.tasksOverdue = this.pointsHistory.filter(h => 
+    h.reason === 'task_overdue'
+  ).length;
+  
+  return this.save();
 };
 
 // Remove password from JSON output

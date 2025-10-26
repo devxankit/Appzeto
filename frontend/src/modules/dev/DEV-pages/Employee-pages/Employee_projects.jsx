@@ -1,32 +1,64 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
+import { employeeService, socketService } from '../../DEV-services'
 import { 
   FiFolder as FolderKanban,
   FiCheckSquare as CheckSquare,
   FiTrendingUp as TrendingUp,
   FiUsers as Users,
-  FiCalendar as Calendar
+  FiCalendar as Calendar,
+  FiLoader
 } from 'react-icons/fi'
 
 const Employee_projects = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [projects, setProjects] = useState([])
 
   useEffect(() => {
-    const load = async () => {
+    loadProjects()
+    setupWebSocket()
+    
+    return () => {
+      socketService.disconnect()
+    }
+  }, [])
+
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('employeeToken')
+    if (token) {
+      socketService.connect(token)
+      
+      // Listen for real-time updates
+      socketService.on('project_updated', () => {
+        loadProjects()
+      })
+      
+      socketService.on('task_status_updated', () => {
+        loadProjects()
+      })
+    }
+  }
+
+  const loadProjects = async () => {
+    try {
       setLoading(true)
-      await new Promise(r => setTimeout(r, 400))
-      const mockProjects = [
-        { _id: 'p1', name: 'Website Revamp', description: 'Modernize the marketing site', status: 'active', priority: 'high', progress: 45, myTasks: 6, myCompletedTasks: 2, assignedTeam: [{ _id: 'u1', fullName: 'Alex' }], dueDate: new Date(Date.now()+7*24*60*60*1000).toISOString() },
-        { _id: 'p2', name: 'Internal Ops', description: 'Optimize ops flows', status: 'planning', priority: 'normal', progress: 10, myTasks: 2, myCompletedTasks: 0, assignedTeam: [{ _id: 'u1', fullName: 'Alex' }], dueDate: new Date(Date.now()+14*24*60*60*1000).toISOString() }
-      ]
-      setProjects(mockProjects)
+      setError(null)
+      
+      // Load employee's assigned projects
+      const response = await employeeService.getEmployeeProjects()
+      setProjects(response.data || [])
+    } catch (error) {
+      console.error('Error loading projects:', error)
+      setError('Failed to load projects. Please try again.')
+      // Set empty array on error
+      setProjects([])
+    } finally {
       setLoading(false)
     }
-    load()
-  }, [])
+  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -53,8 +85,8 @@ const Employee_projects = () => {
     const totalProjects = projects.length
     const activeProjects = projects.filter(p => p.status === 'active').length
     const completedProjects = projects.filter(p => p.status === 'completed').length
-    const totalMyTasks = projects.reduce((s,p)=> s + (p.myTasks||0), 0)
-    const completedMyTasks = projects.reduce((s,p)=> s + (p.myCompletedTasks||0), 0)
+    const totalMyTasks = projects.reduce((s,p)=> s + (p.employeeTasks || 0), 0)
+    const completedMyTasks = projects.reduce((s,p)=> s + (p.employeeCompletedTasks || 0), 0)
     const overallProgress = totalMyTasks>0 ? Math.round((completedMyTasks/totalMyTasks)*100) : 0
     return { totalProjects, activeProjects, completedProjects, totalMyTasks, completedMyTasks, overallProgress }
   }, [projects])
@@ -65,7 +97,12 @@ const Employee_projects = () => {
         <Employee_navbar />
         <main className="pt-16 pb-24 md:pt-20 md:pb-8">
           <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
-            <div className="flex items-center justify-center h-64 text-gray-600">Loading projects...</div>
+            <div className="flex items-center justify-center h-64">
+              <div className="flex items-center space-x-3">
+                <FiLoader className="h-6 w-6 animate-spin text-primary" />
+                <span className="text-gray-600">Loading projects...</span>
+              </div>
+            </div>
           </div>
         </main>
       </div>
@@ -77,6 +114,21 @@ const Employee_projects = () => {
       <Employee_navbar />
       <main className="pt-16 pb-24 md:pt-20 md:pb-8">
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+          {/* Error State */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <div className="text-red-600 text-sm">{error}</div>
+                <button 
+                  onClick={() => setError(null)}
+                  className="ml-auto text-red-400 hover:text-red-600"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mb-6 md:mb-8">
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900">My Projects</h1>
             <p className="text-sm md:text-base text-gray-600 mt-1">Projects you're assigned to</p>
@@ -130,8 +182,18 @@ const Employee_projects = () => {
               <h2 className="text-lg md:text-xl font-semibold text-gray-900">Assigned Projects</h2>
               <span className="text-sm text-gray-500">{projects.length} projects</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              {projects.map((project) => (
+            {projects.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                  <FolderKanban className="h-8 w-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Projects Assigned</h3>
+                <p className="text-gray-600 mb-4">You haven't been assigned to any projects yet.</p>
+                <p className="text-sm text-gray-500">Contact your project manager to get assigned to projects.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                {projects.map((project) => (
                 <div key={project._id} onClick={() => navigate(`/employee-project/${project._id}`)} className="group bg-gradient-to-br from-gray-50 to-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-300 cursor-pointer transform hover:-translate-y-0.5 active:scale-[0.98]">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-start space-x-3 flex-1">
@@ -152,11 +214,11 @@ const Employee_projects = () => {
                   <p className="text-sm text-gray-600 leading-relaxed mb-3 line-clamp-2">{project.description}</p>
                   <div className="mb-3">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs font-medium text-gray-700">Progress</span>
-                      <span className="text-sm font-bold text-gray-900">{project.progress}%</span>
+                      <span className="text-xs font-medium text-gray-700">My Progress</span>
+                      <span className="text-sm font-bold text-gray-900">{project.employeeProgress || 0}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                      <div className="bg-gradient-to-r from-primary to-primary-dark h-2 rounded-full transition-all duration-500 ease-out" style={{ width: `${project.progress}%` }} />
+                      <div className="bg-gradient-to-r from-primary to-primary-dark h-2 rounded-full transition-all duration-500 ease-out" style={{ width: `${project.employeeProgress || 0}%` }} />
                     </div>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-gray-100">
@@ -167,13 +229,17 @@ const Employee_projects = () => {
                       </div>
                       <div className="flex items-center space-x-1 text-gray-500">
                         <Calendar className="h-3.5 w-3.5" />
-                        <span className="text-xs font-medium">{new Date(project.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        <span className="text-xs font-medium">{project.endDate ? new Date(project.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'TBD'}</span>
                       </div>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {project.employeeTasks || 0} tasks
                     </div>
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </main>

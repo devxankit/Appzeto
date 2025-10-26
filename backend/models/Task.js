@@ -104,6 +104,16 @@ const taskSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'PM',
     required: [true, 'Task creator is required']
+  },
+  // Points tracking fields
+  pointsAwarded: {
+    type: Number,
+    default: 0
+  },
+  completionStatus: {
+    type: String,
+    enum: ['on-time', 'overdue', 'pending'],
+    default: 'pending'
   }
 }, {
   timestamps: true
@@ -192,6 +202,22 @@ taskSchema.methods.updateStatus = function(newStatus) {
   }
   
   return this.save();
+};
+
+// Method to calculate and set points for task completion
+taskSchema.methods.calculatePoints = function() {
+  if (this.status !== 'completed' || !this.completedDate || !this.dueDate) {
+    return { points: 0, reason: 'not_completed' };
+  }
+  
+  const isOnTime = this.completedDate <= this.dueDate;
+  const points = isOnTime ? 1 : -1;
+  const reason = isOnTime ? 'task_completed_on_time' : 'task_overdue';
+  
+  this.pointsAwarded = points;
+  this.completionStatus = isOnTime ? 'on-time' : 'overdue';
+  
+  return { points, reason };
 };
 
 // Pre-save middleware to update milestone progress when task status changes

@@ -1,4 +1,4 @@
-import { apiRequest, tokenUtils, employeeStorage } from './baseApiService';
+import { apiRequest, tokenUtils, employeeStorage } from './employeeBaseApiService';
 
 // Employee Authentication Service - Only for login/logout functionality
 export const employeeAuthService = {

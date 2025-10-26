@@ -370,6 +370,11 @@ class SocketService {
     }
   }
 
+  // Emit event to employee (alias for emitToUser)
+  emitToEmployee(employeeId, event, data) {
+    this.emitToUser(employeeId, event, data);
+  }
+
   // Emit event to all connected users
   emitToAll(event, data) {
     if (this.io) {

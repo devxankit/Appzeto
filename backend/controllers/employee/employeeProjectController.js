@@ -58,7 +58,10 @@ const getEmployeeProjectById = asyncHandler(async (req, res, next) => {
       path: 'milestones',
       populate: {
         path: 'tasks',
-        match: { assignedTo: employeeId }
+        populate: {
+          path: 'assignedTo',
+          select: 'name email department'
+        }
       }
     });
 
@@ -66,9 +69,29 @@ const getEmployeeProjectById = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Project not found or you are not assigned to this project', 404));
   }
 
+  // Calculate employee's task count per milestone
+  const milestonesWithEmployeeTasks = project.milestones.map(milestone => {
+    const employeeTasks = milestone.tasks.filter(task => 
+      task.assignedTo.some(assignee => assignee._id.toString() === employeeId)
+    );
+    const employeeCompletedTasks = employeeTasks.filter(task => task.status === 'completed').length;
+    
+    return {
+      ...milestone.toObject(),
+      employeeTasks: employeeTasks.length,
+      employeeCompletedTasks,
+      employeeProgress: employeeTasks.length > 0 
+        ? Math.round((employeeCompletedTasks / employeeTasks.length) * 100) 
+        : 0
+    };
+  });
+
   res.json({
     success: true,
-    data: project
+    data: {
+      ...project.toObject(),
+      milestones: milestonesWithEmployeeTasks
+    }
   });
 });
 
@@ -91,13 +114,34 @@ const getEmployeeProjectMilestones = asyncHandler(async (req, res, next) => {
   const milestones = await Milestone.find({ project: req.params.id })
     .populate({
       path: 'tasks',
-      match: { assignedTo: employeeId }
+      populate: {
+        path: 'assignedTo',
+        select: 'name email department'
+      }
     })
+    .populate('assignedTo', 'name email position department')
     .sort({ sequence: 1 });
+
+  // Add employee task counts and progress to each milestone
+  const milestonesWithEmployeeData = milestones.map(milestone => {
+    const employeeTasks = milestone.tasks.filter(task => 
+      task.assignedTo.some(assignee => assignee._id.toString() === employeeId)
+    );
+    const employeeCompletedTasks = employeeTasks.filter(task => task.status === 'completed').length;
+    
+    return {
+      ...milestone.toObject(),
+      employeeTasks: employeeTasks.length,
+      employeeCompletedTasks,
+      employeeProgress: employeeTasks.length > 0 
+        ? Math.round((employeeCompletedTasks / employeeTasks.length) * 100) 
+        : 0
+    };
+  });
 
   res.json({
     success: true,
-    data: milestones
+    data: milestonesWithEmployeeData
   });
 });
 
