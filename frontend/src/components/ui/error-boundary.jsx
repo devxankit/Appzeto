@@ -1,4 +1,6 @@
 import React from 'react'
+import { DotLottieReact } from '@lottiefiles/dotlottie-react'
+import animationUrl from '../../assets/animations/505 Error.json?url'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -17,35 +19,41 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
-            <div className="flex items-center mb-4">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                  <span className="text-red-600 text-sm font-medium">!</span>
-                </div>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-lg font-medium text-gray-900">Something went wrong</h3>
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4">
+          <div className="max-w-2xl w-full text-center">
+            
+            {/* Lottie Animation */}
+            <div className="flex justify-center mb-8">
+              <div className="w-64 h-64 md:w-80 md:h-80">
+                <DotLottieReact
+                  src={animationUrl}
+                  loop
+                  autoplay
+                  className="w-full h-full"
+                />
               </div>
             </div>
-            <div className="mb-4">
-              <p className="text-sm text-gray-600">
-                An unexpected error occurred. Please try refreshing the page.
-              </p>
-            </div>
-            <div className="flex space-x-3">
+
+            {/* Refresh Button */}
+            <div className="flex justify-center">
               <button
                 onClick={() => window.location.reload()}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-blue-300"
               >
-                Refresh Page
-              </button>
-              <button
-                onClick={() => this.setState({ hasError: false, error: null })}
-                className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
-              >
-                Try Again
+                <svg 
+                  className="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-300" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+                  />
+                </svg>
+                Refresh
               </button>
             </div>
           </div>
