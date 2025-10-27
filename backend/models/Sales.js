@@ -111,6 +111,16 @@ const salesSchema = new mongoose.Schema({
   clientsManaged: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Client'
+  }],
+  // Incentive management fields
+  currentIncentive: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  incentiveHistory: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Incentive'
   }]
 }, {
   timestamps: true

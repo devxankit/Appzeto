@@ -13,6 +13,9 @@ export { default as adminProjectService } from './adminProjectService';
 // Finance Management Service
 export { default as adminFinanceService } from './adminFinanceService';
 
+// Sales Management Service
+export { default as adminSalesService } from './adminSalesService';
+
 // Base API Service (for internal use)
 export { default as baseApiService } from './baseApiService';
 

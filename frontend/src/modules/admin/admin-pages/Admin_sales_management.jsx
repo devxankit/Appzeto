@@ -20,6 +20,7 @@ import {
   FiMail,
   FiCheckCircle,
   FiAlertCircle,
+  FiAlertTriangle,
   FiClock,
   FiStar,
   FiBarChart,
@@ -32,8 +33,20 @@ import {
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
+import { useToast } from '../../../contexts/ToastContext'
+import { adminSalesService } from '../admin-services'
 
 const Admin_sales_management = () => {
+  // Toast context
+  const { toast } = useToast()
+  
+  // Helper function to safely render values (prevent object rendering)
+  const safeRender = (value, fallback = '') => {
+    if (value === null || value === undefined) return fallback
+    if (typeof value === 'object') return fallback
+    return String(value)
+  }
+  
   // State management
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('leads')
@@ -41,6 +54,27 @@ const Admin_sales_management = () => {
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(12)
+  
+  // Data states (replacing mock data)
+  const [statistics, setStatistics] = useState(null)
+  const [leadCategories, setLeadCategories] = useState([])
+  const [leads, setLeads] = useState([])
+  const [allLeads, setAllLeads] = useState([]) // All leads for statistics
+  const [assignedLeads, setAssignedLeads] = useState([]) // Assigned leads for category performance
+  const [salesTeam, setSalesTeam] = useState([])
+  const [clients, setClients] = useState([])
+  
+  // Loading states for different data types
+  const [loadingStatistics, setLoadingStatistics] = useState(false)
+  const [loadingCategories, setLoadingCategories] = useState(false)
+  const [loadingLeads, setLoadingLeads] = useState(false)
+  const [loadingSalesTeam, setLoadingSalesTeam] = useState(false)
+  const [loadingClients, setLoadingClients] = useState(false)
+  const [creatingCategory, setCreatingCategory] = useState(false)
+  const [deletingCategory, setDeletingCategory] = useState(false)
+  const [loadingTarget, setLoadingTarget] = useState(false)
+  const [loadingIncentive, setLoadingIncentive] = useState(false)
+  const [deletingMember, setDeletingMember] = useState(false)
   
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -55,6 +89,7 @@ const Admin_sales_management = () => {
   const [showIncentiveModal, setShowIncentiveModal] = useState(false)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showCategoryEditModal, setShowCategoryEditModal] = useState(false)
+  const [showCategoryDeleteModal, setShowCategoryDeleteModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [modalType, setModalType] = useState('')
   const [selectedLeadCategory, setSelectedLeadCategory] = useState('')
@@ -67,6 +102,7 @@ const Admin_sales_management = () => {
   const [targetAmount, setTargetAmount] = useState('')
   const [leadsToAssign, setLeadsToAssign] = useState('')
   const [incentiveAmount, setIncentiveAmount] = useState('')
+  const [distributingLeads, setDistributingLeads] = useState(false)
   const [categoryName, setCategoryName] = useState('')
   const [categoryDescription, setCategoryDescription] = useState('')
   const [categoryColor, setCategoryColor] = useState('#3B82F6')
@@ -74,1204 +110,194 @@ const Admin_sales_management = () => {
   const [assignCategoryFilter, setAssignCategoryFilter] = useState('all')
   const [leadsPerCategory, setLeadsPerCategory] = useState({})
 
-  // Mock statistics data
-  const [statistics] = useState({
-    leads: {
-      total: 1247,
-      new: 89,
-      connected: 156,
-      converted: 234,
-      hot: 23
-    },
-    sales: {
-      total: 2450000,
-      thisMonth: 180000,
-      target: 3000000,
-      conversion: 12.5
-    },
-    earnings: {
-      total: 1980000,
-      collected: 1650000,
-      pending: 330000,
-      thisMonth: 145000
-    },
-    team: {
-      total: 8,
-      active: 7,
-      performance: 87.5,
-      topPerformer: 'Sarah Wilson'
-    },
-    clients: {
-      total: 342,
-      active: 298,
-      new: 24,
-      retention: 94.2
+  // Data loading functions
+  const loadStatistics = async () => {
+    try {
+      setLoadingStatistics(true)
+      const response = await adminSalesService.getSalesOverview('all')
+      
+      if (response.success) {
+        setStatistics(response.data)
+      }
+    } catch (error) {
+      console.error('Error loading statistics:', error)
+      toast.error('Failed to load statistics')
+    } finally {
+      setLoadingStatistics(false)
     }
-  })
+  }
 
-  // Mock data for different entities
-  const [leads, setLeads] = useState([
-    {
-      id: 1,
-      name: 'Lead 1',
-      company: 'Unknown Company',
-      phone: '+91 9876543210',
-      email: 'lead1@example.com',
-      status: 'hot',
-      priority: 'high',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-20',
-      nextFollowUp: '2024-01-27',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 2,
-      name: 'Lead 2',
-      company: 'Unknown Company',
-      phone: '+91 9876543211',
-      email: 'lead2@example.com',
-      status: 'connected',
-      priority: 'medium',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-20',
-      nextFollowUp: '2024-01-27',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 3,
-      name: 'Lead 3',
-      company: 'Unknown Company',
-      phone: '+91 9876543212',
-      email: 'lead3@example.com',
-      status: 'new',
-      priority: 'medium',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-20',
-      nextFollowUp: '2024-01-27',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 4,
-      name: 'Lead 4',
-      company: 'Unknown Company',
-      phone: '+91 9876543213',
-      email: 'lead4@example.com',
-      status: 'converted',
-      priority: 'high',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-19',
-      nextFollowUp: '2024-01-26',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 5,
-      name: 'Lead 5',
-      company: 'Unknown Company',
-      phone: '+91 9876543214',
-      email: 'lead5@example.com',
-      status: 'lost',
-      priority: 'low',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-19',
-      nextFollowUp: '2024-01-26',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 5,
-      category: 'SME'
-    },
-    {
-      id: 6,
-      name: 'Lead 6',
-      company: 'Unknown Company',
-      phone: '+91 9876543215',
-      email: 'lead6@example.com',
-      status: 'hot',
-      priority: 'high',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-18',
-      nextFollowUp: '2024-01-25',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 7,
-      name: 'Lead 7',
-      company: 'Unknown Company',
-      phone: '+91 9876543216',
-      email: 'lead7@example.com',
-      status: 'connected',
-      priority: 'medium',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-18',
-      nextFollowUp: '2024-01-25',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 8,
-      name: 'Lead 8',
-      company: 'Unknown Company',
-      phone: '+91 9876543217',
-      email: 'lead8@example.com',
-      status: 'new',
-      priority: 'medium',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-17',
-      nextFollowUp: '2024-01-24',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 9,
-      name: 'Lead 9',
-      company: 'Unknown Company',
-      phone: '+91 9876543218',
-      email: 'lead9@example.com',
-      status: 'converted',
-      priority: 'high',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-17',
-      nextFollowUp: '2024-01-24',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 10,
-      name: 'Lead 10',
-      company: 'Unknown Company',
-      phone: '+91 9876543219',
-      email: 'lead10@example.com',
-      status: 'lost',
-      priority: 'low',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-16',
-      nextFollowUp: '2024-01-23',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 5,
-      category: 'SME'
-    },
-    {
-      id: 11,
-      name: 'Lead 11',
-      company: 'Unknown Company',
-      phone: '+91 9876543220',
-      email: 'lead11@example.com',
-      status: 'hot',
-      priority: 'high',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-16',
-      nextFollowUp: '2024-01-23',
-      assignedTo: 'Michael Chen',
-      notes: 'Bulk uploaded lead',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 12,
-      name: 'Lead 12',
-      company: 'Unknown Company',
-      phone: '+91 9876543221',
-      email: 'lead12@example.com',
-      status: 'connected',
-      priority: 'medium',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-15',
-      nextFollowUp: '2024-01-22',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 13,
-      name: 'Lead 13',
-      company: 'Unknown Company',
-      phone: '+91 9876543222',
-      email: 'lead13@example.com',
-      status: 'new',
-      priority: 'medium',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-15',
-      nextFollowUp: '2024-01-22',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 14,
-      name: 'Lead 14',
-      company: 'Unknown Company',
-      phone: '+91 9876543223',
-      email: 'lead14@example.com',
-      status: 'converted',
-      priority: 'high',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-14',
-      nextFollowUp: '2024-01-21',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 15,
-      name: 'Lead 15',
-      company: 'Unknown Company',
-      phone: '+91 9876543224',
-      email: 'lead15@example.com',
-      status: 'lost',
-      priority: 'low',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-14',
-      nextFollowUp: '2024-01-21',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 5,
-      category: 'SME'
-    },
-    {
-      id: 16,
-      name: 'Lead 16',
-      company: 'Unknown Company',
-      phone: '+91 9876543225',
-      email: 'lead16@example.com',
-      status: 'hot',
-      priority: 'high',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-13',
-      nextFollowUp: '2024-01-20',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 17,
-      name: 'Lead 17',
-      company: 'Unknown Company',
-      phone: '+91 9876543226',
-      email: 'lead17@example.com',
-      status: 'connected',
-      priority: 'medium',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-13',
-      nextFollowUp: '2024-01-20',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 18,
-      name: 'Lead 18',
-      company: 'Unknown Company',
-      phone: '+91 9876543227',
-      email: 'lead18@example.com',
-      status: 'new',
-      priority: 'medium',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-12',
-      nextFollowUp: '2024-01-19',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 19,
-      name: 'Lead 19',
-      company: 'Unknown Company',
-      phone: '+91 9876543228',
-      email: 'lead19@example.com',
-      status: 'converted',
-      priority: 'high',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-12',
-      nextFollowUp: '2024-01-19',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 20,
-      name: 'Lead 20',
-      company: 'Unknown Company',
-      phone: '+91 9876543229',
-      email: 'lead20@example.com',
-      status: 'lost',
-      priority: 'low',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-11',
-      nextFollowUp: '2024-01-18',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 5,
-      category: 'SME'
-    },
-    {
-      id: 21,
-      name: 'Lead 21',
-      company: 'Unknown Company',
-      phone: '+91 9876543230',
-      email: 'lead21@example.com',
-      status: 'hot',
-      priority: 'high',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-11',
-      nextFollowUp: '2024-01-18',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 22,
-      name: 'Lead 22',
-      company: 'Unknown Company',
-      phone: '+91 9876543231',
-      email: 'lead22@example.com',
-      status: 'connected',
-      priority: 'medium',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-10',
-      nextFollowUp: '2024-01-17',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 23,
-      name: 'Lead 23',
-      company: 'Unknown Company',
-      phone: '+91 9876543232',
-      email: 'lead23@example.com',
-      status: 'new',
-      priority: 'medium',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-10',
-      nextFollowUp: '2024-01-17',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 24,
-      name: 'Lead 24',
-      company: 'Unknown Company',
-      phone: '+91 9876543233',
-      email: 'lead24@example.com',
-      status: 'converted',
-      priority: 'high',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-09',
-      nextFollowUp: '2024-01-16',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 25,
-      name: 'Lead 25',
-      company: 'Unknown Company',
-      phone: '+91 9876543234',
-      email: 'lead25@example.com',
-      status: 'lost',
-      priority: 'low',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-09',
-      nextFollowUp: '2024-01-16',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 5,
-      category: 'SME'
-    },
-    {
-      id: 26,
-      name: 'Lead 26',
-      company: 'Unknown Company',
-      phone: '+91 9876543235',
-      email: 'lead26@example.com',
-      status: 'hot',
-      priority: 'high',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-08',
-      nextFollowUp: '2024-01-15',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 27,
-      name: 'Lead 27',
-      company: 'Unknown Company',
-      phone: '+91 9876543236',
-      email: 'lead27@example.com',
-      status: 'connected',
-      priority: 'medium',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-08',
-      nextFollowUp: '2024-01-15',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 28,
-      name: 'Lead 28',
-      company: 'Unknown Company',
-      phone: '+91 9876543237',
-      email: 'lead28@example.com',
-      status: 'new',
-      priority: 'medium',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-07',
-      nextFollowUp: '2024-01-14',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 29,
-      name: 'Lead 29',
-      company: 'Unknown Company',
-      phone: '+91 9876543238',
-      email: 'lead29@example.com',
-      status: 'converted',
-      priority: 'high',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-07',
-      nextFollowUp: '2024-01-14',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 30,
-      name: 'Lead 30',
-      company: 'Unknown Company',
-      phone: '+91 9876543239',
-      email: 'lead30@example.com',
-      status: 'lost',
-      priority: 'low',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-06',
-      nextFollowUp: '2024-01-13',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 5,
-      category: 'SME'
-    },
-    {
-      id: 31,
-      name: 'Lead 31',
-      company: 'Unknown Company',
-      phone: '+91 9876543240',
-      email: 'lead31@example.com',
-      status: 'hot',
-      priority: 'high',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-06',
-      nextFollowUp: '2024-01-13',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 32,
-      name: 'Lead 32',
-      company: 'Unknown Company',
-      phone: '+91 9876543241',
-      email: 'lead32@example.com',
-      status: 'connected',
-      priority: 'medium',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-05',
-      nextFollowUp: '2024-01-12',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 33,
-      name: 'Lead 33',
-      company: 'Unknown Company',
-      phone: '+91 9876543242',
-      email: 'lead33@example.com',
-      status: 'new',
-      priority: 'medium',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-05',
-      nextFollowUp: '2024-01-12',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 34,
-      name: 'Lead 34',
-      company: 'Unknown Company',
-      phone: '+91 9876543243',
-      email: 'lead34@example.com',
-      status: 'converted',
-      priority: 'high',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-04',
-      nextFollowUp: '2024-01-11',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 35,
-      name: 'Lead 35',
-      company: 'Unknown Company',
-      phone: '+91 9876543244',
-      email: 'lead35@example.com',
-      status: 'lost',
-      priority: 'low',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-04',
-      nextFollowUp: '2024-01-11',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 5,
-      category: 'SME'
-    },
-    {
-      id: 36,
-      name: 'Lead 36',
-      company: 'Unknown Company',
-      phone: '+91 9876543245',
-      email: 'lead36@example.com',
-      status: 'hot',
-      priority: 'high',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-03',
-      nextFollowUp: '2024-01-10',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 37,
-      name: 'Lead 37',
-      company: 'Unknown Company',
-      phone: '+91 9876543246',
-      email: 'lead37@example.com',
-      status: 'connected',
-      priority: 'medium',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-03',
-      nextFollowUp: '2024-01-10',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 38,
-      name: 'Lead 38',
-      company: 'Unknown Company',
-      phone: '+91 9876543247',
-      email: 'lead38@example.com',
-      status: 'new',
-      priority: 'medium',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-02',
-      nextFollowUp: '2024-01-09',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 39,
-      name: 'Lead 39',
-      company: 'Unknown Company',
-      phone: '+91 9876543248',
-      email: 'lead39@example.com',
-      status: 'converted',
-      priority: 'high',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-02',
-      nextFollowUp: '2024-01-09',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 40,
-      name: 'Lead 40',
-      company: 'Unknown Company',
-      phone: '+91 9876543249',
-      email: 'lead40@example.com',
-      status: 'lost',
-      priority: 'low',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2024-01-01',
-      nextFollowUp: '2024-01-08',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 5,
-      category: 'SME'
-    },
-    {
-      id: 41,
-      name: 'Lead 41',
-      company: 'Unknown Company',
-      phone: '+91 9876543250',
-      email: 'lead41@example.com',
-      status: 'hot',
-      priority: 'high',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2024-01-01',
-      nextFollowUp: '2024-01-08',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 42,
-      name: 'Lead 42',
-      company: 'Unknown Company',
-      phone: '+91 9876543251',
-      email: 'lead42@example.com',
-      status: 'connected',
-      priority: 'medium',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2023-12-31',
-      nextFollowUp: '2024-01-07',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 43,
-      name: 'Lead 43',
-      company: 'Unknown Company',
-      phone: '+91 9876543252',
-      email: 'lead43@example.com',
-      status: 'new',
-      priority: 'medium',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2023-12-31',
-      nextFollowUp: '2024-01-07',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 44,
-      name: 'Lead 44',
-      company: 'Unknown Company',
-      phone: '+91 9876543253',
-      email: 'lead44@example.com',
-      status: 'converted',
-      priority: 'high',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2023-12-30',
-      nextFollowUp: '2024-01-06',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 45,
-      name: 'Lead 45',
-      company: 'Unknown Company',
-      phone: '+91 9876543254',
-      email: 'lead45@example.com',
-      status: 'lost',
-      priority: 'low',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2023-12-30',
-      nextFollowUp: '2024-01-06',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 5,
-      category: 'SME'
-    },
-    {
-      id: 46,
-      name: 'Lead 46',
-      company: 'Unknown Company',
-      phone: '+91 9876543255',
-      email: 'lead46@example.com',
-      status: 'hot',
-      priority: 'high',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2023-12-29',
-      nextFollowUp: '2024-01-05',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 47,
-      name: 'Lead 47',
-      company: 'Unknown Company',
-      phone: '+91 9876543256',
-      email: 'lead47@example.com',
-      status: 'connected',
-      priority: 'medium',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2023-12-29',
-      nextFollowUp: '2024-01-05',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 48,
-      name: 'Lead 48',
-      company: 'Unknown Company',
-      phone: '+91 9876543257',
-      email: 'lead48@example.com',
-      status: 'new',
-      priority: 'medium',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2023-12-28',
-      nextFollowUp: '2024-01-04',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 49,
-      name: 'Lead 49',
-      company: 'Unknown Company',
-      phone: '+91 9876543258',
-      email: 'lead49@example.com',
-      status: 'converted',
-      priority: 'high',
-      source: 'bulk_upload',
-      value: 25000,
-      lastContact: '2023-12-28',
-      nextFollowUp: '2024-01-04',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Bulk uploaded lead',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 50,
-      name: 'Lead 50',
-      company: 'Unknown Company',
-      phone: '+91 9876543259',
-      email: 'lead50@example.com',
-      status: 'lost',
-      priority: 'low',
-      source: 'manual',
-      value: 25000,
-      lastContact: '2023-12-27',
-      nextFollowUp: '2024-01-03',
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: 5,
-      category: 'SME'
+  const loadCategories = async () => {
+    try {
+      setLoadingCategories(true)
+      const response = await adminSalesService.getAllLeadCategories()
+      if (response.success) {
+        setLeadCategories(response.data)
+      }
+    } catch (error) {
+      console.error('Error loading categories:', error)
+      toast.error('Failed to load categories')
+    } finally {
+      setLoadingCategories(false)
     }
-  ])
+  }
 
-  // Mock data for lead categories
-  const [leadCategories, setLeadCategories] = useState([
-    {
-      id: 1,
-      name: 'Hot Leads',
-      description: 'High priority leads with immediate potential',
-      color: '#EF4444',
-      icon: '🔥',
-      createdAt: '2024-01-01',
-      leadCount: 10
-    },
-    {
-      id: 2,
-      name: 'Cold Leads',
-      description: 'Leads that need nurturing and follow-up',
-      color: '#3B82F6',
-      icon: '❄️',
-      createdAt: '2024-01-01',
-      leadCount: 10
-    },
-    {
-      id: 3,
-      name: 'Warm Leads',
-      description: 'Leads showing interest but not ready to convert',
-      color: '#F59E0B',
-      icon: '🌡️',
-      createdAt: '2024-01-01',
-      leadCount: 10
-    },
-    {
-      id: 4,
-      name: 'Enterprise',
-      description: 'Large enterprise clients and prospects',
-      color: '#8B5CF6',
-      icon: '🏢',
-      createdAt: '2024-01-01',
-      leadCount: 10
-    },
-    {
-      id: 5,
-      name: 'SME',
-      description: 'Small and medium enterprise prospects',
-      color: '#10B981',
-      icon: '🏪',
-      createdAt: '2024-01-01',
-      leadCount: 10
+  const loadLeads = async () => {
+    try {
+      setLoadingLeads(true)
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage,
+        search: searchTerm,
+        status: selectedFilter !== 'all' ? selectedFilter : undefined,
+        assignedTo: 'unassigned' // Only show unassigned leads for admin
+      }
+      
+      const response = await adminSalesService.getAllLeads(params)
+      
+      if (response.success) {
+        setLeads(response.data)
+      }
+    } catch (error) {
+      console.error('Error loading leads:', error)
+      toast.error('Failed to load leads')
+    } finally {
+      setLoadingLeads(false)
     }
-  ])
+  }
 
-  const [salesTeam, setSalesTeam] = useState([
-    {
-      id: 1,
-      name: 'Sarah Wilson',
-      email: 'sarah.wilson@company.com',
-      phone: '+91 98765 43210',
-      department: 'Sales',
-      position: 'Senior Sales Manager',
-      status: 'active',
-      performance: 95,
-      leadsCount: 25,
-      convertedCount: 18,
-      revenue: 450000,
-      target: 500000,
-      incentive: 45000,
-      joinDate: '2022-03-15',
-      lastActivity: '2024-01-20',
-      avatar: 'SW',
-      leadBreakdown: {
-        new: 5,
-        contacted: 8,
-        notPicked: 3,
-        todayFollowUp: 2,
-        quotationSent: 4,
-        dqSent: 3,
-        appClient: 2,
-        web: 1,
-        converted: 18,
-        lost: 7,
-        notInterested: 4,
-        hotLead: 6,
-        demoSent: 5,
-        app: 3,
-        taxi: 1
+  // Load all leads for statistics (both assigned and unassigned)
+  const loadAllLeads = async () => {
+    try {
+      const params = {
+        page: 1,
+        limit: 1000, // Load more leads for statistics
+        search: searchTerm,
+        status: selectedFilter !== 'all' ? selectedFilter : undefined
+        // No assignedTo filter - get ALL leads
       }
-    },
-    {
-      id: 2,
-      name: 'Mike Chen',
-      email: 'mike.chen@company.com',
-      phone: '+91 98765 43211',
-      department: 'Sales',
-      position: 'Sales Representative',
-      status: 'active',
-      performance: 87,
-      leadsCount: 20,
-      convertedCount: 14,
-      revenue: 320000,
-      target: 400000,
-      incentive: 32000,
-      joinDate: '2023-01-10',
-      lastActivity: '2024-01-19',
-      avatar: 'MC',
-      leadBreakdown: {
-        new: 3,
-        contacted: 6,
-        notPicked: 2,
-        todayFollowUp: 1,
-        quotationSent: 3,
-        dqSent: 2,
-        appClient: 1,
-        web: 0,
-        converted: 14,
-        lost: 5,
-        notInterested: 3,
-        hotLead: 4,
-        demoSent: 3,
-        app: 2,
-        taxi: 0
+      
+      
+      const response = await adminSalesService.getAllLeads(params)
+      
+      
+      if (response.success) {
+        setAllLeads(response.data)
       }
-    },
-    {
-      id: 3,
-      name: 'Lisa Anderson',
-      email: 'lisa.anderson@company.com',
-      phone: '+91 98765 43212',
-      department: 'Sales',
-      position: 'Sales Director',
-      status: 'active',
-      performance: 92,
-      leadsCount: 30,
-      convertedCount: 22,
-      revenue: 580000,
-      target: 600000,
-      incentive: 58000,
-      joinDate: '2021-08-20',
-      lastActivity: '2024-01-20',
-      avatar: 'LA',
-      leadBreakdown: {
-        new: 8,
-        contacted: 10,
-        notPicked: 4,
-        todayFollowUp: 3,
-        quotationSent: 6,
-        dqSent: 4,
-        appClient: 3,
-        web: 2,
-        converted: 22,
-        lost: 8,
-        notInterested: 5,
-        hotLead: 7,
-        demoSent: 6,
-        app: 4,
-        taxi: 2
-      }
-    },
-    {
-      id: 4,
-      name: 'David Rodriguez',
-      email: 'david.rodriguez@company.com',
-      phone: '+91 98765 43213',
-      department: 'Sales',
-      position: 'Sales Representative',
-      status: 'inactive',
-      performance: 78,
-      leadsCount: 15,
-      convertedCount: 10,
-      revenue: 240000,
-      target: 300000,
-      incentive: 24000,
-      joinDate: '2023-06-05',
-      lastActivity: '2024-01-15',
-      avatar: 'DR',
-      leadBreakdown: {
-        new: 2,
-        contacted: 4,
-        notPicked: 3,
-        todayFollowUp: 1,
-        quotationSent: 2,
-        dqSent: 1,
-        appClient: 1,
-        web: 0,
-        converted: 10,
-        lost: 5,
-        notInterested: 2,
-        hotLead: 3,
-        demoSent: 2,
-        app: 1,
-        taxi: 0
-      }
-    },
-    {
-      id: 5,
-      name: 'Emily Johnson',
-      email: 'emily.johnson@company.com',
-      phone: '+91 98765 43214',
-      department: 'Sales',
-      position: 'Sales Manager',
-      status: 'active',
-      performance: 89,
-      leadsCount: 22,
-      convertedCount: 16,
-      revenue: 380000,
-      target: 450000,
-      incentive: 38000,
-      joinDate: '2022-11-12',
-      lastActivity: '2024-01-18',
-      avatar: 'EJ',
-      leadBreakdown: {
-        new: 4,
-        contacted: 7,
-        notPicked: 2,
-        todayFollowUp: 2,
-        quotationSent: 3,
-        dqSent: 2,
-        appClient: 2,
-        web: 1,
-        converted: 16,
-        lost: 6,
-        notInterested: 3,
-        hotLead: 5,
-        demoSent: 4,
-        app: 2,
-        taxi: 1
-      }
+    } catch (error) {
+      console.error('Error loading all leads:', error)
+      // Don't show toast error for this as it's background loading
     }
-  ])
+  }
 
-  const [clients, setClients] = useState([
-    {
-      id: 1,
-      name: 'Tech Solutions Inc.',
-      contactPerson: 'John Smith',
-      email: 'john@techsolutions.com',
-      phone: '+91 98765 43220',
-      status: 'active',
-      totalSpent: 125000,
-      projectsCompleted: 3,
-      lastContact: '2024-01-15',
-      joinDate: '2023-05-10',
-      industry: 'Technology',
-      location: 'Mumbai',
-      avatar: 'TS'
-    },
-    {
-      id: 2,
-      name: 'Digital Marketing Pro',
-      contactPerson: 'Emily Johnson',
-      email: 'emily@digitalpro.com',
-      phone: '+91 98765 43221',
-      status: 'active',
-      totalSpent: 85000,
-      projectsCompleted: 2,
-      lastContact: '2024-01-18',
-      joinDate: '2023-08-15',
-      industry: 'Marketing',
-      location: 'Delhi',
-      avatar: 'DM'
-    },
-    {
-      id: 3,
-      name: 'E-commerce Store',
-      contactPerson: 'Robert Davis',
-      email: 'robert@estore.com',
-      phone: '+91 98765 43222',
-      status: 'inactive',
-      totalSpent: 45000,
-      projectsCompleted: 1,
-      lastContact: '2023-12-20',
-      joinDate: '2023-10-05',
-      industry: 'Retail',
-      location: 'Bangalore',
-      avatar: 'ES'
-    },
-    {
-      id: 4,
-      name: 'Healthcare Systems',
-      contactPerson: 'Dr. Sarah Wilson',
-      email: 'sarah@healthcare.com',
-      phone: '+91 98765 43223',
-      status: 'active',
-      totalSpent: 200000,
-      projectsCompleted: 4,
-      lastContact: '2024-01-20',
-      joinDate: '2022-12-01',
-      industry: 'Healthcare',
-      location: 'Chennai',
-      avatar: 'HS'
-    },
-    {
-      id: 5,
-      name: 'Finance Corp',
-      contactPerson: 'Michael Brown',
-      email: 'michael@financecorp.com',
-      phone: '+91 98765 43224',
-      status: 'active',
-      totalSpent: 150000,
-      projectsCompleted: 2,
-      lastContact: '2024-01-19',
-      joinDate: '2023-03-20',
-      industry: 'Finance',
-      location: 'Pune',
-      avatar: 'FC'
+  // Load assigned leads for category performance (leads being worked on by sales employees)
+  const loadAssignedLeads = async () => {
+    try {
+      const params = {
+        page: 1,
+        limit: 1000, // Load more leads for statistics
+        search: searchTerm,
+        status: selectedFilter !== 'all' ? selectedFilter : undefined,
+        assignedTo: 'assigned' // Only get assigned leads
+      }
+      
+      
+      const response = await adminSalesService.getAllLeads(params)
+      
+      
+      if (response.success) {
+        setAssignedLeads(response.data)
+      }
+    } catch (error) {
+      console.error('Error loading assigned leads:', error)
+      // Don't show toast error for this as it's background loading
     }
-  ])
+  }
+
+  const loadSalesTeam = async () => {
+    try {
+      setLoadingSalesTeam(true)
+      const response = await adminSalesService.getAllSalesTeam()
+      
+      
+      if (response.success) {
+        setSalesTeam(response.data)
+      }
+    } catch (error) {
+      console.error('Error loading sales team:', error)
+      toast.error('Failed to load sales team')
+    } finally {
+      setLoadingSalesTeam(false)
+    }
+  }
+
+  const loadClients = async () => {
+    try {
+      setLoadingClients(true)
+      const response = await adminSalesService.getAllClients()
+      if (response.success) {
+        setClients(response.data)
+      }
+    } catch (error) {
+      console.error('Error loading clients:', error)
+      toast.error('Failed to load clients')
+    } finally {
+      setLoadingClients(false)
+    }
+  }
+
+  // Initial data load
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true)
+      try {
+        await Promise.all([
+          loadStatistics(),
+          loadCategories(),
+          loadLeads(),
+          loadAllLeads(), // Load all leads for statistics
+          loadAssignedLeads() // Load assigned leads for category performance
+        ])
+      } catch (error) {
+        console.error('Error loading initial data:', error)
+        toast.error('Failed to load initial data')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadInitialData()
+  }, [])
+
+  // Load leads when filters change
+  useEffect(() => {
+    if (!loading) {
+      loadLeads()
+    }
+  }, [currentPage, searchTerm, selectedFilter])
+
+  // Load sales team when switching to sales team tab
+  useEffect(() => {
+    if (activeTab === 'sales-team' && salesTeam.length === 0) {
+      loadSalesTeam()
+    }
+  }, [activeTab])
+
+  // Load clients when switching to clients tab
+  useEffect(() => {
+    if (activeTab === 'clients' && clients.length === 0) {
+      loadClients()
+    }
+  }, [activeTab])
+
+ 
+  
+
 
   // Category Performance Calculations
   const categoryPerformance = useMemo(() => {
-    return leadCategories.map(category => {
-      const categoryLeads = leads.filter(lead => lead.categoryId === category.id)
+    return leadCategories.map((category, index) => {
+      const categoryLeads = assignedLeads.filter(lead => lead.category && (lead.category._id || lead.category.id) === (category._id || category.id))
       const totalLeads = categoryLeads.length
       
       // Calculate conversion rates based on lead status
@@ -1321,28 +347,57 @@ const Admin_sales_management = () => {
         unassignedLeads: categoryLeads.filter(lead => lead.assignedTo === 'Unassigned').length
       }
     })
-  }, [leads, leadCategories])
+  }, [assignedLeads, leadCategories])
 
   // Overall performance metrics
   const overallPerformance = useMemo(() => {
+    // Total Leads shows unassigned leads (admin's available pool)
     const totalLeads = leads.length
-    const totalConverted = leads.filter(lead => 
+    
+    // Other metrics based on all leads for complete picture
+    const totalConverted = allLeads.filter(lead => 
       lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed'
     ).length
-    const totalRevenue = leads.reduce((sum, lead) => sum + (lead.value || 0), 0)
-    const convertedRevenue = leads
+    const totalRevenue = allLeads.reduce((sum, lead) => sum + (lead.value || 0), 0)
+    const convertedRevenue = allLeads
       .filter(lead => lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed')
       .reduce((sum, lead) => sum + (lead.value || 0), 0)
     
-    return {
-      totalLeads,
-      totalConverted,
-      totalRevenue,
-      convertedRevenue,
+    const result = {
+      totalLeads, // Unassigned leads only (admin's pool)
+      totalConverted, // From all leads
+      totalRevenue, // From all leads
+      convertedRevenue, // From all leads
+      overallConversionRate: allLeads.length > 0 ? Math.round((totalConverted / allLeads.length) * 100 * 100) / 100 : 0,
+      avgDealValue: totalConverted > 0 ? Math.round(convertedRevenue / totalConverted) : 0
+    }
+    
+    return result
+  }, [leads, allLeads])
+
+  // Category Performance metrics (for assigned leads only)
+  const categoryPerformanceMetrics = useMemo(() => {
+    // All metrics based on assigned leads for category performance
+    const totalLeads = assignedLeads.length
+    const totalConverted = assignedLeads.filter(lead => 
+      lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed'
+    ).length
+    const totalRevenue = assignedLeads.reduce((sum, lead) => sum + (lead.value || 0), 0)
+    const convertedRevenue = assignedLeads
+      .filter(lead => lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed')
+      .reduce((sum, lead) => sum + (lead.value || 0), 0)
+    
+    const result = {
+      totalLeads, // Assigned leads only
+      totalConverted, // From assigned leads
+      totalRevenue, // From assigned leads
+      convertedRevenue, // From assigned leads
       overallConversionRate: totalLeads > 0 ? Math.round((totalConverted / totalLeads) * 100 * 100) / 100 : 0,
       avgDealValue: totalConverted > 0 ? Math.round(convertedRevenue / totalConverted) : 0
     }
-  }, [leads])
+    
+    return result
+  }, [assignedLeads])
 
   // Load data function
   const loadData = async () => {
@@ -1391,6 +446,7 @@ const Admin_sales_management = () => {
   }
 
   const formatCurrency = (amount) => {
+    if (!amount || isNaN(amount)) return '₹0'
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -1399,11 +455,25 @@ const Admin_sales_management = () => {
   }
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A'
+    try {
     return new Date(dateString).toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
       year: 'numeric'
     })
+    } catch (error) {
+      return 'N/A'
+    }
+  }
+
+  // Format phone number with +91 prefix
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return 'N/A'
+    // If phone is already formatted with country code, return as is
+    if (phone.startsWith('+')) return phone
+    // Add +91 prefix for Indian numbers
+    return `+91 ${phone}`
   }
 
   // Get current data based on active tab
@@ -1460,7 +530,7 @@ const Admin_sales_management = () => {
       // Handle category filter for leads
       let matchesCategory = true
       if (activeTab === 'leads' && selectedCategory) {
-        matchesCategory = item.categoryId === parseInt(selectedCategory)
+        matchesCategory = item.category && (item.category._id || item.category.id) === selectedCategory
       }
       
       return matchesSearch && matchesFilter && matchesCategory
@@ -1507,19 +577,115 @@ const Admin_sales_management = () => {
     setShowDeleteModal(true)
   }
 
-  const confirmDelete = () => {
-    // Simulate delete operation
-    console.log('Deleting item:', selectedItem)
+  const confirmDelete = async () => {
+    try {
+      if (modalType === 'lead') {
+        const leadId = selectedItem._id || selectedItem.id
+        const response = await adminSalesService.deleteLead(leadId)
+        if (response.success) {
+          toast.success('Lead deleted successfully')
+          await loadLeads() // Refresh leads list
+          await loadAllLeads() // Refresh all leads for statistics
+          await loadAssignedLeads() // Refresh assigned leads for category performance
+          await loadStatistics() // Refresh statistics
+        } else {
+          toast.error(response.message || 'Failed to delete lead')
+        }
+      } else if (modalType === 'category') {
+        const categoryId = selectedItem._id || selectedItem.id
+        const response = await adminSalesService.deleteLeadCategory(categoryId)
+        if (response.success) {
+          toast.success('Category deleted successfully')
+          await loadCategories() // Refresh categories list
+          await loadLeads() // Refresh leads list
+          await loadAllLeads() // Refresh all leads for statistics
+          await loadAssignedLeads() // Refresh assigned leads for category performance
+        } else {
+          toast.error(response.message || 'Failed to delete category')
+        }
+      } else if (modalType === 'sales-team') {
+        setDeletingMember(true)
+        const memberId = selectedItem._id || selectedItem.id
+        const response = await adminSalesService.deleteSalesMember(memberId)
+        if (response.success) {
+          toast.success('Sales team member deleted successfully')
+          await loadSalesTeam() // Refresh sales team list
+          await loadStatistics() // Refresh statistics
+        } else {
+          toast.error(response.message || 'Failed to delete sales team member')
+        }
+        setDeletingMember(false)
+      }
+      
     setShowDeleteModal(false)
     setSelectedItem(null)
+    } catch (error) {
+      console.error('Error deleting item:', error)
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes('not found')) {
+        toast.error('Item not found. It may have been deleted already.')
+      } else if (error.message && error.message.includes('network')) {
+        toast.error('Network error. Please check your connection and try again')
+      } else if (error.message && error.message.includes('unauthorized')) {
+        toast.error('You are not authorized to perform this action')
+      } else {
+        toast.error(error.message || 'Failed to delete item')
+      }
+      
+      setShowDeleteModal(false)
+      setSelectedItem(null)
+      setDeletingMember(false)
+    }
   }
 
-  const handleSave = (formData) => {
-    // Simulate save operation
-    console.log('Saving data:', formData)
+  const handleSave = async (formData) => {
+    try {
+      if (showEditModal && selectedItem) {
+        // Update existing lead
+        const response = await adminSalesService.updateLead(selectedItem._id || selectedItem.id, formData)
+        if (response.success) {
+          toast.success('Lead updated successfully')
+          await loadLeads() // Refresh leads list
+          await loadAllLeads() // Refresh all leads for statistics
+          await loadAssignedLeads() // Refresh assigned leads for category performance
+          await loadStatistics() // Refresh statistics
+        } else {
+          toast.error(response.message || 'Failed to update lead')
+        }
+      } else {
+        // Create new lead
+        const response = await adminSalesService.createLead(formData)
+        if (response.success) {
+          toast.success('Lead created successfully')
+          await loadLeads() // Refresh leads list
+          await loadAllLeads() // Refresh all leads for statistics
+          await loadAssignedLeads() // Refresh assigned leads for category performance
+          await loadStatistics() // Refresh statistics
+        } else {
+          toast.error(response.message || 'Failed to create lead')
+        }
+      }
+      
     setShowCreateModal(false)
     setShowEditModal(false)
     setSelectedItem(null)
+    } catch (error) {
+      console.error('Error saving lead:', error)
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes('already exists')) {
+        toast.error('A lead with this phone number already exists')
+      } else if (error.message && error.message.includes('validation')) {
+        toast.error('Please check your input and try again')
+      } else if (error.message && error.message.includes('network')) {
+        toast.error('Network error. Please check your connection and try again')
+      } else if (error.message && error.message.includes('unauthorized')) {
+        toast.error('You are not authorized to perform this action')
+      } else {
+        toast.error(error.message || 'Failed to save lead. Please try again')
+      }
+    }
   }
 
   const closeModals = () => {
@@ -1535,6 +701,7 @@ const Admin_sales_management = () => {
     setShowIncentiveModal(false)
     setShowCategoryModal(false)
     setShowCategoryEditModal(false)
+    setShowCategoryDeleteModal(false)
     setSelectedItem(null)
     setLeadNumber('')
     setUploadedFile(null)
@@ -1542,6 +709,10 @@ const Admin_sales_management = () => {
     setTargetAmount('')
     setLeadsToAssign('')
     setIncentiveAmount('')
+    setDistributingLeads(false)
+    setLoadingTarget(false)
+    setLoadingIncentive(false)
+    setDeletingMember(false)
     setSelectedLeadCategory('')
     setSelectedLeadCategoryData([])
     setCategoryName('')
@@ -1550,6 +721,8 @@ const Admin_sales_management = () => {
     setSelectedCategory('')
     setAssignCategoryFilter('all')
     setLeadsPerCategory({})
+    setCreatingCategory(false)
+    setDeletingCategory(false)
   }
 
   // Close only the lead list modal while keeping view details modal open
@@ -1575,7 +748,7 @@ const Admin_sales_management = () => {
   const handleCategoryCardClick = (category, member) => {
     // Get leads assigned to this member in this category
     const categoryLeads = leads.filter(lead => 
-      lead.assignedTo === member.name && lead.categoryId === category.id
+      lead.assignedTo === member.name && lead.category && (lead.category._id || lead.category.id) === (category._id || category.id)
     )
     
     if (categoryLeads.length > 0) {
@@ -1624,134 +797,266 @@ const Admin_sales_management = () => {
   }
 
   // Handle single lead addition
-  const handleAddLead = () => {
-    if (!leadNumber.trim() || !selectedCategory) return
-    
-    // Simulate API call
-    console.log('Adding lead:', leadNumber)
-    
-    // Get selected category details
-    const selectedCategoryData = leadCategories.find(cat => cat.id === parseInt(selectedCategory))
-    
-    // Create new lead object
-    const newLead = {
-      id: Date.now(),
-      name: `Lead ${leadNumber}`,
-      company: 'Unknown Company',
-      phone: leadNumber,
-      email: `lead${leadNumber}@example.com`,
-      status: 'new',
-      priority: 'medium',
-      source: 'manual',
-      value: 25000,
-      lastContact: new Date().toISOString().split('T')[0],
-      nextFollowUp: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      assignedTo: 'Sarah Wilson',
-      notes: 'Manually added lead',
-      categoryId: parseInt(selectedCategory),
-      category: selectedCategoryData.name
+  const handleAddLead = async () => {
+    // Validation
+    if (!leadNumber.trim()) {
+      toast.error('Phone number is required')
+      return
     }
     
-    // Add to leads array
-    setLeads(prev => [newLead, ...prev])
+    if (!selectedCategory) {
+      toast.error('Please select a category')
+      return
+    }
     
-    // Update category lead count
-    setLeadCategories(prev => prev.map(cat => 
-      cat.id === parseInt(selectedCategory)
-        ? { ...cat, leadCount: cat.leadCount + 1 }
-        : cat
-    ))
+    // Validate phone number format
+    const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,15}$/
+    if (!phoneRegex.test(leadNumber.trim())) {
+      toast.error('Please enter a valid phone number')
+      return
+    }
     
-    // Close modal and reset form
-    closeModals()
+    try {
+    
+    // Get selected category details
+      const selectedCategoryData = leadCategories.find(cat => 
+        (cat._id || cat.id) === selectedCategory
+      )
+      
+      if (!selectedCategoryData) {
+        toast.error('Selected category not found')
+        return
+      }
+      
+      // Create lead data for API
+      const leadData = {
+        phone: leadNumber.trim(),
+        category: selectedCategory,
+      priority: 'medium',
+      value: 25000,
+        source: 'manual',
+        notes: 'Manually added lead'
+      }
+      
+      const response = await adminSalesService.createLead(leadData)
+      
+      if (response.success) {
+        toast.success('Lead added successfully')
+        await loadLeads() // Refresh leads list
+        await loadStatistics() // Refresh statistics
+        setShowAddLeadModal(false)
+        setLeadNumber('')
+        setSelectedCategory('')
+      } else {
+        // Handle specific error cases
+        if (response.message && response.message.includes('already exists')) {
+          toast.error('A lead with this phone number already exists')
+        } else if (response.message && response.message.includes('validation')) {
+          toast.error('Please check your input and try again')
+        } else {
+          toast.error(response.message || 'Failed to add lead')
+        }
+      }
+    } catch (error) {
+      console.error('Error adding lead:', error)
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes('already exists')) {
+        toast.error('A lead with this phone number already exists')
+      } else if (error.message && error.message.includes('validation')) {
+        toast.error('Please check your input and try again')
+      } else if (error.message && error.message.includes('network')) {
+        toast.error('Network error. Please check your connection and try again')
+      } else if (error.message && error.message.includes('unauthorized')) {
+        toast.error('You are not authorized to perform this action')
+      } else {
+        toast.error(error.message || 'Failed to add lead. Please try again')
+      }
+    }
   }
 
   // Handle bulk lead upload
-  const handleBulkUpload = () => {
-    if (!uploadedFile || !selectedCategory) return
+  const handleBulkUpload = async () => {
+    // Validation
+    if (!uploadedFile) {
+      toast.error('Please select a file to upload')
+      return
+    }
     
-    // Simulate file processing
+    if (!selectedCategory) {
+      toast.error('Please select a category')
+      return
+    }
+    
+    try {
     setUploadProgress(0)
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          // Simulate processing phone numbers from file
-          // In real implementation, you would parse the uploaded file
-          const samplePhoneNumbers = [
-            '+91 98765 43210',
-            '+91 98765 43211', 
-            '+91 98765 43212',
-            '+91 98765 43213',
-            '+91 98765 43214'
-          ]
-          
-          // Get selected category details
-          const selectedCategoryData = leadCategories.find(cat => cat.id === parseInt(selectedCategory))
-          
-          const bulkLeads = samplePhoneNumbers.map((phoneNumber, index) => ({
-            id: Date.now() + index,
-            name: `Lead ${phoneNumber}`,
-            company: 'Unknown Company',
-            phone: phoneNumber,
-            email: `lead${phoneNumber.replace(/\s+/g, '')}@example.com`,
-            status: 'new',
-            priority: 'medium',
-            source: 'bulk_upload',
-            value: 25000,
-            lastContact: new Date().toISOString().split('T')[0],
-            nextFollowUp: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            assignedTo: 'Sarah Wilson',
-            notes: 'Bulk uploaded lead from phone number list',
-            categoryId: parseInt(selectedCategory),
-            category: selectedCategoryData.name
-          }))
-          
-          setLeads(prev => [...bulkLeads, ...prev])
-          
-          // Update category lead count
-          setLeadCategories(prev => prev.map(cat => 
-            cat.id === parseInt(selectedCategory)
-              ? { ...cat, leadCount: cat.leadCount + bulkLeads.length }
-              : cat
-          ))
-          
-          closeModals()
-          return 100
+      
+      // Show file processing message
+      toast.info(`Processing ${uploadedFile.name}...`)
+      
+      // Parse file to extract phone numbers
+      const phoneNumbers = await adminSalesService.parseFileForBulkUpload(uploadedFile)
+      
+      if (phoneNumbers.length === 0) {
+        toast.error('No valid phone numbers found in file. Please check format.')
+        return
+      }
+      
+      // Show info toast with count
+      toast.info(`Found ${phoneNumbers.length} valid phone numbers`)
+      
+      // Simulate progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval)
+            return 90
         }
         return prev + 10
       })
     }, 200)
+      
+      // Call API to create bulk leads
+      const response = await adminSalesService.createBulkLeads(
+        phoneNumbers, 
+        selectedCategory, 
+        'medium'
+      )
+      
+      clearInterval(progressInterval)
+      setUploadProgress(100)
+      
+      if (response.success) {
+        // Success messages
+        if (response.data.created > 0) {
+          toast.success(`${response.data.created} leads uploaded successfully`)
+        }
+        
+        if (response.data.skipped > 0) {
+          toast.warning(`${response.data.skipped} leads were skipped due to errors`)
+          // Log detailed errors for debugging
+          if (response.data.errors && response.data.errors.length > 0) {
+            // Show first few errors in console for debugging
+            const firstErrors = response.data.errors.slice(0, 5)
+          }
+        }
+        
+        // Refresh data
+        await Promise.all([
+          loadLeads(),
+          loadStatistics(),
+          loadCategories()
+        ])
+        
+        // Close modal and reset form
+        closeModals()
+      } else {
+        // Handle specific backend error cases
+        if (response.message && response.message.includes('already exists')) {
+          toast.error('Some leads already exist in the system')
+        } else if (response.message && response.message.includes('validation')) {
+          toast.error('Invalid phone number format in file')
+        } else if (response.message && response.message.includes('category')) {
+          toast.error('Invalid category selected')
+        } else if (response.message && response.message.includes('limit')) {
+          toast.error('Too many leads in file. Maximum 1000 leads allowed')
+        } else {
+          toast.error(response.message || 'Failed to upload leads')
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading bulk leads:', error)
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes('Excel')) {
+        toast.error('Failed to parse Excel file. Please check file format and try again')
+      } else if (error.message && error.message.includes('CSV')) {
+        toast.error('Failed to parse CSV file. Please check file format and try again')
+      } else if (error.message && error.message.includes('text')) {
+        toast.error('Failed to parse text file. Please check file format and try again')
+      } else if (error.message && error.message.includes('file format')) {
+        toast.error('Invalid file format. Please upload Excel (.xlsx), CSV (.csv), or Text (.txt) files')
+      } else if (error.message && error.message.includes('network')) {
+        toast.error('Network error. Please check your connection and try again')
+      } else if (error.message && error.message.includes('unauthorized')) {
+        toast.error('You are not authorized to perform this action')
+      } else if (error.message && error.message.includes('Failed to load Excel parser')) {
+        toast.error('Excel parser not available. Please try uploading as CSV or text file')
+      } else {
+        toast.error(error.message || 'Failed to upload leads. Please try again')
+      }
+    } finally {
+      setUploadProgress(0)
+    }
   }
 
   // Handle file upload
   const handleFileUpload = (event) => {
     const file = event.target.files[0]
     if (file) {
+      // Validate file type
+      const allowedTypes = ['.xlsx', '.xls', '.csv', '.txt']
+      const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
+      
+      if (!allowedTypes.includes(fileExtension)) {
+        toast.error('Invalid file type. Please upload Excel (.xlsx, .xls), CSV (.csv), or Text (.txt) files')
+        event.target.value = '' // Clear the input
+        return
+      }
+      
+      // Validate file size (10MB limit)
+      const maxSize = 10 * 1024 * 1024 // 10MB in bytes
+      if (file.size > maxSize) {
+        toast.error('File size too large. Maximum file size is 10MB')
+        event.target.value = '' // Clear the input
+        return
+      }
+      
       setUploadedFile(file)
+      toast.success(`File "${file.name}" selected successfully`)
     }
   }
 
   // Handle target editing
   const handleEditTarget = (member) => {
     setSelectedItem(member)
-    setTargetAmount(member.target.toString())
+    setTargetAmount((member.salesTarget || 0).toString())
     setShowTargetModal(true)
   }
 
-  const handleSaveTarget = () => {
-    if (!targetAmount || !selectedItem) return
+  const handleSaveTarget = async () => {
+    if (!targetAmount || !selectedItem) {
+      toast.error('Please enter a valid target amount')
+      return
+    }
     
     const newTarget = parseFloat(targetAmount)
-    if (isNaN(newTarget) || newTarget < 0) return
+    if (isNaN(newTarget) || newTarget < 0) {
+      toast.error('Please enter a valid target amount')
+      return
+    }
 
-    setSalesTeam(prev => prev.map(member => 
-      member.id === selectedItem.id 
-        ? { ...member, target: newTarget }
-        : member
-    ))
-    
-    closeModals()
+    try {
+      setLoadingTarget(true)
+      const memberId = selectedItem._id || selectedItem.id
+      const response = await adminSalesService.setSalesTarget(memberId, newTarget)
+      
+      if (response.success) {
+        toast.success('Target set successfully')
+        await loadSalesTeam()
+        await loadStatistics()
+        setShowTargetModal(false)
+        setSelectedItem(null)
+        setTargetAmount('')
+      } else {
+        toast.error(response.message || 'Failed to set target')
+      }
+    } catch (error) {
+      console.error('Error setting target:', error)
+      toast.error(error.message || 'Failed to set target')
+    } finally {
+      setLoadingTarget(false)
+    }
   }
 
   // Handle lead assignment
@@ -1761,12 +1066,12 @@ const Admin_sales_management = () => {
     setAssignCategoryFilter('all')
     
     // Calculate leads per category
-    const unassignedLeads = leads.filter(lead => lead.assignedTo === 'Unassigned')
+    const unassignedLeads = leads.filter(lead => !lead.assignedTo || lead.assignedTo === null)
     const categoryBreakdown = {}
     
     leadCategories.forEach(category => {
-      const categoryLeads = unassignedLeads.filter(lead => lead.categoryId === category.id)
-      categoryBreakdown[category.id] = {
+      const categoryLeads = unassignedLeads.filter(lead => lead.category && (lead.category._id || lead.category.id) === (category._id || category.id))
+      categoryBreakdown[category._id || category.id] = {
         name: category.name,
         icon: category.icon,
         color: category.color,
@@ -1781,83 +1086,183 @@ const Admin_sales_management = () => {
   // Handle incentive editing
   const handleEditIncentive = (member) => {
     setSelectedItem(member)
-    setIncentiveAmount(member.incentive.toString())
+    setIncentiveAmount((member.currentIncentive || 0).toString())
     setShowIncentiveModal(true)
   }
 
-  const handleSaveIncentive = () => {
-    if (!incentiveAmount || !selectedItem) return
-    
-    const newIncentive = parseFloat(incentiveAmount)
-    if (isNaN(newIncentive) || newIncentive < 0) return
-
-    setSalesTeam(prev => prev.map(member => 
-      member.id === selectedItem.id 
-        ? { ...member, incentive: newIncentive }
-        : member
-    ))
-    
-    closeModals()
-  }
-
-  const handleSaveLeadAssignment = () => {
-    if (!leadsToAssign || !selectedItem) return
-    
-    const numberOfLeads = parseInt(leadsToAssign)
-    if (isNaN(numberOfLeads) || numberOfLeads <= 0) return
-
-    // Get unassigned leads based on category filter
-    let unassignedLeads = leads.filter(lead => lead.assignedTo === 'Unassigned')
-    
-    // Filter by category if specific category is selected
-    if (assignCategoryFilter !== 'all') {
-      unassignedLeads = unassignedLeads.filter(lead => lead.categoryId === parseInt(assignCategoryFilter))
+  const handleSaveIncentive = async () => {
+    if (!incentiveAmount || !selectedItem) {
+      toast.error('Please enter a valid incentive amount')
+      return
     }
     
-    // Check if we have enough leads to assign
-    if (unassignedLeads.length < numberOfLeads) {
-      const categoryName = assignCategoryFilter === 'all' ? 'all categories' : leadCategories.find(cat => cat.id === parseInt(assignCategoryFilter))?.name
-      alert(`Only ${unassignedLeads.length} unassigned leads available in ${categoryName}. Please enter a number between 1 and ${unassignedLeads.length}.`)
+    const newIncentive = parseFloat(incentiveAmount)
+    if (isNaN(newIncentive) || newIncentive < 0) {
+      toast.error('Please enter a valid incentive amount')
       return
     }
 
-    // Take the first N unassigned leads
-    const leadsToAssign = unassignedLeads.slice(0, numberOfLeads)
-    const leadIds = leadsToAssign.map(lead => lead.id)
+    try {
+      setLoadingIncentive(true)
+      const memberId = selectedItem._id || selectedItem.id
+      const response = await adminSalesService.setIncentive(
+        memberId, 
+        newIncentive, 
+        'Performance incentive', 
+        'Incentive awarded for meeting sales targets'
+      )
+      
+      if (response.success) {
+        toast.success('Incentive set successfully')
+        await loadSalesTeam()
+        await loadStatistics()
+        setShowIncentiveModal(false)
+        setSelectedItem(null)
+        setIncentiveAmount('')
+      } else {
+        toast.error(response.message || 'Failed to set incentive')
+      }
+    } catch (error) {
+      console.error('Error setting incentive:', error)
+      toast.error(error.message || 'Failed to set incentive')
+    } finally {
+      setLoadingIncentive(false)
+    }
+  }
 
-    // Update leads to assign them to the selected member
-    setLeads(prev => prev.map(lead => 
-      leadIds.includes(lead.id)
-        ? { ...lead, assignedTo: selectedItem.name }
-        : lead
-    ))
+  const handleSaveLeadAssignment = async () => {
+    if (!leadsToAssign || !selectedItem) return
+    
+    const numberOfLeads = parseInt(leadsToAssign)
+    if (isNaN(numberOfLeads) || numberOfLeads <= 0) {
+      toast.error('Please enter a valid number of leads')
+      return
+    }
 
-    // Update sales team member's lead count
-    setSalesTeam(prev => prev.map(member => 
-      member.id === selectedItem.id 
-        ? { ...member, leadsCount: member.leadsCount + numberOfLeads }
-        : member
-    ))
+    // Calculate available leads
+    const categoryId = assignCategoryFilter === 'all' ? 'all' : assignCategoryFilter
+    const unassignedLeads = leads.filter(lead => !lead.assignedTo || lead.assignedTo === null)
+    
+    let availableLeads
+    if (categoryId === 'all') {
+      availableLeads = unassignedLeads.length
+    } else {
+      availableLeads = unassignedLeads.filter(lead => 
+        lead.category && (lead.category._id || lead.category.id) === categoryId
+      ).length
+    }
 
+    // Validate requested count
+    if (numberOfLeads > availableLeads) {
+      toast.error(`Only ${availableLeads} leads available. Please enter a lower number.`)
+      return
+    }
+
+    try {
+      setDistributingLeads(true)
+      const salesMemberId = selectedItem._id || selectedItem.id
+      
+      const response = await adminSalesService.distributeLeads(salesMemberId, numberOfLeads, categoryId)
+      
+      if (response.success) {
+        toast.success(`${response.data.leadsDistributed} leads distributed successfully`)
+        await Promise.all([
+          loadLeads(),
+          loadAllLeads(), // Refresh all leads for statistics
+          loadAssignedLeads(), // Refresh assigned leads for category performance
+          loadSalesTeam(),
+          loadStatistics()
+        ])
     closeModals()
+      } else {
+        toast.error(response.message || 'Failed to distribute leads')
+      }
+    } catch (error) {
+      console.error('Error distributing leads:', error)
+      
+      // Enhanced error messages
+      if (error.message && error.message.includes('No unassigned leads')) {
+        toast.error('No unassigned leads available for distribution')
+      } else if (error.message && error.message.includes('not found')) {
+        toast.error('Sales team member not found')
+      } else if (error.message && error.message.includes('network')) {
+        toast.error('Network error. Please check your connection')
+      } else {
+        toast.error(error.message || 'Failed to distribute leads')
+      }
+    } finally {
+      setDistributingLeads(false)
+    }
   }
 
   // Category management functions
-  const handleCreateCategory = () => {
-    if (!categoryName.trim()) return
-    
-    const newCategory = {
-      id: Date.now(),
-      name: categoryName,
-      description: categoryDescription,
-      color: categoryColor,
-      icon: '📋', // Default icon
-      createdAt: new Date().toISOString().split('T')[0],
-      leadCount: 0
+  const handleCreateCategory = async () => {
+    // Validation
+    if (!categoryName.trim()) {
+      toast.error('Category name is required')
+      return
+    }
+
+    if (categoryName.trim().length < 2) {
+      toast.error('Category name must be at least 2 characters long')
+      return
     }
     
-    setLeadCategories(prev => [...prev, newCategory])
+    if (categoryName.trim().length > 50) {
+      toast.error('Category name cannot exceed 50 characters')
+      return
+    }
+    
+    if (!categoryColor || !categoryColor.match(/^#[0-9A-F]{6}$/i)) {
+      toast.error('Please select a valid color')
+      return
+    }
+    
+    if (creatingCategory) return // Prevent multiple submissions
+    
+    try {
+      setCreatingCategory(true)
+      const categoryData = {
+        name: categoryName.trim(),
+        description: categoryDescription.trim(),
+        color: categoryColor,
+        icon: '📋' // Default icon
+      }
+      
+      const response = await adminSalesService.createLeadCategory(categoryData)
+      
+      if (response.success) {
+        toast.success('Category created successfully')
+        await loadCategories() // Refresh categories list
     closeModals()
+      } else {
+        // Handle specific error cases
+        if (response.message && response.message.includes('already exists')) {
+          toast.error('A category with this name already exists')
+        } else if (response.message && response.message.includes('validation')) {
+          toast.error('Please check your input and try again')
+        } else {
+          toast.error(response.message || 'Failed to create category')
+        }
+      }
+    } catch (error) {
+      console.error('Error creating category:', error)
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes('already exists')) {
+        toast.error('A category with this name already exists')
+      } else if (error.message && error.message.includes('validation')) {
+        toast.error('Please check your input and try again')
+      } else if (error.message && error.message.includes('network')) {
+        toast.error('Network error. Please check your connection and try again')
+      } else if (error.message && error.message.includes('unauthorized')) {
+        toast.error('You are not authorized to perform this action')
+      } else {
+        toast.error(error.message || 'Failed to create category. Please try again')
+      }
+    } finally {
+      setCreatingCategory(false)
+    }
   }
 
   const handleEditCategory = (category) => {
@@ -1868,30 +1273,134 @@ const Admin_sales_management = () => {
     setShowCategoryEditModal(true)
   }
 
-  const handleUpdateCategory = () => {
-    if (!categoryName.trim() || !selectedItem) return
+  const handleUpdateCategory = async () => {
+    // Validation
+    if (!categoryName.trim()) {
+      toast.error('Category name is required')
+      return
+    }
     
-    setLeadCategories(prev => prev.map(category => 
-      category.id === selectedItem.id 
-        ? { 
-            ...category, 
-            name: categoryName, 
-            description: categoryDescription, 
+    if (categoryName.trim().length < 2) {
+      toast.error('Category name must be at least 2 characters long')
+      return
+    }
+    
+    if (categoryName.trim().length > 50) {
+      toast.error('Category name cannot exceed 50 characters')
+      return
+    }
+    
+    if (!categoryColor || !categoryColor.match(/^#[0-9A-F]{6}$/i)) {
+      toast.error('Please select a valid color')
+      return
+    }
+    
+    if (!selectedItem) {
+      toast.error('No category selected for update')
+      return
+    }
+    
+    try {
+      const categoryData = {
+        name: categoryName.trim(),
+        description: categoryDescription.trim(),
             color: categoryColor 
           }
-        : category
-    ))
+      
+      const response = await adminSalesService.updateLeadCategory(selectedItem._id || selectedItem.id, categoryData)
+      if (response.success) {
+        toast.success('Category updated successfully')
+        await loadCategories() // Refresh categories list
     closeModals()
+      } else {
+        // Handle specific error cases
+        if (response.message && response.message.includes('already exists')) {
+          toast.error('A category with this name already exists')
+        } else if (response.message && response.message.includes('not found')) {
+          toast.error('Category not found. It may have been deleted')
+        } else {
+          toast.error(response.message || 'Failed to update category')
+        }
+      }
+    } catch (error) {
+      console.error('Error updating category:', error)
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes('already exists')) {
+        toast.error('A category with this name already exists')
+      } else if (error.message && error.message.includes('not found')) {
+        toast.error('Category not found. It may have been deleted')
+      } else if (error.message && error.message.includes('network')) {
+        toast.error('Network error. Please check your connection and try again')
+      } else if (error.message && error.message.includes('unauthorized')) {
+        toast.error('You are not authorized to perform this action')
+      } else {
+        toast.error(error.message || 'Failed to update category. Please try again')
+      }
+    }
   }
 
-  const handleDeleteCategory = (category) => {
-    setLeadCategories(prev => prev.filter(cat => cat.id !== category.id))
-    // Also remove category from leads that have this category
-    setLeads(prev => prev.map(lead => 
-      lead.categoryId === category.id 
-        ? { ...lead, categoryId: null, category: null }
-        : lead
-    ))
+  const handleDeleteCategory = async (category) => {
+    if (deletingCategory) return // Prevent multiple deletions
+    
+    try {
+      // Set the category to delete and show confirmation modal
+      setSelectedItem(category)
+      setShowCategoryDeleteModal(true)
+    } catch (error) {
+      console.error('Error preparing category deletion:', error)
+      toast.error('Error preparing category deletion')
+    }
+  }
+
+  const confirmDeleteCategory = async () => {
+    if (!selectedItem || deletingCategory) return
+    
+    try {
+      setDeletingCategory(true)
+      
+      const categoryId = selectedItem._id || selectedItem.id;
+      if (!categoryId) {
+        toast.error('Category ID not found');
+        return;
+      }
+      
+      const response = await adminSalesService.deleteLeadCategory(categoryId)
+      
+      if (response.success) {
+        toast.success('Category deleted successfully')
+        await loadCategories() // Refresh categories list
+        await loadLeads() // Refresh leads list
+        setShowCategoryDeleteModal(false)
+        setSelectedItem(null)
+      } else {
+        // Handle specific error cases
+        if (response.message && response.message.includes('associated leads')) {
+          toast.error('Cannot delete category because it has associated leads. Please reassign or delete the leads first.')
+        } else if (response.message && response.message.includes('not found')) {
+          toast.error('Category not found. It may have already been deleted.')
+        } else {
+          toast.error(response.message || 'Failed to delete category')
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting category:', error)
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes('associated leads')) {
+        toast.error('Cannot delete category because it has associated leads. Please reassign or delete the leads first.')
+      } else if (error.message && error.message.includes('not found')) {
+        toast.error('Category not found. It may have already been deleted.')
+      } else if (error.message && error.message.includes('network')) {
+        toast.error('Network error. Please check your connection and try again')
+      } else if (error.message && error.message.includes('unauthorized')) {
+        toast.error('You are not authorized to perform this action')
+      } else {
+        toast.error(error.message || 'Failed to delete category. Please try again')
+      }
+    } finally {
+      setDeletingCategory(false)
+    }
   }
 
   if (loading) {
@@ -1972,13 +1481,15 @@ const Admin_sales_management = () => {
                     <FiUsers className="h-4 w-4 text-blue-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-blue-700">+{statistics.leads.new}</p>
+                    <p className="text-xs font-medium text-blue-700">+{statistics?.leads?.new || 0}</p>
                     <p className="text-xs text-blue-600">this month</p>
                   </div>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-blue-700 mb-1">Total Leads</p>
-                  <p className="text-lg font-bold text-blue-800">{statistics.leads.total}</p>
+                  <p className="text-lg font-bold text-blue-800">
+                    {loadingStatistics ? '...' : (overallPerformance.totalLeads || 0)}
+                  </p>
                 </div>
               </div>
             </div>
@@ -1992,13 +1503,15 @@ const Admin_sales_management = () => {
                     <FiCreditCard className="h-4 w-4 text-emerald-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-emerald-700">{statistics.sales.conversion}%</p>
+                    <p className="text-xs font-medium text-emerald-700">{statistics?.sales?.conversion || 0}%</p>
                     <p className="text-xs text-emerald-600">conversion</p>
                   </div>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-emerald-700 mb-1">Total Sales</p>
-                  <p className="text-lg font-bold text-emerald-800">{formatCurrency(statistics.sales.total)}</p>
+                  <p className="text-lg font-bold text-emerald-800">
+                    {loadingStatistics ? '...' : formatCurrency(statistics?.sales?.total || 0)}
+                  </p>
                 </div>
               </div>
             </div>
@@ -2012,13 +1525,13 @@ const Admin_sales_management = () => {
                     <FiTrendingUp className="h-4 w-4 text-purple-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-purple-700">{formatCurrency(statistics.earnings.pending)}</p>
+                    <p className="text-xs font-medium text-purple-700">{formatCurrency(statistics?.earnings?.pending || 0)}</p>
                     <p className="text-xs text-purple-600">pending</p>
                   </div>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-purple-700 mb-1">Earnings Collected</p>
-                  <p className="text-lg font-bold text-purple-800">{formatCurrency(statistics.earnings.collected)}</p>
+                  <p className="text-lg font-bold text-purple-800">{formatCurrency(statistics?.earnings?.collected || 0)}</p>
                 </div>
               </div>
             </div>
@@ -2032,13 +1545,13 @@ const Admin_sales_management = () => {
                     <FiUser className="h-4 w-4 text-orange-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-orange-700">{statistics.team.performance}%</p>
+                    <p className="text-xs font-medium text-orange-700">{statistics?.team?.performance || 0}%</p>
                     <p className="text-xs text-orange-600">performance</p>
                   </div>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-orange-700 mb-1">Sales Team</p>
-                  <p className="text-lg font-bold text-orange-800">{statistics.team.total}</p>
+                  <p className="text-lg font-bold text-orange-800">{statistics?.team?.total || 0}</p>
                 </div>
               </div>
             </div>
@@ -2066,7 +1579,7 @@ const Admin_sales_management = () => {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-green-700 mb-1">New Leads</p>
-                  <p className="text-lg font-bold text-green-800">{statistics.leads.new}</p>
+                  <p className="text-lg font-bold text-green-800">{statistics?.leads?.new || 0}</p>
                 </div>
               </div>
             </div>
@@ -2086,7 +1599,7 @@ const Admin_sales_management = () => {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-indigo-700 mb-1">Connected</p>
-                  <p className="text-lg font-bold text-indigo-800">{statistics.leads.connected}</p>
+                  <p className="text-lg font-bold text-indigo-800">{statistics?.leads?.connected || 0}</p>
                 </div>
               </div>
             </div>
@@ -2106,7 +1619,7 @@ const Admin_sales_management = () => {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-rose-700 mb-1">Hot Leads</p>
-                  <p className="text-lg font-bold text-rose-800">{statistics.leads.hot}</p>
+                  <p className="text-lg font-bold text-rose-800">{statistics?.leads?.hot || 0}</p>
                 </div>
               </div>
             </div>
@@ -2120,13 +1633,13 @@ const Admin_sales_management = () => {
                     <FiHome className="h-4 w-4 text-teal-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-teal-700">{statistics.clients.retention}%</p>
+                    <p className="text-xs font-medium text-teal-700">{statistics?.clients?.retention || 0}%</p>
                     <p className="text-xs text-teal-600">retention</p>
                   </div>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-teal-700 mb-1">Total Clients</p>
-                  <p className="text-lg font-bold text-teal-800">{statistics.clients.total}</p>
+                  <p className="text-lg font-bold text-teal-800">{statistics?.clients?.total || 0}</p>
                 </div>
               </div>
             </div>
@@ -2202,9 +1715,9 @@ const Admin_sales_management = () => {
                            className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white appearance-none cursor-pointer hover:border-gray-400 transition-colors shadow-sm"
                          >
                            <option value="">🏷️ All Categories</option>
-                           {leadCategories.map(category => (
-                             <option key={category.id} value={category.id}>
-                               {category.icon} {category.name}
+                           {leadCategories.map((category, index) => (
+                             <option key={category._id || category.id || `category-${index}`} value={category._id || category.id}>
+                               {safeRender(category.icon, '📋')} {safeRender(category.name, 'Category')}
                              </option>
                            ))}
                          </select>
@@ -2270,14 +1783,14 @@ const Admin_sales_management = () => {
                     
                     {/* Category Overview */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                      {leadCategories.map((category) => (
-                        <div key={category.id} className="bg-white rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow">
+                      {leadCategories.map((category, index) => (
+                        <div key={category._id || category.id || `category-${index}`} className="bg-white rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow">
                           <div className="flex items-center space-x-2">
                             <div 
                               className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
                               style={{ backgroundColor: category.color }}
                             >
-                              {category.icon}
+                              {safeRender(category.icon, '📋')}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-semibold text-gray-900 truncate">{category.name}</div>
@@ -2301,8 +1814,8 @@ const Admin_sales_management = () => {
                       </div>
                       
                     <div className="divide-y divide-gray-200">
-                      {paginatedData.map((lead, index) => (
-                        <div key={lead.id} className="p-4 hover:bg-gray-50 transition-colors">
+                      {paginatedData.length > 0 ? paginatedData.map((lead, index) => (
+                        <div key={lead._id || lead.id || `lead-${index}`} className="p-4 hover:bg-gray-50 transition-colors">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-4">
                               <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
@@ -2310,24 +1823,24 @@ const Admin_sales_management = () => {
                         </div>
                               <div>
                                 <div className="text-lg font-semibold text-gray-900 font-mono">
-                                  {lead.phone}
+                                  {formatPhoneNumber(lead?.phone)}
                       </div>
                                 <div className="flex items-center space-x-4 text-sm text-gray-500">
-                                  <span>Added: {formatDate(lead.lastContact)}</span>
+                                  <span>Added: {formatDate(lead?.createdAt)}</span>
                         </div>
                         </div>
                       </div>
                       
                             <div className="flex items-center space-x-2">
-                              <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-full ${getStatusColor(lead.status)}`}>
-                                {lead.status}
+                              <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-full ${getStatusColor(lead?.status || 'new')}`}>
+                                {lead?.status || 'new'}
                               </span>
-                              {lead.category && (
+                              {lead?.category && (
                                 <span 
                                   className="inline-flex px-2 py-1 text-xs font-bold rounded-full text-white"
-                                  style={{ backgroundColor: leadCategories.find(cat => cat.name === lead.category)?.color || '#6B7280' }}
+                                  style={{ backgroundColor: lead.category?.color || '#6B7280' }}
                                 >
-                                  {leadCategories.find(cat => cat.name === lead.category)?.icon} {lead.category}
+                                  {safeRender(lead.category?.icon, '📋')} {safeRender(lead.category?.name, 'N/A')}
                                 </span>
                               )}
                           <button 
@@ -2340,7 +1853,15 @@ const Admin_sales_management = () => {
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                      <FiUsers className="h-12 w-12 mb-4 text-gray-300" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No Leads Found</h3>
+                      <p className="text-sm text-gray-600 text-center max-w-md">
+                        No leads are available at the moment. Leads will appear here once they are added to the system.
+                      </p>
+                    </div>
+                  )}
                     </div>
                   </div>
                 </div>
@@ -2348,18 +1869,18 @@ const Admin_sales_management = () => {
 
               {activeTab === 'sales-team' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {paginatedData.map((member) => (
-                    <div key={member.id} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
+                  {paginatedData.length > 0 ? paginatedData.map((member, index) => (
+                    <div key={member._id || member.id || `member-${index}`} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
                       {/* Header Section */}
                       <div className="flex items-center space-x-3 mb-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-dark text-white rounded-full flex items-center justify-center font-bold text-sm shadow-md">
-                          {member.avatar}
+                          {member?.avatar || 'S'}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-bold text-gray-900 truncate">{member.name}</h3>
-                          <p className="text-xs text-gray-600 font-medium">{member.position}</p>
-                          <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border mt-1 ${getStatusColor(member.status)}`}>
-                            {member.status}
+                          <h3 className="text-sm font-bold text-gray-900 truncate">{member?.name || 'Unknown Member'}</h3>
+                          <p className="text-xs text-gray-600 font-medium">{member?.position || 'Sales Rep'}</p>
+                          <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border mt-1 ${getStatusColor(member?.status || 'active')}`}>
+                            {member?.status || 'active'}
                           </span>
                         </div>
                       </div>
@@ -2368,7 +1889,10 @@ const Admin_sales_management = () => {
                       <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-2 mb-3">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-semibold text-green-700">Performance</span>
-                          <span className="text-lg font-bold text-green-600">{member.performance}%</span>
+                          <span className="text-lg font-bold text-green-600">
+                            {typeof member?.performance === 'number' ? member.performance : 
+                             typeof member?.performance === 'object' ? (member.performance?.conversionRate || 0) : 0}%
+                          </span>
                         </div>
                       </div>
                       
@@ -2376,11 +1900,15 @@ const Admin_sales_management = () => {
                       <div className="grid grid-cols-2 gap-2 mb-3">
                         <div className="bg-blue-50 rounded-lg p-2">
                           <div className="text-xs text-blue-600 font-medium mb-1">Leads</div>
-                          <div className="text-xs font-bold text-blue-800">{member.leadsCount}</div>
+                          <div className="text-xs font-bold text-blue-800">
+                            {member?.performance?.totalLeads || 0}
+                          </div>
                         </div>
                         <div className="bg-purple-50 rounded-lg p-2">
                           <div className="text-xs text-purple-600 font-medium mb-1">Converted</div>
-                          <div className="text-xs font-bold text-purple-800">{member.convertedCount}</div>
+                          <div className="text-xs font-bold text-purple-800">
+                            {member?.performance?.convertedLeads || 0}
+                          </div>
                         </div>
                       </div>
                       
@@ -2388,18 +1916,24 @@ const Admin_sales_management = () => {
                       <div className="grid grid-cols-2 gap-2 mb-3">
                         <div className="bg-orange-50 rounded-lg p-2">
                           <div className="text-xs text-orange-600 font-medium mb-1">Revenue</div>
-                          <div className="text-xs font-bold text-orange-800">{formatCurrency(member.revenue)}</div>
+                          <div className="text-xs font-bold text-orange-800">
+                            {formatCurrency(member?.performance?.totalValue || 0)}
+                          </div>
                         </div>
                         <div className="bg-gray-50 rounded-lg p-2">
                           <div className="text-xs text-gray-600 font-medium mb-1">Target</div>
-                          <div className="text-xs font-bold text-gray-800">{formatCurrency(member.target)}</div>
+                          <div className="text-xs font-bold text-gray-800">
+                            {formatCurrency(member?.salesTarget || 0)}
+                          </div>
                         </div>
                       </div>
 
                       {/* Incentive Metric */}
                       <div className="bg-green-50 rounded-lg p-2 mb-3">
                         <div className="text-xs text-green-600 font-medium mb-1">Incentive</div>
-                        <div className="text-xs font-bold text-green-800">{formatCurrency(member.incentive)}</div>
+                        <div className="text-xs font-bold text-green-800">
+                          {formatCurrency(member?.currentIncentive || 0)}
+                        </div>
                       </div>
 
                       {/* Footer */}
@@ -2443,24 +1977,32 @@ const Admin_sales_management = () => {
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="col-span-full flex flex-col items-center justify-center py-12 text-gray-500">
+                      <FiUser className="h-12 w-12 mb-4 text-gray-300" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No Sales Team Found</h3>
+                      <p className="text-sm text-gray-600 text-center max-w-md">
+                        No sales team members are available at the moment. Sales team members will appear here once they are added to the system.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
               {activeTab === 'clients' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {paginatedData.map((client) => (
+                  {paginatedData.length > 0 ? paginatedData.map((client) => (
                     <div key={client.id} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
                       {/* Header Section */}
                       <div className="flex items-center space-x-3 mb-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-md">
-                          {client.avatar}
+                          {client?.avatar || 'C'}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-bold text-gray-900 truncate">{client.name}</h3>
-                          <p className="text-xs text-gray-600 font-medium">{client.contactPerson}</p>
-                          <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border mt-1 ${getStatusColor(client.status)}`}>
-                            {client.status}
+                          <h3 className="text-sm font-bold text-gray-900 truncate">{client?.name || 'Unknown Client'}</h3>
+                          <p className="text-xs text-gray-600 font-medium">{client?.contactPerson || 'N/A'}</p>
+                          <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border mt-1 ${getStatusColor(client?.status || 'active')}`}>
+                            {client?.status || 'active'}
                           </span>
                         </div>
                       </div>
@@ -2469,7 +2011,7 @@ const Admin_sales_management = () => {
                       <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-2 mb-3">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-semibold text-green-700">Total Spent</span>
-                          <span className="text-sm font-bold text-green-600">{formatCurrency(client.totalSpent)}</span>
+                          <span className="text-sm font-bold text-green-600">{formatCurrency(client?.totalSpent || 0)}</span>
                         </div>
                       </div>
                       
@@ -2477,11 +2019,11 @@ const Admin_sales_management = () => {
                       <div className="grid grid-cols-2 gap-2 mb-3">
                         <div className="bg-blue-50 rounded-lg p-2">
                           <div className="text-xs text-blue-600 font-medium mb-1">Projects</div>
-                          <div className="text-xs font-bold text-blue-800">{client.projectsCompleted}</div>
+                          <div className="text-xs font-bold text-blue-800">{client?.projectsCompleted || 0}</div>
                         </div>
                         <div className="bg-purple-50 rounded-lg p-2">
                           <div className="text-xs text-purple-600 font-medium mb-1">Industry</div>
-                          <div className="text-xs font-bold text-purple-800">{client.industry}</div>
+                          <div className="text-xs font-bold text-purple-800">{client?.industry || 'N/A'}</div>
                         </div>
                       </div>
                       
@@ -2489,11 +2031,11 @@ const Admin_sales_management = () => {
                       <div className="grid grid-cols-2 gap-2 mb-3">
                         <div className="bg-orange-50 rounded-lg p-2">
                           <div className="text-xs text-orange-600 font-medium mb-1">Location</div>
-                          <div className="text-xs font-bold text-orange-800">{client.location}</div>
+                          <div className="text-xs font-bold text-orange-800">{client?.location || 'N/A'}</div>
                         </div>
                         <div className="bg-gray-50 rounded-lg p-2">
                           <div className="text-xs text-gray-600 font-medium mb-1">Joined</div>
-                          <div className="text-xs font-bold text-gray-800">{formatDate(client.joinDate)}</div>
+                          <div className="text-xs font-bold text-gray-800">{formatDate(client?.joinDate || new Date())}</div>
                         </div>
                       </div>
 
@@ -2523,11 +2065,19 @@ const Admin_sales_management = () => {
                           </button>
                         </div>
                         <div className="text-xs text-gray-400 font-medium">
-                          {formatDate(client.lastContact)}
+                          {formatDate(client?.lastContact || new Date())}
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="col-span-full flex flex-col items-center justify-center py-12 text-gray-500">
+                      <FiHome className="h-12 w-12 mb-4 text-gray-300" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No Clients Found</h3>
+                      <p className="text-sm text-gray-600 text-center max-w-md">
+                        No clients are available at the moment. Clients will appear here once they are added to the system.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2554,7 +2104,7 @@ const Admin_sales_management = () => {
                           </div>
                           <div>
                             <div className="text-sm text-gray-600">Total Leads</div>
-                            <div className="text-lg font-bold text-gray-900">{overallPerformance.totalLeads}</div>
+                            <div className="text-lg font-bold text-gray-900">{categoryPerformanceMetrics.totalLeads}</div>
                           </div>
                         </div>
                       </div>
@@ -2566,7 +2116,7 @@ const Admin_sales_management = () => {
                           </div>
                           <div>
                             <div className="text-sm text-gray-600">Converted</div>
-                            <div className="text-lg font-bold text-gray-900">{overallPerformance.totalConverted}</div>
+                            <div className="text-lg font-bold text-gray-900">{categoryPerformanceMetrics.totalConverted}</div>
                           </div>
                         </div>
                       </div>
@@ -2578,7 +2128,7 @@ const Admin_sales_management = () => {
                           </div>
                           <div>
                             <div className="text-sm text-gray-600">Conversion Rate</div>
-                            <div className="text-lg font-bold text-gray-900">{overallPerformance.overallConversionRate}%</div>
+                            <div className="text-lg font-bold text-gray-900">{categoryPerformanceMetrics.overallConversionRate}%</div>
                           </div>
                         </div>
                       </div>
@@ -2590,7 +2140,7 @@ const Admin_sales_management = () => {
                           </div>
                           <div>
                             <div className="text-sm text-gray-600">Avg Deal Value</div>
-                            <div className="text-lg font-bold text-gray-900">{formatCurrency(overallPerformance.avgDealValue)}</div>
+                            <div className="text-lg font-bold text-gray-900">{formatCurrency(categoryPerformanceMetrics.avgDealValue)}</div>
                           </div>
                         </div>
                       </div>
@@ -2599,8 +2149,8 @@ const Admin_sales_management = () => {
 
                   {/* Category Performance Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                    {categoryPerformance.map((category) => (
-                      <div key={category.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all duration-200 hover:scale-105">
+                    {categoryPerformance.map((category, index) => (
+                      <div key={category._id || category.id || `category-${index}`} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all duration-200 hover:scale-105">
                         {/* Category Header */}
                         <div className="flex items-center space-x-2 mb-3">
                           <div 
@@ -2725,20 +2275,42 @@ const Admin_sales_management = () => {
             >
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Delete</h3>
               <p className="text-gray-600 mb-4">
-                Are you sure you want to delete this {modalType}? This action cannot be undone.
+                {modalType === 'sales-team' 
+                  ? `Are you sure you want to delete "${selectedItem?.name}" from the sales team? This action cannot be undone.`
+                  : `Are you sure you want to delete this ${modalType}? This action cannot be undone.`
+                }
               </p>
+              {modalType === 'sales-team' && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Warning:</strong> If this sales team member has assigned leads, you'll need to reassign or delete them first.
+                  </p>
+                </div>
+              )}
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={closeModals}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  disabled={deletingMember}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  disabled={deletingMember}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
-                  Delete
+                  {deletingMember ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiTrash2 className="h-4 w-4" />
+                      <span>Delete</span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>
@@ -2802,9 +2374,9 @@ const Admin_sales_management = () => {
                     required
                   >
                     <option value="">Select a category</option>
-                    {leadCategories.map(category => (
-                      <option key={category.id} value={category.id}>
-                        {category.icon} {category.name}
+                    {leadCategories.map((category, index) => (
+                      <option key={category._id || category.id || `category-${index}`} value={category._id || category.id}>
+                        {safeRender(category.icon, '📋')} {safeRender(category.name, 'Category')}
                       </option>
                     ))}
                   </select>
@@ -2920,9 +2492,9 @@ const Admin_sales_management = () => {
                     required
                   >
                     <option value="">Select a category</option>
-                    {leadCategories.map(category => (
-                      <option key={category.id} value={category.id}>
-                        {category.icon} {category.name}
+                    {leadCategories.map((category, index) => (
+                      <option key={category._id || category.id || `category-${index}`} value={category._id || category.id}>
+                        {safeRender(category.icon, '📋')} {safeRender(category.name, 'Category')}
                       </option>
                     ))}
                   </select>
@@ -2937,16 +2509,17 @@ const Admin_sales_management = () => {
                   <ul className="text-xs text-blue-800 space-y-1">
                     <li>• File should contain only phone numbers (one per line)</li>
                     <li>• Each line represents one lead number</li>
-                    <li>• Phone numbers should include country code (e.g., +91 9876543210)</li>
+                    <li>• Phone numbers can be 10 digits (9755620716) or with country code (+91 9755620716)</li>
+                    <li>• System will automatically handle country code normalization</li>
                     <li>• Supported formats: Excel (.xlsx, .xls), CSV (.csv), or Text (.txt)</li>
                     <li>• Maximum file size: 10MB</li>
                   </ul>
                   <div className="mt-3 p-2 bg-white rounded border border-blue-300">
-                    <p className="text-xs text-blue-700 font-medium mb-1">Example format:</p>
+                    <p className="text-xs text-blue-700 font-medium mb-1">Example formats (all valid):</p>
                     <div className="text-xs text-blue-600 font-mono">
-                      +91 9876543210<br/>
-                      +91 9876543211<br/>
-                      +91 9876543212
+                      9755620716<br/>
+                      +91 9755620717<br/>
+                      919755620718
                     </div>
                   </div>
                 </div>
@@ -2992,8 +2565,17 @@ const Admin_sales_management = () => {
                   disabled={!uploadedFile || uploadProgress > 0}
                   className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
+                  {uploadProgress > 0 ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <>
                   <FiUpload className="h-4 w-4" />
                   <span>Upload & Process</span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>
@@ -3052,19 +2634,19 @@ const Admin_sales_management = () => {
                 <div className="grid grid-cols-4 gap-2">
                   <div className="bg-white rounded-lg p-2 text-center">
                     <div className="text-xs text-blue-600 font-medium">Performance</div>
-                    <div className="text-lg font-bold text-blue-800">{selectedItem.performance}%</div>
+                    <div className="text-lg font-bold text-blue-800">{selectedItem?.performance?.conversionRate || 0}%</div>
                   </div>
                   <div className="bg-white rounded-lg p-2 text-center">
                     <div className="text-xs text-green-600 font-medium">Revenue</div>
-                    <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem.revenue)}</div>
+                    <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem?.performance?.totalValue || 0)}</div>
                   </div>
                   <div className="bg-white rounded-lg p-2 text-center">
                     <div className="text-xs text-purple-600 font-medium">Total Leads</div>
-                    <div className="text-lg font-bold text-purple-700">{selectedItem.leadsCount}</div>
+                    <div className="text-lg font-bold text-purple-700">{selectedItem?.performance?.totalLeads || 0}</div>
                   </div>
                   <div className="bg-white rounded-lg p-2 text-center">
                     <div className="text-xs text-orange-600 font-medium">Converted</div>
-                    <div className="text-lg font-bold text-orange-700">{selectedItem.convertedCount}</div>
+                    <div className="text-lg font-bold text-orange-700">{selectedItem?.performance?.convertedLeads || 0}</div>
                   </div>
                 </div>
               </div>
@@ -3082,7 +2664,7 @@ const Admin_sales_management = () => {
                       {leadCategories.map((category) => {
                         // Calculate leads for this category assigned to this member
                         const categoryLeads = leads.filter(lead => 
-                          lead.assignedTo === selectedItem.name && lead.categoryId === category.id
+                          lead.assignedTo === selectedItem.name && lead.category && (lead.category._id || lead.category.id) === (category._id || category.id)
                         )
                         const categoryCount = categoryLeads.length
                         const conversionRate = categoryCount > 0 ? 
@@ -3103,7 +2685,7 @@ const Admin_sales_management = () => {
                                   className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
                                   style={{ backgroundColor: category.color }}
                                 >
-                                  {category.icon}
+                                  {safeRender(category.icon, '📋')}
                                 </div>
                                 <div>
                                   <h6 className="font-semibold text-gray-900 text-sm">{category.name}</h6>
@@ -3202,11 +2784,26 @@ const Admin_sales_management = () => {
                         { key: 'demoSent', label: 'Demo Sent', color: 'bg-violet-50 text-violet-700 border-violet-200', icon: '🎯' },
                         { key: 'app', label: 'App', color: 'bg-sky-50 text-sky-700 border-sky-200', icon: '📲' },
                         { key: 'taxi', label: 'Taxi', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: '🚕' }
-                      ].map((category) => {
-                        const count = selectedItem.leadBreakdown[category.key] || 0
+                      ].map((category, index) => {
+                        const leadBreakdown = selectedItem?.leadBreakdown || {
+                          new: selectedItem?.performance?.totalLeads || 0,
+                          converted: selectedItem?.performance?.convertedLeads || 0,
+                          hotLead: 0,
+                          lost: 0,
+                          notInterested: 0,
+                          web: 0,
+                          app: 0,
+                          taxi: 0,
+                          todayFollowUp: 0,
+                          quotationSent: 0,
+                          dqSent: 0,
+                          appClient: 0,
+                          demoSent: 0
+                        }
+                        const count = leadBreakdown[category.key] || 0
                         return (
                           <button
-                            key={category.key}
+                            key={category.key || `category-${index}`}
                             onClick={() => handleLeadCategoryClick(category.key, selectedItem)}
                             disabled={count === 0}
                             className={`${category.color} rounded-lg p-3 border-2 hover:shadow-md transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -3214,7 +2811,7 @@ const Admin_sales_management = () => {
                             }`}
                           >
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-lg">{category.icon}</span>
+                              <span className="text-lg">{safeRender(category.icon, '📋')}</span>
                               <span className="text-lg font-bold">{count}</span>
                             </div>
                             <div className="text-xs font-medium truncate">{category.label}</div>
@@ -3521,7 +3118,7 @@ const Admin_sales_management = () => {
                     <h4 className="font-semibold text-gray-900">{selectedItem.name}</h4>
                     <p className="text-sm text-gray-600">{selectedItem.position}</p>
                     <div className="text-sm text-orange-700 font-medium">
-                      Current Target: {formatCurrency(selectedItem.target)}
+                      Current Target: {formatCurrency(selectedItem.salesTarget || 0)}
                     </div>
                   </div>
                 </div>
@@ -3553,10 +3150,20 @@ const Admin_sales_management = () => {
                 </button>
                 <button
                   onClick={handleSaveTarget}
-                  disabled={!targetAmount || parseFloat(targetAmount) < 0}
-                  className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!targetAmount || parseFloat(targetAmount) < 0 || loadingTarget}
+                  className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
-                  Set Target
+                  {loadingTarget ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Setting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiTarget className="h-4 w-4" />
+                      <span>Set Target</span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>
@@ -3602,8 +3209,8 @@ const Admin_sales_management = () => {
                     <h4 className="font-semibold text-gray-900">{selectedItem.name}</h4>
                     <p className="text-sm text-gray-600">{selectedItem.position}</p>
                     <div className="flex items-center space-x-4 text-sm text-blue-700">
-                      <span>Current Leads: {selectedItem.leadsCount}</span>
-                      <span>Converted: {selectedItem.convertedCount}</span>
+                      <span>Current Leads: {selectedItem?.performance?.totalLeads || 0}</span>
+                      <span>Converted: {selectedItem?.performance?.convertedLeads || 0}</span>
                     </div>
                   </div>
                 </div>
@@ -3624,7 +3231,7 @@ const Admin_sales_management = () => {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
-                          <span className="text-lg">{categoryData.icon}</span>
+                          <span className="text-lg">{safeRender(categoryData.icon, '📋')}</span>
                           <div>
                             <div className="font-medium text-gray-900 text-sm">{categoryData.name}</div>
                             <div className="text-xs text-gray-500">Available leads</div>
@@ -3672,7 +3279,7 @@ const Admin_sales_management = () => {
                     placeholder="Enter number of leads to assign"
                     min="1"
                     max={assignCategoryFilter === 'all' 
-                      ? leads.filter(lead => lead.assignedTo === 'Unassigned').length
+                      ? leads.filter(lead => !lead.assignedTo || lead.assignedTo === null).length
                       : leadsPerCategory[assignCategoryFilter]?.count || 0
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-semibold"
@@ -3685,7 +3292,7 @@ const Admin_sales_management = () => {
                   <p className="text-xs font-medium text-blue-600">
                     Available: {
                       assignCategoryFilter === 'all' 
-                        ? leads.filter(lead => lead.assignedTo === 'Unassigned').length
+                        ? leads.filter(lead => !lead.assignedTo || lead.assignedTo === null).length
                         : leadsPerCategory[assignCategoryFilter]?.count || 0
                     }
                   </p>
@@ -3702,11 +3309,20 @@ const Admin_sales_management = () => {
                 </button>
                 <button
                   onClick={handleSaveLeadAssignment}
-                  disabled={!leadsToAssign || parseInt(leadsToAssign) <= 0}
+                  disabled={!leadsToAssign || parseInt(leadsToAssign) <= 0 || distributingLeads}
                   className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
+                  {distributingLeads ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Distributing...</span>
+                    </>
+                  ) : (
+                    <>
                   <FiUsers className="h-4 w-4" />
                   <span>Assign {leadsToAssign || 0} Lead{leadsToAssign && parseInt(leadsToAssign) > 1 ? 's' : ''}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>
@@ -3822,7 +3438,6 @@ const Admin_sales_management = () => {
                 <button
                   onClick={() => {
                     // Export leads functionality
-                    console.log('Export leads:', selectedLeadCategoryData)
                   }}
                   className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold flex items-center space-x-2"
                 >
@@ -3873,7 +3488,7 @@ const Admin_sales_management = () => {
                     <h4 className="font-semibold text-gray-900">{selectedItem.name}</h4>
                     <p className="text-sm text-gray-600">{selectedItem.position}</p>
                     <div className="text-sm text-green-700 font-medium">
-                      Current Incentive: {formatCurrency(selectedItem.incentive)}
+                      Current Incentive: {formatCurrency(selectedItem.currentIncentive || 0)}
                     </div>
                   </div>
                 </div>
@@ -3905,11 +3520,20 @@ const Admin_sales_management = () => {
                 </button>
                 <button
                   onClick={handleSaveIncentive}
-                  disabled={!incentiveAmount || parseFloat(incentiveAmount) < 0}
+                  disabled={!incentiveAmount || parseFloat(incentiveAmount) < 0 || loadingIncentive}
                   className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
+                  {loadingIncentive ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Setting...</span>
+                    </>
+                  ) : (
+                    <>
                   <FiCreditCard className="h-4 w-4" />
                   <span>Set Incentive</span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>
@@ -3991,11 +3615,20 @@ const Admin_sales_management = () => {
                 <div className="mt-4 flex justify-end">
                   <button
                     onClick={handleCreateCategory}
-                    disabled={!categoryName.trim()}
+                    disabled={!categoryName.trim() || creatingCategory}
                     className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                   >
+                    {creatingCategory ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Creating...</span>
+                      </>
+                    ) : (
+                      <>
                     <FiPlus className="h-4 w-4" />
                     <span>Add Category</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -4003,8 +3636,8 @@ const Admin_sales_management = () => {
               {/* Categories List */}
               <div className="space-y-3">
                 <h4 className="text-lg font-semibold text-gray-900">Existing Categories</h4>
-                {leadCategories.map((category) => (
-                  <div key={category.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                {leadCategories.map((category, index) => (
+                  <div key={category._id || category.id || `category-${index}`} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
                         <div 
@@ -4036,10 +3669,15 @@ const Admin_sales_management = () => {
                         </button>
                         <button
                           onClick={() => handleDeleteCategory(category)}
-                          className="text-red-600 hover:text-red-800 p-2 rounded hover:bg-red-50 transition-colors"
+                          disabled={deletingCategory}
+                          className="text-red-600 hover:text-red-800 p-2 rounded hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Delete Category"
                         >
+                          {deletingCategory ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                          ) : (
                           <FiTrash2 className="h-4 w-4" />
+                          )}
                         </button>
                       </div>
                     </div>
@@ -4147,9 +3785,101 @@ const Admin_sales_management = () => {
             </motion.div>
           </motion.div>
         )}
+
+        {/* Category Delete Confirmation Modal */}
+        {showCategoryDeleteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-md w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Delete Category</h3>
+                  <p className="text-gray-600 text-sm mt-1">This action cannot be undone</p>
+                </div>
+                <button
+                  onClick={closeModals}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <div className="flex items-center space-x-4 p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div 
+                    className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-lg"
+                    style={{ backgroundColor: selectedItem?.color || '#EF4444' }}
+                  >
+                    {selectedItem?.icon || '📋'}
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">{selectedItem?.name}</h4>
+                    <p className="text-sm text-gray-600">{selectedItem?.description}</p>
+                    <p className="text-xs text-red-600 mt-1">
+                      {selectedItem?.leadCount || 0} leads in this category
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <div className="flex items-start space-x-3">
+                    <FiAlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-yellow-800">
+                        Warning: This action cannot be undone
+                      </p>
+                      <p className="text-sm text-yellow-700 mt-1">
+                        If this category has associated leads, you'll need to reassign or delete them first.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3">
+                <button
+                  onClick={closeModals}
+                  disabled={deletingCategory}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteCategory}
+                  disabled={deletingCategory}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {deletingCategory ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiTrash2 className="h-4 w-4" />
+                      <span>Delete Category</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   )
 }
 
 export default Admin_sales_management
+

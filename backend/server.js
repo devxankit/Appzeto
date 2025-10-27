@@ -26,6 +26,7 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 // Import role-specific routes
 const adminProjectRoutes = require('./routes/adminProjectRoutes');
 const adminAnalyticsRoutes = require('./routes/adminAnalyticsRoutes');
+const adminSalesRoutes = require('./routes/adminSalesRoutes');
 const employeeProjectRoutes = require('./routes/employeeProjectRoutes');
 const employeeTaskRoutes = require('./routes/employeeTaskRoutes');
 const employeeAnalyticsRoutes = require('./routes/employeeAnalyticsRoutes');
@@ -127,6 +128,7 @@ app.use('/api/analytics', analyticsRoutes);
 // Admin routes
 app.use('/api/admin/projects', adminProjectRoutes);
 app.use('/api/admin/analytics', adminAnalyticsRoutes);
+app.use('/api/admin/sales', adminSalesRoutes);
 
 // Employee routes
 app.use('/api/employee/projects', employeeProjectRoutes);
@@ -176,7 +178,32 @@ app.get('/api', (req, res) => {
         'DELETE /api/admin/projects/:id',
         'GET /api/admin/projects/statistics',
         'GET /api/admin/analytics/dashboard',
-        'GET /api/admin/analytics/system'
+        'GET /api/admin/analytics/system',
+        'POST /api/admin/sales/leads',
+        'POST /api/admin/sales/leads/bulk',
+        'GET /api/admin/sales/leads',
+        'GET /api/admin/sales/leads/:id',
+        'PUT /api/admin/sales/leads/:id',
+        'DELETE /api/admin/sales/leads/:id',
+        'GET /api/admin/sales/leads/statistics',
+        'POST /api/admin/sales/categories',
+        'GET /api/admin/sales/categories',
+        'GET /api/admin/sales/categories/:id',
+        'PUT /api/admin/sales/categories/:id',
+        'DELETE /api/admin/sales/categories/:id',
+        'GET /api/admin/sales/categories/performance',
+        'GET /api/admin/sales/team',
+        'GET /api/admin/sales/team/:id',
+        'PUT /api/admin/sales/team/:id/target',
+        'POST /api/admin/sales/team/:id/distribute-leads',
+        'GET /api/admin/sales/team/:id/leads',
+        'GET /api/admin/sales/team/:id/leads/category/:categoryId',
+        'POST /api/admin/sales/team/:id/incentive',
+        'GET /api/admin/sales/team/:id/incentives',
+        'PUT /api/admin/sales/team/:id/incentive/:incentiveId',
+        'GET /api/admin/sales/overview',
+        'GET /api/admin/sales/analytics/categories',
+        'GET /api/admin/sales/analytics/team'
       ],
       projects: [
         'POST /api/projects (PM only)',
