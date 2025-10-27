@@ -4,8 +4,8 @@ const {
   getClientProjectById,
   getClientProjectMilestones,
   getClientProjectStatistics
-} = require('../../controllers/client/clientProjectController');
-const { protect, authorize } = require('../../middlewares/auth');
+} = require('../controllers/clientProjectController');
+const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
 

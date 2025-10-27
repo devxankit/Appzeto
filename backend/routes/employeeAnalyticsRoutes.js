@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { protect, authorize } = require('../../middlewares/auth');
+const { protect, authorize } = require('../middlewares/auth');
 const {
   getEmployeeDashboardStats,
   getEmployeePerformanceStats,
   getEmployeeLeaderboard,
   getEmployeePointsHistory
-} = require('../../controllers/employee/employeeAnalyticsController');
+} = require('../controllers/employeeAnalyticsController');
 
 // All routes are protected and require employee role
 router.use(protect);

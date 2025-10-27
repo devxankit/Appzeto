@@ -1,10 +1,10 @@
-const Task = require('../../models/Task');
-const Project = require('../../models/Project');
-const Milestone = require('../../models/Milestone');
-const Employee = require('../../models/Employee');
-const asyncHandler = require('../../middlewares/asyncHandler');
-const ErrorResponse = require('../../utils/errorResponse');
-const socketService = require('../../services/socketService');
+const Task = require('../models/Task');
+const Project = require('../models/Project');
+const Milestone = require('../models/Milestone');
+const Employee = require('../models/Employee');
+const asyncHandler = require('../middlewares/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
+const socketService = require('../services/socketService');
 
 // @desc    Get employee's assigned tasks
 // @route   GET /api/employee/tasks

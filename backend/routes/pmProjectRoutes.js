@@ -4,8 +4,8 @@ const {
   updateMeetingStatus,
   startProject,
   activateProject
-} = require('../../controllers/pm/pmProjectController');
-const { protect, authorize } = require('../../middlewares/auth');
+} = require('../controllers/pmProjectController');
+const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
 

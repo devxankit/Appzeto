@@ -4,8 +4,8 @@ const {
   getEmployeeMilestoneById,
   getEmployeeMilestoneTasks,
   addEmployeeMilestoneComment
-} = require('../../controllers/employee/employeeMilestoneController');
-const { protect, authorize } = require('../../middlewares/auth');
+} = require('../controllers/employeeMilestoneController');
+const { protect, authorize } = require('../middlewares/auth');
 
 // Apply authentication and authorization middleware to all routes
 router.use(protect);

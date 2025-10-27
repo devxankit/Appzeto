@@ -99,10 +99,7 @@ const Admin_user_management = () => {
       // Load users and statistics
       const [usersResponse, statisticsResponse] = await Promise.all([
         adminUserService.getAllUsers({
-          role: activeTab === 'employees' ? 'employee' : 
-                activeTab === 'project-managers' ? 'project-manager' : 
-                activeTab === 'clients' ? 'client' : 
-                activeTab === 'admin-hr' ? 'admin-hr' : 'all',
+          role: 'all',
           team: activeTab === 'employees' && selectedDepartment !== 'all' ? selectedDepartment : undefined,
           status: selectedFilter !== 'all' ? selectedFilter : undefined,
           search: searchTerm || undefined
@@ -111,18 +108,7 @@ const Admin_user_management = () => {
       ])
 
       // Format users for display
-      let filteredUsers = usersResponse.data;
-      
-      // Filter based on active tab
-      if (activeTab === 'admin-hr') {
-        // Show only admin and hr users
-        filteredUsers = usersResponse.data.filter(user => user.role === 'admin' || user.role === 'hr');
-      } else {
-        // Exclude admin and hr users for other tabs
-        filteredUsers = usersResponse.data.filter(user => user.role !== 'admin' && user.role !== 'hr');
-      }
-      
-      const formattedUsers = filteredUsers.map(user => adminUserService.formatUserForDisplay(user))
+      const formattedUsers = usersResponse.data.map(user => adminUserService.formatUserForDisplay(user))
       
       setUsers(formattedUsers)
       setStatistics(statisticsResponse.data)
@@ -139,28 +125,14 @@ const Admin_user_management = () => {
     try {
       // Load only users data
       const usersResponse = await adminUserService.getAllUsers({
-        role: activeTab === 'employees' ? 'employee' : 
-              activeTab === 'project-managers' ? 'project-manager' : 
-              activeTab === 'clients' ? 'client' : 
-              activeTab === 'admin-hr' ? 'admin-hr' : 'all',
+        role: 'all',
         team: activeTab === 'employees' && selectedDepartment !== 'all' ? selectedDepartment : undefined,
         status: selectedFilter !== 'all' ? selectedFilter : undefined,
         search: searchTerm || undefined
       })
 
       // Format users for display
-      let filteredUsers = usersResponse.data;
-      
-      // Filter based on active tab
-      if (activeTab === 'admin-hr') {
-        // Show only admin and hr users
-        filteredUsers = usersResponse.data.filter(user => user.role === 'admin' || user.role === 'hr');
-      } else {
-        // Exclude admin and hr users for other tabs
-        filteredUsers = usersResponse.data.filter(user => user.role !== 'admin' && user.role !== 'hr');
-      }
-      
-      const formattedUsers = filteredUsers.map(user => adminUserService.formatUserForDisplay(user))
+      const formattedUsers = usersResponse.data.map(user => adminUserService.formatUserForDisplay(user))
       
       setUsers(formattedUsers)
     } catch (error) {
@@ -209,19 +181,19 @@ const Admin_user_management = () => {
   const getCurrentUsers = () => {
     let filteredUsers = users
 
-    // Filter by tab
+    // Filter by tab/role
     filteredUsers = users.filter(user => {
       switch (activeTab) {
         case 'employees':
-          return user.role === 'employee'
+          return user.userType === 'employee' || user.userType === 'sales'
         case 'project-managers':
-          return user.role === 'project-manager'
+          return user.userType === 'project-manager'
         case 'clients':
-          return user.role === 'client'
+          return user.userType === 'client'
         case 'admin-hr':
-          return user.role === 'admin' || user.role === 'hr'
+          return user.userType === 'admin' || user.role === 'hr'
         default:
-          return user.role === activeTab
+          return true
       }
     })
 
@@ -275,7 +247,7 @@ const Admin_user_management = () => {
       department: user.department || '',
       status: user.status,
       dateOfBirth: user.dateOfBirth || '',
-      joiningDate: user.joiningDate || user.joinDate || '',
+      joiningDate: user.joiningDate || '',
       document: user.document || null,
       password: '',
       confirmPassword: ''
@@ -886,7 +858,7 @@ const Admin_user_management = () => {
                             <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                               <div className="flex items-center space-x-1">
                                 <Calendar className="h-3 w-3 text-gray-400" />
-                                <span className="text-xs text-gray-500">{formatDate(user.joiningDate || user.joinDate)}</span>
+                                <span className="text-xs text-gray-500">{formatDate(user.joiningDate)}</span>
                               </div>
                             </div>
                           </motion.div>
@@ -1343,7 +1315,7 @@ const Admin_user_management = () => {
                       <Calendar className="h-4 w-4 text-gray-500" />
                       <div>
                         <p className="text-sm font-medium text-gray-700">Joined Date</p>
-                        <p className="text-gray-900">{formatDate(selectedUser.joiningDate || selectedUser.joinDate)}</p>
+                        <p className="text-gray-900">{formatDate(selectedUser.joiningDate)}</p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">

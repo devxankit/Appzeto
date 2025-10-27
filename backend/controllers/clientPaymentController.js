@@ -1,7 +1,7 @@
-const Payment = require('../../models/Payment');
-const Project = require('../../models/Project');
-const asyncHandler = require('../../middlewares/asyncHandler');
-const ErrorResponse = require('../../utils/errorResponse');
+const Payment = require('../models/Payment');
+const Project = require('../models/Project');
+const asyncHandler = require('../middlewares/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
 
 // @desc    Get client's payment history
 // @route   GET /api/client/payments

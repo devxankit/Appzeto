@@ -9,9 +9,9 @@ const {
   uploadEmployeeTaskAttachment,
   getEmployeeTaskAttachments,
   deleteEmployeeTaskAttachment
-} = require('../../controllers/employee/employeeTaskController');
-const { protect, authorize } = require('../../middlewares/auth');
-const upload = require('../../middlewares/upload');
+} = require('../controllers/employeeTaskController');
+const { protect, authorize } = require('../middlewares/auth');
+const upload = require('../middlewares/upload');
 
 const router = express.Router();
 

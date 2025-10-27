@@ -2,8 +2,8 @@ const express = require('express');
 const {
   getAdminDashboardStats,
   getSystemAnalytics
-} = require('../../controllers/admin/adminAnalyticsController');
-const { protect, authorize } = require('../../middlewares/auth');
+} = require('../controllers/adminAnalyticsController');
+const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
 

@@ -10,8 +10,8 @@ const {
   getPendingProjects,
   assignPMToPendingProject,
   getPMsForAssignment
-} = require('../../controllers/admin/adminProjectController');
-const { protect, authorize } = require('../../middlewares/auth');
+} = require('../controllers/adminProjectController');
+const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
 

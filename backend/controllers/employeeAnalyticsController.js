@@ -1,7 +1,7 @@
-const Employee = require('../../models/Employee');
-const Task = require('../../models/Task');
-const Project = require('../../models/Project');
-const asyncHandler = require('../../middlewares/asyncHandler');
+const Employee = require('../models/Employee');
+const Task = require('../models/Task');
+const Project = require('../models/Project');
+const asyncHandler = require('../middlewares/asyncHandler');
 
 // @desc    Get employee dashboard statistics
 // @route   GET /api/employee/analytics/dashboard

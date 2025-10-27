@@ -1,12 +1,12 @@
-const Project = require('../../models/Project');
-const Milestone = require('../../models/Milestone');
-const Task = require('../../models/Task');
-const Payment = require('../../models/Payment');
-const Employee = require('../../models/Employee');
-const PM = require('../../models/PM');
-const Client = require('../../models/Client');
-const asyncHandler = require('../../middlewares/asyncHandler');
-const ErrorResponse = require('../../utils/errorResponse');
+const Project = require('../models/Project');
+const Milestone = require('../models/Milestone');
+const Task = require('../models/Task');
+const Payment = require('../models/Payment');
+const Employee = require('../models/Employee');
+const PM = require('../models/PM');
+const Client = require('../models/Client');
+const asyncHandler = require('../middlewares/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
 
 // @desc    Get admin dashboard statistics
 // @route   GET /api/admin/analytics/dashboard

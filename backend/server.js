@@ -24,14 +24,14 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 
 // Import role-specific routes
-const adminProjectRoutes = require('./routes/admin/adminProjectRoutes');
-const adminAnalyticsRoutes = require('./routes/admin/adminAnalyticsRoutes');
-const employeeProjectRoutes = require('./routes/employee/employeeProjectRoutes');
-const employeeTaskRoutes = require('./routes/employee/employeeTaskRoutes');
-const employeeAnalyticsRoutes = require('./routes/employee/employeeAnalyticsRoutes');
-const employeeMilestoneRoutes = require('./routes/employee/employeeMilestoneRoutes');
-const clientProjectRoutes = require('./routes/client/clientProjectRoutes');
-const clientPaymentRoutes = require('./routes/client/clientPaymentRoutes');
+const adminProjectRoutes = require('./routes/adminProjectRoutes');
+const adminAnalyticsRoutes = require('./routes/adminAnalyticsRoutes');
+const employeeProjectRoutes = require('./routes/employeeProjectRoutes');
+const employeeTaskRoutes = require('./routes/employeeTaskRoutes');
+const employeeAnalyticsRoutes = require('./routes/employeeAnalyticsRoutes');
+const employeeMilestoneRoutes = require('./routes/employeeMilestoneRoutes');
+const clientProjectRoutes = require('./routes/clientProjectRoutes');
+const clientPaymentRoutes = require('./routes/clientPaymentRoutes');
 
 // Import socket service
 const socketService = require('./services/socketService');

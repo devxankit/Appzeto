@@ -15,7 +15,7 @@ const {
 } = require('../controllers/pmTeamController');
 
 // Import PM project controllers
-const pmProjectRoutes = require('./pm/pmProjectRoutes');
+const pmProjectRoutes = require('./pmProjectRoutes');
 
 const { protect, authorize } = require('../middlewares/auth');
 

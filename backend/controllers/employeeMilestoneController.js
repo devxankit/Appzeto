@@ -1,8 +1,8 @@
-const Milestone = require('../../models/Milestone');
-const Task = require('../../models/Task');
-const Project = require('../../models/Project');
-const asyncHandler = require('../../middlewares/asyncHandler');
-const ErrorResponse = require('../../utils/errorResponse');
+const Milestone = require('../models/Milestone');
+const Task = require('../models/Task');
+const Project = require('../models/Project');
+const asyncHandler = require('../middlewares/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
 
 // @desc    Get milestone details (Employee view - only assigned projects)
 // @route   GET /api/employee/milestones/:id

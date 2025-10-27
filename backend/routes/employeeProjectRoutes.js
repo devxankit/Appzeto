@@ -4,8 +4,8 @@ const {
   getEmployeeProjectById,
   getEmployeeProjectMilestones,
   getEmployeeProjectStatistics
-} = require('../../controllers/employee/employeeProjectController');
-const { protect, authorize } = require('../../middlewares/auth');
+} = require('../controllers/employeeProjectController');
+const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
 

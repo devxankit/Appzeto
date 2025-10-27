@@ -1,8 +1,8 @@
-const Project = require('../../models/Project');
-const Activity = require('../../models/Activity');
-const asyncHandler = require('../../middlewares/asyncHandler');
-const ErrorResponse = require('../../utils/errorResponse');
-const socketService = require('../../services/socketService');
+const Project = require('../models/Project');
+const Activity = require('../models/Activity');
+const asyncHandler = require('../middlewares/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
+const socketService = require('../services/socketService');
 
 // @desc    Get new projects assigned to PM
 // @route   GET /api/pm/new-projects

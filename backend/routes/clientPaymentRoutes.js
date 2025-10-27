@@ -3,8 +3,8 @@ const {
   getClientPayments,
   getClientPaymentById,
   getClientPaymentStatistics
-} = require('../../controllers/client/clientPaymentController');
-const { protect, authorize } = require('../../middlewares/auth');
+} = require('../controllers/clientPaymentController');
+const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
 

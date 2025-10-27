@@ -1,13 +1,13 @@
-const Project = require('../../models/Project');
-const Milestone = require('../../models/Milestone');
-const Task = require('../../models/Task');
-const Employee = require('../../models/Employee');
-const Client = require('../../models/Client');
-const PM = require('../../models/PM');
-const Payment = require('../../models/Payment');
-const asyncHandler = require('../../middlewares/asyncHandler');
-const ErrorResponse = require('../../utils/errorResponse');
-const socketService = require('../../services/socketService');
+const Project = require('../models/Project');
+const Milestone = require('../models/Milestone');
+const Task = require('../models/Task');
+const Employee = require('../models/Employee');
+const Client = require('../models/Client');
+const PM = require('../models/PM');
+const Payment = require('../models/Payment');
+const asyncHandler = require('../middlewares/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
+const socketService = require('../services/socketService');
 
 // @desc    Get all projects (Admin view - all projects)
 // @route   GET /api/admin/projects
