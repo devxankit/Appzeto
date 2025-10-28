@@ -28,12 +28,10 @@ const clientSchema = new mongoose.Schema({
     default: 'client'
   },
   dateOfBirth: {
-    type: Date,
-    required: [true, 'Date of birth is required']
+    type: Date
   },
   joiningDate: {
-    type: Date,
-    required: [true, 'Joining date is required']
+    type: Date
   },
   document: {
     public_id: String,
@@ -107,6 +105,31 @@ const clientSchema = new mongoose.Schema({
     },
     language: { type: String, default: 'en' },
     timezone: { type: String, default: 'Asia/Kolkata' }
+  },
+  // Reference to original lead (if converted from lead)
+  originLead: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Lead'
+  },
+  // Sales employee who converted this lead
+  convertedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Sales'
+  },
+  // Conversion date
+  conversionDate: {
+    type: Date
+  },
+  // Total spent on projects
+  totalSpent: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  // Last activity (for tracking active clients)
+  lastActivity: {
+    type: Date,
+    default: Date.now
   }
 }, {
   timestamps: true
@@ -215,6 +238,38 @@ clientSchema.methods.getSignedJwtToken = function() {
   return jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE
   });
+};
+
+// Method to handle lead conversion
+clientSchema.methods.convertFromLead = function(leadData, salesId) {
+  this.originLead = leadData.leadId;
+  this.convertedBy = salesId;
+  this.conversionDate = new Date();
+  this.joiningDate = new Date(); // Set joining date to conversion date
+  
+  // Update basic info if provided
+  if (leadData.name) this.name = leadData.name;
+  if (leadData.email) this.email = leadData.email;
+  if (leadData.companyName) this.companyName = leadData.companyName;
+  
+  return this.save();
+};
+
+// Method to update total spent
+clientSchema.methods.updateTotalSpent = function(amount) {
+  this.totalSpent += amount;
+  this.lastActivity = new Date();
+  return this.save();
+};
+
+// Method to add project
+clientSchema.methods.addProject = function(projectId) {
+  if (!this.projects.includes(projectId)) {
+    this.projects.push(projectId);
+    this.lastActivity = new Date();
+    return this.save();
+  }
+  return Promise.resolve(this);
 };
 
 // Remove sensitive data from JSON output

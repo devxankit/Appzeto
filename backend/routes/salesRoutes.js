@@ -3,7 +3,9 @@ const {
   loginSales,
   getSalesProfile,
   logoutSales,
-  createDemoSales
+  createDemoSales,
+  createLeadBySales,
+  getLeadCategories
 } = require('../controllers/salesController');
 const { protect } = require('../middlewares/auth');
 
@@ -18,6 +20,10 @@ router.use(protect); // All routes below this middleware are protected
 
 router.get('/profile', getSalesProfile);
 router.post('/logout', logoutSales);
+
+// Lead management routes
+router.post('/leads', createLeadBySales);
+router.get('/lead-categories', getLeadCategories);
 
 // Future Sales-specific routes can be added here
 // router.get('/leads', getSalesLeads);

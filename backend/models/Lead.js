@@ -26,7 +26,7 @@ const leadSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['new', 'connected', 'hot', 'converted', 'lost'],
+    enum: ['new', 'connected', 'hot', 'converted', 'lost', 'not_picked', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested'],
     default: 'new'
   },
   priority: {
@@ -65,9 +65,60 @@ const leadSchema = new mongoose.Schema({
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admin',
-    required: [true, 'Created by admin is required']
-  }
+    required: [true, 'Creator is required'],
+    refPath: 'creatorModel'
+  },
+  creatorModel: {
+    type: String,
+    required: true,
+    enum: ['Admin', 'Sales']
+  },
+  // Link to lead profile (when lead gets contacted and profiled)
+  leadProfile: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LeadProfile'
+  },
+  // Follow-up tracking
+  followUps: [{
+    scheduledDate: Date,
+    scheduledTime: String,
+    type: { type: String, enum: ['call', 'email', 'meeting', 'whatsapp', 'visit', 'demo'] },
+    notes: String,
+    status: { type: String, enum: ['pending', 'completed', 'cancelled'], default: 'pending' },
+    completedAt: Date,
+    createdAt: { type: Date, default: Date.now }
+  }],
+  // Meeting tracking
+  meetings: [{
+    scheduledDate: Date,
+    scheduledTime: String,
+    type: { type: String, enum: ['in-person', 'video', 'phone'] },
+    location: String,
+    assignee: String,
+    notes: String,
+    status: { type: String, enum: ['scheduled', 'completed', 'cancelled', 'rescheduled'], default: 'scheduled' },
+    completedAt: Date,
+    createdAt: { type: Date, default: Date.now }
+  }],
+  // Lost lead reason
+  lostReason: {
+    type: String,
+    maxlength: [500, 'Lost reason cannot exceed 500 characters']
+  },
+  // Transfer history
+  transferHistory: [{
+    fromSales: { type: mongoose.Schema.Types.ObjectId, ref: 'Sales' },
+    toSales: { type: mongoose.Schema.Types.ObjectId, ref: 'Sales' },
+    transferredAt: { type: Date, default: Date.now },
+    reason: String
+  }],
+  // Activity/interaction log
+  activities: [{
+    type: { type: String, enum: ['call', 'email', 'whatsapp', 'meeting', 'note', 'status_change'] },
+    description: String,
+    performedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Sales' },
+    timestamp: { type: Date, default: Date.now }
+  }]
 }, {
   timestamps: true
 });
@@ -107,9 +158,16 @@ leadSchema.virtual('daysUntilFollowUp').get(function() {
 // Method to update status
 leadSchema.methods.updateStatus = function(newStatus) {
   const validTransitions = {
-    'new': ['connected', 'lost'],
-    'connected': ['hot', 'lost'],
-    'hot': ['converted', 'lost'],
+    'new': ['connected', 'not_picked', 'lost'],
+    'connected': ['hot', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
+    'not_picked': ['connected', 'today_followup', 'lost'],
+    'today_followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
+    'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
+    'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
+    'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'lost'],
+    'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'lost'],
+    'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost'],
+    'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
     'converted': [], // Final state
     'lost': [] // Final state
   };
@@ -128,6 +186,60 @@ leadSchema.methods.updateStatus = function(newStatus) {
 // Method to assign to sales employee
 leadSchema.methods.assignToSales = function(salesId) {
   this.assignedTo = salesId;
+  this.lastContactDate = new Date();
+  return this.save();
+};
+
+// Method to add follow-up
+leadSchema.methods.addFollowUp = function(followUpData) {
+  this.followUps.push(followUpData);
+  this.nextFollowUpDate = followUpData.scheduledDate;
+  return this.save();
+};
+
+// Method to complete follow-up
+leadSchema.methods.completeFollowUp = function(followUpId) {
+  const followUp = this.followUps.id(followUpId);
+  if (followUp) {
+    followUp.status = 'completed';
+    followUp.completedAt = new Date();
+    return this.save();
+  }
+  throw new Error('Follow-up not found');
+};
+
+// Method to add meeting
+leadSchema.methods.addMeeting = function(meetingData) {
+  this.meetings.push(meetingData);
+  return this.save();
+};
+
+// Method to complete meeting
+leadSchema.methods.completeMeeting = function(meetingId) {
+  const meeting = this.meetings.id(meetingId);
+  if (meeting) {
+    meeting.status = 'completed';
+    meeting.completedAt = new Date();
+    return this.save();
+  }
+  throw new Error('Meeting not found');
+};
+
+// Method to add activity
+leadSchema.methods.addActivity = function(activityData) {
+  this.activities.push(activityData);
+  this.lastContactDate = new Date();
+  return this.save();
+};
+
+// Method to transfer lead to another sales employee
+leadSchema.methods.transferToSales = function(fromSalesId, toSalesId, reason) {
+  this.transferHistory.push({
+    fromSales: fromSalesId,
+    toSales: toSalesId,
+    reason: reason
+  });
+  this.assignedTo = toSalesId;
   this.lastContactDate = new Date();
   return this.save();
 };

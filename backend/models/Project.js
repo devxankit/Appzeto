@@ -123,6 +123,29 @@ const projectSchema = new mongoose.Schema({
         feedback: null
       }
     }
+  },
+  // Reference to original lead (if from sales conversion)
+  originLead: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Lead'
+  },
+  // Project type flags
+  projectType: {
+    web: { type: Boolean, default: false },
+    app: { type: Boolean, default: false },
+    taxi: { type: Boolean, default: false }
+  },
+  // Financial details from conversion
+  financialDetails: {
+    totalCost: { type: Number, default: 0 },
+    advanceReceived: { type: Number, default: 0 },
+    includeGST: { type: Boolean, default: false },
+    remainingAmount: { type: Number, default: 0 }
+  },
+  // Finished days (deadline from sales)
+  finishedDays: {
+    type: Number,
+    min: 0
   }
 }, {
   timestamps: true
@@ -256,6 +279,72 @@ projectSchema.methods.updateRevisionStatus = function(revisionType, status, feed
   // Mark the revisions field as modified
   this.markModified('revisions');
   
+  return this.save();
+};
+
+// Method to create project from lead conversion
+projectSchema.methods.createFromLeadConversion = function(leadProfileData, salesId) {
+  this.originLead = leadProfileData.leadId;
+  this.submittedBy = salesId;
+  this.status = 'pending-assignment';
+  
+  // Set project type from lead profile
+  if (leadProfileData.projectType) {
+    this.projectType = {
+      web: leadProfileData.projectType.web || false,
+      app: leadProfileData.projectType.app || false,
+      taxi: leadProfileData.projectType.taxi || false
+    };
+  }
+  
+  // Set financial details from conversion data
+  if (leadProfileData.conversionData) {
+    this.financialDetails = {
+      totalCost: leadProfileData.conversionData.totalCost || 0,
+      advanceReceived: leadProfileData.conversionData.advanceReceived || 0,
+      includeGST: leadProfileData.conversionData.includeGST || false,
+      remainingAmount: (leadProfileData.conversionData.totalCost || 0) - (leadProfileData.conversionData.advanceReceived || 0)
+    };
+    
+    // Set budget from total cost
+    this.budget = leadProfileData.conversionData.totalCost || 0;
+  }
+  
+  // Set finished days
+  if (leadProfileData.conversionData && leadProfileData.conversionData.finishedDays) {
+    this.finishedDays = leadProfileData.conversionData.finishedDays;
+  }
+  
+  // Set project name from conversion data
+  if (leadProfileData.conversionData && leadProfileData.conversionData.projectName) {
+    this.name = leadProfileData.conversionData.projectName;
+  }
+  
+  return this.save();
+};
+
+// Method to update financial details
+projectSchema.methods.updateFinancialDetails = function(financialData) {
+  this.financialDetails = {
+    ...this.financialDetails,
+    ...financialData
+  };
+  
+  // Recalculate remaining amount
+  this.financialDetails.remainingAmount = this.financialDetails.totalCost - this.financialDetails.advanceReceived;
+  
+  // Update budget to match total cost
+  this.budget = this.financialDetails.totalCost;
+  
+  return this.save();
+};
+
+// Method to update project type
+projectSchema.methods.updateProjectType = function(projectTypeData) {
+  this.projectType = {
+    ...this.projectType,
+    ...projectTypeData
+  };
   return this.save();
 };
 

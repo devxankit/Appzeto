@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
 const Sales = require('../models/Sales');
+const Lead = require('../models/Lead');
+const LeadCategory = require('../models/LeadCategory');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -238,9 +240,132 @@ const createDemoSales = async (req, res) => {
   }
 };
 
+// @desc    Create lead by sales employee
+// @route   POST /api/sales/leads
+// @access  Private (Sales only)
+const createLeadBySales = async (req, res) => {
+  try {
+    const { phone, name, company, email, category, priority, value, notes } = req.body;
+
+    // Validate required fields
+    if (!phone || !category) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number and category are required'
+      });
+    }
+
+    // Check if lead with phone number already exists
+    const existingLead = await Lead.findOne({ phone });
+    if (existingLead) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lead with this phone number already exists'
+      });
+    }
+
+    // Verify category exists
+    const categoryExists = await LeadCategory.findById(category);
+    if (!categoryExists) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid category'
+      });
+    }
+
+    // Create lead with sales employee as creator AND assignee
+    const lead = await Lead.create({
+      phone,
+      name,
+      company,
+      email,
+      category,
+      priority: priority || 'medium',
+      value: value || 0,
+      notes,
+      createdBy: req.sales.id,
+      creatorModel: 'Sales',
+      assignedTo: req.sales.id, // Auto-assign to self
+      status: 'new',
+      source: 'manual'
+    });
+
+    // Update sales employee's leadsManaged array
+    await Sales.findByIdAndUpdate(req.sales.id, {
+      $push: { leadsManaged: lead._id }
+    });
+
+    // Update sales employee's lead statistics
+    const sales = await Sales.findById(req.sales.id);
+    await sales.updateLeadStats();
+
+    // Populate for response
+    await lead.populate('category', 'name color icon');
+    await lead.populate('assignedTo', 'name email');
+
+    res.status(201).json({
+      success: true,
+      message: 'Lead created successfully',
+      data: lead
+    });
+
+  } catch (error) {
+    console.error('Create lead by sales error:', error);
+    
+    // Handle Mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
+    
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lead with this phone number already exists'
+      });
+    }
+    
+    // Handle other errors
+    res.status(500).json({
+      success: false,
+      message: 'Server error while creating lead'
+    });
+  }
+};
+
+// @desc    Get all lead categories for sales
+// @route   GET /api/sales/lead-categories
+// @access  Private (Sales only)
+const getLeadCategories = async (req, res) => {
+  try {
+    const categories = await LeadCategory.find()
+      .select('name description color icon')
+      .sort('name');
+
+    res.status(200).json({
+      success: true,
+      data: categories
+    });
+
+  } catch (error) {
+    console.error('Get lead categories error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching categories'
+    });
+  }
+};
+
 module.exports = {
   loginSales,
   getSalesProfile,
   logoutSales,
-  createDemoSales
+  createDemoSales,
+  createLeadBySales,
+  getLeadCategories
 };

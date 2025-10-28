@@ -18,15 +18,22 @@ import {
   FiChevronDown
 } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
+import api from '../../../utils/api'
+import { useToast } from '../../../contexts/ToastContext'
 import SL_navbar from '../SL-components/SL_navbar'
 
 const LeadDashboard = () => {
+  const { toast } = useToast()
+  
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formData, setFormData] = useState({
     phoneNumber: '',
     categoryId: ''
   })
+  const [categories, setCategories] = useState([])
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
   const dropdownRef = useRef(null)
 
@@ -44,49 +51,55 @@ const LeadDashboard = () => {
     }
   }, [])
 
-  // Lead categories (matching admin system)
-  const leadCategories = [
-    {
-      id: 1,
-      name: 'Hot Leads',
-      description: 'High priority leads with immediate potential',
-      color: '#EF4444',
-      icon: '🔥'
-    },
-    {
-      id: 2,
-      name: 'Cold Leads',
-      description: 'Leads that need nurturing and follow-up',
-      color: '#3B82F6',
-      icon: '❄️'
-    },
-    {
-      id: 3,
-      name: 'Warm Leads',
-      description: 'Leads showing interest but not ready to convert',
-      color: '#F59E0B',
-      icon: '🌡️'
-    },
-    {
-      id: 4,
-      name: 'Enterprise',
-      description: 'Large enterprise clients with complex requirements',
-      color: '#8B5CF6',
-      icon: '🏢'
-    },
-    {
-      id: 5,
-      name: 'SME',
-      description: 'Small and medium enterprise clients',
-      color: '#10B981',
-      icon: '🏪'
+  // Fetch categories on component mount
+  useEffect(() => {
+    const token = localStorage.getItem('salesToken') || localStorage.getItem('token')
+    if (token) {
+      fetchCategories()
+    } else {
+      // Set default categories if not logged in
+      setCategories([
+        { _id: '1', name: 'Hot Leads', description: 'High priority leads', color: '#EF4444', icon: '🔥' },
+        { _id: '2', name: 'Cold Leads', description: 'Leads that need nurturing', color: '#3B82F6', icon: '❄️' },
+        { _id: '3', name: 'Warm Leads', description: 'Leads showing interest', color: '#F59E0B', icon: '🌡️' }
+      ])
     }
-  ]
+  }, [])
+
+  const fetchCategories = async () => {
+    setIsLoadingCategories(true)
+    try {
+      const response = await api.get('/api/sales/lead-categories')
+      
+      if (response.data.success) {
+        setCategories(response.data.data)
+      } else {
+        console.error('API Error:', response.data.message)
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+      // Set some default categories as fallback
+      setCategories([
+        { _id: '1', name: 'Hot Leads', description: 'High priority leads', color: '#EF4444', icon: '🔥' },
+        { _id: '2', name: 'Cold Leads', description: 'Leads that need nurturing', color: '#3B82F6', icon: '❄️' },
+        { _id: '3', name: 'Warm Leads', description: 'Leads showing interest', color: '#F59E0B', icon: '🌡️' }
+      ])
+    } finally {
+      setIsLoadingCategories(false)
+    }
+  }
 
   // Helper function to get category info by ID
   const getCategoryInfo = (categoryId) => {
-    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+    return categories.find(cat => cat._id === categoryId) || categories[0]
   }
+
+  // Transform categories for combobox
+  const categoryOptions = categories.map(category => ({
+    value: category._id,
+    label: category.name,
+    color: category.color || '#6B7280'
+  }))
   
   // Refs for scroll-triggered animations
   const tilesRef = useRef(null)
@@ -101,7 +114,10 @@ const LeadDashboard = () => {
   const closeModal = () => {
     setIsModalOpen(false)
     setShowCategoryDropdown(false)
-    setFormData({ phoneNumber: '', categoryId: '' })
+    setFormData({ 
+      phoneNumber: '', 
+      categoryId: ''
+    })
   }
   
   // Form handlers
@@ -112,7 +128,7 @@ const LeadDashboard = () => {
     })
   }
 
-  const handleCategorySelect = (categoryId) => {
+  const handleCategoryChange = (categoryId) => {
     setFormData({
       ...formData,
       categoryId: categoryId
@@ -120,19 +136,65 @@ const LeadDashboard = () => {
     setShowCategoryDropdown(false)
   }
   
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    // Validate required fields
+    
     if (!formData.phoneNumber || !formData.categoryId) {
-      alert('Please fill in all required fields')
+      toast.error('Please fill in phone number and category')
       return
     }
-    // Handle form submission logic here
-    console.log('Form submitted:', formData)
-    // Close modal after successful submission
-    closeModal()
-    // Reset form
-    setFormData({ phoneNumber: '', categoryId: '' })
+
+    // Client-side phone validation
+    const phoneRegex = /^[0-9]{10}$/
+    if (!phoneRegex.test(formData.phoneNumber)) {
+      toast.error('Please enter a valid 10-digit phone number')
+      return
+    }
+
+    const token = localStorage.getItem('salesToken') || localStorage.getItem('token')
+    if (!token) {
+      toast.error('Please log in to create a lead')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const response = await api.post('/api/sales/leads', {
+        phone: formData.phoneNumber,
+        category: formData.categoryId
+      })
+
+      if (response.data.success) {
+        toast.success('Lead created successfully!')
+        closeModal()
+        // Optionally refresh the dashboard data
+      } else {
+        toast.error(response.data.message || 'Failed to create lead')
+      }
+    } catch (error) {
+      console.error('Error creating lead:', error)
+      if (error.response) {
+        // Server responded with error status
+        const errorData = error.response.data
+        
+        // Handle validation errors with multiple messages
+        if (errorData.errors && Array.isArray(errorData.errors)) {
+          errorData.errors.forEach(errorMsg => {
+            toast.error(errorMsg)
+          })
+        } else {
+          toast.error(errorData.message || 'Server error occurred')
+        }
+      } else if (error.request) {
+        // Request was made but no response received
+        toast.error('Server error. Please check if the backend server is running.')
+      } else {
+        // Something else happened
+        toast.error('An error occurred while creating the lead')
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // Sample data for tiles with monochromatic color scheme
@@ -506,6 +568,9 @@ const LeadDashboard = () => {
               <form onSubmit={handleSubmit} className="p-6 space-y-6">
                 {/* Phone Number Input */}
                 <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
                   <div className="relative">
                     <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-teal-600">
                       <FiPhone className="text-xl" />
@@ -515,12 +580,13 @@ const LeadDashboard = () => {
                       name="phoneNumber"
                       value={formData.phoneNumber}
                       onChange={handleInputChange}
-                      placeholder="Enter Number"
+                      placeholder="Enter 10-digit phone number"
                       className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                       required
                     />
                   </div>
                 </div>
+
 
                 {/* Category Selection */}
                 <div className="space-y-2">
@@ -533,54 +599,69 @@ const LeadDashboard = () => {
                       onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
                       className="w-full pl-4 pr-10 py-4 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 flex items-center justify-between"
                     >
-                      <div className="flex items-center space-x-3">
-                        <FiTag className="text-teal-600 text-xl" />
-                        <span className={formData.categoryId ? 'text-gray-900' : 'text-gray-500'}>
-                          {formData.categoryId 
-                            ? `${getCategoryInfo(parseInt(formData.categoryId)).icon} ${getCategoryInfo(parseInt(formData.categoryId)).name}`
-                            : 'Select a category'
-                          }
-                        </span>
+                      <span className={formData.categoryId ? 'text-gray-900' : 'text-gray-500'}>
+                        {formData.categoryId 
+                          ? getCategoryInfo(formData.categoryId).name
+                          : 'Select a category'
+                        }
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        {formData.categoryId && (
+                          <div 
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: getCategoryInfo(formData.categoryId).color || '#6B7280' }}
+                          />
+                        )}
+                        <FiChevronDown className={`text-gray-400 transition-transform duration-200 ${showCategoryDropdown ? 'rotate-180' : ''}`} />
                       </div>
-                      <FiChevronDown className={`text-gray-400 transition-transform duration-200 ${showCategoryDropdown ? 'rotate-180' : ''}`} />
                     </button>
 
                     {/* Category Dropdown */}
                     {showCategoryDropdown && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        {leadCategories.map((category) => (
-                          <button
-                            key={category.id}
-                            type="button"
-                            onClick={() => handleCategorySelect(category.id.toString())}
-                            className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-3 border-b border-gray-100 last:border-b-0"
-                          >
-                            <span className="text-lg">{category.icon}</span>
-                            <div className="flex-1">
-                              <div className="font-medium text-gray-900">{category.name}</div>
-                              <div className="text-sm text-gray-500">{category.description}</div>
-                            </div>
-                            <div 
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: category.color }}
-                            ></div>
-                          </button>
-                        ))}
+                        {isLoadingCategories ? (
+                          <div className="px-4 py-3 text-center text-gray-500">Loading categories...</div>
+                        ) : categories.length > 0 ? (
+                          categories.map((category) => (
+                            <button
+                              key={category._id}
+                              type="button"
+                              onClick={() => handleCategoryChange(category._id)}
+                              className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-200 flex items-center justify-between border-b border-gray-100 last:border-b-0"
+                            >
+                              <span className="text-gray-900">{category.name}</span>
+                              <div 
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: category.color || '#6B7280' }}
+                              />
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-4 py-3 text-center text-gray-500">No categories available</div>
+                        )}
                       </div>
                     )}
                   </div>
+                  {isLoadingCategories && (
+                    <p className="text-sm text-gray-500">Loading categories...</p>
+                  )}
                 </div>
 
 
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700 text-white font-bold py-4 rounded-lg shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 border border-teal-400/20"
+                  disabled={isSubmitting}
+                  className={`w-full font-bold py-4 rounded-lg shadow-xl transition-all duration-300 border border-teal-400/20 ${
+                    isSubmitting 
+                      ? 'bg-gray-400 cursor-not-allowed' 
+                      : 'bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700 hover:shadow-2xl transform hover:scale-105 active:scale-95'
+                  }`}
                   style={{
-                    boxShadow: '0 8px 25px -5px rgba(20, 184, 166, 0.3), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                    boxShadow: isSubmitting ? 'none' : '0 8px 25px -5px rgba(20, 184, 166, 0.3), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
                   }}
                 >
-                  Add Lead
+                  {isSubmitting ? 'Creating Lead...' : 'Add Lead'}
                 </button>
               </form>
             </motion.div>

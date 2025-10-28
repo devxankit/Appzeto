@@ -121,7 +121,20 @@ const salesSchema = new mongoose.Schema({
   incentiveHistory: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Incentive'
-  }]
+  }],
+  // Lead statistics
+  leadStats: {
+    totalAssigned: { type: Number, default: 0 },
+    contacted: { type: Number, default: 0 },
+    converted: { type: Number, default: 0 },
+    lost: { type: Number, default: 0 },
+    conversionRate: { type: Number, default: 0 }
+  },
+  // Last activity timestamp
+  lastActivityAt: {
+    type: Date,
+    default: Date.now
+  }
 }, {
   timestamps: true
 });
@@ -184,6 +197,97 @@ salesSchema.methods.resetLoginAttempts = function() {
     $unset: { loginAttempts: 1, lockUntil: 1 },
     $set: { lastLogin: new Date() }
   });
+};
+
+// Method to update lead statistics
+salesSchema.methods.updateLeadStats = async function() {
+  try {
+    const Lead = this.constructor.model('Lead');
+    
+    // Count leads by status
+    const stats = await Lead.aggregate([
+      { $match: { assignedTo: this._id } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Initialize stats
+    const leadStats = {
+      totalAssigned: 0,
+      contacted: 0,
+      converted: 0,
+      lost: 0,
+      conversionRate: 0
+    };
+    
+    // Process stats
+    stats.forEach(stat => {
+      leadStats.totalAssigned += stat.count;
+      
+      switch (stat._id) {
+        case 'connected':
+        case 'hot':
+        case 'today_followup':
+        case 'quotation_sent':
+        case 'dq_sent':
+        case 'app_client':
+        case 'web':
+        case 'demo_requested':
+          leadStats.contacted += stat.count;
+          break;
+        case 'converted':
+          leadStats.converted += stat.count;
+          break;
+        case 'lost':
+          leadStats.lost += stat.count;
+          break;
+      }
+    });
+    
+    // Calculate conversion rate
+    if (leadStats.totalAssigned > 0) {
+      leadStats.conversionRate = Math.round((leadStats.converted / leadStats.totalAssigned) * 100);
+    }
+    
+    // Update the sales employee's stats
+    this.leadStats = leadStats;
+    await this.save();
+    
+    return leadStats;
+  } catch (error) {
+    throw new Error('Failed to update lead statistics');
+  }
+};
+
+// Method to add activity to a lead
+salesSchema.methods.addActivity = async function(leadId, activityType, description) {
+  try {
+    const Lead = this.constructor.model('Lead');
+    const lead = await Lead.findById(leadId);
+    
+    if (!lead) {
+      throw new Error('Lead not found');
+    }
+    
+    // Add activity to lead
+    await lead.addActivity({
+      type: activityType,
+      description: description,
+      performedBy: this._id
+    });
+    
+    // Update last activity timestamp
+    this.lastActivityAt = new Date();
+    await this.save();
+    
+    return lead;
+  } catch (error) {
+    throw new Error('Failed to add activity');
+  }
 };
 
 // Remove password from JSON output

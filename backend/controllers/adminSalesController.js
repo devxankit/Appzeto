@@ -38,7 +38,8 @@ const createLead = asyncHandler(async (req, res, next) => {
     category,
     priority: priority || 'medium',
     notes,
-    createdBy: req.admin.id
+    createdBy: req.admin.id,
+    creatorModel: 'Admin'
   });
 
   await lead.populate('category', 'name color icon');
@@ -103,7 +104,8 @@ const createBulkLeads = asyncHandler(async (req, res, next) => {
         category,
         priority: priority || 'medium',
         source: 'bulk_upload',
-        createdBy: req.admin.id
+        createdBy: req.admin.id,
+        creatorModel: 'Admin'
       });
 
       results.created++;
