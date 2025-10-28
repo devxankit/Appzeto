@@ -37,7 +37,6 @@ const createLead = asyncHandler(async (req, res, next) => {
     email,
     category,
     priority: priority || 'medium',
-    value: value || 0,
     notes,
     createdBy: req.admin.id
   });

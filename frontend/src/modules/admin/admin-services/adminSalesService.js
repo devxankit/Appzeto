@@ -15,7 +15,6 @@ class AdminSalesService {
       const requestData = {
         ...leadData,
         phone: formattedPhone,
-        value: leadData.value || 0,
         priority: leadData.priority || 'medium'
       };
 

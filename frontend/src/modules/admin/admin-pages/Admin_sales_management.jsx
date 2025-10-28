@@ -787,7 +787,7 @@ const Admin_sales_management = () => {
       status: category,
       priority: category === 'hotLead' ? 'high' : category === 'lost' || category === 'notInterested' ? 'low' : 'medium',
       source: 'manual',
-      value: 25000,
+      value: 0,
       lastContact: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       nextFollowUp: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       assignedTo: assignedTo,
@@ -832,8 +832,7 @@ const Admin_sales_management = () => {
       const leadData = {
         phone: leadNumber.trim(),
         category: selectedCategory,
-      priority: 'medium',
-      value: 25000,
+        priority: 'medium',
         source: 'manual',
         notes: 'Manually added lead'
       }

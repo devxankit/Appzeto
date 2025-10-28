@@ -28,7 +28,7 @@ function SL_navbar() {
 
   const navItems = [
     { 
-      path: '/', 
+      path: '/dashboard', 
       label: 'Home', 
       icon: FiHome,
       iconWithPower: true

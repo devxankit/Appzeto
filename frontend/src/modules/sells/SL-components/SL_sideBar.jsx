@@ -26,7 +26,7 @@ const SL_sideBar = ({ isOpen, onClose }) => {
 
   const navItems = [
     { 
-      path: '/', 
+      path: '/dashboard', 
       label: 'Home', 
       icon: FiHome
     },
