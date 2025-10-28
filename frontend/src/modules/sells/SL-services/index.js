@@ -4,6 +4,9 @@
 // Sales Authentication Service
 export { default as salesAuthService } from './salesAuthService';
 
+// Sales Lead Management Service
+export { default as salesLeadService } from './salesLeadService';
+
 // Base API Service (for internal use)
 export { default as baseApiService } from './baseApiService';
 

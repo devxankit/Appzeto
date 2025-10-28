@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { 
@@ -12,148 +12,158 @@ import {
   FiMessageCircle,
   FiMail,
   FiPhoneOff,
-  FiTag
+  FiTag,
+  FiLoader,
+  FiX
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import { salesLeadService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_not_picked = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
+  
+  // State for filters and UI
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLeadId, setSelectedLeadId] = useState(null)
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
+  
+  // State for real data
+  const [leadsData, setLeadsData] = useState([])
+  const [categories, setCategories] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  
+  // State for Contacted form modal
+  const [showContactedForm, setShowContactedForm] = useState(false)
+  const [selectedLeadForForm, setSelectedLeadForForm] = useState(null)
+  const [contactedFormData, setContactedFormData] = useState({
+    name: '',
+    businessName: '',
+    projectType: '',
+    description: '',
+    estimatedCost: '',
+    quotationSent: false,
+    demoSent: false
+  })
 
-  // Lead categories (matching admin system)
-  const leadCategories = [
-    {
-      id: 1,
-      name: 'Hot Leads',
-      description: 'High priority leads with immediate potential',
-      color: '#EF4444',
-      icon: '🔥'
-    },
-    {
-      id: 2,
-      name: 'Cold Leads',
-      description: 'Leads that need nurturing and follow-up',
-      color: '#3B82F6',
-      icon: '❄️'
-    },
-    {
-      id: 3,
-      name: 'Warm Leads',
-      description: 'Leads showing interest but not ready to convert',
-      color: '#F59E0B',
-      icon: '🌡️'
-    },
-    {
-      id: 4,
-      name: 'Enterprise',
-      description: 'Large enterprise clients and prospects',
-      color: '#8B5CF6',
-      icon: '🏢'
-    },
-    {
-      id: 5,
-      name: 'SME',
-      description: 'Small and medium enterprise prospects',
-      color: '#10B981',
-      icon: '🏪'
-    }
-  ]
+  // Fetch categories and leads on component mount
+  useEffect(() => {
+    fetchCategories()
+    fetchLeads()
+  }, [selectedFilter, selectedCategory, searchTerm])
 
-  // Mock not picked leads data with categories
-  const notPickedLeadsData = [
-    {
-      id: 1,
-      name: 'John Smith',
-      phone: '9845637236',
-      company: 'Tech Solutions Inc.',
-      lastAttempt: '2 hours ago',
-      attempts: 3,
-      status: 'not_picked',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 2,
-      name: 'Sarah Johnson',
-      phone: '9876543210',
-      company: 'Digital Marketing Pro',
-      lastAttempt: '1 hour ago',
-      attempts: 2,
-      status: 'not_picked',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 3,
-      name: 'Michael Brown',
-      phone: '9087654321',
-      company: 'E-commerce Store',
-      lastAttempt: '30 minutes ago',
-      attempts: 1,
-      status: 'not_picked'
-    },
-    {
-      id: 4,
-      name: 'Emily Davis',
-      phone: '8765432109',
-      company: 'Restaurant Chain',
-      lastAttempt: '4 hours ago',
-      attempts: 5,
-      status: 'not_picked'
-    },
-    {
-      id: 5,
-      name: 'David Wilson',
-      phone: '7654321098',
-      company: 'Fitness Center',
-      lastAttempt: '6 hours ago',
-      attempts: 2,
-      status: 'not_picked'
-    },
-    {
-      id: 6,
-      name: 'Lisa Anderson',
-      phone: '6543210987',
-      company: 'Real Estate Agency',
-      lastAttempt: '1 day ago',
-      attempts: 4,
-      status: 'not_picked'
-    },
-    {
-      id: 7,
-      name: 'Robert Garcia',
-      phone: '5432109876',
-      company: 'Healthcare Clinic',
-      lastAttempt: '2 hours ago',
-      attempts: 3,
-      status: 'not_picked'
+  // Fetch categories from API
+  const fetchCategories = async () => {
+    try {
+      const cats = await salesLeadService.getLeadCategories()
+      setCategories(cats)
+    } catch (error) {
+      console.error('Error fetching categories:', error)
     }
-  ]
+  }
+
+  // Fetch leads from API
+  const fetchLeads = async () => {
+    setIsLoading(true)
+    try {
+      const params = {
+        category: selectedCategory !== 'all' ? selectedCategory : undefined,
+        search: searchTerm || undefined,
+        timeFrame: selectedFilter !== 'all' ? selectedFilter : undefined,
+        page: 1,
+        limit: 50
+      }
+      const response = await salesLeadService.getLeadsByStatus('not_picked', params)
+      setLeadsData(response.data || [])
+    } catch (error) {
+      console.error('Error fetching leads:', error)
+      toast.error('Failed to fetch leads')
+      setLeadsData([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const filters = [
     { id: 'today', label: 'Today' },
-    { id: 'yesterday', label: 'Yesterday' },
     { id: 'week', label: 'Last 7 Days' },
     { id: 'month', label: 'This Month' },
     { id: 'all', label: 'All' }
   ]
 
-  const filteredLeads = notPickedLeadsData.filter(lead => {
-    const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         lead.phone.includes(searchTerm) ||
-                         lead.company.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || lead.categoryId === parseInt(selectedCategory)
-    return matchesSearch && matchesCategory
-  })
-
-  // Get category info for a lead
+  // Get category info helper
   const getCategoryInfo = (categoryId) => {
-    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+    const category = categories.find(cat => cat._id === categoryId)
+    return category || { name: 'Unknown', color: '#999999', icon: '📋' }
+  }
+
+  // Status change handler
+  const handleStatusChange = async (leadId, newStatus) => {
+    try {
+      if (newStatus === 'connected') {
+        // Show contacted form
+        setSelectedLeadForForm(leadId)
+        setShowContactedForm(true)
+      } else {
+        await salesLeadService.updateLeadStatus(leadId, newStatus)
+        toast.success(`Lead status updated to ${salesLeadService.getStatusDisplayName(newStatus)}`)
+        
+        // Remove lead from current list
+        setLeadsData(prev => prev.filter(lead => lead._id !== leadId))
+        
+        // Refresh dashboard stats
+        if (window.refreshDashboardStats) {
+          window.refreshDashboardStats()
+        }
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error)
+      toast.error('Failed to update lead status')
+    }
+    setShowActionsMenu(null)
+  }
+
+  // Handle contacted form submission
+  const handleContactedFormSubmit = async (e) => {
+    e.preventDefault()
+    try {
+      // First update lead status to connected
+      await salesLeadService.updateLeadStatus(selectedLeadForForm, 'connected')
+      
+      // Then create lead profile
+      await salesLeadService.createLeadProfile(selectedLeadForForm, contactedFormData)
+      
+      toast.success('Lead marked as contacted and profile created')
+      
+      // Remove lead from current list
+      setLeadsData(prev => prev.filter(lead => lead._id !== selectedLeadForForm))
+      
+      // Refresh dashboard stats
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+      
+      // Reset form and close modal
+      setContactedFormData({
+        name: '',
+        businessName: '',
+        projectType: '',
+        description: '',
+        estimatedCost: '',
+        quotationSent: false,
+        demoSent: false
+      })
+      setShowContactedForm(false)
+      setSelectedLeadForForm(null)
+      
+    } catch (error) {
+      console.error('Error creating lead profile:', error)
+      toast.error('Failed to create lead profile')
+    }
   }
 
   const handleCall = (phone) => {
@@ -168,11 +178,6 @@ const SL_not_picked = () => {
   const handleProfile = (leadId) => {
     console.log('Navigating to profile for lead ID:', leadId)
     navigate(`/lead-profile/${leadId}`)
-  }
-
-  const handleStatusChange = (leadId, newStatus) => {
-    console.log(`Lead ${leadId} status changed to: ${newStatus}`)
-    setShowActionsMenu(null)
   }
 
   // Mobile Lead Card Component
@@ -192,12 +197,16 @@ const SL_not_picked = () => {
 
           {/* Lead Info & Category */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-gray-900 truncate">{lead.name}</h3>
-            <p className="text-sm text-gray-600 truncate">{lead.company}</p>
+            <h3 className="text-base font-semibold text-gray-900 truncate">
+              {lead.leadProfile?.name || lead.name || 'Unknown'}
+            </h3>
+            <p className="text-sm text-gray-600 truncate">
+              {lead.leadProfile?.businessName || lead.company || 'No company'}
+            </p>
             {/* Category Tag */}
             <div className="flex items-center space-x-1 mt-1">
               <span 
-                className="text-xs text-gray-500"
+                className="text-xs text-black"
                 style={{ color: categoryInfo.color }}
               >
                 {categoryInfo.icon} {categoryInfo.name}
@@ -258,7 +267,7 @@ const SL_not_picked = () => {
           {/* More Options */}
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -266,7 +275,7 @@ const SL_not_picked = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === lead.id && (
+              {showActionsMenu === lead._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -276,16 +285,22 @@ const SL_not_picked = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'follow_up')}
+                      onClick={() => handleStatusChange(lead._id, 'connected')}
                       className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                     >
-                      Follow Up
+                      Contacted
                     </button>
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'reschedule')}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
+                      onClick={() => handleStatusChange(lead._id, 'today_followup')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
                     >
-                      Reschedule
+                      Today Followup
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'lost')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
+                    >
+                      Not Interested
                     </button>
                   </div>
                 </motion.div>
@@ -315,12 +330,16 @@ const SL_not_picked = () => {
 
           {/* Lead Info & Category */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.name}</h3>
-            <p className="text-sm text-gray-600 truncate">{lead.company}</p>
+            <h3 className="text-lg font-semibold text-gray-900 truncate">
+              {lead.leadProfile?.name || lead.name || 'Unknown'}
+            </h3>
+            <p className="text-sm text-gray-600 truncate">
+              {lead.leadProfile?.businessName || lead.company || 'No company'}
+            </p>
             {/* Category Tag */}
             <div className="flex items-center space-x-2 mt-1">
               <span 
-                className="text-xs text-gray-500"
+                className="text-xs text-black"
                 style={{ color: categoryInfo.color }}
               >
                 {categoryInfo.icon} {categoryInfo.name}
@@ -381,7 +400,7 @@ const SL_not_picked = () => {
 
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
               className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -389,7 +408,7 @@ const SL_not_picked = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === lead.id && (
+              {showActionsMenu === lead._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -399,16 +418,22 @@ const SL_not_picked = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'follow_up')}
+                      onClick={() => handleStatusChange(lead._id, 'connected')}
                       className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                     >
-                      Follow Up
+                      Contacted
                     </button>
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'reschedule')}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
+                      onClick={() => handleStatusChange(lead._id, 'today_followup')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
                     >
-                      Reschedule Call
+                      Today Followup
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'lost')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
+                    >
+                      Not Interested
                     </button>
                   </div>
                 </motion.div>
@@ -460,7 +485,7 @@ const SL_not_picked = () => {
                  <div className="bg-white rounded-lg px-4 py-3 shadow-md border border-white/20 ml-3">
                    <div className="text-center">
                      <p className="text-xs text-rose-600 font-medium mb-0.5">Total</p>
-                     <p className="text-2xl font-bold text-rose-900 leading-none">{notPickedLeadsData.length}</p>
+                     <p className="text-2xl font-bold text-rose-900 leading-none">{leadsData.length}</p>
                      <p className="text-xs text-rose-600 font-medium mt-0.5">Not Picked</p>
                    </div>
                  </div>
@@ -540,17 +565,17 @@ const SL_not_picked = () => {
                   >
                     All Categories
                   </button>
-                  {leadCategories.map((category) => (
+                  {categories.map((category) => (
                     <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id.toString())}
+                      key={category._id}
+                      onClick={() => setSelectedCategory(category._id)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
-                        selectedCategory === category.id.toString()
+                        selectedCategory === category._id
                           ? 'text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                       style={{
-                        backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                        backgroundColor: selectedCategory === category._id ? category.color : undefined
                       }}
                     >
                       <span>{category.icon}</span>
@@ -570,7 +595,7 @@ const SL_not_picked = () => {
             className="mb-4"
           >
             <p className="text-gray-600 text-sm">
-              Showing {filteredLeads.length} of {notPickedLeadsData.length} not picked leads
+              Showing {leadsData.length} not picked leads
             </p>
           </motion.div>
 
@@ -581,10 +606,32 @@ const SL_not_picked = () => {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="space-y-3"
           >
-            <AnimatePresence>
-              {filteredLeads.map((lead, index) => (
+            {isLoading ? (
+              // Loading skeleton
+              <div className="space-y-3">
+                {[...Array(3)].map((_, index) => (
+                  <div key={index} className="bg-white rounded-xl p-4 border border-gray-200 animate-pulse">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 flex-1">
+                        <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <div className="w-12 h-6 bg-gray-200 rounded"></div>
+                        <div className="w-6 h-6 bg-gray-200 rounded"></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <AnimatePresence>
+                {leadsData.map((lead, index) => (
                 <motion.div
-                  key={lead.id}
+                  key={lead._id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
@@ -595,9 +642,10 @@ const SL_not_picked = () => {
                 </motion.div>
               ))}
             </AnimatePresence>
+            )}
 
             {/* Empty State */}
-            {filteredLeads.length === 0 && (
+            {leadsData.length === 0 && !isLoading && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -637,10 +685,10 @@ const SL_not_picked = () => {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="bg-gradient-to-r from-rose-500 to-rose-600 text-white px-6 py-3 rounded-xl">
-                    <span className="text-sm font-semibold">Total: {notPickedLeadsData.length}</span>
+                    <span className="text-sm font-semibold">Total: {leadsData.length}</span>
                   </div>
                   <div className="bg-white text-gray-600 px-6 py-3 rounded-xl border border-gray-200">
-                    <span className="text-sm font-semibold">Showing: {filteredLeads.length}</span>
+                    <span className="text-sm font-semibold">Showing: {leadsData.length}</span>
                   </div>
                 </div>
               </motion.div>
@@ -718,17 +766,17 @@ const SL_not_picked = () => {
                         >
                           All Categories
                         </button>
-                        {leadCategories.map((category) => (
+                        {categories.map((category) => (
                           <button
-                            key={category.id}
-                            onClick={() => setSelectedCategory(category.id.toString())}
+                            key={category._id}
+                            onClick={() => setSelectedCategory(category._id)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
-                              selectedCategory === category.id.toString()
+                              selectedCategory === category._id
                                 ? 'text-white shadow-md'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                             style={{
-                              backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                              backgroundColor: selectedCategory === category._id ? category.color : undefined
                             }}
                           >
                             <span>{category.icon}</span>
@@ -748,24 +796,48 @@ const SL_not_picked = () => {
                 transition={{ duration: 0.6, delay: 0.4 }}
                 className="space-y-3"
               >
-                <AnimatePresence>
-                  {filteredLeads.map((lead, index) => (
-                    <motion.div
-                      key={lead.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
-                      className="bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300"
-                    >
-                      <DesktopLeadCard lead={lead} />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+                {isLoading ? (
+                  // Loading skeleton
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, index) => (
+                      <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 animate-pulse">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4 flex-1">
+                            <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                            <div className="flex-1">
+                              <div className="h-5 bg-gray-200 rounded w-1/3 mb-2"></div>
+                              <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                            </div>
+                          </div>
+                          <div className="flex space-x-3">
+                            <div className="w-16 h-8 bg-gray-200 rounded"></div>
+                            <div className="w-20 h-8 bg-gray-200 rounded"></div>
+                            <div className="w-8 h-8 bg-gray-200 rounded"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <AnimatePresence>
+                    {leadsData.map((lead, index) => (
+                      <motion.div
+                        key={lead._id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        className="bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300"
+                      >
+                        <DesktopLeadCard lead={lead} />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                )}
               </motion.div>
 
               {/* Empty State */}
-              {filteredLeads.length === 0 && (
+              {leadsData.length === 0 && !isLoading && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -799,19 +871,19 @@ const SL_not_picked = () => {
                  <div className="space-y-4">
                    <div className="flex items-center justify-between">
                      <span className="text-rose-700 text-sm font-medium">Total Not Picked</span>
-                     <span className="text-rose-900 text-xl font-bold">{notPickedLeadsData.length}</span>
+                     <span className="text-rose-900 text-xl font-bold">{leadsData.length}</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-rose-700 text-sm font-medium">High Attempts (3+)</span>
-                     <span className="text-rose-900 text-xl font-bold">{notPickedLeadsData.filter(lead => lead.attempts >= 3).length}</span>
+                     <span className="text-rose-900 text-xl font-bold">-</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-rose-700 text-sm font-medium">Today's Attempts</span>
-                     <span className="text-rose-900 text-xl font-bold">{notPickedLeadsData.filter(lead => lead.lastAttempt.includes('hour') || lead.lastAttempt.includes('minute')).length}</span>
+                     <span className="text-rose-900 text-xl font-bold">-</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-rose-700 text-sm font-medium">Avg. Attempts</span>
-                     <span className="text-rose-900 text-xl font-bold">{Math.round(notPickedLeadsData.reduce((sum, lead) => sum + lead.attempts, 0) / notPickedLeadsData.length)}</span>
+                     <span className="text-rose-900 text-xl font-bold">-</span>
                    </div>
                  </div>
               </motion.div>
@@ -883,6 +955,143 @@ const SL_not_picked = () => {
           </div>
         </div>
       </main>
+      {/* Contacted Form Modal */}
+      <AnimatePresence>
+        {showContactedForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Mark as Contacted</h3>
+                <button
+                  onClick={() => setShowContactedForm(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleContactedFormSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contact Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={contactedFormData.name}
+                    onChange={(e) => setContactedFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Business Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={contactedFormData.businessName}
+                    onChange={(e) => setContactedFormData(prev => ({ ...prev, businessName: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Project Type
+                  </label>
+                  <select
+                    value={contactedFormData.projectType}
+                    onChange={(e) => setContactedFormData(prev => ({ ...prev, projectType: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  >
+                    <option value="">Select project type</option>
+                    <option value="Web Development">Web Development</option>
+                    <option value="Mobile App">Mobile App</option>
+                    <option value="E-commerce">E-commerce</option>
+                    <option value="Custom Software">Custom Software</option>
+                    <option value="Consulting">Consulting</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={contactedFormData.description}
+                    onChange={(e) => setContactedFormData(prev => ({ ...prev, description: e.target.value }))}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estimated Cost
+                  </label>
+                  <input
+                    type="number"
+                    value={contactedFormData.estimatedCost}
+                    onChange={(e) => setContactedFormData(prev => ({ ...prev, estimatedCost: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    placeholder="Enter estimated cost"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={contactedFormData.quotationSent}
+                      onChange={(e) => setContactedFormData(prev => ({ ...prev, quotationSent: e.target.checked }))}
+                      className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Quotation Sent</span>
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={contactedFormData.demoSent}
+                      onChange={(e) => setContactedFormData(prev => ({ ...prev, demoSent: e.target.checked }))}
+                      className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Demo Sent</span>
+                  </label>
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowContactedForm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                  >
+                    Mark as Contacted
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

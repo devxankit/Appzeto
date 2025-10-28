@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { 
@@ -12,18 +12,80 @@ import {
   FiMessageCircle,
   FiMail,
   FiFileText,
-  FiTag
+  FiTag,
+  FiLoader,
+  FiX,
+  FiCheckCircle
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import { salesLeadService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_quotation_sent = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
+  
+  // State for filters and UI
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLeadId, setSelectedLeadId] = useState(null)
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
+  
+  // State for real data
+  const [leadsData, setLeadsData] = useState([])
+  const [categories, setCategories] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  
+  // State for Conversion form modal
+  const [showConversionForm, setShowConversionForm] = useState(false)
+  const [selectedLeadForConversion, setSelectedLeadForConversion] = useState(null)
+  const [conversionFormData, setConversionFormData] = useState({
+    projectName: '',
+    projectType: '',
+    estimatedBudget: '',
+    startDate: '',
+    notes: ''
+  })
+
+  // Fetch categories and leads on component mount
+  useEffect(() => {
+    fetchCategories()
+    fetchLeads()
+  }, [selectedFilter, selectedCategory, searchTerm])
+
+  // Fetch categories from API
+  const fetchCategories = async () => {
+    try {
+      const cats = await salesLeadService.getLeadCategories()
+      setCategories(cats)
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    }
+  }
+
+  // Fetch leads from API
+  const fetchLeads = async () => {
+    setIsLoading(true)
+    try {
+      const params = {
+        category: selectedCategory !== 'all' ? selectedCategory : undefined,
+        search: searchTerm || undefined,
+        timeFrame: selectedFilter !== 'all' ? selectedFilter : undefined,
+        page: 1,
+        limit: 50
+      }
+      const response = await salesLeadService.getLeadsByStatus('quotation_sent', params)
+      setLeadsData(response.data || [])
+    } catch (error) {
+      console.error('Error fetching leads:', error)
+      toast.error('Failed to fetch leads')
+      setLeadsData([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Lead categories (matching admin system)
   const leadCategories = [
@@ -144,22 +206,75 @@ const SL_quotation_sent = () => {
 
   const filters = [
     { id: 'today', label: 'Today' },
-    { id: 'week', label: 'This Week' },
+    { id: 'week', label: 'Last 7 Days' },
     { id: 'month', label: 'This Month' },
     { id: 'all', label: 'All' }
   ]
 
-  const filteredLeads = quotationSentData.filter(lead => {
-    const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         lead.phone.includes(searchTerm) ||
-                         lead.company.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || lead.categoryId === parseInt(selectedCategory)
-    return matchesSearch && matchesCategory
-  })
-
-  // Get category info for a lead
+  // Get category info helper
   const getCategoryInfo = (categoryId) => {
-    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+    const category = categories.find(cat => cat._id === categoryId)
+    return category || { name: 'Unknown', color: '#999999', icon: '📋' }
+  }
+
+  // Status change handler
+  const handleStatusChange = async (leadId, newStatus) => {
+    try {
+      await salesLeadService.updateLeadStatus(leadId, newStatus)
+      toast.success(`Lead status updated to ${salesLeadService.getStatusDisplayName(newStatus)}`)
+      
+      // Remove lead from current list
+      setLeadsData(prev => prev.filter(lead => lead._id !== leadId))
+      
+      // Refresh dashboard stats
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error)
+      toast.error('Failed to update lead status')
+    }
+    setShowActionsMenu(null)
+  }
+
+  // Handle conversion
+  const handleConvertLead = (leadId) => {
+    setSelectedLeadForConversion(leadId)
+    setShowConversionForm(true)
+    setShowActionsMenu(null)
+  }
+
+  // Handle conversion form submission
+  const handleConversionFormSubmit = async (e) => {
+    e.preventDefault()
+    try {
+      const result = await salesLeadService.convertLeadToClient(selectedLeadForConversion, conversionFormData)
+      
+      toast.success('Lead converted to client successfully')
+      
+      // Remove lead from current list
+      setLeadsData(prev => prev.filter(lead => lead._id !== selectedLeadForConversion))
+      
+      // Refresh dashboard stats
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+      
+      // Reset form and close modal
+      setConversionFormData({
+        projectName: '',
+        projectType: '',
+        estimatedBudget: '',
+        startDate: '',
+        notes: ''
+      })
+      setShowConversionForm(false)
+      setSelectedLeadForConversion(null)
+      
+    } catch (error) {
+      console.error('Error converting lead:', error)
+      toast.error('Failed to convert lead')
+    }
   }
 
   const handleCall = (phone) => {
@@ -176,11 +291,6 @@ const SL_quotation_sent = () => {
     navigate(`/lead-profile/${leadId}`)
   }
 
-  const handleStatusChange = (leadId, newStatus) => {
-    console.log(`Lead ${leadId} status changed to: ${newStatus}`)
-    setShowActionsMenu(null)
-  }
-
   // Mobile Lead Card Component
   const MobileLeadCard = ({ lead }) => (
     <div className="p-4 space-y-3">
@@ -195,8 +305,12 @@ const SL_quotation_sent = () => {
 
         {/* Lead Info & Category */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-gray-900 truncate">{lead.name}</h3>
-          <p className="text-sm text-gray-600 truncate">{lead.company}</p>
+          <h3 className="text-base font-semibold text-gray-900 truncate">
+            {lead.leadProfile?.name || lead.name || 'Unknown'}
+          </h3>
+          <p className="text-sm text-gray-600 truncate">
+            {lead.leadProfile?.businessName || lead.company || 'No company'}
+          </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-1 mt-1">
             <span 
@@ -261,7 +375,7 @@ const SL_quotation_sent = () => {
           {/* More Options */}
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -269,7 +383,7 @@ const SL_quotation_sent = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === lead.id && (
+              {showActionsMenu === lead._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -279,16 +393,34 @@ const SL_quotation_sent = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'follow_up')}
+                      onClick={() => handleStatusChange(lead._id, 'connected')}
                       className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                     >
-                      Follow Up
+                      Contacted
                     </button>
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'resend')}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
+                      onClick={() => handleStatusChange(lead._id, 'hot')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
                     >
-                      Resend
+                      Hot Lead
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'dq_sent')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors duration-200"
+                    >
+                      D&Q Sent
+                    </button>
+                    <button
+                      onClick={() => handleConvertLead(lead._id)}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200"
+                    >
+                      Converted
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'lost')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
+                    >
+                      Not Interested
                     </button>
                   </div>
                 </motion.div>
@@ -314,8 +446,12 @@ const SL_quotation_sent = () => {
 
         {/* Lead Info & Category */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.name}</h3>
-          <p className="text-sm text-gray-600 truncate">{lead.company}</p>
+          <h3 className="text-lg font-semibold text-gray-900 truncate">
+            {lead.leadProfile?.name || lead.name || 'Unknown'}
+          </h3>
+          <p className="text-sm text-gray-600 truncate">
+            {lead.leadProfile?.businessName || lead.company || 'No company'}
+          </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-2 mt-1">
             <span 
@@ -380,7 +516,7 @@ const SL_quotation_sent = () => {
 
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
               className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -388,7 +524,7 @@ const SL_quotation_sent = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === lead.id && (
+              {showActionsMenu === lead._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -398,16 +534,34 @@ const SL_quotation_sent = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'follow_up')}
+                      onClick={() => handleStatusChange(lead._id, 'connected')}
                       className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                     >
-                      Follow Up
+                      Contacted
                     </button>
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'resend')}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
+                      onClick={() => handleStatusChange(lead._id, 'hot')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
                     >
-                      Resend Quotation
+                      Hot Lead
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'dq_sent')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors duration-200"
+                    >
+                      D&Q Sent
+                    </button>
+                    <button
+                      onClick={() => handleConvertLead(lead._id)}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200"
+                    >
+                      Converted
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'lost')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
+                    >
+                      Not Interested
                     </button>
                   </div>
                 </motion.div>
@@ -580,9 +734,9 @@ const SL_quotation_sent = () => {
             className="space-y-3"
           >
             <AnimatePresence>
-              {filteredLeads.map((lead, index) => (
+              {leadsData.map((lead, index) => (
                 <motion.div
-                  key={lead.id}
+                  key={lead._id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
@@ -747,9 +901,9 @@ const SL_quotation_sent = () => {
                 className="space-y-3"
               >
                 <AnimatePresence>
-                  {filteredLeads.map((lead, index) => (
+                  {leadsData.map((lead, index) => (
                     <motion.div
-                      key={lead.id}
+                      key={lead._id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
@@ -881,6 +1035,125 @@ const SL_quotation_sent = () => {
           </div>
         </div>
       </main>
+      {/* Conversion Form Modal */}
+      <AnimatePresence>
+        {showConversionForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Convert Lead to Client</h3>
+                <button
+                  onClick={() => setShowConversionForm(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleConversionFormSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Project Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={conversionFormData.projectName}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, projectName: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Project Type *
+                  </label>
+                  <select
+                    value={conversionFormData.projectType}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, projectType: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  >
+                    <option value="">Select project type</option>
+                    <option value="Web Development">Web Development</option>
+                    <option value="Mobile App">Mobile App</option>
+                    <option value="E-commerce">E-commerce</option>
+                    <option value="Custom Software">Custom Software</option>
+                    <option value="Consulting">Consulting</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estimated Budget *
+                  </label>
+                  <input
+                    type="number"
+                    value={conversionFormData.estimatedBudget}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, estimatedBudget: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                    placeholder="Enter estimated budget"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={conversionFormData.startDate}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea
+                    value={conversionFormData.notes}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Add any notes about this conversion..."
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowConversionForm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Convert to Client
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -20,6 +20,7 @@ import {
 import { Link } from 'react-router-dom'
 import api from '../../../utils/api'
 import { useToast } from '../../../contexts/ToastContext'
+import { salesLeadService } from '../SL-services'
 import SL_navbar from '../SL-components/SL_navbar'
 
 const LeadDashboard = () => {
@@ -36,6 +37,26 @@ const LeadDashboard = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
   const dropdownRef = useRef(null)
+  
+  // Dashboard statistics state
+  const [dashboardStats, setDashboardStats] = useState({
+    statusCounts: {
+      new: 0,
+      connected: 0,
+      not_picked: 0,
+      today_followup: 0,
+      quotation_sent: 0,
+      dq_sent: 0,
+      app_client: 0,
+      web: 0,
+      converted: 0,
+      lost: 0,
+      hot: 0,
+      demo_requested: 0
+    },
+    totalLeads: 0
+  })
+  const [isLoadingStats, setIsLoadingStats] = useState(false)
 
   // Handle clicks outside dropdown
   useEffect(() => {
@@ -51,7 +72,7 @@ const LeadDashboard = () => {
     }
   }, [])
 
-  // Fetch categories on component mount
+  // Fetch categories and dashboard stats on component mount
   useEffect(() => {
     const token = localStorage.getItem('salesToken') || localStorage.getItem('token')
     if (token) {
@@ -63,6 +84,50 @@ const LeadDashboard = () => {
         { _id: '2', name: 'Cold Leads', description: 'Leads that need nurturing', color: '#3B82F6', icon: '❄️' },
         { _id: '3', name: 'Warm Leads', description: 'Leads showing interest', color: '#F59E0B', icon: '🌡️' }
       ])
+    }
+    
+    // Always try to fetch dashboard stats - service will handle auth errors gracefully
+    fetchDashboardStats()
+  }, [])
+
+  // Fetch dashboard statistics
+  const fetchDashboardStats = async () => {
+    setIsLoadingStats(true)
+    try {
+      // Get actual leads count for 'new' status to match SL_newLeads.jsx
+      const newLeadsResponse = await salesLeadService.getLeadsByStatus('new', { page: 1, limit: 1000 })
+      const newLeadsCount = newLeadsResponse.data.length
+      
+      // Update dashboard stats with actual new leads count
+      const updatedStats = {
+        ...dashboardStats,
+        statusCounts: {
+          ...dashboardStats.statusCounts,
+          new: newLeadsCount
+        },
+        totalLeads: dashboardStats.totalLeads + (newLeadsCount - dashboardStats.statusCounts.new)
+      }
+      
+      setDashboardStats(updatedStats)
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error)
+      // Don't show error toast for dashboard stats, just use defaults
+      // The service already returns default values on error
+    } finally {
+      setIsLoadingStats(false)
+    }
+  }
+
+  // Function to refresh stats (can be called from other components)
+  const refreshDashboardStats = () => {
+    fetchDashboardStats()
+  }
+
+  // Expose refresh function globally for other components to use
+  useEffect(() => {
+    window.refreshDashboardStats = refreshDashboardStats
+    return () => {
+      delete window.refreshDashboardStats
     }
   }, [])
 
@@ -167,7 +232,8 @@ const LeadDashboard = () => {
       if (response.data.success) {
         toast.success('Lead created successfully!')
         closeModal()
-        // Optionally refresh the dashboard data
+        // Refresh the dashboard data to show updated counts
+        refreshDashboardStats()
       } else {
         toast.error(response.data.message || 'Failed to create lead')
       }
@@ -197,16 +263,16 @@ const LeadDashboard = () => {
     }
   }
 
-  // Sample data for tiles with monochromatic color scheme
+  // Dynamic tile data based on dashboard statistics
   const tileData = [
-    { title: "Contacted", count: 42, icon: FiPhone, bgClass: "bg-emerald-50", textClass: "text-emerald-800", iconBgClass: "bg-emerald-100", iconClass: "text-emerald-600", borderClass: "border-emerald-200/30" },
-    { title: "Not Picked", count: 18, icon: FiPhoneOff, bgClass: "bg-rose-50", textClass: "text-rose-800", iconBgClass: "bg-rose-100", iconClass: "text-rose-600", borderClass: "border-rose-200/30" },
-    { title: "Today Follow Up", count: 5, icon: FiCalendar, bgClass: "bg-amber-50", textClass: "text-amber-800", iconBgClass: "bg-amber-100", iconClass: "text-amber-600", borderClass: "border-amber-200/30" },
-    { title: "Quotation Sent", count: 15, icon: FiFileText, bgClass: "bg-blue-50", textClass: "text-blue-800", iconBgClass: "bg-blue-100", iconClass: "text-blue-600", borderClass: "border-blue-200/30" },
-    { title: "D&Q Sent", count: 17, icon: FiSend, bgClass: "bg-purple-50", textClass: "text-purple-800", iconBgClass: "bg-purple-100", iconClass: "text-purple-600", borderClass: "border-purple-200/30" },
-    { title: "App Client", count: 33, icon: FiSmartphone, bgClass: "bg-indigo-50", textClass: "text-indigo-800", iconBgClass: "bg-indigo-100", iconClass: "text-indigo-600", borderClass: "border-indigo-200/30" },
-    { title: "Web", count: 6653, icon: FiGlobe, bgClass: "bg-cyan-50", textClass: "text-cyan-800", iconBgClass: "bg-cyan-100", iconClass: "text-cyan-600", borderClass: "border-cyan-200/30" },
-    { title: "Converted", count: 65, icon: FiCheckCircle, bgClass: "bg-green-50", textClass: "text-green-800", iconBgClass: "bg-green-100", iconClass: "text-green-600", borderClass: "border-green-200/30" }
+    { title: "Contacted", count: dashboardStats.statusCounts.connected, icon: FiPhone, bgClass: "bg-emerald-50", textClass: "text-emerald-800", iconBgClass: "bg-emerald-100", iconClass: "text-emerald-600", borderClass: "border-emerald-200/30", status: "connected" },
+    { title: "Not Picked", count: dashboardStats.statusCounts.not_picked, icon: FiPhoneOff, bgClass: "bg-rose-50", textClass: "text-rose-800", iconBgClass: "bg-rose-100", iconClass: "text-rose-600", borderClass: "border-rose-200/30", status: "not_picked" },
+    { title: "Today Follow Up", count: dashboardStats.statusCounts.today_followup, icon: FiCalendar, bgClass: "bg-amber-50", textClass: "text-amber-800", iconBgClass: "bg-amber-100", iconClass: "text-amber-600", borderClass: "border-amber-200/30", status: "today_followup" },
+    { title: "Quotation Sent", count: dashboardStats.statusCounts.quotation_sent, icon: FiFileText, bgClass: "bg-blue-50", textClass: "text-blue-800", iconBgClass: "bg-blue-100", iconClass: "text-blue-600", borderClass: "border-blue-200/30", status: "quotation_sent" },
+    { title: "D&Q Sent", count: dashboardStats.statusCounts.dq_sent, icon: FiSend, bgClass: "bg-purple-50", textClass: "text-purple-800", iconBgClass: "bg-purple-100", iconClass: "text-purple-600", borderClass: "border-purple-200/30", status: "dq_sent" },
+    { title: "App Client", count: dashboardStats.statusCounts.app_client, icon: FiSmartphone, bgClass: "bg-indigo-50", textClass: "text-indigo-800", iconBgClass: "bg-indigo-100", iconClass: "text-indigo-600", borderClass: "border-indigo-200/30", status: "app_client" },
+    { title: "Web", count: dashboardStats.statusCounts.web, icon: FiGlobe, bgClass: "bg-cyan-50", textClass: "text-cyan-800", iconBgClass: "bg-cyan-100", iconClass: "text-cyan-600", borderClass: "border-cyan-200/30", status: "web" },
+    { title: "Converted", count: dashboardStats.statusCounts.converted, icon: FiCheckCircle, bgClass: "bg-green-50", textClass: "text-green-800", iconBgClass: "bg-green-100", iconClass: "text-green-600", borderClass: "border-green-200/30", status: "converted" }
   ]
 
   return (
@@ -251,7 +317,7 @@ const LeadDashboard = () => {
                     boxShadow: '0 4px 12px -2px rgba(20, 184, 166, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.1)'
                   }}
                 >
-                  <span className="text-lg font-bold">24</span>
+                  <span className="text-lg font-bold">{isLoadingStats ? '...' : dashboardStats.statusCounts.new}</span>
                 </div>
               </div>
             </div>
@@ -391,7 +457,7 @@ const LeadDashboard = () => {
                         boxShadow: '0 4px 12px -2px rgba(20, 184, 166, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.1)'
                       }}
                     >
-                      <span className="text-2xl font-bold">24</span>
+                      <span className="text-2xl font-bold">{isLoadingStats ? '...' : dashboardStats.statusCounts.new}</span>
                     </motion.div>
                   </div>
                 </motion.div>

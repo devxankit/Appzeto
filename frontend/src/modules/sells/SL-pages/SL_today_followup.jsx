@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { 
@@ -12,135 +12,155 @@ import {
   FiMessageCircle,
   FiMail,
   FiCalendar,
-  FiTag
+  FiTag,
+  FiLoader,
+  FiX,
+  FiClock
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import { salesLeadService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_today_followup = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
+  
+  // State for filters and UI
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLeadId, setSelectedLeadId] = useState(null)
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
+  
+  // State for real data
+  const [leadsData, setLeadsData] = useState([])
+  const [categories, setCategories] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  
+  // State for Follow-up form modal
+  const [showFollowupForm, setShowFollowupForm] = useState(false)
+  const [selectedLeadForFollowup, setSelectedLeadForFollowup] = useState(null)
+  const [followupFormData, setFollowupFormData] = useState({
+    followupDate: '',
+    followupTime: '',
+    notes: '',
+    priority: 'medium'
+  })
 
-  // Lead categories (matching admin system)
-  const leadCategories = [
-    {
-      id: 1,
-      name: 'Hot Leads',
-      description: 'High priority leads with immediate potential',
-      color: '#EF4444',
-      icon: '🔥'
-    },
-    {
-      id: 2,
-      name: 'Cold Leads',
-      description: 'Leads that need nurturing and follow-up',
-      color: '#3B82F6',
-      icon: '❄️'
-    },
-    {
-      id: 3,
-      name: 'Warm Leads',
-      description: 'Leads showing interest but not ready to convert',
-      color: '#F59E0B',
-      icon: '🌡️'
-    },
-    {
-      id: 4,
-      name: 'Enterprise',
-      description: 'Large enterprise clients and prospects',
-      color: '#8B5CF6',
-      icon: '🏢'
-    },
-    {
-      id: 5,
-      name: 'SME',
-      description: 'Small and medium enterprise prospects',
-      color: '#10B981',
-      icon: '🏪'
-    }
-  ]
+  // Fetch categories and leads on component mount
+  useEffect(() => {
+    fetchCategories()
+    fetchLeads()
+  }, [selectedFilter, selectedCategory, searchTerm])
 
-  // Mock today follow-up leads data with categories
-  const todayFollowupData = [
-    {
-      id: 1,
-      name: 'John Smith',
-      phone: '9845637236',
-      company: 'Tech Solutions Inc.',
-      followupTime: '10:00 AM',
-      followupDate: 'Today',
-      status: 'followup',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 2,
-      name: 'Sarah Johnson',
-      phone: '9876543210',
-      company: 'Digital Marketing Pro',
-      followupTime: '2:00 PM',
-      followupDate: 'Today',
-      status: 'followup',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 3,
-      name: 'Michael Brown',
-      phone: '9087654321',
-      company: 'E-commerce Store',
-      followupTime: '4:30 PM',
-      followupDate: 'Today',
-      status: 'followup',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 4,
-      name: 'Emily Davis',
-      phone: '8765432109',
-      company: 'Restaurant Chain',
-      followupTime: '11:30 AM',
-      followupDate: 'Today',
-      status: 'followup',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 5,
-      name: 'David Wilson',
-      phone: '7654321098',
-      company: 'Fitness Center',
-      followupTime: '3:15 PM',
-      followupDate: 'Today',
-      status: 'followup',
-      categoryId: 5,
-      category: 'SME'
+  // Fetch categories from API
+  const fetchCategories = async () => {
+    try {
+      const cats = await salesLeadService.getLeadCategories()
+      setCategories(cats)
+    } catch (error) {
+      console.error('Error fetching categories:', error)
     }
-  ]
+  }
+
+  // Fetch leads from API
+  const fetchLeads = async () => {
+    setIsLoading(true)
+    try {
+      const params = {
+        category: selectedCategory !== 'all' ? selectedCategory : undefined,
+        search: searchTerm || undefined,
+        timeFrame: selectedFilter !== 'all' ? selectedFilter : undefined,
+        page: 1,
+        limit: 50
+      }
+      const response = await salesLeadService.getLeadsByStatus('today_followup', params)
+      setLeadsData(response.data || [])
+    } catch (error) {
+      console.error('Error fetching leads:', error)
+      toast.error('Failed to fetch leads')
+      setLeadsData([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const filters = [
-    { id: 'morning', label: 'Morning' },
-    { id: 'afternoon', label: 'Afternoon' },
-    { id: 'evening', label: 'Evening' },
+    { id: 'today', label: 'Today' },
+    { id: 'week', label: 'Last 7 Days' },
+    { id: 'month', label: 'This Month' },
     { id: 'all', label: 'All' }
   ]
 
-  const filteredLeads = todayFollowupData.filter(lead => {
-    const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         lead.phone.includes(searchTerm) ||
-                         lead.company.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || lead.categoryId === parseInt(selectedCategory)
-    return matchesSearch && matchesCategory
-  })
-
-  // Get category info for a lead
+  // Get category info helper
   const getCategoryInfo = (categoryId) => {
-    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+    const category = categories.find(cat => cat._id === categoryId)
+    return category || { name: 'Unknown', color: '#999999', icon: '📋' }
+  }
+
+  // Status change handler
+  const handleStatusChange = async (leadId, newStatus) => {
+    try {
+      await salesLeadService.updateLeadStatus(leadId, newStatus)
+      toast.success(`Lead status updated to ${salesLeadService.getStatusDisplayName(newStatus)}`)
+      
+      // Remove lead from current list
+      setLeadsData(prev => prev.filter(lead => lead._id !== leadId))
+      
+      // Refresh dashboard stats
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error)
+      toast.error('Failed to update lead status')
+    }
+    setShowActionsMenu(null)
+  }
+
+  // Handle reschedule follow-up
+  const handleRescheduleFollowup = (leadId) => {
+    setSelectedLeadForFollowup(leadId)
+    setShowFollowupForm(true)
+    setShowActionsMenu(null)
+  }
+
+  // Handle follow-up form submission
+  const handleFollowupFormSubmit = async (e) => {
+    e.preventDefault()
+    try {
+      // Update lead with new follow-up details (this could be a note update or a custom field)
+      await salesLeadService.updateLeadStatus(
+        selectedLeadForFollowup, 
+        'today_followup', 
+        `Follow-up rescheduled for ${followupFormData.followupDate} at ${followupFormData.followupTime}. Priority: ${followupFormData.priority}. Notes: ${followupFormData.notes}`
+      )
+      
+      toast.success('Follow-up rescheduled successfully')
+      
+      // Refresh leads list
+      fetchLeads()
+      
+      // Refresh dashboard stats
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+      
+      // Reset form and close modal
+      setFollowupFormData({
+        followupDate: '',
+        followupTime: '',
+        notes: '',
+        priority: 'medium'
+      })
+      setShowFollowupForm(false)
+      setSelectedLeadForFollowup(null)
+      
+    } catch (error) {
+      console.error('Error rescheduling follow-up:', error)
+      toast.error('Failed to reschedule follow-up')
+    }
   }
 
   const handleCall = (phone) => {
@@ -157,11 +177,6 @@ const SL_today_followup = () => {
     navigate(`/lead-profile/${leadId}`)
   }
 
-  const handleStatusChange = (leadId, newStatus) => {
-    console.log(`Lead ${leadId} status changed to: ${newStatus}`)
-    setShowActionsMenu(null)
-  }
-
   // Mobile Lead Card Component
   const MobileLeadCard = ({ lead }) => (
     <div className="p-4 space-y-3">
@@ -176,12 +191,16 @@ const SL_today_followup = () => {
 
         {/* Lead Info & Category */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-gray-900 truncate">{lead.name}</h3>
-          <p className="text-sm text-gray-600 truncate">{lead.company}</p>
+          <h3 className="text-base font-semibold text-gray-900 truncate">
+            {lead.leadProfile?.name || lead.name || 'Unknown'}
+          </h3>
+          <p className="text-sm text-gray-600 truncate">
+            {lead.leadProfile?.businessName || lead.company || 'No company'}
+          </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-1 mt-1">
             <span 
-              className="text-xs text-gray-500"
+              className="text-xs text-black"
               style={{ color: getCategoryInfo(lead.categoryId).color }}
             >
               {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
@@ -191,13 +210,13 @@ const SL_today_followup = () => {
 
         {/* Time Badge */}
         <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-amber-600">{lead.followupTime}</p>
+          <p className="text-sm font-bold text-amber-600">{lead.followupTime || 'Today'}</p>
         </div>
       </div>
 
       {/* Follow-up Info */}
       <div className="flex justify-between items-center">
-        <span className="text-xs text-gray-500">Follow-up: {lead.followupDate}</span>
+        <span className="text-xs text-gray-500">Follow-up: {lead.followupDate || 'Today'}</span>
         <span className="text-xs text-gray-500">{lead.phone}</span>
       </div>
 
@@ -231,7 +250,7 @@ const SL_today_followup = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(lead.id)
+              handleProfile(lead._id)
             }}
             className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
             title="Profile"
@@ -242,7 +261,7 @@ const SL_today_followup = () => {
           {/* More Options */}
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -250,7 +269,7 @@ const SL_today_followup = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === lead.id && (
+              {showActionsMenu === lead._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -260,16 +279,34 @@ const SL_today_followup = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'completed')}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
-                    >
-                      Mark Done
-                    </button>
-                    <button
-                      onClick={() => handleStatusChange(lead.id, 'reschedule')}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
+                      onClick={() => handleRescheduleFollowup(lead._id)}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
                     >
                       Reschedule
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'connected')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
+                    >
+                      Contacted
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'hot')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
+                    >
+                      Hot Lead
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'quotation_sent')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
+                    >
+                      Quotation Sent
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'lost')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
+                    >
+                      Not Interested
                     </button>
                   </div>
                 </motion.div>
@@ -295,12 +332,16 @@ const SL_today_followup = () => {
 
         {/* Lead Info & Category */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.name}</h3>
-          <p className="text-sm text-gray-600 truncate">{lead.company}</p>
+          <h3 className="text-lg font-semibold text-gray-900 truncate">
+            {lead.leadProfile?.name || lead.name || 'Unknown'}
+          </h3>
+          <p className="text-sm text-gray-600 truncate">
+            {lead.leadProfile?.businessName || lead.company || 'No company'}
+          </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-2 mt-1">
             <span 
-              className="text-xs text-gray-500"
+              className="text-xs text-black"
               style={{ color: getCategoryInfo(lead.categoryId).color }}
             >
               {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
@@ -310,8 +351,8 @@ const SL_today_followup = () => {
 
         {/* Time & Date */}
         <div className="text-right flex-shrink-0">
-          <p className="text-lg font-bold text-amber-600">{lead.followupTime}</p>
-          <p className="text-xs text-gray-500">{lead.followupDate}</p>
+          <p className="text-lg font-bold text-amber-600">{lead.followupTime || 'Today'}</p>
+          <p className="text-xs text-gray-500">{lead.followupDate || 'Follow-up'}</p>
         </div>
       </div>
 
@@ -351,7 +392,7 @@ const SL_today_followup = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(lead.id)
+              handleProfile(lead._id)
             }}
             className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200 flex items-center space-x-1"
           >
@@ -361,7 +402,7 @@ const SL_today_followup = () => {
 
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
               className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -369,7 +410,7 @@ const SL_today_followup = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === lead.id && (
+              {showActionsMenu === lead._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -379,16 +420,34 @@ const SL_today_followup = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'completed')}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
-                    >
-                      Mark Done
-                    </button>
-                    <button
-                      onClick={() => handleStatusChange(lead.id, 'reschedule')}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
+                      onClick={() => handleRescheduleFollowup(lead._id)}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
                     >
                       Reschedule
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'connected')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
+                    >
+                      Contacted
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'hot')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
+                    >
+                      Hot Lead
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'quotation_sent')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
+                    >
+                      Quotation Sent
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'lost')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
+                    >
+                      Not Interested
                     </button>
                   </div>
                 </motion.div>
@@ -439,7 +498,7 @@ const SL_today_followup = () => {
                  <div className="bg-white rounded-lg px-4 py-3 shadow-md border border-white/20 ml-3">
                    <div className="text-center">
                      <p className="text-xs text-amber-600 font-medium mb-0.5">Total</p>
-                     <p className="text-2xl font-bold text-amber-900 leading-none">{todayFollowupData.length}</p>
+                     <p className="text-2xl font-bold text-amber-900 leading-none">{leadsData.length}</p>
                      <p className="text-xs text-amber-600 font-medium mt-0.5">Follow-ups</p>
                    </div>
                  </div>
@@ -519,17 +578,17 @@ const SL_today_followup = () => {
                   >
                     All Categories
                   </button>
-                  {leadCategories.map((category) => (
+                  {categories.map((category) => (
                     <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id.toString())}
+                      key={category._id}
+                      onClick={() => setSelectedCategory(category._id)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
-                        selectedCategory === category.id.toString()
+                        selectedCategory === category._id
                           ? 'text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                       style={{
-                        backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                        backgroundColor: selectedCategory === category._id ? category.color : undefined
                       }}
                     >
                       <span>{category.icon}</span>
@@ -549,7 +608,7 @@ const SL_today_followup = () => {
             className="mb-4"
           >
             <p className="text-gray-600 text-sm">
-              Showing {filteredLeads.length} of {todayFollowupData.length} follow-up leads
+              Showing {leadsData.length} follow-up leads
             </p>
           </motion.div>
 
@@ -560,10 +619,32 @@ const SL_today_followup = () => {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="space-y-3"
           >
-            <AnimatePresence>
-              {filteredLeads.map((lead, index) => (
+            {isLoading ? (
+              // Loading skeleton
+              <div className="space-y-3">
+                {[...Array(3)].map((_, index) => (
+                  <div key={index} className="bg-white rounded-xl p-4 border border-gray-200 animate-pulse">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 flex-1">
+                        <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <div className="w-12 h-6 bg-gray-200 rounded"></div>
+                        <div className="w-6 h-6 bg-gray-200 rounded"></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <AnimatePresence>
+                {leadsData.map((lead, index) => (
                 <motion.div
-                  key={lead.id}
+                  key={lead._id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
@@ -574,9 +655,10 @@ const SL_today_followup = () => {
                 </motion.div>
               ))}
             </AnimatePresence>
+            )}
 
             {/* Empty State */}
-            {filteredLeads.length === 0 && (
+            {leadsData.length === 0 && !isLoading && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -616,10 +698,10 @@ const SL_today_followup = () => {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white px-6 py-3 rounded-xl">
-                    <span className="text-sm font-semibold">Total: {todayFollowupData.length}</span>
+                    <span className="text-sm font-semibold">Total: {leadsData.length}</span>
                   </div>
                   <div className="bg-white text-gray-600 px-6 py-3 rounded-xl border border-gray-200">
-                    <span className="text-sm font-semibold">Showing: {filteredLeads.length}</span>
+                    <span className="text-sm font-semibold">Showing: {leadsData.length}</span>
                   </div>
                 </div>
               </motion.div>
@@ -697,17 +779,17 @@ const SL_today_followup = () => {
                         >
                           All Categories
                         </button>
-                        {leadCategories.map((category) => (
+                        {categories.map((category) => (
                           <button
-                            key={category.id}
-                            onClick={() => setSelectedCategory(category.id.toString())}
+                            key={category._id}
+                            onClick={() => setSelectedCategory(category._id)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
-                              selectedCategory === category.id.toString()
+                              selectedCategory === category._id
                                 ? 'text-white shadow-md'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                             style={{
-                              backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                              backgroundColor: selectedCategory === category._id ? category.color : undefined
                             }}
                           >
                             <span>{category.icon}</span>
@@ -727,24 +809,48 @@ const SL_today_followup = () => {
                 transition={{ duration: 0.6, delay: 0.4 }}
                 className="space-y-3"
               >
-                <AnimatePresence>
-                  {filteredLeads.map((lead, index) => (
-                    <motion.div
-                      key={lead.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
-                      className="bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300"
-                    >
-                      <DesktopLeadCard lead={lead} />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+                {isLoading ? (
+                  // Loading skeleton
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, index) => (
+                      <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 animate-pulse">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4 flex-1">
+                            <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                            <div className="flex-1">
+                              <div className="h-5 bg-gray-200 rounded w-1/3 mb-2"></div>
+                              <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                            </div>
+                          </div>
+                          <div className="flex space-x-3">
+                            <div className="w-16 h-8 bg-gray-200 rounded"></div>
+                            <div className="w-20 h-8 bg-gray-200 rounded"></div>
+                            <div className="w-8 h-8 bg-gray-200 rounded"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <AnimatePresence>
+                    {leadsData.map((lead, index) => (
+                      <motion.div
+                        key={lead._id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        className="bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300"
+                      >
+                        <DesktopLeadCard lead={lead} />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                )}
               </motion.div>
 
               {/* Empty State */}
-              {filteredLeads.length === 0 && (
+              {leadsData.length === 0 && !isLoading && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -778,15 +884,15 @@ const SL_today_followup = () => {
                  <div className="space-y-4">
                    <div className="flex items-center justify-between">
                      <span className="text-amber-700 text-sm font-medium">Total Follow-ups</span>
-                     <span className="text-amber-900 text-xl font-bold">{todayFollowupData.length}</span>
+                     <span className="text-amber-900 text-xl font-bold">{leadsData.length}</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-amber-700 text-sm font-medium">Morning (AM)</span>
-                     <span className="text-amber-900 text-xl font-bold">{todayFollowupData.filter(lead => lead.followupTime.includes('AM')).length}</span>
+                     <span className="text-amber-900 text-xl font-bold">-</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-amber-700 text-sm font-medium">Afternoon (PM)</span>
-                     <span className="text-amber-900 text-xl font-bold">{todayFollowupData.filter(lead => lead.followupTime.includes('PM')).length}</span>
+                     <span className="text-amber-900 text-xl font-bold">-</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-amber-700 text-sm font-medium">Completed</span>
@@ -862,6 +968,108 @@ const SL_today_followup = () => {
           </div>
         </div>
       </main>
+      {/* Follow-up Form Modal */}
+      <AnimatePresence>
+        {showFollowupForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Reschedule Follow-up</h3>
+                <button
+                  onClick={() => setShowFollowupForm(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleFollowupFormSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Follow-up Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={followupFormData.followupDate}
+                    onChange={(e) => setFollowupFormData(prev => ({ ...prev, followupDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    required
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Follow-up Time *
+                  </label>
+                  <input
+                    type="time"
+                    value={followupFormData.followupTime}
+                    onChange={(e) => setFollowupFormData(prev => ({ ...prev, followupTime: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Priority
+                  </label>
+                  <select
+                    value={followupFormData.priority}
+                    onChange={(e) => setFollowupFormData(prev => ({ ...prev, priority: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea
+                    value={followupFormData.notes}
+                    onChange={(e) => setFollowupFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    placeholder="Add any notes about this follow-up..."
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowFollowupForm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+                  >
+                    Reschedule Follow-up
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

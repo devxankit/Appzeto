@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   FiPhone, 
@@ -12,9 +12,13 @@ import {
   FiX,
   FiTag
 } from 'react-icons/fi'
+import { salesLeadService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 import SL_navbar from '../SL-components/SL_navbar'
 
 const SL_newLeads = () => {
+  const { toast } = useToast()
+  
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
@@ -32,6 +36,16 @@ const SL_newLeads = () => {
     estimatedPrice: '50000',
     quotationSent: false,
     demoSent: false
+  })
+  
+  // Real lead data state
+  const [leadsData, setLeadsData] = useState([])
+  const [isLoadingLeads, setIsLoadingLeads] = useState(false)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 12,
+    total: 0,
+    pages: 0
   })
 
   // Lead categories (matching admin system)
@@ -73,51 +87,47 @@ const SL_newLeads = () => {
     }
   ]
 
-  // Mock leads data with categories
-  const leadsData = [
-    {
-      id: 1,
-      phone: '9845637236',
-      priority: 'high',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 2,
-      phone: '9876543210',
-      priority: 'medium',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 3,
-      phone: '9087654321',
-      priority: 'high',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 4,
-      phone: '8765432109',
-      priority: 'low',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 5,
-      phone: '7654321098',
-      priority: 'high',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 6,
-      phone: '6543210987',
-      priority: 'medium',
-      categoryId: 5,
-      category: 'SME'
+  // Fetch leads from API
+  const fetchLeads = async () => {
+    setIsLoadingLeads(true)
+    try {
+      const params = {
+        status: 'new',
+        page: pagination.page,
+        limit: pagination.limit
+      }
+      
+      if (selectedCategory !== 'all') {
+        params.category = selectedCategory
+      }
+      
+      if (searchTerm) {
+        params.search = searchTerm
+      }
+
+      const response = await salesLeadService.getLeadsByStatus('new', params)
+      setLeadsData(response.data)
+      setPagination({
+        page: response.page,
+        limit: response.limit,
+        total: response.total,
+        pages: response.pages
+      })
+    } catch (error) {
+      console.error('Error fetching leads:', error)
+      // Service already returns empty data on error, just show a subtle message
+      if (leadsData.length === 0) {
+        toast.error('Unable to load leads. Please check your connection.')
+      }
+    } finally {
+      setIsLoadingLeads(false)
     }
-  ]
+  }
+
+  // Fetch leads on component mount and when filters change
+  useEffect(() => {
+    fetchLeads()
+  }, [selectedCategory, searchTerm, pagination.page])
 
   const filters = [
     { id: 'today', label: 'Today' },
@@ -127,15 +137,16 @@ const SL_newLeads = () => {
     { id: 'all', label: 'All' }
   ]
 
-  const filteredLeads = leadsData.filter(lead => {
-    const matchesSearch = lead.phone.includes(searchTerm)
-    const matchesCategory = selectedCategory === 'all' || lead.categoryId === parseInt(selectedCategory)
-    return matchesSearch && matchesCategory
-  })
+  // Since we're fetching filtered data from API, we don't need client-side filtering
+  // The API handles search and category filtering
+  const filteredLeads = leadsData
 
   // Get category info for a lead
-  const getCategoryInfo = (categoryId) => {
-    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+  const getCategoryInfo = (category) => {
+    if (typeof category === 'object' && category._id) {
+      return category
+    }
+    return leadCategories.find(cat => cat.id === category) || leadCategories[0]
   }
 
 
@@ -157,28 +168,68 @@ const SL_newLeads = () => {
     window.open(`https://wa.me/91${phone}?text=${message}`, '_blank')
   }
 
-  const handleStatusChange = (leadId, newStatus) => {
-    if (newStatus === 'contacted') {
-      setSelectedLeadForForm(leadId)
-      setShowConnectedForm(true)
-    } else {
-      console.log(`Lead ${leadId} status changed to: ${newStatus}`)
+  const handleStatusChange = async (leadId, newStatus) => {
+    try {
+      if (newStatus === 'contacted') {
+        setSelectedLeadForForm(leadId)
+        setShowConnectedForm(true)
+      } else {
+        await salesLeadService.updateLeadStatus(leadId, newStatus)
+        toast.success(`Lead status updated to ${newStatus}`)
+        // Refresh leads data
+        fetchLeads()
+        // Refresh dashboard stats if available
+        if (window.refreshDashboardStats) {
+          window.refreshDashboardStats()
+        }
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error)
+      toast.error('Failed to update lead status')
     }
     setShowActionsMenu(null)
   }
 
-  const handleNotInterested = (leadId) => {
-    setLeadToDelete(leadId)
-    setShowDeleteConfirm(true)
+  const handleNotInterested = async (leadId) => {
+    try {
+      await salesLeadService.updateLeadStatus(leadId, 'lost', 'Not interested')
+      toast.success('Lead marked as not interested')
+      // Refresh leads data
+      fetchLeads()
+      // Refresh dashboard stats if available
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error)
+      toast.error('Failed to update lead status')
+    }
     setShowActionsMenu(null)
   }
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (leadToDelete) {
-      // Remove lead from the data array
-      const updatedLeads = leadsData.filter(lead => lead.id !== leadToDelete)
-      console.log(`Lead ${leadToDelete} permanently deleted`)
-      // In a real app, you would update the state or make an API call
+      try {
+        await salesLeadService.updateLeadStatus(leadToDelete, 'lost', 'Not interested')
+        toast({
+          title: 'Success',
+          description: 'Lead marked as not interested',
+          variant: 'default'
+        })
+        // Refresh leads data
+        fetchLeads()
+        // Refresh dashboard stats if available
+        if (window.refreshDashboardStats) {
+          window.refreshDashboardStats()
+        }
+      } catch (error) {
+        console.error('Error updating lead status:', error)
+        toast({
+          title: 'Error',
+          description: 'Failed to update lead status',
+          variant: 'destructive'
+        })
+      }
     }
     setShowDeleteConfirm(false)
     setLeadToDelete(null)
@@ -196,20 +247,54 @@ const SL_newLeads = () => {
     }))
   }
 
-  const handleConnectedFormSubmit = (e) => {
+  const handleConnectedFormSubmit = async (e) => {
     e.preventDefault()
-    console.log('Connected form submitted:', connectedForm)
-    // Handle form submission logic here
-    setShowConnectedForm(false)
-    setSelectedLeadForForm(null)
-    setConnectedForm({
-      name: '',
-      description: '',
-      projectType: 'web',
-      estimatedPrice: '50000',
-      quotationSent: false,
-      demoSent: false
-    })
+    try {
+      // First update lead status to connected
+      await salesLeadService.updateLeadStatus(selectedLeadForForm, 'connected')
+      
+      // Then create lead profile
+      const profileData = {
+        name: connectedForm.name,
+        businessName: connectedForm.name, // Using name as business name for now
+        email: '', // Will be filled later if available
+        projectType: {
+          web: connectedForm.projectType === 'web',
+          app: connectedForm.projectType === 'app',
+          taxi: connectedForm.projectType === 'taxi'
+        },
+        estimatedCost: parseInt(connectedForm.estimatedPrice) || 0,
+        description: connectedForm.description,
+        quotationSent: connectedForm.quotationSent,
+        demoSent: connectedForm.demoSent
+      }
+      
+      await salesLeadService.createLeadProfile(selectedLeadForForm, profileData)
+      
+      toast.success('Lead marked as contacted and profile created')
+      
+      // Refresh leads data
+      fetchLeads()
+      // Refresh dashboard stats if available
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+      
+      // Close form and reset
+      setShowConnectedForm(false)
+      setSelectedLeadForForm(null)
+      setConnectedForm({
+        name: '',
+        description: '',
+        projectType: 'web',
+        estimatedPrice: '50000',
+        quotationSent: false,
+        demoSent: false
+      })
+    } catch (error) {
+      console.error('Error creating lead profile:', error)
+      toast.error('Failed to create lead profile')
+    }
   }
 
   const closeConnectedForm = () => {
@@ -227,7 +312,7 @@ const SL_newLeads = () => {
 
   // Mobile Lead Card Component - Simplified
   const MobileLeadCard = ({ lead }) => {
-    const categoryInfo = getCategoryInfo(lead.categoryId)
+    const categoryInfo = getCategoryInfo(lead.category)
     
     return (
       <div className="flex items-center justify-between">
@@ -245,12 +330,11 @@ const SL_newLeads = () => {
             <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.phone}</h3>
             {/* Category Tag */}
             <div className="flex items-center space-x-1 mt-1">
-              <span 
-                className="text-xs text-gray-500"
-                style={{ color: categoryInfo.color }}
-              >
-                {categoryInfo.icon} {categoryInfo.name}
-              </span>
+                <span 
+                  className="text-xs text-black"
+                >
+                  {categoryInfo.icon} {categoryInfo.name}
+                </span>
             </div>
           </div>
         </div>
@@ -278,7 +362,7 @@ const SL_newLeads = () => {
         {/* More Options */}
         <div className="relative">
           <button
-            onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+            onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
             className="text-gray-400 hover:text-gray-600 p-1"
           >
             <FiMoreVertical className="text-lg" />
@@ -286,7 +370,7 @@ const SL_newLeads = () => {
 
           {/* Actions Dropdown */}
           <AnimatePresence>
-            {showActionsMenu === lead.id && (
+            {showActionsMenu === lead._id && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -296,19 +380,19 @@ const SL_newLeads = () => {
               >
                 <div className="py-1.5">
                   <button
-                    onClick={() => handleStatusChange(lead.id, 'contacted')}
+                    onClick={() => handleStatusChange(lead._id, 'contacted')}
                     className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                   >
                     Contacted
                   </button>
                   <button
-                    onClick={() => handleStatusChange(lead.id, 'not_picked')}
+                    onClick={() => handleStatusChange(lead._id, 'not_picked')}
                     className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors duration-200"
                   >
                     Not Picked
                   </button>
                   <button
-                    onClick={() => handleNotInterested(lead.id)}
+                    onClick={() => handleNotInterested(lead._id)}
                     className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
                   >
                     Not Interested
@@ -325,7 +409,7 @@ const SL_newLeads = () => {
 
   // Desktop Lead Card Component - Simplified
   const DesktopLeadCard = ({ lead }) => {
-    const categoryInfo = getCategoryInfo(lead.categoryId)
+    const categoryInfo = getCategoryInfo(lead.category)
     
     return (
       <div className="flex items-center justify-between">
@@ -343,12 +427,11 @@ const SL_newLeads = () => {
             <h3 className="text-xl font-semibold text-gray-900">{lead.phone}</h3>
             {/* Category Tag */}
             <div className="flex items-center space-x-2 mt-1">
-              <span 
-                className="text-xs text-gray-500"
-                style={{ color: categoryInfo.color }}
-              >
-                {categoryInfo.icon} {categoryInfo.name}
-              </span>
+                <span 
+                  className="text-xs text-black"
+                >
+                  {categoryInfo.icon} {categoryInfo.name}
+                </span>
             </div>
           </div>
         </div>
@@ -367,14 +450,14 @@ const SL_newLeads = () => {
           className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-all duration-200 flex items-center space-x-2"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.':195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5-.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/>
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/>
           </svg>
           <span className="text-sm">WhatsApp</span>
         </button>
 
         <div className="relative">
           <button
-            onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+            onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
             className="bg-gray-100 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-200 transition-all duration-200"
           >
             <FiMoreVertical className="text-lg" />
@@ -382,7 +465,7 @@ const SL_newLeads = () => {
 
           {/* Actions Dropdown */}
           <AnimatePresence>
-            {showActionsMenu === lead.id && (
+            {showActionsMenu === lead._id && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -392,19 +475,19 @@ const SL_newLeads = () => {
               >
                 <div className="py-2.5">
                   <button
-                    onClick={() => handleStatusChange(lead.id, 'contacted')}
+                    onClick={() => handleStatusChange(lead._id, 'contacted')}
                     className="w-full px-5 py-3 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                   >
                     Mark as Contacted
                   </button>
                   <button
-                    onClick={() => handleStatusChange(lead.id, 'not_picked')}
+                    onClick={() => handleStatusChange(lead._id, 'not_picked')}
                     className="w-full px-5 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors duration-200"
                   >
                     Mark as Not Picked
                   </button>
                   <button
-                    onClick={() => handleNotInterested(lead.id)}
+                    onClick={() => handleNotInterested(lead._id)}
                     className="w-full px-5 py-3 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
                   >
                     Mark as Not Interested
@@ -574,9 +657,28 @@ const SL_newLeads = () => {
             className="space-y-3"
           >
             <AnimatePresence>
-              {filteredLeads.map((lead, index) => (
+              {isLoadingLeads ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, index) => (
+                    <div key={index} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 animate-pulse">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-200 rounded w-24 mb-2"></div>
+                          <div className="h-3 bg-gray-200 rounded w-16"></div>
+                        </div>
+                        <div className="h-8 w-8 bg-gray-200 rounded-full"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredLeads.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No new leads found</p>
+                </div>
+              ) : (
+                filteredLeads.map((lead, index) => (
                 <motion.div
-                  key={lead.id}
+                  key={lead._id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
@@ -585,7 +687,8 @@ const SL_newLeads = () => {
                 >
                   <MobileLeadCard lead={lead} />
                 </motion.div>
-              ))}
+              ))
+              )}
             </AnimatePresence>
 
             {/* Empty State */}
@@ -720,9 +823,28 @@ const SL_newLeads = () => {
                 className="space-y-3"
               >
                 <AnimatePresence>
-                  {filteredLeads.map((lead, index) => (
+                  {isLoadingLeads ? (
+                    <div className="space-y-3">
+                      {[...Array(3)].map((_, index) => (
+                        <div key={index} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="h-5 bg-gray-200 rounded w-32 mb-2"></div>
+                              <div className="h-4 bg-gray-200 rounded w-20"></div>
+                            </div>
+                            <div className="h-10 w-10 bg-gray-200 rounded-full"></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : filteredLeads.length === 0 ? (
+                    <div className="text-center py-12">
+                      <p className="text-gray-500 text-lg">No new leads found</p>
+                    </div>
+                  ) : (
+                    filteredLeads.map((lead, index) => (
                     <motion.div
-                      key={lead.id}
+                      key={lead._id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
@@ -731,7 +853,8 @@ const SL_newLeads = () => {
                     >
                       <DesktopLeadCard lead={lead} />
                     </motion.div>
-                  ))}
+                  ))
+                  )}
                 </AnimatePresence>
               </motion.div>
 

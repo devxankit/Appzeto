@@ -1,165 +1,87 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { 
   FiPhone, 
-  FiMoreVertical,
   FiFilter,
   FiUser,
   FiSearch,
-  FiAlertCircle,
-  FiUserCheck,
+  FiCheckCircle,
   FiMessageCircle,
   FiMail,
-  FiCheckCircle,
-  FiTag
+  FiTag,
+  FiLoader,
+  FiExternalLink
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import { salesLeadService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_converted = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
+  
+  // State for filters and UI
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedLeadId, setSelectedLeadId] = useState(null)
-  const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
+  
+  // State for real data
+  const [leadsData, setLeadsData] = useState([])
+  const [categories, setCategories] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
 
-  // Lead categories (matching admin system)
-  const leadCategories = [
-    {
-      id: 1,
-      name: 'Hot Leads',
-      description: 'High priority leads with immediate potential',
-      color: '#EF4444',
-      icon: '🔥'
-    },
-    {
-      id: 2,
-      name: 'Cold Leads',
-      description: 'Leads that need nurturing and follow-up',
-      color: '#3B82F6',
-      icon: '❄️'
-    },
-    {
-      id: 3,
-      name: 'Warm Leads',
-      description: 'Leads showing interest but not ready to convert',
-      color: '#F59E0B',
-      icon: '🌡️'
-    },
-    {
-      id: 4,
-      name: 'Enterprise',
-      description: 'Large enterprise clients and prospects',
-      color: '#8B5CF6',
-      icon: '🏢'
-    },
-    {
-      id: 5,
-      name: 'SME',
-      description: 'Small and medium enterprise prospects',
-      color: '#10B981',
-      icon: '🏪'
-    }
-  ]
+  // Fetch categories and leads on component mount
+  useEffect(() => {
+    fetchCategories()
+    fetchLeads()
+  }, [selectedFilter, selectedCategory, searchTerm])
 
-  // Mock converted clients data with categories
-  const convertedClientsData = [
-    {
-      id: 1,
-      name: 'Sarah Wilson',
-      phone: '9845637236',
-      company: 'Tech Solutions Inc.',
-      package: 'Premium Web + App',
-      convertedDate: '2024-01-15',
-      amount: 45000,
-      status: 'converted',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 2,
-      name: 'Michael Chen',
-      phone: '9876543210',
-      company: 'Digital Marketing Pro',
-      package: 'Basic Web Package',
-      convertedDate: '2024-01-12',
-      amount: 25000,
-      status: 'converted'
-    },
-    {
-      id: 3,
-      name: 'Emily Rodriguez',
-      phone: '9087654321',
-      company: 'E-commerce Store',
-      package: 'E-commerce Solution',
-      convertedDate: '2024-01-10',
-      amount: 35000,
-      status: 'converted'
-    },
-    {
-      id: 4,
-      name: 'James Thompson',
-      phone: '8765432109',
-      company: 'Restaurant Chain',
-      package: 'Restaurant App',
-      convertedDate: '2024-01-08',
-      amount: 30000,
-      status: 'converted'
-    },
-    {
-      id: 5,
-      name: 'Lisa Anderson',
-      phone: '7654321098',
-      company: 'Fitness Center',
-      package: 'Fitness App + Web',
-      convertedDate: '2024-01-05',
-      amount: 40000,
-      status: 'converted'
-    },
-    {
-      id: 6,
-      name: 'Robert Garcia',
-      phone: '6543210987',
-      company: 'Real Estate Agency',
-      package: 'Real Estate Portal',
-      convertedDate: '2024-01-03',
-      amount: 50000,
-      status: 'converted'
-    },
-    {
-      id: 7,
-      name: 'Jennifer Martinez',
-      phone: '5432109876',
-      company: 'Healthcare Clinic',
-      package: 'Healthcare Management',
-      convertedDate: '2024-01-01',
-      amount: 55000,
-      status: 'converted'
+  // Fetch categories from API
+  const fetchCategories = async () => {
+    try {
+      const cats = await salesLeadService.getLeadCategories()
+      setCategories(cats)
+    } catch (error) {
+      console.error('Error fetching categories:', error)
     }
-  ]
+  }
+
+  // Fetch leads from API
+  const fetchLeads = async () => {
+    setIsLoading(true)
+    try {
+      const params = {
+        category: selectedCategory !== 'all' ? selectedCategory : undefined,
+        search: searchTerm || undefined,
+        timeFrame: selectedFilter !== 'all' ? selectedFilter : undefined,
+        page: 1,
+        limit: 50
+      }
+      const response = await salesLeadService.getLeadsByStatus('converted', params)
+      setLeadsData(response.data || [])
+    } catch (error) {
+      console.error('Error fetching leads:', error)
+      toast.error('Failed to fetch leads')
+      setLeadsData([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Get category info helper
+  const getCategoryInfo = (categoryId) => {
+    const category = categories.find(cat => cat._id === categoryId)
+    return category || { name: 'Unknown', color: '#999999', icon: '📋' }
+  }
 
   const filters = [
     { id: 'today', label: 'Today' },
-    { id: 'yesterday', label: 'Yesterday' },
     { id: 'week', label: 'Last 7 Days' },
     { id: 'month', label: 'This Month' },
     { id: 'all', label: 'All' }
   ]
-
-  const filteredClients = convertedClientsData.filter(client => {
-    const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         client.phone.includes(searchTerm) ||
-                         client.company.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || client.categoryId === parseInt(selectedCategory)
-    return matchesSearch && matchesCategory
-  })
-
-  // Get category info for a client
-  const getCategoryInfo = (categoryId) => {
-    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
-  }
 
   const handleCall = (phone) => {
     window.open(`tel:${phone}`, '_self')
@@ -194,13 +116,17 @@ const SL_converted = () => {
 
         {/* Client Info & Category */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-gray-900 truncate">{client.name}</h3>
-          <p className="text-sm text-gray-600 truncate">{client.company}</p>
+          <h3 className="text-base font-semibold text-gray-900 truncate">
+            {lead.leadProfile?.name || lead.name || 'Unknown'}
+          </h3>
+          <p className="text-sm text-gray-600 truncate">
+            {lead.leadProfile?.businessName || lead.company || 'No company'}
+          </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-1 mt-1">
             <span 
               className="text-xs text-gray-500"
-              style={{ color: getCategoryInfo(client.categoryId).color }}
+              style={{ color: getCategoryInfo(lead.categoryId).color }}
             >
               {getCategoryInfo(client.categoryId).icon} {getCategoryInfo(client.categoryId).name}
             </span>
@@ -315,13 +241,17 @@ const SL_converted = () => {
 
         {/* Client Info & Category */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 truncate">{client.name}</h3>
-          <p className="text-sm text-gray-600 truncate">{client.company}</p>
+          <h3 className="text-lg font-semibold text-gray-900 truncate">
+            {lead.leadProfile?.name || lead.name || 'Unknown'}
+          </h3>
+          <p className="text-sm text-gray-600 truncate">
+            {lead.leadProfile?.businessName || lead.company || 'No company'}
+          </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-2 mt-1">
             <span 
               className="text-xs text-gray-500"
-              style={{ color: getCategoryInfo(client.categoryId).color }}
+              style={{ color: getCategoryInfo(lead.categoryId).color }}
             >
               {getCategoryInfo(client.categoryId).icon} {getCategoryInfo(client.categoryId).name}
             </span>
@@ -538,21 +468,21 @@ const SL_converted = () => {
                   >
                     All Categories
                   </button>
-                  {leadCategories.map((category) => (
+                  {categories.map((category) => (
                     <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id.toString())}
+                      key={category._id}
+                      onClick={() => setSelectedCategory(category._id)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
-                        selectedCategory === category.id.toString()
+                        selectedCategory === category._id
                           ? 'text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                       style={{
-                        backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                        backgroundColor: selectedCategory === category._id ? category.color : undefined
                       }}
                     >
                       <span>{category.icon}</span>
-                      <span>{category.name}</span>
+                      <span className="text-black">{category.name}</span>
                     </button>
                   ))}
                 </div>
@@ -580,9 +510,39 @@ const SL_converted = () => {
             className="space-y-3"
           >
             <AnimatePresence>
-              {filteredClients.map((client, index) => (
+              {isLoading ? (
+                // Loading skeleton
+                Array.from({ length: 3 }).map((_, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="bg-white rounded-xl p-4 border border-gray-200"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-4 bg-gray-200 rounded animate-pulse mb-2"></div>
+                        <div className="h-3 bg-gray-200 rounded animate-pulse w-2/3"></div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              ) : leadsData.length === 0 ? (
+                // Empty state
                 <motion.div
-                  key={client.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center py-12"
+                >
+                  <FiCheckCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Converted Leads</h3>
+                  <p className="text-gray-500">No leads have been converted to clients yet.</p>
+                </motion.div>
+              ) : (
+                leadsData.map((lead, index) => (
+                <motion.div
+                  key={lead._id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
@@ -591,7 +551,8 @@ const SL_converted = () => {
                 >
                   <MobileClientCard client={client} />
                 </motion.div>
-              ))}
+                ))
+              )}
             </AnimatePresence>
 
             {/* Empty State */}
@@ -716,21 +677,21 @@ const SL_converted = () => {
                         >
                           All Categories
                         </button>
-                        {leadCategories.map((category) => (
+                        {categories.map((category) => (
                           <button
-                            key={category.id}
-                            onClick={() => setSelectedCategory(category.id.toString())}
+                            key={category._id}
+                            onClick={() => setSelectedCategory(category._id)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
-                              selectedCategory === category.id.toString()
+                              selectedCategory === category._id
                                 ? 'text-white shadow-md'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                             style={{
-                              backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                              backgroundColor: selectedCategory === category._id ? category.color : undefined
                             }}
                           >
                             <span>{category.icon}</span>
-                            <span>{category.name}</span>
+                            <span className="text-black">{category.name}</span>
                           </button>
                         ))}
                       </div>
@@ -747,9 +708,39 @@ const SL_converted = () => {
                 className="space-y-3"
               >
                 <AnimatePresence>
-                  {filteredClients.map((client, index) => (
+                  {isLoading ? (
+                    // Loading skeleton
+                    Array.from({ length: 4 }).map((_, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="bg-white rounded-xl p-6 border border-gray-200"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse"></div>
+                          <div className="flex-1">
+                            <div className="h-5 bg-gray-200 rounded animate-pulse mb-2"></div>
+                            <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  ) : leadsData.length === 0 ? (
+                    // Empty state
                     <motion.div
-                      key={client.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-center py-16 col-span-2"
+                    >
+                      <FiCheckCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-medium text-gray-900 mb-2">No Converted Leads</h3>
+                      <p className="text-gray-500">No leads have been converted to clients yet.</p>
+                    </motion.div>
+                  ) : (
+                    leadsData.map((lead, index) => (
+                    <motion.div
+                      key={lead._id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
@@ -758,7 +749,8 @@ const SL_converted = () => {
                     >
                       <DesktopClientCard client={client} />
                     </motion.div>
-                  ))}
+                    ))
+                  )}
                 </AnimatePresence>
               </motion.div>
 

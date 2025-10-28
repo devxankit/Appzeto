@@ -5,7 +5,15 @@ const {
   logoutSales,
   createDemoSales,
   createLeadBySales,
-  getLeadCategories
+  getLeadCategories,
+  getSalesDashboardStats,
+  getMyLeads,
+  getLeadsByStatus,
+  getLeadDetail,
+  updateLeadStatus,
+  createLeadProfile,
+  updateLeadProfile,
+  convertLeadToClient
 } = require('../controllers/salesController');
 const { protect } = require('../middlewares/auth');
 
@@ -25,9 +33,20 @@ router.post('/logout', logoutSales);
 router.post('/leads', createLeadBySales);
 router.get('/lead-categories', getLeadCategories);
 
-// Future Sales-specific routes can be added here
-// router.get('/leads', getSalesLeads);
-// router.get('/clients', getSalesClients);
-// router.get('/targets', getSalesTargets);
+// Dashboard & Statistics
+router.get('/dashboard/statistics', getSalesDashboardStats);
+
+// Lead Management
+router.get('/leads', getMyLeads);
+router.get('/leads/status/:status', getLeadsByStatus);
+router.get('/leads/:id', getLeadDetail);
+router.patch('/leads/:id/status', updateLeadStatus);
+
+// LeadProfile Management
+router.post('/leads/:id/profile', createLeadProfile);
+router.put('/leads/:id/profile', updateLeadProfile);
+
+// Lead Conversion
+router.post('/leads/:id/convert', convertLeadToClient);
 
 module.exports = router;

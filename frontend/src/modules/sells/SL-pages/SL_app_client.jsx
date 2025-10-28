@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { 
@@ -12,181 +12,153 @@ import {
   FiMessageCircle,
   FiMail,
   FiSmartphone,
-  FiTag
+  FiTag,
+  FiLoader,
+  FiX,
+  FiCheckCircle
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import { salesLeadService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_app_client = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
+  
+  // State for filters and UI
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLeadId, setSelectedLeadId] = useState(null)
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
-
-  // Lead categories (matching admin system)
-  const leadCategories = [
-    {
-      id: 1,
-      name: 'Hot Leads',
-      description: 'High priority leads with immediate potential',
-      color: '#EF4444',
-      icon: '🔥'
-    },
-    {
-      id: 2,
-      name: 'Cold Leads',
-      description: 'Leads that need nurturing and follow-up',
-      color: '#3B82F6',
-      icon: '❄️'
-    },
-    {
-      id: 3,
-      name: 'Warm Leads',
-      description: 'Leads showing interest but not ready to convert',
-      color: '#F59E0B',
-      icon: '🌡️'
-    },
-    {
-      id: 4,
-      name: 'Enterprise',
-      description: 'Large enterprise clients and prospects',
-      color: '#8B5CF6',
-      icon: '🏢'
-    },
-    {
-      id: 5,
-      name: 'SME',
-      description: 'Small and medium enterprise prospects',
-      color: '#10B981',
-      icon: '🏪'
-    }
-  ]
-
-  // Mock app client leads data with categories
-  const appClientData = [
-    {
-      id: 1,
-      name: 'John Smith',
-      phone: '9845637236',
-      company: 'Tech Solutions Inc.',
-      appType: 'Mobile App',
-      status: 'app_client',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 2,
-      name: 'Sarah Johnson',
-      phone: '9876543210',
-      company: 'Digital Marketing Pro',
-      appType: 'iOS App',
-      status: 'app_client',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 3,
-      name: 'Michael Brown',
-      phone: '9087654321',
-      company: 'E-commerce Store',
-      appType: 'Android App',
-      status: 'app_client',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 4,
-      name: 'Emily Davis',
-      phone: '8765432109',
-      company: 'Restaurant Chain',
-      appType: 'Cross Platform',
-      status: 'app_client',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 5,
-      name: 'David Wilson',
-      phone: '7654321098',
-      company: 'Fitness Center',
-      appType: 'Mobile App',
-      status: 'app_client',
-      categoryId: 5,
-      category: 'SME'
-    },
-    {
-      id: 6,
-      name: 'Lisa Anderson',
-      phone: '6543210987',
-      company: 'Real Estate Agency',
-      appType: 'iOS App',
-      status: 'app_client',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 7,
-      name: 'Robert Garcia',
-      phone: '5432109876',
-      company: 'Healthcare Clinic',
-      appType: 'Android App',
-      status: 'app_client',
-      categoryId: 3,
-      category: 'Warm Leads'
-    },
-    {
-      id: 8,
-      name: 'Jennifer Lee',
-      phone: '4321098765',
-      company: 'Education Institute',
-      appType: 'Cross Platform',
-      status: 'app_client',
-      categoryId: 4,
-      category: 'Enterprise'
-    },
-    {
-      id: 9,
-      name: 'Mark Thompson',
-      phone: '3210987654',
-      company: 'Retail Store',
-      appType: 'Mobile App',
-      status: 'app_client',
-      categoryId: 2,
-      category: 'Cold Leads'
-    },
-    {
-      id: 10,
-      name: 'Anna Rodriguez',
-      phone: '2109876543',
-      company: 'Travel Agency',
-      appType: 'iOS App',
-      status: 'app_client',
-      categoryId: 5,
-      category: 'SME'
-    }
-  ]
-
-  const filters = [
-    { id: 'ios', label: 'iOS' },
-    { id: 'android', label: 'Android' },
-    { id: 'cross', label: 'Cross Platform' },
-    { id: 'all', label: 'All' }
-  ]
-
-  const filteredLeads = appClientData.filter(lead => {
-    const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         lead.phone.includes(searchTerm) ||
-                         lead.company.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || lead.categoryId === parseInt(selectedCategory)
-    return matchesSearch && matchesCategory
+  
+  // State for real data
+  const [leadsData, setLeadsData] = useState([])
+  const [categories, setCategories] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  
+  // State for Conversion form modal
+  const [showConversionForm, setShowConversionForm] = useState(false)
+  const [selectedLeadForConversion, setSelectedLeadForConversion] = useState(null)
+  const [conversionFormData, setConversionFormData] = useState({
+    projectName: '',
+    projectType: '',
+    estimatedBudget: '',
+    startDate: '',
+    notes: ''
   })
 
-  // Get category info for a lead
-  const getCategoryInfo = (categoryId) => {
-    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+  // Fetch categories and leads on component mount
+  useEffect(() => {
+    fetchCategories()
+    fetchLeads()
+  }, [selectedFilter, selectedCategory, searchTerm])
+
+  // Fetch categories from API
+  const fetchCategories = async () => {
+    try {
+      const cats = await salesLeadService.getLeadCategories()
+      setCategories(cats)
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    }
   }
+
+  // Fetch leads from API
+  const fetchLeads = async () => {
+    setIsLoading(true)
+    try {
+      const params = {
+        category: selectedCategory !== 'all' ? selectedCategory : undefined,
+        search: searchTerm || undefined,
+        timeFrame: selectedFilter !== 'all' ? selectedFilter : undefined,
+        page: 1,
+        limit: 50
+      }
+      const response = await salesLeadService.getLeadsByStatus('app_client', params)
+      setLeadsData(response.data || [])
+    } catch (error) {
+      console.error('Error fetching leads:', error)
+      toast.error('Failed to fetch leads')
+      setLeadsData([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Get category info helper
+  const getCategoryInfo = (categoryId) => {
+    const category = categories.find(cat => cat._id === categoryId)
+    return category || { name: 'Unknown', color: '#999999', icon: '📋' }
+  }
+
+  // Status change handler
+  const handleStatusChange = async (leadId, newStatus) => {
+    try {
+      await salesLeadService.updateLeadStatus(leadId, newStatus)
+      toast.success(`Lead status updated to ${salesLeadService.getStatusDisplayName(newStatus)}`)
+      
+      // Remove lead from current list
+      setLeadsData(prev => prev.filter(lead => lead._id !== leadId))
+      
+      // Refresh dashboard stats
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error)
+      toast.error('Failed to update lead status')
+    }
+    setShowActionsMenu(null)
+  }
+
+  // Handle conversion
+  const handleConvertLead = (leadId) => {
+    setSelectedLeadForConversion(leadId)
+    setShowConversionForm(true)
+    setShowActionsMenu(null)
+  }
+
+  // Handle conversion form submission
+  const handleConversionFormSubmit = async (e) => {
+    e.preventDefault()
+    try {
+      const result = await salesLeadService.convertLeadToClient(selectedLeadForConversion, conversionFormData)
+      
+      toast.success('Lead converted to client successfully')
+      
+      // Remove lead from current list
+      setLeadsData(prev => prev.filter(lead => lead._id !== selectedLeadForConversion))
+      
+      // Refresh dashboard stats
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+      
+      // Reset form and close modal
+      setConversionFormData({
+        projectName: '',
+        projectType: '',
+        estimatedBudget: '',
+        startDate: '',
+        notes: ''
+      })
+      setShowConversionForm(false)
+      setSelectedLeadForConversion(null)
+      
+    } catch (error) {
+      console.error('Error converting lead:', error)
+      toast.error('Failed to convert lead')
+    }
+  }
+
+  const filters = [
+    { id: 'today', label: 'Today' },
+    { id: 'week', label: 'Last 7 Days' },
+    { id: 'month', label: 'This Month' },
+    { id: 'all', label: 'All' }
+  ]
 
   const handleCall = (phone) => {
     window.open(`tel:${phone}`, '_self')
@@ -200,11 +172,6 @@ const SL_app_client = () => {
   const handleProfile = (leadId) => {
     console.log('Navigating to profile for lead ID:', leadId)
     navigate(`/lead-profile/${leadId}`)
-  }
-
-  const handleStatusChange = (leadId, newStatus) => {
-    console.log(`Lead ${leadId} status changed to: ${newStatus}`)
-    setShowActionsMenu(null)
   }
 
   // Mobile Lead Card Component
@@ -221,8 +188,12 @@ const SL_app_client = () => {
 
         {/* Lead Info & Category */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-gray-900 truncate">{lead.name}</h3>
-          <p className="text-sm text-gray-600 truncate">{lead.company}</p>
+          <h3 className="text-base font-semibold text-gray-900 truncate">
+            {lead.leadProfile?.name || lead.name || 'Unknown'}
+          </h3>
+          <p className="text-sm text-gray-600 truncate">
+            {lead.leadProfile?.businessName || lead.company || 'No company'}
+          </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-1 mt-1">
             <span 
@@ -287,7 +258,7 @@ const SL_app_client = () => {
           {/* More Options */}
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -295,7 +266,7 @@ const SL_app_client = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === lead.id && (
+              {showActionsMenu === lead._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -305,16 +276,46 @@ const SL_app_client = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'update')}
+                      onClick={() => handleStatusChange(lead._id, 'connected')}
                       className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                     >
-                      Update
+                      Contacted
                     </button>
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'support')}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors duration-200"
+                      onClick={() => handleStatusChange(lead._id, 'hot')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
                     >
-                      Support
+                      Hot Lead
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'quotation_sent')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
+                    >
+                      Quotation Sent
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'dq_sent')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors duration-200"
+                    >
+                      D&Q Sent
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'web')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-cyan-50 hover:text-cyan-700 transition-colors duration-200"
+                    >
+                      Web Client
+                    </button>
+                    <button
+                      onClick={() => handleConvertLead(lead._id)}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200"
+                    >
+                      Converted
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'lost')}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
+                    >
+                      Not Interested
                     </button>
                   </div>
                 </motion.div>
@@ -340,8 +341,12 @@ const SL_app_client = () => {
 
         {/* Lead Info & Category */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.name}</h3>
-          <p className="text-sm text-gray-600 truncate">{lead.company}</p>
+          <h3 className="text-lg font-semibold text-gray-900 truncate">
+            {lead.leadProfile?.name || lead.name || 'Unknown'}
+          </h3>
+          <p className="text-sm text-gray-600 truncate">
+            {lead.leadProfile?.businessName || lead.company || 'No company'}
+          </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-2 mt-1">
             <span 
@@ -405,7 +410,7 @@ const SL_app_client = () => {
 
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
               className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -413,7 +418,7 @@ const SL_app_client = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === lead.id && (
+              {showActionsMenu === lead._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -423,16 +428,46 @@ const SL_app_client = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'update')}
+                      onClick={() => handleStatusChange(lead._id, 'connected')}
                       className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                     >
-                      Update App
+                      Contacted
                     </button>
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'support')}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors duration-200"
+                      onClick={() => handleStatusChange(lead._id, 'hot')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
                     >
-                      Technical Support
+                      Hot Lead
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'quotation_sent')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
+                    >
+                      Quotation Sent
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'dq_sent')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors duration-200"
+                    >
+                      D&Q Sent
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'web')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-cyan-50 hover:text-cyan-700 transition-colors duration-200"
+                    >
+                      Web Client
+                    </button>
+                    <button
+                      onClick={() => handleConvertLead(lead._id)}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200"
+                    >
+                      Converted
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(lead._id, 'lost')}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
+                    >
+                      Not Interested
                     </button>
                   </div>
                 </motion.div>
@@ -483,7 +518,7 @@ const SL_app_client = () => {
                  <div className="bg-white rounded-lg px-4 py-3 shadow-md border border-white/20 ml-3">
                    <div className="text-center">
                      <p className="text-xs text-indigo-600 font-medium mb-0.5">Total</p>
-                     <p className="text-2xl font-bold text-indigo-900 leading-none">{appClientData.length}</p>
+                     <p className="text-2xl font-bold text-indigo-900 leading-none">{leadsData.length}</p>
                      <p className="text-xs text-indigo-600 font-medium mt-0.5">App Clients</p>
                    </div>
                  </div>
@@ -563,21 +598,21 @@ const SL_app_client = () => {
                   >
                     All Categories
                   </button>
-                  {leadCategories.map((category) => (
+                  {categories.map((category) => (
                     <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id.toString())}
+                      key={category._id}
+                      onClick={() => setSelectedCategory(category._id)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
-                        selectedCategory === category.id.toString()
+                        selectedCategory === category._id
                           ? 'text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                       style={{
-                        backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                        backgroundColor: selectedCategory === category._id ? category.color : undefined
                       }}
                     >
                       <span>{category.icon}</span>
-                      <span>{category.name}</span>
+                      <span className="text-black">{category.name}</span>
                     </button>
                   ))}
                 </div>
@@ -593,7 +628,7 @@ const SL_app_client = () => {
             className="mb-4"
           >
             <p className="text-gray-600 text-sm">
-              Showing {filteredLeads.length} of {appClientData.length} app clients
+              Showing {leadsData.length} app clients
             </p>
           </motion.div>
 
@@ -605,9 +640,39 @@ const SL_app_client = () => {
             className="space-y-3"
           >
             <AnimatePresence>
-              {filteredLeads.map((lead, index) => (
+              {isLoading ? (
+                // Loading skeleton
+                Array.from({ length: 3 }).map((_, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="bg-white rounded-xl p-4 border border-gray-200"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-4 bg-gray-200 rounded animate-pulse mb-2"></div>
+                        <div className="h-3 bg-gray-200 rounded animate-pulse w-2/3"></div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              ) : leadsData.length === 0 ? (
+                // Empty state
                 <motion.div
-                  key={lead.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center py-12"
+                >
+                  <FiSmartphone className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No App Client Leads</h3>
+                  <p className="text-gray-500">No leads have been marked as app clients yet.</p>
+                </motion.div>
+              ) : (
+                leadsData.map((lead, index) => (
+                <motion.div
+                  key={lead._id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
@@ -616,11 +681,12 @@ const SL_app_client = () => {
                 >
                   <MobileLeadCard lead={lead} />
                 </motion.div>
-              ))}
+                ))
+              )}
             </AnimatePresence>
 
             {/* Empty State */}
-            {filteredLeads.length === 0 && (
+              {leadsData.length === 0 && !isLoading && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -660,10 +726,10 @@ const SL_app_client = () => {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white px-6 py-3 rounded-xl">
-                    <span className="text-sm font-semibold">Total: {appClientData.length}</span>
+                    <span className="text-sm font-semibold">Total: {leadsData.length}</span>
                   </div>
                   <div className="bg-white text-gray-600 px-6 py-3 rounded-xl border border-gray-200">
-                    <span className="text-sm font-semibold">Showing: {filteredLeads.length}</span>
+                    <span className="text-sm font-semibold">Showing: {leadsData.length}</span>
                   </div>
                 </div>
               </motion.div>
@@ -741,21 +807,21 @@ const SL_app_client = () => {
                         >
                           All Categories
                         </button>
-                        {leadCategories.map((category) => (
+                        {categories.map((category) => (
                           <button
-                            key={category.id}
-                            onClick={() => setSelectedCategory(category.id.toString())}
+                            key={category._id}
+                            onClick={() => setSelectedCategory(category._id)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
-                              selectedCategory === category.id.toString()
+                              selectedCategory === category._id
                                 ? 'text-white shadow-md'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                             style={{
-                              backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                              backgroundColor: selectedCategory === category._id ? category.color : undefined
                             }}
                           >
                             <span>{category.icon}</span>
-                            <span>{category.name}</span>
+                            <span className="text-black">{category.name}</span>
                           </button>
                         ))}
                       </div>
@@ -772,9 +838,39 @@ const SL_app_client = () => {
                 className="space-y-3"
               >
                 <AnimatePresence>
-                  {filteredLeads.map((lead, index) => (
+                  {isLoading ? (
+                    // Loading skeleton
+                    Array.from({ length: 4 }).map((_, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="bg-white rounded-xl p-6 border border-gray-200"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse"></div>
+                          <div className="flex-1">
+                            <div className="h-5 bg-gray-200 rounded animate-pulse mb-2"></div>
+                            <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  ) : leadsData.length === 0 ? (
+                    // Empty state
                     <motion.div
-                      key={lead.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-center py-16 col-span-2"
+                    >
+                      <FiSmartphone className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-medium text-gray-900 mb-2">No App Client Leads</h3>
+                      <p className="text-gray-500">No leads have been marked as app clients yet.</p>
+                    </motion.div>
+                  ) : (
+                    leadsData.map((lead, index) => (
+                    <motion.div
+                      key={lead._id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
@@ -783,12 +879,13 @@ const SL_app_client = () => {
                     >
                       <DesktopLeadCard lead={lead} />
                     </motion.div>
-                  ))}
+                    ))
+                  )}
                 </AnimatePresence>
               </motion.div>
 
               {/* Empty State */}
-              {filteredLeads.length === 0 && (
+                {leadsData.length === 0 && !isLoading && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -822,19 +919,19 @@ const SL_app_client = () => {
                  <div className="space-y-4">
                    <div className="flex items-center justify-between">
                      <span className="text-indigo-700 text-sm font-medium">Total App Clients</span>
-                     <span className="text-indigo-900 text-xl font-bold">{appClientData.length}</span>
+                     <span className="text-indigo-900 text-xl font-bold">{leadsData.length}</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-indigo-700 text-sm font-medium">iOS Apps</span>
-                     <span className="text-indigo-900 text-xl font-bold">{appClientData.filter(lead => lead.appType.includes('iOS')).length}</span>
+                     <span className="text-indigo-900 text-xl font-bold">-</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-indigo-700 text-sm font-medium">Android Apps</span>
-                     <span className="text-indigo-900 text-xl font-bold">{appClientData.filter(lead => lead.appType.includes('Android')).length}</span>
+                     <span className="text-indigo-900 text-xl font-bold">-</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-indigo-700 text-sm font-medium">Cross Platform</span>
-                     <span className="text-indigo-900 text-xl font-bold">{appClientData.filter(lead => lead.appType.includes('Cross')).length}</span>
+                     <span className="text-indigo-900 text-xl font-bold">-</span>
                    </div>
                  </div>
               </motion.div>
@@ -906,6 +1003,125 @@ const SL_app_client = () => {
           </div>
         </div>
       </main>
+      {/* Conversion Form Modal */}
+      <AnimatePresence>
+        {showConversionForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Convert Lead to Client</h3>
+                <button
+                  onClick={() => setShowConversionForm(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleConversionFormSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Project Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={conversionFormData.projectName}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, projectName: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Project Type *
+                  </label>
+                  <select
+                    value={conversionFormData.projectType}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, projectType: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    required
+                  >
+                    <option value="">Select project type</option>
+                    <option value="Mobile App">Mobile App</option>
+                    <option value="iOS App">iOS App</option>
+                    <option value="Android App">Android App</option>
+                    <option value="Cross Platform">Cross Platform</option>
+                    <option value="Web App">Web App</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estimated Budget *
+                  </label>
+                  <input
+                    type="number"
+                    value={conversionFormData.estimatedBudget}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, estimatedBudget: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    required
+                    placeholder="Enter estimated budget"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={conversionFormData.startDate}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    required
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea
+                    value={conversionFormData.notes}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="Add any notes about this conversion..."
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowConversionForm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    Convert to Client
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

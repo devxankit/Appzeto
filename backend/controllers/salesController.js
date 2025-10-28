@@ -361,11 +361,596 @@ const getLeadCategories = async (req, res) => {
   }
 };
 
+// @desc    Get sales dashboard statistics
+// @route   GET /api/sales/dashboard/statistics
+// @access  Private (Sales only)
+const getSalesDashboardStats = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+
+    // Aggregate leads by status for the logged-in sales employee
+    const stats = await Lead.aggregate([
+      { $match: { assignedTo: salesId } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Initialize all possible status counts
+    const statusCounts = {
+      new: 0,
+      connected: 0,
+      not_picked: 0,
+      today_followup: 0,
+      quotation_sent: 0,
+      dq_sent: 0,
+      app_client: 0,
+      web: 0,
+      converted: 0,
+      lost: 0,
+      hot: 0,
+      demo_requested: 0
+    };
+
+    // Map aggregation results to status counts
+    stats.forEach(stat => {
+      if (statusCounts.hasOwnProperty(stat._id)) {
+        statusCounts[stat._id] = stat.count;
+      }
+    });
+
+    // Calculate total leads
+    const totalLeads = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        statusCounts,
+        totalLeads,
+        salesEmployee: {
+          id: req.sales.id,
+          name: req.sales.name
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get sales dashboard stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching dashboard statistics'
+    });
+  }
+};
+
+// @desc    Get all leads assigned to sales employee
+// @route   GET /api/sales/leads
+// @access  Private (Sales only)
+const getMyLeads = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const { 
+      status, 
+      category, 
+      priority, 
+      search, 
+      page = 1, 
+      limit = 12,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Build filter object
+    let filter = { assignedTo: salesId };
+
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+
+    if (category && category !== 'all') {
+      filter.category = category;
+    }
+
+    if (priority && priority !== 'all') {
+      filter.priority = priority;
+    }
+
+    if (search) {
+      filter.$or = [
+        { phone: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: 'i' } },
+        { company: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Calculate pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    const leads = await Lead.find(filter)
+      .populate('category', 'name color icon')
+      .populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent')
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNum);
+
+    const totalLeads = await Lead.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      count: leads.length,
+      total: totalLeads,
+      page: pageNum,
+      pages: Math.ceil(totalLeads / limitNum),
+      data: leads
+    });
+
+  } catch (error) {
+    console.error('Get my leads error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching leads'
+    });
+  }
+};
+
+// @desc    Get leads by specific status
+// @route   GET /api/sales/leads/status/:status
+// @access  Private (Sales only)
+const getLeadsByStatus = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const { status } = req.params;
+    const { 
+      category, 
+      priority, 
+      search, 
+      timeFrame,
+      page = 1, 
+      limit = 12 
+    } = req.query;
+
+    // Validate status
+    const validStatuses = ['new', 'connected', 'not_picked', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status'
+      });
+    }
+
+    // Build filter object
+    let filter = { 
+      assignedTo: salesId,
+      status: status 
+    };
+
+    if (category && category !== 'all') {
+      filter.category = category;
+    }
+
+    if (priority && priority !== 'all') {
+      filter.priority = priority;
+    }
+
+    if (search) {
+      filter.$or = [
+        { phone: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: 'i' } },
+        { company: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Add time frame filtering
+    if (timeFrame && timeFrame !== 'all') {
+      const now = new Date();
+      let startDate;
+      
+      switch(timeFrame) {
+        case 'today':
+          startDate = new Date(now.setHours(0, 0, 0, 0));
+          break;
+        case 'week':
+          startDate = new Date(now.setDate(now.getDate() - 7));
+          break;
+        case 'month':
+          startDate = new Date(now.setDate(now.getDate() - 30));
+          break;
+      }
+      
+      if (startDate) {
+        filter.createdAt = { $gte: startDate };
+      }
+    }
+
+    // Calculate pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const leads = await Lead.find(filter)
+      .populate('category', 'name color icon')
+      .populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    const totalLeads = await Lead.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      count: leads.length,
+      total: totalLeads,
+      page: pageNum,
+      pages: Math.ceil(totalLeads / limitNum),
+      status: status,
+      data: leads
+    });
+
+  } catch (error) {
+    console.error('Get leads by status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching leads by status'
+    });
+  }
+};
+
+// @desc    Get single lead detail
+// @route   GET /api/sales/leads/:id
+// @access  Private (Sales only)
+const getLeadDetail = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const leadId = req.params.id;
+
+    const lead = await Lead.findOne({ 
+      _id: leadId, 
+      assignedTo: salesId 
+    })
+      .populate('category', 'name color icon description')
+      .populate('assignedTo', 'name email phone')
+      .populate('createdBy', 'name email')
+      .populate('leadProfile', 'name businessName email projectType estimatedCost description quotationSent demoSent notes documents');
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: lead
+    });
+
+  } catch (error) {
+    console.error('Get lead detail error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching lead detail'
+    });
+  }
+};
+
+// @desc    Update lead status
+// @route   PATCH /api/sales/leads/:id/status
+// @access  Private (Sales only)
+const updateLeadStatus = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const leadId = req.params.id;
+    const { status, notes } = req.body;
+
+    // Validate status
+    const validStatuses = ['new', 'connected', 'not_picked', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status'
+      });
+    }
+
+    // Find lead and verify ownership
+    const lead = await Lead.findOne({ 
+      _id: leadId, 
+      assignedTo: salesId 
+    });
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+
+    // Validate status transition
+    const validTransitions = {
+      'new': ['connected', 'not_picked', 'lost'],
+      'connected': ['hot', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
+      'not_picked': ['connected', 'today_followup', 'lost'],
+      'today_followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
+      'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
+      'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
+      'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'lost'],
+      'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'lost'],
+      'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost'],
+      'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
+      'converted': [], // Terminal state
+      'lost': [] // Terminal state
+    };
+
+    if (!validTransitions[lead.status].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status transition from ${lead.status} to ${status}`
+      });
+    }
+
+    // Update lead status
+    const oldStatus = lead.status;
+    lead.status = status;
+    lead.lastContactDate = new Date();
+
+    // Add activity log
+    lead.activities.push({
+      type: 'status_change',
+      description: `Status changed from ${oldStatus} to ${status}${notes ? ` - ${notes}` : ''}`,
+      performedBy: salesId,
+      timestamp: new Date()
+    });
+
+    await lead.save();
+
+    // Update sales employee's lead statistics
+    const sales = await Sales.findById(salesId);
+    await sales.updateLeadStats();
+
+    // Populate for response
+    await lead.populate('category', 'name color icon');
+    await lead.populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent');
+
+    res.status(200).json({
+      success: true,
+      message: 'Lead status updated successfully',
+      data: lead
+    });
+
+  } catch (error) {
+    console.error('Update lead status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating lead status'
+    });
+  }
+};
+
+// @desc    Create lead profile
+// @route   POST /api/sales/leads/:id/profile
+// @access  Private (Sales only)
+const createLeadProfile = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const leadId = req.params.id;
+    const { name, businessName, email, projectType, estimatedCost, description, quotationSent, demoSent } = req.body;
+
+    // Find lead and verify ownership
+    const lead = await Lead.findOne({ 
+      _id: leadId, 
+      assignedTo: salesId 
+    });
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+
+    // Check if profile already exists
+    if (lead.leadProfile) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lead profile already exists'
+      });
+    }
+
+    // Create lead profile
+    const LeadProfile = require('../models/LeadProfile');
+    const leadProfile = await LeadProfile.create({
+      lead: leadId,
+      name,
+      businessName,
+      email,
+      projectType: projectType || { web: false, app: false, taxi: false },
+      estimatedCost: estimatedCost || 0,
+      description,
+      quotationSent: quotationSent || false,
+      demoSent: demoSent || false,
+      createdBy: salesId
+    });
+
+    // Update lead with profile reference
+    lead.leadProfile = leadProfile._id;
+    await lead.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Lead profile created successfully',
+      data: leadProfile
+    });
+
+  } catch (error) {
+    console.error('Create lead profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while creating lead profile'
+    });
+  }
+};
+
+// @desc    Update lead profile
+// @route   PUT /api/sales/leads/:id/profile
+// @access  Private (Sales only)
+const updateLeadProfile = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const leadId = req.params.id;
+    const updateData = req.body;
+
+    // Find lead and verify ownership
+    const lead = await Lead.findOne({ 
+      _id: leadId, 
+      assignedTo: salesId 
+    }).populate('leadProfile');
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+
+    if (!lead.leadProfile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead profile not found'
+      });
+    }
+
+    // Update lead profile
+    const LeadProfile = require('../models/LeadProfile');
+    const leadProfile = await LeadProfile.findByIdAndUpdate(
+      lead.leadProfile._id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Lead profile updated successfully',
+      data: leadProfile
+    });
+
+  } catch (error) {
+    console.error('Update lead profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating lead profile'
+    });
+  }
+};
+
+// @desc    Convert lead to client and create project
+// @route   POST /api/sales/leads/:id/convert
+// @access  Private (Sales only)
+const convertLeadToClient = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { projectData } = req.body; // projectName, projectType, estimatedBudget, startDate
+    
+    const lead = await Lead.findById(id).populate('leadProfile');
+    
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found'
+      });
+    }
+    
+    // Verify lead belongs to sales employee
+    if (lead.assignedTo.toString() !== req.sales.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to convert this lead'
+      });
+    }
+    
+    // Verify lead has profile
+    if (!lead.leadProfile) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lead must have a profile before conversion'
+      });
+    }
+    
+    // Create Client from LeadProfile
+    const Client = require('../models/Client');
+    const newClient = await Client.create({
+      phoneNumber: lead.phone,
+      name: lead.leadProfile.name || lead.name,
+      companyName: lead.leadProfile.businessName || lead.company,
+      email: lead.email,
+      isActive: true,
+      // OTP will be generated when client first logs in
+    });
+    
+    // Create Project
+    const Project = require('../models/Project');
+    const newProject = await Project.create({
+      name: projectData.projectName,
+      description: lead.leadProfile.description || '',
+      client: newClient._id,
+      projectType: projectData.projectType || lead.leadProfile.projectType,
+      status: 'pending-assignment', // Admin needs to assign PM
+      estimatedBudget: projectData.estimatedBudget || lead.leadProfile.estimatedCost,
+      startDate: projectData.startDate || new Date(),
+      submittedBy: req.sales.id,
+      submittedByModel: 'Sales'
+    });
+    
+    // Update lead status to converted
+    lead.status = 'converted';
+    lead.value = projectData.estimatedBudget || lead.leadProfile.estimatedCost || 0;
+    await lead.save();
+    
+    // Update sales stats
+    const sales = await Sales.findById(req.sales.id);
+    await sales.updateLeadStats();
+    
+    res.status(201).json({
+      success: true,
+      message: 'Lead converted successfully',
+      data: {
+        client: newClient,
+        project: newProject,
+        lead: lead
+      }
+    });
+    
+  } catch (error) {
+    console.error('Convert lead error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while converting lead'
+    });
+  }
+};
+
 module.exports = {
   loginSales,
   getSalesProfile,
   logoutSales,
   createDemoSales,
   createLeadBySales,
-  getLeadCategories
+  getLeadCategories,
+  getSalesDashboardStats,
+  getMyLeads,
+  getLeadsByStatus,
+  getLeadDetail,
+  updateLeadStatus,
+  createLeadProfile,
+  updateLeadProfile,
+  convertLeadToClient
 };
