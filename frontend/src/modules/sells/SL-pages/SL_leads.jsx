@@ -94,21 +94,27 @@ const LeadDashboard = () => {
   const fetchDashboardStats = async () => {
     setIsLoadingStats(true)
     try {
-      // Get actual leads count for 'new' status to match SL_newLeads.jsx
-      const newLeadsResponse = await salesLeadService.getLeadsByStatus('new', { page: 1, limit: 1000 })
-      const newLeadsCount = newLeadsResponse.data.length
+      // Use the getDashboardStatistics service to get all status counts at once
+      const stats = await salesLeadService.getDashboardStatistics()
       
-      // Update dashboard stats with actual new leads count
-      const updatedStats = {
-        ...dashboardStats,
-        statusCounts: {
-          ...dashboardStats.statusCounts,
-          new: newLeadsCount
+      // Update dashboard stats with actual data from backend
+      setDashboardStats({
+        statusCounts: stats.statusCounts || {
+          new: 0,
+          connected: 0,
+          not_picked: 0,
+          today_followup: 0,
+          quotation_sent: 0,
+          dq_sent: 0,
+          app_client: 0,
+          web: 0,
+          converted: 0,
+          lost: 0,
+          hot: 0,
+          demo_requested: 0
         },
-        totalLeads: dashboardStats.totalLeads + (newLeadsCount - dashboardStats.statusCounts.new)
-      }
-      
-      setDashboardStats(updatedStats)
+        totalLeads: stats.totalLeads || 0
+      })
     } catch (error) {
       console.error('Error fetching dashboard stats:', error)
       // Don't show error toast for dashboard stats, just use defaults
@@ -401,7 +407,7 @@ const LeadDashboard = () => {
                 tabIndex={0}
               >
                 <FiAlertCircle className="text-xl text-rose-700" />
-                <span className="text-lg">Lost 23</span>
+                <span className="text-lg">Lost {isLoadingStats ? '...' : dashboardStats.statusCounts.lost}</span>
               </button>
             </Link>
           </div>
@@ -477,7 +483,7 @@ const LeadDashboard = () => {
                     <Link
                       key={tile.title}
                       to={
-                        tile.title === "Contacted" ? "/connected" :
+                        tile.title === "Connected" ? "/connected" :
                         tile.title === "Not Picked" ? "/not-picked" :
                         tile.title === "Today Follow Up" ? "/today-followup" :
                         tile.title === "Quotation Sent" ? "/quotation-sent" :
@@ -545,7 +551,7 @@ const LeadDashboard = () => {
                     tabIndex={0}
                   >
                     <FiAlertCircle className="text-2xl text-rose-700" />
-                    <span className="text-xl">Lost 23</span>
+                    <span className="text-xl">Lost {isLoadingStats ? '...' : dashboardStats.statusCounts.lost}</span>
                   </button>
                 </Link>
               </motion.div>

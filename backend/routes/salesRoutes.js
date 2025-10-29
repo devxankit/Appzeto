@@ -13,7 +13,11 @@ const {
   updateLeadStatus,
   createLeadProfile,
   updateLeadProfile,
-  convertLeadToClient
+  convertLeadToClient,
+  getSalesTeam,
+  requestDemo,
+  transferLead,
+  addNoteToLead
 } = require('../controllers/salesController');
 const { protect } = require('../middlewares/auth');
 
@@ -48,5 +52,13 @@ router.put('/leads/:id/profile', updateLeadProfile);
 
 // Lead Conversion
 router.post('/leads/:id/convert', convertLeadToClient);
+
+// Team Management
+router.get('/team', getSalesTeam);
+
+// Lead Actions
+router.post('/leads/:id/request-demo', requestDemo);
+router.post('/leads/:id/transfer', transferLead);
+router.post('/leads/:id/notes', addNoteToLead);
 
 module.exports = router;

@@ -1080,6 +1080,244 @@ const convertLeadToClient = async (req, res) => {
   }
 };
 
+// @desc    Get all sales team members
+// @route   GET /api/sales/team
+// @access  Private (Sales only)
+const getSalesTeam = async (req, res) => {
+  try {
+    const salesTeam = await Sales.find({ isActive: true })
+      .select('_id name email employeeId department role')
+      .sort({ name: 1 });
+
+    res.status(200).json({
+      success: true,
+      data: salesTeam
+    });
+
+  } catch (error) {
+    console.error('Get sales team error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching sales team'
+    });
+  }
+};
+
+// @desc    Request demo for lead
+// @route   POST /api/sales/leads/:id/request-demo
+// @access  Private (Sales only)
+const requestDemo = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const leadId = req.params.id;
+    const { clientName, description, reference, mobileNumber } = req.body;
+
+    // Find lead and verify ownership
+    const lead = await Lead.findOne({ 
+      _id: leadId, 
+      assignedTo: salesId 
+    });
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+
+    // Create demo request
+    const DemoRequest = require('../models/DemoRequest');
+    const demoRequest = await DemoRequest.create({
+      lead: leadId,
+      clientName,
+      mobileNumber,
+      description,
+      reference,
+      requestedBy: salesId,
+      priority: lead.priority === 'urgent' ? 'high' : 'medium'
+    });
+
+    // Update lead status to demo_requested
+    lead.status = 'demo_requested';
+    lead.lastContactDate = new Date();
+    await lead.save();
+
+    // Add activity log
+    lead.activities.push({
+      type: 'status_change',
+      description: `Demo requested for ${clientName} - ${description || 'No description provided'}`,
+      performedBy: salesId,
+      timestamp: new Date()
+    });
+    await lead.save();
+
+    // Update sales employee's lead statistics
+    const sales = await Sales.findById(salesId);
+    await sales.updateLeadStats();
+
+    res.status(201).json({
+      success: true,
+      message: 'Demo request submitted successfully',
+      data: demoRequest
+    });
+
+  } catch (error) {
+    console.error('Request demo error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while requesting demo'
+    });
+  }
+};
+
+// @desc    Transfer lead to another sales employee
+// @route   POST /api/sales/leads/:id/transfer
+// @access  Private (Sales only)
+const transferLead = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const leadId = req.params.id;
+    const { toSalesId, reason } = req.body;
+
+    // Validate required fields
+    if (!toSalesId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Target sales employee ID is required'
+      });
+    }
+
+    // Find lead and verify ownership
+    const lead = await Lead.findOne({ 
+      _id: leadId, 
+      assignedTo: salesId 
+    });
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+
+    // Verify target sales employee exists
+    const targetSales = await Sales.findById(toSalesId);
+    if (!targetSales) {
+      return res.status(404).json({
+        success: false,
+        message: 'Target sales employee not found'
+      });
+    }
+
+    // Transfer lead
+    await lead.transferToSales(salesId, toSalesId, reason);
+
+    // Update both sales employees' lead statistics
+    const fromSales = await Sales.findById(salesId);
+    const toSales = await Sales.findById(toSalesId);
+    
+    await fromSales.updateLeadStats();
+    await toSales.updateLeadStats();
+
+    // Add activity log
+    lead.activities.push({
+      type: 'status_change',
+      description: `Lead transferred to ${targetSales.name}${reason ? ` - ${reason}` : ''}`,
+      performedBy: salesId,
+      timestamp: new Date()
+    });
+    await lead.save();
+
+    // Populate for response
+    await lead.populate('assignedTo', 'name email');
+    await lead.populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent');
+
+    res.status(200).json({
+      success: true,
+      message: 'Lead transferred successfully',
+      data: lead
+    });
+
+  } catch (error) {
+    console.error('Transfer lead error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while transferring lead'
+    });
+  }
+};
+
+// @desc    Add note to lead profile
+// @route   POST /api/sales/leads/:id/notes
+// @access  Private (Sales only)
+const addNoteToLead = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const leadId = req.params.id;
+    const { content } = req.body;
+
+    // Validate required fields
+    if (!content || !content.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Note content is required'
+      });
+    }
+
+    // Find lead and verify ownership
+    const lead = await Lead.findOne({ 
+      _id: leadId, 
+      assignedTo: salesId 
+    }).populate('leadProfile');
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+
+    if (!lead.leadProfile) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lead profile not found. Please create a profile first.'
+      });
+    }
+
+    // Add note to lead profile
+    const LeadProfile = require('../models/LeadProfile');
+    const leadProfile = await LeadProfile.findById(lead.leadProfile._id);
+    
+    await leadProfile.addNote(content.trim(), salesId);
+
+    // Add activity log
+    lead.activities.push({
+      type: 'note',
+      description: `Note added: ${content.trim().substring(0, 50)}${content.trim().length > 50 ? '...' : ''}`,
+      performedBy: salesId,
+      timestamp: new Date()
+    });
+    lead.lastContactDate = new Date();
+    await lead.save();
+
+    // Populate for response
+    await leadProfile.populate('notes.addedBy', 'name email');
+
+    res.status(201).json({
+      success: true,
+      message: 'Note added successfully',
+      data: leadProfile
+    });
+
+  } catch (error) {
+    console.error('Add note error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while adding note'
+    });
+  }
+};
+
 module.exports = {
   loginSales,
   getSalesProfile,
@@ -1094,5 +1332,9 @@ module.exports = {
   updateLeadStatus,
   createLeadProfile,
   updateLeadProfile,
-  convertLeadToClient
+  convertLeadToClient,
+  getSalesTeam,
+  requestDemo,
+  transferLead,
+  addNoteToLead
 };

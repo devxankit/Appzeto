@@ -245,6 +245,61 @@ export const getValidStatusTransitions = (currentStatus) => {
   return transitions[currentStatus] || [];
 };
 
+// Get all sales team members
+export const getSalesTeam = async () => {
+  try {
+    const response = await apiRequest('/sales/team', {
+      method: 'GET'
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching sales team:', error);
+    return [];
+  }
+};
+
+// Request demo for lead
+export const requestDemo = async (leadId, demoData) => {
+  try {
+    const response = await apiRequest(`/sales/leads/${leadId}/request-demo`, {
+      method: 'POST',
+      body: JSON.stringify(demoData)
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error requesting demo:', error);
+    throw error;
+  }
+};
+
+// Transfer lead to another sales employee
+export const transferLead = async (leadId, transferData) => {
+  try {
+    const response = await apiRequest(`/sales/leads/${leadId}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify(transferData)
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error transferring lead:', error);
+    throw error;
+  }
+};
+
+// Add note to lead profile
+export const addNoteToLead = async (leadId, noteData) => {
+  try {
+    const response = await apiRequest(`/sales/leads/${leadId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(noteData)
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error adding note:', error);
+    throw error;
+  }
+};
+
 // Default export with all functions
 const salesLeadService = {
   getDashboardStatistics,
@@ -258,7 +313,11 @@ const salesLeadService = {
   getLeadCategories,
   getStatusDisplayName,
   getStatusColor,
-  getValidStatusTransitions
+  getValidStatusTransitions,
+  getSalesTeam,
+  requestDemo,
+  transferLead,
+  addNoteToLead
 };
 
 export default salesLeadService;
