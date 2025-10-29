@@ -197,6 +197,14 @@ const SL_dq_sent = () => {
     navigate(`/lead-profile/${leadId}`)
   }
 
+  const handleProfileClick = (lead) => {
+    if (lead.leadProfile) {
+      handleProfile(lead._id)
+    } else {
+      toast.error('This lead doesn\'t have a profile. Please connect to the lead first to create a profile.')
+    }
+  }
+
   // Mobile Lead Card Component
   const MobileLeadCard = ({ lead }) => {
     const categoryInfo = getCategoryInfo(lead.category)
@@ -268,18 +276,20 @@ const SL_dq_sent = () => {
             </svg>
           </button>
 
-          {/* Profile Button */}
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              handleProfile(lead.id)
-            }}
-            className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
-            title="Profile"
-          >
-            <FiUser className="w-4 h-4" />
-          </button>
+          {/* Profile Button - Only show if lead has profile */}
+          {lead.leadProfile && (
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                handleProfile(lead._id)
+              }}
+              className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
+              title="Profile"
+            >
+              <FiUser className="w-4 h-4" />
+            </button>
+          )}
 
           {/* More Options */}
           <div className="relative">
@@ -414,17 +424,20 @@ const SL_dq_sent = () => {
             <span>WhatsApp</span>
           </button>
 
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              handleProfile(lead.id)
-            }}
-            className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200 flex items-center space-x-1"
-          >
-            <FiUser className="w-4 h-4" />
-            <span>Profile</span>
-          </button>
+          {/* Profile Button - Only show if lead has profile */}
+          {lead.leadProfile && (
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                handleProfile(lead._id)
+              }}
+              className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200 flex items-center space-x-1"
+            >
+              <FiUser className="w-4 h-4" />
+              <span>Profile</span>
+            </button>
+          )}
 
           <div className="relative">
             <button

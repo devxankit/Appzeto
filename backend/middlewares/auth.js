@@ -19,6 +19,10 @@ const protect = async (req, res, next) => {
     else if (req.cookies.token) {
       token = req.cookies.token;
     }
+    // Check for sales token in cookies
+    else if (req.cookies.salesToken) {
+      token = req.cookies.salesToken;
+    }
 
     // Make sure token exists
     if (!token) {
@@ -334,6 +338,10 @@ const optionalAuth = async (req, res, next) => {
     // Check for token in cookies
     else if (req.cookies.token) {
       token = req.cookies.token;
+    }
+    // Check for sales token in cookies
+    else if (req.cookies.salesToken) {
+      token = req.cookies.salesToken;
     }
 
     if (token) {

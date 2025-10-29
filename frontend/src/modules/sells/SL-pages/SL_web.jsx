@@ -273,7 +273,7 @@ const SL_web = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(lead.id)
+              handleProfile(lead._id)
             }}
             className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
             title="Profile"
@@ -430,7 +430,7 @@ const SL_web = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(lead.id)
+              handleProfile(lead._id)
             }}
             className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200 flex items-center space-x-1"
           >

@@ -6,6 +6,7 @@ const {
   createDemoSales,
   createLeadBySales,
   getLeadCategories,
+  debugLeads,
   getSalesDashboardStats,
   getMyLeads,
   getLeadsByStatus,
@@ -13,7 +14,11 @@ const {
   updateLeadStatus,
   createLeadProfile,
   updateLeadProfile,
-  convertLeadToClient
+  convertLeadToClient,
+  getSalesTeam,
+  requestDemo,
+  transferLead,
+  addNoteToLead
 } = require('../controllers/salesController');
 const { protect } = require('../middlewares/auth');
 
@@ -22,6 +27,11 @@ const router = express.Router();
 // Public routes
 router.post('/login', loginSales);
 router.post('/create-demo', createDemoSales); // Remove in production
+
+// Test route
+router.get('/test', (req, res) => {
+  res.json({ success: true, message: 'Sales API is working' });
+});
 
 // Protected routes
 router.use(protect); // All routes below this middleware are protected
@@ -34,6 +44,7 @@ router.post('/leads', createLeadBySales);
 router.get('/lead-categories', getLeadCategories);
 
 // Dashboard & Statistics
+router.get('/debug/leads', debugLeads);
 router.get('/dashboard/statistics', getSalesDashboardStats);
 
 // Lead Management
@@ -48,5 +59,13 @@ router.put('/leads/:id/profile', updateLeadProfile);
 
 // Lead Conversion
 router.post('/leads/:id/convert', convertLeadToClient);
+
+// Team Management
+router.get('/team', getSalesTeam);
+
+// Lead Actions
+router.post('/leads/:id/request-demo', requestDemo);
+router.post('/leads/:id/transfer', transferLead);
+router.post('/leads/:id/notes', addNoteToLead);
 
 module.exports = router;

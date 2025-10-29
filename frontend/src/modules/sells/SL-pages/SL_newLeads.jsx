@@ -40,6 +40,7 @@ const SL_newLeads = () => {
   
   // Real lead data state
   const [leadsData, setLeadsData] = useState([])
+  const [categories, setCategories] = useState([])
   const [isLoadingLeads, setIsLoadingLeads] = useState(false)
   const [pagination, setPagination] = useState({
     page: 1,
@@ -47,45 +48,19 @@ const SL_newLeads = () => {
     total: 0,
     pages: 0
   })
+  
+  // Total count for statistics (not affected by pagination)
+  const [totalNewLeads, setTotalNewLeads] = useState(0)
 
-  // Lead categories (matching admin system)
-  const leadCategories = [
-    {
-      id: 1,
-      name: 'Hot Leads',
-      description: 'High priority leads with immediate potential',
-      color: '#EF4444',
-      icon: '🔥'
-    },
-    {
-      id: 2,
-      name: 'Cold Leads',
-      description: 'Leads that need nurturing and follow-up',
-      color: '#3B82F6',
-      icon: '❄️'
-    },
-    {
-      id: 3,
-      name: 'Warm Leads',
-      description: 'Leads showing interest but not ready to convert',
-      color: '#F59E0B',
-      icon: '🌡️'
-    },
-    {
-      id: 4,
-      name: 'Enterprise',
-      description: 'Large enterprise clients and prospects',
-      color: '#8B5CF6',
-      icon: '🏢'
-    },
-    {
-      id: 5,
-      name: 'SME',
-      description: 'Small and medium enterprise prospects',
-      color: '#10B981',
-      icon: '🏪'
+  // Fetch categories from API
+  const fetchCategories = async () => {
+    try {
+      const cats = await salesLeadService.getLeadCategories()
+      setCategories(cats)
+    } catch (error) {
+      console.error('Error fetching categories:', error)
     }
-  ]
+  }
 
   // Fetch leads from API
   const fetchLeads = async () => {
@@ -105,6 +80,10 @@ const SL_newLeads = () => {
         params.search = searchTerm
       }
 
+      if (selectedFilter !== 'all') {
+        params.timeFrame = selectedFilter
+      }
+
       const response = await salesLeadService.getLeadsByStatus('new', params)
       setLeadsData(response.data)
       setPagination({
@@ -113,6 +92,8 @@ const SL_newLeads = () => {
         total: response.total,
         pages: response.pages
       })
+      // Store total count for statistics display
+      setTotalNewLeads(response.total)
     } catch (error) {
       console.error('Error fetching leads:', error)
       // Service already returns empty data on error, just show a subtle message
@@ -124,10 +105,16 @@ const SL_newLeads = () => {
     }
   }
 
-  // Fetch leads on component mount and when filters change
+  // Reset pagination when filters change
   useEffect(() => {
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }, [selectedCategory, searchTerm, selectedFilter])
+
+  // Fetch categories and leads on component mount and when filters change
+  useEffect(() => {
+    fetchCategories()
     fetchLeads()
-  }, [selectedCategory, searchTerm, pagination.page])
+  }, [selectedCategory, searchTerm, selectedFilter, pagination.page])
 
   const filters = [
     { id: 'today', label: 'Today' },
@@ -141,12 +128,33 @@ const SL_newLeads = () => {
   // The API handles search and category filtering
   const filteredLeads = leadsData
 
-  // Get category info for a lead
-  const getCategoryInfo = (category) => {
-    if (typeof category === 'object' && category._id) {
-      return category
+  // Get category info helper
+  const getCategoryInfo = (categoryIdOrObject) => {
+    // Handle null/undefined
+    if (!categoryIdOrObject) {
+      return { name: 'Unknown', color: '#999999', icon: '📋' }
     }
-    return leadCategories.find(cat => cat.id === category) || leadCategories[0]
+    
+    // If category is already populated (object with properties like name, color, icon), return it directly
+    if (typeof categoryIdOrObject === 'object' && categoryIdOrObject.name) {
+      return {
+        name: categoryIdOrObject.name,
+        color: categoryIdOrObject.color || '#999999',
+        icon: categoryIdOrObject.icon || '📋'
+      }
+    }
+    
+    // If category is an ID (string or ObjectId), find it in categories array
+    const categoryId = typeof categoryIdOrObject === 'object' ? categoryIdOrObject._id : categoryIdOrObject
+    if (categoryId) {
+      const category = categories.find(cat => cat._id === categoryId || cat._id?.toString() === categoryId?.toString())
+      if (category) {
+        return category
+      }
+    }
+    
+    // Return default if not found
+    return { name: 'Unknown', color: '#999999', icon: '📋' }
   }
 
 
@@ -534,7 +542,7 @@ const SL_newLeads = () => {
                  <div className="bg-white/70 backdrop-blur-sm rounded-lg px-3 py-2 shadow-sm border border-white/30">
                    <div className="text-center">
                      <p className="text-xs text-teal-600 font-medium mb-0.5">Total</p>
-                     <p className="text-xl font-bold text-teal-900">{leadsData.length}</p>
+                     <p className="text-xl font-bold text-teal-900">{totalNewLeads}</p>
                      <p className="text-xs text-teal-600 font-medium">Leads</p>
                    </div>
                  </div>
@@ -615,23 +623,25 @@ const SL_newLeads = () => {
                   >
                     All Categories
                   </button>
-                  {leadCategories.map((category) => (
+                  {categories.length > 0 ? categories.map((category) => (
                     <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id.toString())}
+                      key={category._id}
+                      onClick={() => setSelectedCategory(category._id)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
-                        selectedCategory === category.id.toString()
+                        selectedCategory === category._id
                           ? 'text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                       style={{
-                        backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                        backgroundColor: selectedCategory === category._id ? category.color : undefined
                       }}
                     >
                       <span>{category.icon}</span>
                       <span>{category.name}</span>
                     </button>
-                  ))}
+                  )) : (
+                    <div className="text-xs text-gray-500">Loading categories...</div>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -645,7 +655,7 @@ const SL_newLeads = () => {
             className="mb-4"
           >
             <p className="text-gray-600 text-sm">
-              Showing {filteredLeads.length} of {leadsData.length} leads
+              Showing {filteredLeads.length} of {totalNewLeads} leads
             </p>
           </motion.div>
 
@@ -692,7 +702,7 @@ const SL_newLeads = () => {
             </AnimatePresence>
 
             {/* Empty State */}
-            {filteredLeads.length === 0 && (
+            {filteredLeads.length === 0 && !isLoadingLeads && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -707,6 +717,36 @@ const SL_newLeads = () => {
                     {searchTerm ? 'Try adjusting your search criteria or filters.' : 'No leads match your current filters.'}
                   </p>
                 </div>
+              </motion.div>
+            )}
+
+            {/* Mobile Pagination */}
+            {pagination.pages > 1 && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.6, delay: 0.8 }}
+                className="flex items-center justify-center space-x-2 mt-6"
+              >
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                  disabled={pagination.page === 1}
+                  className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                
+                <span className="px-3 py-2 text-sm text-gray-700">
+                  Page {pagination.page} of {pagination.pages}
+                </span>
+                
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
+                  disabled={pagination.page === pagination.pages}
+                  className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
               </motion.div>
             )}
           </motion.div>
@@ -732,7 +772,7 @@ const SL_newLeads = () => {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="bg-gradient-to-r from-teal-500 to-teal-600 text-white px-6 py-3 rounded-xl">
-                    <span className="text-sm font-semibold">Total: {leadsData.length}</span>
+                    <span className="text-sm font-semibold">Total: {totalNewLeads}</span>
                   </div>
                   <div className="bg-white text-gray-600 px-6 py-3 rounded-xl border border-gray-200">
                     <span className="text-sm font-semibold">Showing: {filteredLeads.length}</span>
@@ -794,23 +834,25 @@ const SL_newLeads = () => {
                     >
                       All Categories
                     </button>
-                    {leadCategories.map((category) => (
+                    {categories.length > 0 ? categories.map((category) => (
                       <button
-                        key={category.id}
-                        onClick={() => setSelectedCategory(category.id.toString())}
+                        key={category._id}
+                        onClick={() => setSelectedCategory(category._id)}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
-                          selectedCategory === category.id.toString()
+                          selectedCategory === category._id
                             ? 'text-white shadow-md'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                         style={{
-                          backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                          backgroundColor: selectedCategory === category._id ? category.color : undefined
                         }}
                       >
                         <span>{category.icon}</span>
                         <span>{category.name}</span>
                       </button>
-                    ))}
+                    )) : (
+                      <div className="text-sm text-gray-500">Loading categories...</div>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -859,7 +901,7 @@ const SL_newLeads = () => {
               </motion.div>
 
               {/* Empty State */}
-              {filteredLeads.length === 0 && (
+              {filteredLeads.length === 0 && !isLoadingLeads && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -874,6 +916,66 @@ const SL_newLeads = () => {
                       {searchTerm ? 'Try adjusting your search criteria or filters.' : 'No leads match your current filters.'}
                     </p>
                   </div>
+                </motion.div>
+              )}
+
+              {/* Desktop Pagination */}
+              {pagination.pages > 1 && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.6, delay: 0.8 }}
+                  className="flex items-center justify-center space-x-4 mt-8"
+                >
+                  <button
+                    onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                    disabled={pagination.page === 1}
+                    className="px-4 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                  >
+                    Previous
+                  </button>
+                  
+                  <div className="flex items-center space-x-2">
+                    {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                      const pageNum = i + 1;
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setPagination(prev => ({ ...prev, page: pageNum }))}
+                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                            pagination.page === pageNum
+                              ? 'bg-teal-500 text-white'
+                              : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                    {pagination.pages > 5 && (
+                      <>
+                        <span className="text-gray-500">...</span>
+                        <button
+                          onClick={() => setPagination(prev => ({ ...prev, page: prev.pages }))}
+                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                            pagination.page === pagination.pages
+                              ? 'bg-teal-500 text-white'
+                              : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pagination.pages}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  
+                  <button
+                    onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
+                    disabled={pagination.page === pagination.pages}
+                    className="px-4 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                  >
+                    Next
+                  </button>
                 </motion.div>
               )}
             </div>
@@ -893,7 +995,7 @@ const SL_newLeads = () => {
                  <div className="space-y-4">
                    <div className="flex items-center justify-between">
                      <span className="text-teal-700 text-sm font-medium">Total Leads</span>
-                     <span className="text-teal-900 text-xl font-bold">{leadsData.length}</span>
+                     <span className="text-teal-900 text-xl font-bold">{totalNewLeads}</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-teal-700 text-sm font-medium">Showing</span>

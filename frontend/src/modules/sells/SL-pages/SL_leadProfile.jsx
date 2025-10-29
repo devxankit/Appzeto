@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useParams, useNavigate } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
@@ -27,83 +27,38 @@ import {
   FiVideo
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import { salesLeadService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_leadProfile = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { toast } = useToast()
   
-  console.log('Client Profile loaded with ID:', id)
-  
-  // Mock client data - in real app, fetch based on ID
-  const clientData = {
-    1: {
-      id: 1,
-      name: 'Alice Brown',
-      phone: '7654321098',
-      business: 'Cloth shop ecommerce',
-      estimatedCost: '50k',
-      avatar: 'A',
-      status: {
-        quotationSent: false,
-        web: false,
-        hotLead: false,
-        demoSent: false,
-        app: false,
-        taxi: false
-      }
-    },
-    2: {
-      id: 2,
-      name: 'John Doe',
-      phone: '9845637236',
-      business: 'Restaurant chain',
-      estimatedCost: '75k',
-      avatar: 'J',
-      status: {
-        quotationSent: true,
-        web: false,
-        hotLead: true,
-        demoSent: false,
-        app: false,
-        taxi: false
-      }
-    },
-    3: {
-      id: 3,
-      name: 'Jane Smith',
-      phone: '9876543210',
-      business: 'Tech startup',
-      estimatedCost: '100k',
-      avatar: 'J',
-      status: {
-        quotationSent: false,
-        web: true,
-        hotLead: false,
-        demoSent: true,
-        app: true,
-        taxi: false
-      }
-    }
-  }
-
-  const client = clientData[id] || clientData[1]
-  const [status, setStatus] = useState(client.status)
-  const [isLoading, setIsLoading] = useState(false)
+  // State management
+  const [lead, setLead] = useState(null)
+  const [leadProfile, setLeadProfile] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [status, setStatus] = useState({
+    quotationSent: false,
+    web: false,
+    hotLead: false,
+    demoSent: false,
+    app: false,
+    taxi: false
+  })
   const [showConvertedDialog, setShowConvertedDialog] = useState(false)
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false)
   const [showRequestDemoDialog, setShowRequestDemoDialog] = useState(false)
   const [showLostDialog, setShowLostDialog] = useState(false)
+  // Form states
   const [convertedForm, setConvertedForm] = useState({
-    clientName: client.name,
     projectName: '',
-    mobileNo: client.phone,
-    finishedDays: '',
-    web: false,
-    app: false,
-    description: '',
-    totalCost: '',
-    advanceReceived: '',
-    includeGST: false
+    projectType: { web: false, app: false, taxi: false },
+    estimatedBudget: '',
+    startDate: '',
+    description: ''
   })
   const [followUpForm, setFollowUpForm] = useState({
     date: null,
@@ -112,10 +67,23 @@ const SL_leadProfile = () => {
     type: 'call'
   })
   const [requestDemoForm, setRequestDemoForm] = useState({
-    clientName: client.name,
+    clientName: '',
     description: '',
     reference: '',
-    mobileNumber: client.phone
+    mobileNumber: ''
+  })
+  const [demoData, setDemoData] = useState({
+    clientName: '',
+    mobileNumber: '',
+    description: '',
+    reference: ''
+  })
+  const [conversionData, setConversionData] = useState({
+    projectName: '',
+    projectType: { web: false, app: false, taxi: false },
+    estimatedBudget: '',
+    startDate: '',
+    description: ''
   })
   const [lostReason, setLostReason] = useState('')
   const [showTypeDropdown, setShowTypeDropdown] = useState(false)
@@ -125,7 +93,7 @@ const SL_leadProfile = () => {
   const [showMeetingTypeDropdown, setShowMeetingTypeDropdown] = useState(false)
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
   const [meetingForm, setMeetingForm] = useState({
-    clientName: client.name,
+    clientName: '',
     meetingDate: '',
     meetingTime: '',
     meetingType: 'in-person',
@@ -134,29 +102,187 @@ const SL_leadProfile = () => {
     assignee: ''
   })
 
+  // Additional state for new features
+  const [showNotesDialog, setShowNotesDialog] = useState(false)
+  const [newNote, setNewNote] = useState('')
+  const [notes, setNotes] = useState([])
+  const [salesTeam, setSalesTeam] = useState([])
+  const [selectedStatus, setSelectedStatus] = useState('')
+
+  // Fetch lead data on component mount
+  useEffect(() => {
+    if (id) {
+      fetchLeadData()
+    }
+  }, [id])
+
+  const fetchLeadData = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await salesLeadService.getLeadDetail(id)
+      if (response) {
+        setLead(response)
+        setLeadProfile(response.leadProfile)
+        setSelectedStatus(response.status)
+        
+        // Update status checkboxes based on lead status
+        updateStatusFromLeadStatus(response.status)
+        
+        // Update form data with lead information
+        const lp = response.leadProfile
+        setDemoData({
+          clientName: lp?.name || response.name || '',
+          mobileNumber: response.phone || '',
+          description: '',
+          reference: ''
+        })
+        
+        setConversionData({
+          projectName: lp?.businessName || '',
+          projectType: {
+            web: lp?.projectType?.web || false,
+            app: lp?.projectType?.app || false,
+            taxi: lp?.projectType?.taxi || false
+          },
+          estimatedBudget: lp?.estimatedCost?.toString() || '',
+          startDate: new Date().toISOString().split('T')[0],
+          description: lp?.description || ''
+        })
+        
+        setMeetingForm(prev => ({
+          ...prev,
+          clientName: lp?.name || response.name || ''
+        }))
+        
+        // Set notes if available
+        if (lp?.notes) {
+          setNotes(lp.notes)
+        }
+      } else {
+        setError('Lead not found')
+      }
+    } catch (err) {
+      console.error('Error fetching lead data:', err)
+      setError('Failed to fetch lead data')
+      toast.error('Failed to load lead profile')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const updateStatusFromLeadStatus = (leadStatus) => {
+    const statusMap = {
+      'quotation_sent': { quotationSent: true },
+      'web': { web: true },
+      'hot': { hotLead: true },
+      'demo_requested': { demoSent: true },
+      'app_client': { app: true },
+      'taxi': { taxi: true }
+    }
+    
+    const newStatus = {
+      quotationSent: false,
+      web: false,
+      hotLead: false,
+      demoSent: false,
+      app: false,
+      taxi: false
+    }
+    
+    if (statusMap[leadStatus]) {
+      Object.assign(newStatus, statusMap[leadStatus])
+    }
+    
+    setStatus(newStatus)
+  }
+
   const handleCall = (phone) => {
     window.open(`tel:${phone}`, '_self')
   }
 
   const handleWhatsApp = (phone) => {
-    const message = encodeURIComponent(`Hello ${client.name}! I'm following up on our previous conversation. How can I help you today?`)
+    const clientName = leadProfile?.name || lead?.name || 'there'
+    const message = encodeURIComponent(`Hello ${clientName}! I'm following up on our previous conversation. How can I help you today?`)
     window.open(`https://wa.me/91${phone}?text=${message}`, '_blank')
   }
 
   const handleStatusChange = (statusKey) => {
-    setStatus(prev => ({
-      ...prev,
-      [statusKey]: !prev[statusKey]
-    }))
+    setStatus(prev => {
+      // Reset all statuses to false first
+      const newStatus = {
+        quotationSent: false,
+        web: false,
+        hotLead: false,
+        demoSent: false,
+        app: false,
+        taxi: false
+      }
+      
+      // Set only the selected status to true
+      newStatus[statusKey] = true
+      
+      return newStatus
+    })
   }
 
   const handleSave = async () => {
+    if (!lead) return
+    
     setIsLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    // Show success message or handle response
-    console.log('Status saved:', status)
+    try {
+      // Map status checkboxes to lead status
+      const statusMap = {
+        'quotationSent': 'quotation_sent',
+        'web': 'web',
+        'hotLead': 'hot',
+        'demoSent': 'demo_requested',
+        'app': 'app_client',
+        'taxi': 'taxi'
+      }
+      
+      // Find the first checked status
+      const checkedStatus = Object.keys(status).find(key => status[key])
+      const newLeadStatus = checkedStatus ? statusMap[checkedStatus] : 'connected'
+      
+      console.log('Current lead status:', lead.status)
+      console.log('Checked status:', checkedStatus)
+      console.log('New lead status:', newLeadStatus)
+      console.log('Status object:', status)
+      
+      // Only update lead status if it's different from current status
+      if (newLeadStatus !== lead.status) {
+        console.log('Updating lead status from', lead.status, 'to', newLeadStatus)
+        await salesLeadService.updateLeadStatus(id, newLeadStatus)
+        setSelectedStatus(newLeadStatus)
+        
+        // Update the lead object locally
+        setLead(prev => ({ ...prev, status: newLeadStatus }))
+      } else {
+        console.log('Status is the same, skipping update')
+      }
+      
+      // If lead profile exists, update it
+      if (leadProfile) {
+        const profileUpdateData = {
+          quotationSent: status.quotationSent,
+          demoSent: status.demoSent
+        }
+        await salesLeadService.updateLeadProfile(id, profileUpdateData)
+      }
+      
+      toast.success('Status updated successfully')
+      
+      // Refresh dashboard stats if available
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+    } catch (err) {
+      console.error('Error updating status:', err)
+      toast.error('Failed to update status')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleAddFollow = () => {
@@ -172,24 +298,40 @@ const SL_leadProfile = () => {
 
   const handleFollowUpSubmit = async () => {
     if (!followUpForm.date || !followUpForm.time) {
-      alert('Please select both date and time')
+      toast.error('Please select both date and time')
       return
     }
 
     setIsLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    setShowFollowUpDialog(false)
-    console.log('Follow-up scheduled:', followUpForm)
-    
-    // Reset form
-    setFollowUpForm({
-      date: null,
-      time: '',
-      notes: '',
-      type: 'call'
-    })
+    try {
+      const followUpData = {
+        date: followUpForm.date,
+        time: followUpForm.time,
+        notes: followUpForm.notes,
+        type: followUpForm.type
+      }
+      
+      await salesLeadService.updateLeadStatus(id, 'followup', followUpData)
+      
+      toast.success('Follow-up scheduled successfully')
+      setShowFollowUpDialog(false)
+      
+      // Reset form
+      setFollowUpForm({
+        date: null,
+        time: '',
+        notes: '',
+        type: 'call'
+      })
+      
+      // Refresh data
+      fetchLeadData()
+    } catch (err) {
+      console.error('Error scheduling follow-up:', err)
+      toast.error('Failed to schedule follow-up')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const followUpTypes = [
@@ -217,7 +359,31 @@ const SL_leadProfile = () => {
   }
 
   const handleAddNote = () => {
-    navigate(`/client-notes/${client.id}`)
+    setShowNotesDialog(true)
+  }
+
+  const handleAddNoteSubmit = async () => {
+    if (!newNote.trim()) {
+      toast.error('Please enter a note')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      await salesLeadService.addNoteToLead(id, { content: newNote.trim() })
+      
+      toast.success('Note added successfully')
+      setShowNotesDialog(false)
+      setNewNote('')
+      
+      // Refresh data to get updated notes
+      fetchLeadData()
+    } catch (err) {
+      console.error('Error adding note:', err)
+      toast.error('Failed to add note')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleRequestDemo = () => {
@@ -232,25 +398,41 @@ const SL_leadProfile = () => {
   }
 
   const handleRequestDemoSubmit = async () => {
-    if (!requestDemoForm.clientName || !requestDemoForm.mobileNumber) {
-      alert('Please fill in client name and mobile number')
+    if (!demoData.clientName || !demoData.mobileNumber) {
+      toast.error('Please fill in client name and mobile number')
       return
     }
 
     setIsLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    setShowRequestDemoDialog(false)
-    console.log('Demo request submitted:', requestDemoForm)
-    
-    // Reset form
-    setRequestDemoForm({
-      clientName: client.name,
-      description: '',
-      reference: '',
-      mobileNumber: client.phone
-    })
+    try {
+      const demoRequestData = {
+        clientName: demoData.clientName,
+        description: demoData.description,
+        reference: demoData.reference,
+        mobileNumber: demoData.mobileNumber
+      }
+      
+      await salesLeadService.requestDemo(id, demoRequestData)
+      
+      toast.success('Demo request submitted successfully')
+      setShowRequestDemoDialog(false)
+      
+      // Reset form
+      setDemoData({
+        clientName: leadProfile?.name || lead?.name || '',
+        mobileNumber: lead?.phone || '',
+        description: '',
+        reference: ''
+      })
+      
+      // Refresh data
+      fetchLeadData()
+    } catch (err) {
+      console.error('Error submitting demo request:', err)
+      toast.error('Failed to submit demo request')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCloseRequestDemoDialog = () => {
@@ -262,21 +444,26 @@ const SL_leadProfile = () => {
   }
 
   const handleLostSubmit = async () => {
-    if (!lostReason.trim()) {
-      alert('Please enter a reason for marking this lead as lost')
-      return
-    }
-
     setIsLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    setShowLostDialog(false)
-    setStatus('lost')
-    console.log('Lead marked as lost:', { clientId: client.id, reason: lostReason })
-    
-    // Reset form
-    setLostReason('')
+    try {
+      const lostData = {
+        lostReason: lostReason.trim() || 'No reason provided'
+      }
+      
+      await salesLeadService.updateLeadStatus(id, 'lost', lostData)
+      
+      toast.success('Lead marked as lost')
+      setShowLostDialog(false)
+      setLostReason('')
+      
+      // Refresh data
+      fetchLeadData()
+    } catch (err) {
+      console.error('Error marking lead as lost:', err)
+      toast.error('Failed to mark lead as lost')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCloseLostDialog = () => {
@@ -284,25 +471,45 @@ const SL_leadProfile = () => {
     setLostReason('')
   }
 
-  const handleTransferClient = () => {
-    setShowTransferDialog(true)
+  // Fetch sales team when transfer dialog opens
+  const handleTransferClient = async () => {
+    try {
+      const team = await salesLeadService.getSalesTeam()
+      setSalesTeam(team)
+      setShowTransferDialog(true)
+    } catch (err) {
+      console.error('Error fetching sales team:', err)
+      toast.error('Failed to load sales team')
+    }
   }
 
   const handleTransferSubmit = async () => {
     if (!selectedTransferPerson) {
-      alert('Please select a person to transfer to')
+      toast.error('Please select a person to transfer to')
       return
     }
 
     setIsLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    setShowTransferDialog(false)
-    console.log('Client transferred:', { clientId: client.id, transferTo: selectedTransferPerson })
-    
-    // Reset form
-    setSelectedTransferPerson('')
+    try {
+      const transferData = {
+        toSalesId: selectedTransferPerson,
+        reason: 'Transferred from lead profile'
+      }
+      
+      await salesLeadService.transferLead(id, transferData)
+      
+      toast.success('Lead transferred successfully')
+      setShowTransferDialog(false)
+      setSelectedTransferPerson('')
+      
+      // Navigate back to leads list
+      navigate('/leads')
+    } catch (err) {
+      console.error('Error transferring lead:', err)
+      toast.error('Failed to transfer lead')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCloseTransferDialog = () => {
@@ -332,7 +539,7 @@ const SL_leadProfile = () => {
 
   const handleAddMeeting = () => {
     setMeetingForm({
-      clientName: client.name,
+      clientName: leadProfile?.name || lead?.name || '',
       meetingDate: '',
       meetingTime: '',
       meetingType: 'in-person',
@@ -352,17 +559,24 @@ const SL_leadProfile = () => {
 
   const handleSaveMeeting = () => {
     if (!meetingForm.meetingDate || !meetingForm.meetingTime) {
-      alert('Please fill in meeting date and time')
+      toast.error('Please fill in meeting date and time')
       return
     }
 
     setIsLoading(true)
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // For now, just simulate the API call since meeting functionality might need backend implementation
+      setTimeout(() => {
+        setIsLoading(false)
+        setShowMeetingDialog(false)
+        toast.success('Meeting scheduled successfully')
+        console.log('Meeting scheduled:', meetingForm)
+      }, 1000)
+    } catch (err) {
+      console.error('Error scheduling meeting:', err)
+      toast.error('Failed to schedule meeting')
       setIsLoading(false)
-      setShowMeetingDialog(false)
-      console.log('Meeting scheduled:', meetingForm)
-    }, 1000)
+    }
   }
 
   const handleCloseMeetingDialog = () => {
@@ -393,17 +607,120 @@ const SL_leadProfile = () => {
   }
 
   const handleConvertedSubmit = async () => {
+    // Validate required fields
+    if (!conversionData.projectName.trim()) {
+      toast.error('Please enter project name')
+      return
+    }
+    if (!conversionData.estimatedBudget.trim() || parseFloat(conversionData.estimatedBudget) < 0) {
+      toast.error('Please enter a valid estimated budget')
+      return
+    }
+    if (!conversionData.projectType.web && !conversionData.projectType.app && !conversionData.projectType.taxi) {
+      toast.error('Please select at least one project type')
+      return
+    }
+    if (!conversionData.startDate) {
+      toast.error('Please select a start date')
+      return
+    }
+
     setIsLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    setShowConvertedDialog(false)
-    console.log('Converted form submitted:', convertedForm)
+    try {
+      // Transform form data to match backend API structure
+      const projectData = {
+        projectName: conversionData.projectName.trim(),
+        projectType: conversionData.projectType,
+        estimatedBudget: parseFloat(conversionData.estimatedBudget) || 0,
+        startDate: conversionData.startDate || new Date().toISOString()
+      }
+
+      await salesLeadService.convertLeadToClient(id, projectData)
+      
+      toast.success('Lead converted to client successfully')
+      setShowConvertedDialog(false)
+      navigate('/leads')
+      
+      // Refresh dashboard stats if available
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+    } catch (err) {
+      console.error('Error converting lead:', err)
+      toast.error('Failed to convert lead')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCloseDialog = () => {
     setShowConvertedDialog(false)
   }
+
+  // Show loading state
+  if (isLoading && !lead) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading lead profile...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Profile</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => navigate('/leads')}
+            className="bg-teal-500 text-white px-6 py-2 rounded-lg hover:bg-teal-600 transition-colors"
+          >
+            Back to Leads
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Show create profile CTA if no profile exists
+  if (lead && !leadProfile) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <SL_navbar />
+        <main className="max-w-md mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200 text-center"
+          >
+            <div className="text-6xl mb-4">📝</div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Create Lead Profile</h2>
+            <p className="text-gray-600 mb-6">This lead doesn't have a profile yet. Create one to manage all lead information.</p>
+            <button
+              onClick={() => navigate(`/connected-form/${id}`)}
+              className="bg-teal-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-teal-600 transition-colors"
+            >
+              Create Profile
+            </button>
+          </motion.div>
+        </main>
+      </div>
+    )
+  }
+
+  // Get display data
+  const displayName = leadProfile?.name || lead?.name || 'Unknown'
+  const displayPhone = lead?.phone || ''
+  const displayBusiness = leadProfile?.businessName || lead?.company || 'No business info'
+  const displayCost = leadProfile?.estimatedCost ? `${leadProfile.estimatedCost}k` : 'Not specified'
+  const avatar = displayName.charAt(0).toUpperCase()
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -425,26 +742,26 @@ const SL_leadProfile = () => {
             <div className="text-center mb-6">
               <div className="relative inline-block mb-4">
                 <div className="w-20 h-20 bg-gradient-to-br from-teal-500 via-teal-600 to-emerald-600 rounded-full flex items-center justify-center shadow-xl border-4 border-white">
-                  <span className="text-2xl font-bold text-white">{client.avatar}</span>
+                  <span className="text-2xl font-bold text-white">{avatar}</span>
                 </div>
               </div>
               
-              <h2 className="text-2xl font-bold text-gray-900 mb-1">{client.name}</h2>
-              <p className="text-lg text-teal-600 mb-1 font-medium">{client.phone}</p>
-              <p className="text-sm text-gray-500 bg-gray-50 px-3 py-1 rounded-full inline-block">{client.business}</p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-1">{displayName}</h2>
+              <p className="text-lg text-teal-600 mb-1 font-medium">{displayPhone}</p>
+              <p className="text-sm text-gray-500 bg-gray-50 px-3 py-1 rounded-full inline-block">{displayBusiness}</p>
             </div>
 
             {/* Contact Buttons */}
             <div className="grid grid-cols-2 gap-3 mb-6">
               <button
-                onClick={() => handleCall(client.phone)}
+                onClick={() => handleCall(displayPhone)}
                 className="bg-gradient-to-r from-teal-500 to-teal-600 text-white py-3 px-4 rounded-xl font-semibold flex items-center justify-center space-x-2 hover:from-teal-600 hover:to-teal-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
               >
                 <FiPhone className="text-lg" />
                 <span>Call</span>
               </button>
               <button
-                onClick={() => handleWhatsApp(client.phone)}
+                onClick={() => handleWhatsApp(displayPhone)}
                 className="bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 px-4 rounded-xl font-semibold flex items-center justify-center space-x-2 hover:from-green-600 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
               >
                 <FiMessageCircle className="text-lg" />
@@ -462,7 +779,7 @@ const SL_leadProfile = () => {
           >
             <div className="flex items-center justify-between">
               <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
-                E-cost: {client.estimatedCost}
+                E-cost: {displayCost}
               </div>
             <button 
               onClick={handleAddMeeting}
@@ -660,175 +977,116 @@ const SL_leadProfile = () => {
 
               {/* Form Fields */}
               <div className="space-y-4">
-                {/* Client Name */}
-                <div className="space-y-2">
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
-                      <FiUser className="text-lg" />
-                    </div>
-                    <input
-                      type="text"
-                      value={convertedForm.clientName}
-                      onChange={(e) => handleConvertedFormChange('clientName', e.target.value)}
-                      placeholder="Client name"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                    />
-                  </div>
-                </div>
-
                 {/* Project Name */}
-                <div className="space-y-2">
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
-                      <FiFolder className="text-lg" />
-                    </div>
-                    <input
-                      type="text"
-                      value={convertedForm.projectName}
-                      onChange={(e) => handleConvertedFormChange('projectName', e.target.value)}
-                      placeholder="Project name"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                    />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Project Name <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={conversionData.projectName}
+                    onChange={(e) => setConversionData({ ...conversionData, projectName: e.target.value })}
+                    placeholder="Enter project name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    required
+                  />
+                </div>
+
+                {/* Project Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Project Type <span className="text-red-500">*</span></label>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={conversionData.projectType.web}
+                        onChange={(e) => setConversionData({
+                          ...conversionData,
+                          projectType: { ...conversionData.projectType, web: e.target.checked }
+                        })}
+                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">Web</span>
+                    </label>
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={conversionData.projectType.app}
+                        onChange={(e) => setConversionData({
+                          ...conversionData,
+                          projectType: { ...conversionData.projectType, app: e.target.checked }
+                        })}
+                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">App</span>
+                    </label>
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={conversionData.projectType.taxi}
+                        onChange={(e) => setConversionData({
+                          ...conversionData,
+                          projectType: { ...conversionData.projectType, taxi: e.target.checked }
+                        })}
+                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">Taxi</span>
+                    </label>
                   </div>
                 </div>
 
-                {/* Mobile No */}
-                <div className="space-y-2">
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
-                      <FiPhone className="text-lg" />
-                    </div>
-                    <input
-                      type="tel"
-                      value={convertedForm.mobileNo}
-                      onChange={(e) => handleConvertedFormChange('mobileNo', e.target.value)}
-                      placeholder="Mobile no."
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                    />
-                  </div>
+                {/* Estimated Budget */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Budget <span className="text-red-500">*</span></label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={conversionData.estimatedBudget}
+                    onChange={(e) => setConversionData({ ...conversionData, estimatedBudget: e.target.value })}
+                    placeholder="Enter estimated budget"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    required
+                  />
                 </div>
 
-                {/* Finished Days */}
-                <div className="space-y-2">
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
-                      <FiCalendar className="text-lg" />
-                    </div>
-                    <input
-                      type="number"
-                      value={convertedForm.finishedDays}
-                      onChange={(e) => handleConvertedFormChange('finishedDays', e.target.value)}
-                      placeholder="Finished days"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                    />
-                  </div>
-                </div>
-
-                {/* Web and App Checkboxes */}
-                <div className="flex items-center space-x-6">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={convertedForm.web}
-                      onChange={(e) => handleConvertedFormChange('web', e.target.checked)}
-                      className="w-5 h-5 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Web</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={convertedForm.app}
-                      onChange={(e) => handleConvertedFormChange('app', e.target.checked)}
-                      className="w-5 h-5 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700">App</span>
-                  </label>
+                {/* Start Date */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date <span className="text-red-500">*</span></label>
+                  <input
+                    type="date"
+                    value={conversionData.startDate}
+                    onChange={(e) => setConversionData({ ...conversionData, startDate: e.target.value })}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    required
+                  />
                 </div>
 
                 {/* Description */}
-                <div className="space-y-2">
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
-                      <FiFileText className="text-lg" />
-                    </div>
-                    <input
-                      type="text"
-                      value={convertedForm.description}
-                      onChange={(e) => handleConvertedFormChange('description', e.target.value)}
-                      placeholder="Description"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <textarea
+                    value={conversionData.description}
+                    onChange={(e) => setConversionData({ ...conversionData, description: e.target.value })}
+                    placeholder="Enter project description (optional)"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
                 </div>
 
-                {/* Total Cost */}
-                <div className="space-y-2">
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
-                      <FiDollarSign className="text-lg" />
-                    </div>
-                    <input
-                      type="number"
-                      value={convertedForm.totalCost}
-                      onChange={(e) => handleConvertedFormChange('totalCost', e.target.value)}
-                      placeholder="Total cost"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                    />
-                  </div>
+                <div className="flex justify-end space-x-3 pt-2">
+                  <button
+                    onClick={() => setShowConvertedDialog(false)}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConvertedSubmit}
+                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    Convert to Client
+                  </button>
                 </div>
-
-                {/* Advance Received */}
-                <div className="space-y-2">
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
-                      <FiCheck className="text-lg" />
-                    </div>
-                    <input
-                      type="number"
-                      value={convertedForm.advanceReceived}
-                      onChange={(e) => handleConvertedFormChange('advanceReceived', e.target.value)}
-                      placeholder="Advance received"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                    />
-                  </div>
-                </div>
-
-                {/* Upload Screenshot Section */}
-                <div className="space-y-3">
-                  <h3 className="text-lg font-semibold text-gray-900">Upload Screenshot</h3>
-                  <div className="bg-gray-50 rounded-lg p-8 border-2 border-dashed border-gray-300 text-center hover:border-teal-300 transition-colors duration-200">
-                    <FiImage className="text-gray-400 text-4xl mx-auto mb-2" />
-                    <p className="text-gray-500 text-sm">Drop image here or click to upload</p>
-                  </div>
-                  
-                  {/* Include GST Checkbox */}
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={convertedForm.includeGST}
-                      onChange={(e) => handleConvertedFormChange('includeGST', e.target.checked)}
-                      className="w-5 h-5 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Include GST</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className="mt-6">
-                <button
-                  onClick={handleConvertedSubmit}
-                  disabled={isLoading}
-                  className="w-full bg-gradient-to-r from-teal-500 to-blue-600 text-white py-4 px-6 rounded-xl font-semibold flex items-center justify-center space-x-2 hover:from-teal-600 hover:to-blue-700 transition-all duration-200 disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <FiCheck className="text-lg" />
-                  )}
-                  <span>{isLoading ? 'Converting...' : 'Converted'}</span>
-                </button>
               </div>
             </motion.div>
           </div>
@@ -1002,8 +1260,8 @@ const SL_leadProfile = () => {
                     </div>
                     <input
                       type="text"
-                      value={requestDemoForm.clientName}
-                      onChange={(e) => handleRequestDemoFormChange('clientName', e.target.value)}
+                      value={demoData.clientName}
+                      onChange={(e) => setDemoData({ ...demoData, clientName: e.target.value })}
                       placeholder="Enter client name"
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                     />
@@ -1018,8 +1276,8 @@ const SL_leadProfile = () => {
                     </div>
                     <input
                       type="text"
-                      value={requestDemoForm.description}
-                      onChange={(e) => handleRequestDemoFormChange('description', e.target.value)}
+                      value={demoData.description}
+                      onChange={(e) => setDemoData({ ...demoData, description: e.target.value })}
                       placeholder="Enter description"
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                     />
@@ -1034,8 +1292,8 @@ const SL_leadProfile = () => {
                     </div>
                     <input
                       type="text"
-                      value={requestDemoForm.reference}
-                      onChange={(e) => handleRequestDemoFormChange('reference', e.target.value)}
+                      value={demoData.reference}
+                      onChange={(e) => setDemoData({ ...demoData, reference: e.target.value })}
                       placeholder="Reference"
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                     />
@@ -1050,14 +1308,14 @@ const SL_leadProfile = () => {
                     </div>
                     <input
                       type="tel"
-                      value={requestDemoForm.mobileNumber}
-                      onChange={(e) => handleRequestDemoFormChange('mobileNumber', e.target.value)}
+                      value={demoData.mobileNumber}
+                      onChange={(e) => setDemoData({ ...demoData, mobileNumber: e.target.value })}
                       placeholder="Enter client mobile number"
                       maxLength={10}
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                     />
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
-                      {requestDemoForm.mobileNumber.length}/10
+                      {demoData.mobileNumber.length}/10
                     </div>
                   </div>
                 </div>
@@ -1167,11 +1425,11 @@ const SL_leadProfile = () => {
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-bold text-white">{client.avatar}</span>
+                    <span className="text-sm font-bold text-white">{avatar}</span>
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">{client.name}</h3>
-                    <p className="text-sm text-gray-500">{client.business}</p>
+                    <h3 className="font-semibold text-gray-900">{displayName}</h3>
+                    <p className="text-sm text-gray-500">{displayBusiness}</p>
                   </div>
                 </div>
               </div>
@@ -1180,11 +1438,11 @@ const SL_leadProfile = () => {
               <div className="space-y-3 mb-6">
                 <h3 className="text-sm font-medium text-gray-700">Transfer to:</h3>
                 <div className="max-h-48 overflow-y-auto space-y-2">
-                  {transferPeople.map((person) => (
+                  {salesTeam.map((person) => (
                     <label
-                      key={person.id}
+                      key={person._id}
                       className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
-                        selectedTransferPerson === person.id
+                        selectedTransferPerson === person._id
                           ? 'border-teal-500 bg-teal-50'
                           : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                       }`}
@@ -1192,14 +1450,14 @@ const SL_leadProfile = () => {
                       <input
                         type="radio"
                         name="transferPerson"
-                        value={person.id}
-                        checked={selectedTransferPerson === person.id}
+                        value={person._id}
+                        checked={selectedTransferPerson === person._id}
                         onChange={(e) => setSelectedTransferPerson(e.target.value)}
                         className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
                       />
                       <div className="flex-1">
                         <div className="font-medium text-gray-900">{person.name}</div>
-                        <div className="text-sm text-gray-500">{person.role}</div>
+                        <div className="text-sm text-gray-500">{person.department || 'Sales'}</div>
                       </div>
                     </label>
                   ))}
@@ -1225,6 +1483,81 @@ const SL_leadProfile = () => {
                     <FiRefreshCw className="w-4 h-4" />
                   )}
                   <span>{isLoading ? 'Transferring...' : 'Transfer'}</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Notes Dialog */}
+        {showNotesDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl"
+            >
+              {/* Dialog Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Add Note</h2>
+                <button
+                  onClick={() => setShowNotesDialog(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+                >
+                  <FiX className="text-xl text-gray-600" />
+                </button>
+              </div>
+
+              {/* Notes List */}
+              {notes.length > 0 && (
+                <div className="mb-4 max-h-40 overflow-y-auto">
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Previous Notes:</h3>
+                  <div className="space-y-2">
+                    {notes.map((note, index) => (
+                      <div key={index} className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-800">{note.content}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {note.addedBy?.name || 'Unknown'} • {new Date(note.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* New Note Input */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">New Note</label>
+                  <textarea
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    placeholder="Enter your note here..."
+                    className="w-full p-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 resize-none"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowNotesDialog(false)}
+                  className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddNoteSubmit}
+                  disabled={isLoading || !newNote.trim()}
+                  className="px-6 py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg font-medium hover:from-teal-600 hover:to-teal-700 transition-all duration-200 disabled:opacity-50 flex items-center space-x-2"
+                >
+                  {isLoading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : null}
+                  <span>{isLoading ? 'Adding...' : 'Add Note'}</span>
                 </button>
               </div>
             </motion.div>
@@ -1486,29 +1819,29 @@ const SL_leadProfile = () => {
               <div className="text-center mb-8">
                 <div className="relative inline-block mb-6">
                   <div className="w-24 h-24 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center shadow-lg">
-                    <span className="text-3xl font-bold text-white">{client.avatar}</span>
+                    <span className="text-3xl font-bold text-white">{avatar}</span>
                   </div>
                   <div className="absolute -top-3 -right-3 bg-teal-500 text-white text-sm font-bold px-3 py-1 rounded-full">
-                    {client.estimatedCost}
+                    {displayCost}
                   </div>
                 </div>
                 
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">{client.name}</h2>
-                <p className="text-xl text-gray-600 mb-2">{client.phone}</p>
-                <p className="text-base text-gray-500">{client.business}</p>
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">{displayName}</h2>
+                <p className="text-xl text-gray-600 mb-2">{displayPhone}</p>
+                <p className="text-base text-gray-500">{displayBusiness}</p>
               </div>
 
               {/* Contact Buttons */}
               <div className="grid grid-cols-2 gap-4 mb-8">
                 <button
-                  onClick={() => handleCall(client.phone)}
+                  onClick={() => handleCall(displayPhone)}
                   className="bg-teal-500 text-white py-4 px-6 rounded-xl font-semibold flex items-center justify-center space-x-3 hover:bg-teal-600 transition-colors duration-200"
                 >
                   <FiPhone className="text-xl" />
                   <span>Call</span>
                 </button>
                 <button
-                  onClick={() => handleWhatsApp(client.phone)}
+                  onClick={() => handleWhatsApp(displayPhone)}
                   className="bg-green-500 text-white py-4 px-6 rounded-xl font-semibold flex items-center justify-center space-x-3 hover:bg-green-600 transition-colors duration-200"
                 >
                   <FiMessageCircle className="text-xl" />

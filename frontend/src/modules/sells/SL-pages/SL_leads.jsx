@@ -44,7 +44,7 @@ const LeadDashboard = () => {
       new: 0,
       connected: 0,
       not_picked: 0,
-      today_followup: 0,
+      followup: 0, // Changed from today_followup to followup to match backend
       quotation_sent: 0,
       dq_sent: 0,
       app_client: 0,
@@ -86,33 +86,68 @@ const LeadDashboard = () => {
       ])
     }
     
-    // Always try to fetch dashboard stats - service will handle auth errors gracefully
-    fetchDashboardStats()
+    // Only try to fetch dashboard stats if we have a token
+    if (token) {
+      fetchDashboardStats()
+    }
   }, [])
 
   // Fetch dashboard statistics
   const fetchDashboardStats = async () => {
     setIsLoadingStats(true)
     try {
-      // Get actual leads count for 'new' status to match SL_newLeads.jsx
-      const newLeadsResponse = await salesLeadService.getLeadsByStatus('new', { page: 1, limit: 1000 })
-      const newLeadsCount = newLeadsResponse.data.length
+      // Check authentication token
+      const token = localStorage.getItem('salesToken') || localStorage.getItem('token')
       
-      // Update dashboard stats with actual new leads count
-      const updatedStats = {
-        ...dashboardStats,
-        statusCounts: {
-          ...dashboardStats.statusCounts,
-          new: newLeadsCount
+      // Use the getDashboardStatistics service to get all status counts at once
+      const stats = await salesLeadService.getDashboardStatistics()
+      
+      // Update dashboard stats with actual data from backend
+      setDashboardStats({
+        statusCounts: stats.statusCounts || {
+          new: 0,
+          connected: 0,
+          not_picked: 0,
+          followup: 0, // Changed from today_followup to followup to match backend
+          quotation_sent: 0,
+          dq_sent: 0,
+          app_client: 0,
+          web: 0,
+          converted: 0,
+          lost: 0,
+          hot: 0,
+          demo_requested: 0
         },
-        totalLeads: dashboardStats.totalLeads + (newLeadsCount - dashboardStats.statusCounts.new)
-      }
-      
-      setDashboardStats(updatedStats)
+        totalLeads: stats.totalLeads || 0
+      })
     } catch (error) {
       console.error('Error fetching dashboard stats:', error)
-      // Don't show error toast for dashboard stats, just use defaults
-      // The service already returns default values on error
+      
+      // Handle different types of errors
+      if (error.message === 'Failed to fetch' || error.code === 'ERR_NETWORK') {
+        toast.error('Cannot connect to server. Please make sure the backend server is running.')
+      } else {
+        toast.error('Failed to load dashboard statistics. Check console for details.')
+      }
+      
+      // Set default stats on error
+      setDashboardStats({
+        statusCounts: {
+          new: 0,
+          connected: 0,
+          not_picked: 0,
+          followup: 0,
+          quotation_sent: 0,
+          dq_sent: 0,
+          app_client: 0,
+          web: 0,
+          converted: 0,
+          lost: 0,
+          hot: 0,
+          demo_requested: 0
+        },
+        totalLeads: 0
+      })
     } finally {
       setIsLoadingStats(false)
     }
@@ -140,9 +175,23 @@ const LeadDashboard = () => {
         setCategories(response.data.data)
       } else {
         console.error('API Error:', response.data.message)
+        // Set default categories on API error
+        setCategories([
+          { _id: '1', name: 'Hot Leads', description: 'High priority leads', color: '#EF4444', icon: '🔥' },
+          { _id: '2', name: 'Cold Leads', description: 'Leads that need nurturing', color: '#3B82F6', icon: '❄️' },
+          { _id: '3', name: 'Warm Leads', description: 'Leads showing interest', color: '#F59E0B', icon: '🌡️' }
+        ])
       }
     } catch (error) {
       console.error('Error fetching categories:', error)
+      
+      // Handle different types of errors
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        console.log('Server not available, using default categories')
+      } else {
+        console.error('API Error:', error)
+      }
+      
       // Set some default categories as fallback
       setCategories([
         { _id: '1', name: 'Hot Leads', description: 'High priority leads', color: '#EF4444', icon: '🔥' },
@@ -267,7 +316,7 @@ const LeadDashboard = () => {
   const tileData = [
     { title: "Connected", count: dashboardStats.statusCounts.connected, icon: FiPhone, bgClass: "bg-emerald-50", textClass: "text-emerald-800", iconBgClass: "bg-emerald-100", iconClass: "text-emerald-600", borderClass: "border-emerald-200/30", status: "connected" },
     { title: "Not Picked", count: dashboardStats.statusCounts.not_picked, icon: FiPhoneOff, bgClass: "bg-rose-50", textClass: "text-rose-800", iconBgClass: "bg-rose-100", iconClass: "text-rose-600", borderClass: "border-rose-200/30", status: "not_picked" },
-    { title: "Today Follow Up", count: dashboardStats.statusCounts.today_followup, icon: FiCalendar, bgClass: "bg-amber-50", textClass: "text-amber-800", iconBgClass: "bg-amber-100", iconClass: "text-amber-600", borderClass: "border-amber-200/30", status: "today_followup" },
+    { title: "Follow Up", count: dashboardStats.statusCounts.followup, icon: FiCalendar, bgClass: "bg-amber-50", textClass: "text-amber-800", iconBgClass: "bg-amber-100", iconClass: "text-amber-600", borderClass: "border-amber-200/30", status: "followup" },
     { title: "Quotation Sent", count: dashboardStats.statusCounts.quotation_sent, icon: FiFileText, bgClass: "bg-blue-50", textClass: "text-blue-800", iconBgClass: "bg-blue-100", iconClass: "text-blue-600", borderClass: "border-blue-200/30", status: "quotation_sent" },
     { title: "D&Q Sent", count: dashboardStats.statusCounts.dq_sent, icon: FiSend, bgClass: "bg-purple-50", textClass: "text-purple-800", iconBgClass: "bg-purple-100", iconClass: "text-purple-600", borderClass: "border-purple-200/30", status: "dq_sent" },
     { title: "App Client", count: dashboardStats.statusCounts.app_client, icon: FiSmartphone, bgClass: "bg-indigo-50", textClass: "text-indigo-800", iconBgClass: "bg-indigo-100", iconClass: "text-indigo-600", borderClass: "border-indigo-200/30", status: "app_client" },
@@ -337,7 +386,7 @@ const LeadDashboard = () => {
                   to={
                     tile.title === "Connected" ? "/connected" :
                     tile.title === "Not Picked" ? "/not-picked" :
-                    tile.title === "Today Follow Up" ? "/today-followup" :
+                    tile.title === "Follow Up" ? "/followup" :
                     tile.title === "Quotation Sent" ? "/quotation-sent" :
                     tile.title === "D&Q Sent" ? "/dq-sent" :
                     tile.title === "App Client" ? "/app-client" :
@@ -401,7 +450,7 @@ const LeadDashboard = () => {
                 tabIndex={0}
               >
                 <FiAlertCircle className="text-xl text-rose-700" />
-                <span className="text-lg">Lost 23</span>
+                <span className="text-lg">Lost {isLoadingStats ? '...' : dashboardStats.statusCounts.lost}</span>
               </button>
             </Link>
           </div>
@@ -477,9 +526,9 @@ const LeadDashboard = () => {
                     <Link
                       key={tile.title}
                       to={
-                        tile.title === "Contacted" ? "/connected" :
+                        tile.title === "Connected" ? "/connected" :
                         tile.title === "Not Picked" ? "/not-picked" :
-                        tile.title === "Today Follow Up" ? "/today-followup" :
+                        tile.title === "Follow Up" ? "/followup" :
                         tile.title === "Quotation Sent" ? "/quotation-sent" :
                         tile.title === "D&Q Sent" ? "/dq-sent" :
                         tile.title === "App Client" ? "/app-client" :
@@ -545,7 +594,7 @@ const LeadDashboard = () => {
                     tabIndex={0}
                   >
                     <FiAlertCircle className="text-2xl text-rose-700" />
-                    <span className="text-xl">Lost 23</span>
+                    <span className="text-xl">Lost {isLoadingStats ? '...' : dashboardStats.statusCounts.lost}</span>
                   </button>
                 </Link>
               </motion.div>

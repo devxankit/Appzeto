@@ -144,6 +144,10 @@ const SL_lost = () => {
     return name.includes(q) || company.includes(q) || phone.includes(searchTerm || '')
   })
 
+  // Calculate connected vs non-connected lost leads
+  const connectedLostLeads = leadsData.filter(lead => lead.leadProfile).length
+  const nonConnectedLostLeads = leadsData.filter(lead => !lead.leadProfile).length
+
   const handleCall = (phone) => {
     window.open(`tel:${phone}`, '_self')
   }
@@ -156,6 +160,14 @@ const SL_lost = () => {
   const handleProfile = (leadId) => {
     console.log('Navigating to profile for lead ID:', leadId)
     navigate(`/lead-profile/${leadId}`)
+  }
+
+  const handleProfileClick = (lead) => {
+    if (lead.leadProfile) {
+      handleProfile(lead._id)
+    } else {
+      toast.error('This lead doesn\'t have a profile. Please connect to the lead first to create a profile.')
+    }
   }
 
   // Handle recover and connect functionality
@@ -279,6 +291,7 @@ const SL_lost = () => {
   // Mobile Lead Card Component
   const MobileLeadCard = ({ lead }) => {
     const categoryInfo = getCategoryInfo(lead.category)
+    const hasProfile = lead.leadProfile
     
     return (
       <div className="p-4 space-y-3">
@@ -293,8 +306,12 @@ const SL_lost = () => {
 
           {/* Lead Info & Category */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-gray-900 truncate">{lead.name || 'Unknown'}</h3>
-            <p className="text-sm text-gray-600 truncate">{lead.company || 'No Company'}</p>
+            <h3 className="text-base font-semibold text-gray-900 truncate">
+              {hasProfile ? (lead.leadProfile?.name || lead.name || 'Unknown') : (lead.name || 'Unknown')}
+            </h3>
+            <p className="text-sm text-gray-600 truncate">
+              {hasProfile ? (lead.leadProfile?.businessName || lead.company || 'No Company') : (lead.company || 'No Company')}
+            </p>
             {/* Category Tag */}
             <div className="flex items-center space-x-1 mt-1">
               <span 
@@ -313,6 +330,7 @@ const SL_lost = () => {
             </p>
           </div>
         </div>
+
 
       {/* Lost Info */}
       <div className="flex justify-between items-center">
@@ -345,7 +363,8 @@ const SL_lost = () => {
             </svg>
           </button>
 
-          {/* Profile Button */}
+          {/* Profile Button - Only show if lead has profile */}
+          {lead.leadProfile && (
           <button
             onClick={(e) => {
               e.preventDefault()
@@ -357,6 +376,7 @@ const SL_lost = () => {
           >
             <FiUser className="w-4 h-4" />
           </button>
+          )}
 
           {/* More Options */}
           <div className="relative">
@@ -398,6 +418,7 @@ const SL_lost = () => {
   // Desktop Lead Card Component
   const DesktopLeadCard = ({ lead }) => {
     const categoryInfo = getCategoryInfo(lead.category)
+    const hasProfile = lead.leadProfile
     
     return (
       <div className="p-4 space-y-3">
@@ -412,8 +433,12 @@ const SL_lost = () => {
 
           {/* Lead Info & Category */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.name || 'Unknown'}</h3>
-            <p className="text-sm text-gray-600 truncate">{lead.company || 'No Company'}</p>
+            <h3 className="text-lg font-semibold text-gray-900 truncate">
+              {hasProfile ? (lead.leadProfile?.name || lead.name || 'Unknown') : (lead.name || 'Unknown')}
+            </h3>
+            <p className="text-sm text-gray-600 truncate">
+              {hasProfile ? (lead.leadProfile?.businessName || lead.company || 'No Company') : (lead.company || 'No Company')}
+            </p>
             {/* Category Tag */}
             <div className="flex items-center space-x-2 mt-1">
               <span 
@@ -432,6 +457,7 @@ const SL_lost = () => {
             </p>
           </div>
         </div>
+
 
       {/* Phone & Status */}
       <div className="flex justify-between items-center">
@@ -470,6 +496,8 @@ const SL_lost = () => {
             <span>WhatsApp</span>
           </button>
 
+          {/* Profile Button - Only show if lead has profile */}
+          {lead.leadProfile && (
           <button
             onClick={(e) => {
               e.preventDefault()
@@ -481,6 +509,7 @@ const SL_lost = () => {
             <FiUser className="w-4 h-4" />
             <span>Profile</span>
           </button>
+          )}
 
           <div className="relative">
             <button
