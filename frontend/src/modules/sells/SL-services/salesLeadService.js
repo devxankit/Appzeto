@@ -75,9 +75,11 @@ export const getLeadsByStatus = async (status, params = {}) => {
     if (params.limit) queryParams.append('limit', params.limit);
 
     const url = `/sales/leads/status/${status}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    
     const response = await apiRequest(url, {
       method: 'GET'
     });
+    
     return response;
   } catch (error) {
     console.error('Error fetching leads by status:', error);
@@ -105,15 +107,27 @@ export const getLeadDetail = async (leadId) => {
   }
 };
 
-export const updateLeadStatus = async (leadId, status, notes = '') => {
+export const updateLeadStatus = async (leadId, status, payload = '') => {
   try {
+    let requestBody = { status };
+    
+    // Handle different payload types for backward compatibility
+    if (typeof payload === 'string') {
+      // Legacy: notes as string
+      requestBody.notes = payload;
+    } else if (typeof payload === 'object' && payload !== null) {
+      // New: follow-up data object
+      requestBody = {
+        ...requestBody,
+        ...payload
+      };
+    }
+    
     const response = await apiRequest(`/sales/leads/${leadId}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({
-        status,
-        notes
-      })
+      body: JSON.stringify(requestBody)
     });
+    
     return response.data;
   } catch (error) {
     console.error('Error updating lead status:', error);
@@ -179,7 +193,8 @@ export const getStatusDisplayName = (status) => {
     'new': 'New',
     'connected': 'Connected',
     'not_picked': 'Not Picked',
-    'today_followup': 'Today Followup',
+    'followup': 'Follow Up',
+    'today_followup': 'Today Followup', // Backward compatibility
     'quotation_sent': 'Quotation Sent',
     'dq_sent': 'DQ Sent',
     'app_client': 'App Client',
@@ -197,7 +212,8 @@ export const getStatusColor = (status) => {
     'new': 'bg-blue-100 text-blue-800',
     'connected': 'bg-green-100 text-green-800',
     'not_picked': 'bg-gray-100 text-gray-800',
-    'today_followup': 'bg-yellow-100 text-yellow-800',
+    'followup': 'bg-yellow-100 text-yellow-800',
+    'today_followup': 'bg-yellow-100 text-yellow-800', // Backward compatibility
     'quotation_sent': 'bg-purple-100 text-purple-800',
     'dq_sent': 'bg-indigo-100 text-indigo-800',
     'app_client': 'bg-pink-100 text-pink-800',
@@ -213,9 +229,10 @@ export const getStatusColor = (status) => {
 export const getValidStatusTransitions = (currentStatus) => {
   const transitions = {
     'new': ['connected', 'not_picked', 'lost'],
-    'connected': ['hot', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
-    'not_picked': ['connected', 'today_followup', 'lost'],
-    'today_followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
+    'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
+    'not_picked': ['connected', 'followup', 'lost'],
+    'followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
+    'today_followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'], // Backward compatibility
     'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
     'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
     'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'lost'],
@@ -223,7 +240,7 @@ export const getValidStatusTransitions = (currentStatus) => {
     'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost'],
     'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
     'converted': [], // Terminal state
-    'lost': [] // Terminal state
+    'lost': ['connected'] // Can be recovered and connected
   };
   return transitions[currentStatus] || [];
 };

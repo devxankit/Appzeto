@@ -26,12 +26,12 @@ const leadSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['new', 'connected', 'hot', 'converted', 'lost', 'not_picked', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested'],
+    enum: ['new', 'connected', 'hot', 'converted', 'lost', 'not_picked', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested'],
     default: 'new'
   },
   priority: {
     type: String,
-    enum: ['high', 'medium', 'low'],
+    enum: ['high', 'medium', 'low', 'urgent'],
     default: 'medium'
   },
   source: {
@@ -82,8 +82,9 @@ const leadSchema = new mongoose.Schema({
   followUps: [{
     scheduledDate: Date,
     scheduledTime: String,
-    type: { type: String, enum: ['call', 'email', 'meeting', 'whatsapp', 'visit', 'demo'] },
+    type: { type: String, enum: ['call', 'email', 'meeting', 'whatsapp', 'visit', 'demo'], default: 'call' },
     notes: String,
+    priority: { type: String, enum: ['high', 'medium', 'low', 'urgent'], default: 'medium' },
     status: { type: String, enum: ['pending', 'completed', 'cancelled'], default: 'pending' },
     completedAt: Date,
     createdAt: { type: Date, default: Date.now }
@@ -159,9 +160,9 @@ leadSchema.virtual('daysUntilFollowUp').get(function() {
 leadSchema.methods.updateStatus = function(newStatus) {
   const validTransitions = {
     'new': ['connected', 'not_picked', 'lost'],
-    'connected': ['hot', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
-    'not_picked': ['connected', 'today_followup', 'lost'],
-    'today_followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
+    'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
+    'not_picked': ['connected', 'followup', 'lost'],
+    'followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
     'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
     'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
     'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'lost'],
@@ -169,7 +170,7 @@ leadSchema.methods.updateStatus = function(newStatus) {
     'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost'],
     'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
     'converted': [], // Final state
-    'lost': [] // Final state
+    'lost': ['connected'] // Can be recovered and connected
   };
 
   if (!validTransitions[this.status].includes(newStatus)) {
@@ -193,7 +194,16 @@ leadSchema.methods.assignToSales = function(salesId) {
 // Method to add follow-up
 leadSchema.methods.addFollowUp = function(followUpData) {
   this.followUps.push(followUpData);
-  this.nextFollowUpDate = followUpData.scheduledDate;
+  
+  // Update nextFollowUpDate to the nearest upcoming follow-up
+  const upcomingFollowUps = this.followUps
+    .filter(fu => fu.status === 'pending' && fu.scheduledDate >= new Date())
+    .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
+  
+  if (upcomingFollowUps.length > 0) {
+    this.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
+  }
+  
   return this.save();
 };
 

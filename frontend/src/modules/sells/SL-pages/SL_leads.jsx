@@ -265,7 +265,7 @@ const LeadDashboard = () => {
 
   // Dynamic tile data based on dashboard statistics
   const tileData = [
-    { title: "Contacted", count: dashboardStats.statusCounts.connected, icon: FiPhone, bgClass: "bg-emerald-50", textClass: "text-emerald-800", iconBgClass: "bg-emerald-100", iconClass: "text-emerald-600", borderClass: "border-emerald-200/30", status: "connected" },
+    { title: "Connected", count: dashboardStats.statusCounts.connected, icon: FiPhone, bgClass: "bg-emerald-50", textClass: "text-emerald-800", iconBgClass: "bg-emerald-100", iconClass: "text-emerald-600", borderClass: "border-emerald-200/30", status: "connected" },
     { title: "Not Picked", count: dashboardStats.statusCounts.not_picked, icon: FiPhoneOff, bgClass: "bg-rose-50", textClass: "text-rose-800", iconBgClass: "bg-rose-100", iconClass: "text-rose-600", borderClass: "border-rose-200/30", status: "not_picked" },
     { title: "Today Follow Up", count: dashboardStats.statusCounts.today_followup, icon: FiCalendar, bgClass: "bg-amber-50", textClass: "text-amber-800", iconBgClass: "bg-amber-100", iconClass: "text-amber-600", borderClass: "border-amber-200/30", status: "today_followup" },
     { title: "Quotation Sent", count: dashboardStats.statusCounts.quotation_sent, icon: FiFileText, bgClass: "bg-blue-50", textClass: "text-blue-800", iconBgClass: "bg-blue-100", iconClass: "text-blue-600", borderClass: "border-blue-200/30", status: "quotation_sent" },
@@ -335,7 +335,7 @@ const LeadDashboard = () => {
                 <Link
                   key={tile.title}
                   to={
-                    tile.title === "Contacted" ? "/connected" :
+                    tile.title === "Connected" ? "/connected" :
                     tile.title === "Not Picked" ? "/not-picked" :
                     tile.title === "Today Follow Up" ? "/today-followup" :
                     tile.title === "Quotation Sent" ? "/quotation-sent" :

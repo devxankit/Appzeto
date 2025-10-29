@@ -59,7 +59,9 @@ const Admin_sales_management = () => {
   const [statistics, setStatistics] = useState(null)
   const [leadCategories, setLeadCategories] = useState([])
   const [leads, setLeads] = useState([])
+  const [totalLeadsCount, setTotalLeadsCount] = useState(0) // Total count from API
   const [allLeads, setAllLeads] = useState([]) // All leads for statistics
+  const [totalAllLeadsCount, setTotalAllLeadsCount] = useState(0) // Total count of all leads from API
   const [assignedLeads, setAssignedLeads] = useState([]) // Assigned leads for category performance
   const [salesTeam, setSalesTeam] = useState([])
   const [clients, setClients] = useState([])
@@ -156,7 +158,9 @@ const Admin_sales_management = () => {
       const response = await adminSalesService.getAllLeads(params)
       
       if (response.success) {
-        setLeads(response.data)
+        setLeads(response.data || [])
+        // Store total count from API response (accurate unassigned leads count)
+        setTotalLeadsCount(response.total || 0)
       }
     } catch (error) {
       console.error('Error loading leads:', error)
@@ -166,15 +170,15 @@ const Admin_sales_management = () => {
     }
   }
 
-  // Load all leads for statistics (both assigned and unassigned)
+  // Load all unassigned leads for statistics
   const loadAllLeads = async () => {
     try {
       const params = {
         page: 1,
         limit: 1000, // Load more leads for statistics
         search: searchTerm,
-        status: selectedFilter !== 'all' ? selectedFilter : undefined
-        // No assignedTo filter - get ALL leads
+        status: selectedFilter !== 'all' ? selectedFilter : undefined,
+        assignedTo: 'unassigned' // Only get unassigned leads
       }
       
       
@@ -182,7 +186,9 @@ const Admin_sales_management = () => {
       
       
       if (response.success) {
-        setAllLeads(response.data)
+        setAllLeads(response.data || [])
+        // Store total count from API response
+        setTotalAllLeadsCount(response.total || 0)
       }
     } catch (error) {
       console.error('Error loading all leads:', error)
@@ -255,7 +261,7 @@ const Admin_sales_management = () => {
           loadStatistics(),
           loadCategories(),
           loadLeads(),
-          loadAllLeads(), // Load all leads for statistics
+          loadAllLeads(), // Load all unassigned leads for statistics
           loadAssignedLeads() // Load assigned leads for category performance
         ])
       } catch (error) {
@@ -351,10 +357,10 @@ const Admin_sales_management = () => {
 
   // Overall performance metrics
   const overallPerformance = useMemo(() => {
-    // Total Leads shows unassigned leads (admin's available pool)
-    const totalLeads = leads.length
+    // Total Leads uses totalLeadsCount from loadLeads API (accurate unassigned count)
+    const totalLeads = totalLeadsCount > 0 ? totalLeadsCount : (statistics?.leads?.unassigned || 0)
     
-    // Other metrics based on all leads for complete picture
+    // Other metrics based on unassigned leads only
     const totalConverted = allLeads.filter(lead => 
       lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed'
     ).length
@@ -364,16 +370,16 @@ const Admin_sales_management = () => {
       .reduce((sum, lead) => sum + (lead.value || 0), 0)
     
     const result = {
-      totalLeads, // Unassigned leads only (admin's pool)
-      totalConverted, // From all leads
-      totalRevenue, // From all leads
-      convertedRevenue, // From all leads
+      totalLeads, // Unassigned leads only from statistics API
+      totalConverted, // From unassigned leads
+      totalRevenue, // From unassigned leads
+      convertedRevenue, // From unassigned leads
       overallConversionRate: allLeads.length > 0 ? Math.round((totalConverted / allLeads.length) * 100 * 100) / 100 : 0,
       avgDealValue: totalConverted > 0 ? Math.round(convertedRevenue / totalConverted) : 0
     }
     
     return result
-  }, [leads, allLeads])
+  }, [totalLeadsCount, statistics, allLeads])
 
   // Category Performance metrics (for assigned leads only)
   const categoryPerformanceMetrics = useMemo(() => {
@@ -539,18 +545,31 @@ const Admin_sales_management = () => {
 
   // Pagination
   const paginatedData = useMemo(() => {
-    let sortedData = [...filteredData]
-    
-    // Sort leads by date (newest first) when on leads tab
+    // For leads tab, data is already paginated from server - don't slice again
     if (activeTab === 'leads') {
-      sortedData.sort((a, b) => new Date(b.lastContact) - new Date(a.lastContact))
+      let sortedData = [...filteredData]
+      
+      // Sort leads by date (newest first) when on leads tab
+      sortedData.sort((a, b) => new Date(b.lastContact || b.createdAt) - new Date(a.lastContact || a.createdAt))
+      
+      return sortedData // Return already paginated data from server
     }
     
+    // For other tabs, do client-side pagination
+    let sortedData = [...filteredData]
     const startIndex = (currentPage - 1) * itemsPerPage
     return sortedData.slice(startIndex, startIndex + itemsPerPage)
   }, [filteredData, currentPage, itemsPerPage, activeTab])
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage)
+  
+  // Get total count for display - use API total for leads tab, filteredData length for others
+  const displayTotal = activeTab === 'leads' ? totalLeadsCount : filteredData.length
+  
+  // Calculate total pages using API total for leads tab
+  const displayTotalPages = activeTab === 'leads' && totalLeadsCount > 0 
+    ? Math.ceil(totalLeadsCount / itemsPerPage) 
+    : totalPages
 
   // Management functions
   const handleCreate = (type) => {
@@ -1064,8 +1083,31 @@ const Admin_sales_management = () => {
     setLeadsToAssign('')
     setAssignCategoryFilter('all')
     
-    // Calculate leads per category
-    const unassignedLeads = leads.filter(lead => !lead.assignedTo || lead.assignedTo === null)
+    // Calculate employee statistics from assignedLeads
+    const employeeLeads = assignedLeads.filter(lead => {
+      if (!lead.assignedTo) return false
+      // Handle populated assignedTo object (from getAllLeads API)
+      if (typeof lead.assignedTo === 'object' && lead.assignedTo._id) {
+        return lead.assignedTo._id.toString() === member._id.toString()
+      }
+      // Handle unpopulated assignedTo (ObjectId string)
+      return lead.assignedTo.toString() === member._id.toString()
+    })
+    const employeeConverted = employeeLeads.filter(lead => 
+      lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed'
+    ).length
+    
+    // Update member performance stats if not already set correctly
+    if (!member.performance || member.performance.totalLeads !== employeeLeads.length || member.performance.convertedLeads !== employeeConverted) {
+      member.performance = {
+        ...member.performance,
+        totalLeads: employeeLeads.length,
+        convertedLeads: employeeConverted
+      }
+    }
+    
+    // Calculate leads per category - use allLeads instead of paginated leads
+    const unassignedLeads = allLeads.filter(lead => !lead.assignedTo || lead.assignedTo === null || lead.assignedTo === 'Unassigned')
     const categoryBreakdown = {}
     
     leadCategories.forEach(category => {
@@ -1138,9 +1180,9 @@ const Admin_sales_management = () => {
       return
     }
 
-    // Calculate available leads
+    // Calculate available leads - use allLeads instead of paginated leads
     const categoryId = assignCategoryFilter === 'all' ? 'all' : assignCategoryFilter
-    const unassignedLeads = leads.filter(lead => !lead.assignedTo || lead.assignedTo === null)
+    const unassignedLeads = allLeads.filter(lead => !lead.assignedTo || lead.assignedTo === null || lead.assignedTo === 'Unassigned')
     
     let availableLeads
     if (categoryId === 'all') {
@@ -1487,7 +1529,7 @@ const Admin_sales_management = () => {
                 <div>
                   <p className="text-xs font-medium text-blue-700 mb-1">Total Leads</p>
                   <p className="text-lg font-bold text-blue-800">
-                    {loadingStatistics ? '...' : (overallPerformance.totalLeads || 0)}
+                    {totalLeadsCount > 0 ? totalLeadsCount : (statistics?.leads?.unassigned ?? 0)}
                   </p>
                 </div>
               </div>
@@ -1766,7 +1808,7 @@ const Admin_sales_management = () => {
                         <h3 className="text-xl font-bold text-gray-900">Lead Management</h3>
                         <p className="text-gray-600 text-sm mt-1">Organize and manage your leads with categories</p>
                       </div>
-                      <div className="flex items-center space-x-3">
+                      <div className="flex items-center">
                         <button
                           onClick={() => setShowCategoryModal(true)}
                           className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
@@ -1774,9 +1816,6 @@ const Admin_sales_management = () => {
                           <FiTarget className="h-4 w-4" />
                           <span>Manage Categories</span>
                         </button>
-                        <div className="text-sm text-gray-600">
-                          <span className="font-semibold">{filteredData.length}</span> leads found
-                        </div>
                       </div>
                     </div>
                     
@@ -1807,8 +1846,8 @@ const Admin_sales_management = () => {
                       <div className="flex items-center justify-between">
                         <h3 className="text-lg font-semibold text-gray-900">All Leads</h3>
                         <div className="text-sm text-gray-500">
-                          {filteredData.length} leads found
-                          </div>
+                          {activeTab === 'leads' ? totalLeadsCount : filteredData.length} leads found
+                        </div>
                         </div>
                       </div>
                       
@@ -2227,7 +2266,7 @@ const Admin_sales_management = () => {
               {/* Pagination */}
               <div className="flex items-center justify-between mt-6">
                 <div className="text-sm text-gray-700">
-                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} {activeTab}
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, displayTotal)} of {displayTotal} {activeTab}
                 </div>
                 <div className="flex items-center space-x-2">
                   <button
@@ -2238,11 +2277,11 @@ const Admin_sales_management = () => {
                     Previous
                   </button>
                   <span className="text-sm text-gray-700">
-                    Page {currentPage} of {totalPages}
+                    Page {currentPage} of {displayTotalPages}
                   </span>
                   <button
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, displayTotalPages))}
+                    disabled={currentPage === displayTotalPages}
                     className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next
@@ -3208,8 +3247,27 @@ const Admin_sales_management = () => {
                     <h4 className="font-semibold text-gray-900">{selectedItem.name}</h4>
                     <p className="text-sm text-gray-600">{selectedItem.position}</p>
                     <div className="flex items-center space-x-4 text-sm text-blue-700">
-                      <span>Current Leads: {selectedItem?.performance?.totalLeads || 0}</span>
-                      <span>Converted: {selectedItem?.performance?.convertedLeads || 0}</span>
+                      {(() => {
+                        // Calculate employee statistics from assignedLeads
+                        const employeeLeads = assignedLeads.filter(lead => {
+                          if (!lead.assignedTo) return false
+                          // Handle populated assignedTo object (from getAllLeads API)
+                          if (typeof lead.assignedTo === 'object' && lead.assignedTo._id) {
+                            return lead.assignedTo._id.toString() === selectedItem._id.toString()
+                          }
+                          // Handle unpopulated assignedTo (ObjectId string)
+                          return lead.assignedTo.toString() === selectedItem._id.toString()
+                        })
+                        const employeeConverted = employeeLeads.filter(lead => 
+                          lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed'
+                        ).length
+                        return (
+                          <>
+                            <span>Current Leads: {employeeLeads.length}</span>
+                            <span>Converted: {employeeConverted}</span>
+                          </>
+                        )
+                      })()}
                     </div>
                   </div>
                 </div>

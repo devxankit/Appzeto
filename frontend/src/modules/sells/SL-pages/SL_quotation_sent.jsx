@@ -77,7 +77,11 @@ const SL_quotation_sent = () => {
         limit: 50
       }
       const response = await salesLeadService.getLeadsByStatus('quotation_sent', params)
-      setLeadsData(response.data || [])
+      
+      // Normalize leads array from response shape
+      const raw = response?.data
+      const leads = Array.isArray(raw) ? raw : (raw?.data ?? [])
+      setLeadsData(Array.isArray(leads) ? leads : [])
     } catch (error) {
       console.error('Error fetching leads:', error)
       toast.error('Failed to fetch leads')
@@ -87,122 +91,14 @@ const SL_quotation_sent = () => {
     }
   }
 
-  // Lead categories (matching admin system)
-  const leadCategories = [
-    {
-      id: 1,
-      name: 'Hot Leads',
-      description: 'High priority leads with immediate potential',
-      color: '#EF4444',
-      icon: '🔥'
-    },
-    {
-      id: 2,
-      name: 'Cold Leads',
-      description: 'Leads that need nurturing and follow-up',
-      color: '#3B82F6',
-      icon: '❄️'
-    },
-    {
-      id: 3,
-      name: 'Warm Leads',
-      description: 'Leads showing interest but not ready to convert',
-      color: '#F59E0B',
-      icon: '🌡️'
-    },
-    {
-      id: 4,
-      name: 'Enterprise',
-      description: 'Large enterprise clients and prospects',
-      color: '#8B5CF6',
-      icon: '🏢'
-    },
-    {
-      id: 5,
-      name: 'SME',
-      description: 'Small and medium enterprise prospects',
-      color: '#10B981',
-      icon: '🏪'
-    }
-  ]
-
-  // Mock quotation sent leads data
-  const quotationSentData = [
-    {
-      id: 1,
-      name: 'John Smith',
-      phone: '9845637236',
-      company: 'Tech Solutions Inc.',
-      quotationDate: '2 days ago',
-      amount: '₹25,000',
-      status: 'quotation_sent',
-      categoryId: 1,
-      category: 'Hot Leads'
-    },
-    {
-      id: 2,
-      name: 'Sarah Johnson',
-      phone: '9876543210',
-      company: 'Digital Marketing Pro',
-      quotationDate: '1 day ago',
-      amount: '₹45,000',
-      status: 'quotation_sent'
-    },
-    {
-      id: 3,
-      name: 'Michael Brown',
-      phone: '9087654321',
-      company: 'E-commerce Store',
-      quotationDate: '3 days ago',
-      amount: '₹35,000',
-      status: 'quotation_sent'
-    },
-    {
-      id: 4,
-      name: 'Emily Davis',
-      phone: '8765432109',
-      company: 'Restaurant Chain',
-      quotationDate: '5 days ago',
-      amount: '₹60,000',
-      status: 'quotation_sent'
-    },
-    {
-      id: 5,
-      name: 'David Wilson',
-      phone: '7654321098',
-      company: 'Fitness Center',
-      quotationDate: '1 week ago',
-      amount: '₹30,000',
-      status: 'quotation_sent'
-    },
-    {
-      id: 6,
-      name: 'Lisa Anderson',
-      phone: '6543210987',
-      company: 'Real Estate Agency',
-      quotationDate: '4 days ago',
-      amount: '₹50,000',
-      status: 'quotation_sent'
-    },
-    {
-      id: 7,
-      name: 'Robert Garcia',
-      phone: '5432109876',
-      company: 'Healthcare Clinic',
-      quotationDate: '6 days ago',
-      amount: '₹40,000',
-      status: 'quotation_sent'
-    },
-    {
-      id: 8,
-      name: 'Jennifer Lee',
-      phone: '4321098765',
-      company: 'Education Institute',
-      quotationDate: '2 days ago',
-      amount: '₹55,000',
-      status: 'quotation_sent'
-    }
-  ]
+  // Client-side filtered list for quick search display (based on fetched leads)
+  const filteredLeads = leadsData.filter((lead) => {
+    const name = (lead.name || lead.leadProfile?.name || '').toLowerCase()
+    const company = (lead.company || lead.leadProfile?.businessName || '').toLowerCase()
+    const phone = lead.phone || ''
+    const q = (searchTerm || '').toLowerCase()
+    return name.includes(q) || company.includes(q) || phone.includes(searchTerm || '')
+  })
 
   const filters = [
     { id: 'today', label: 'Today' },
@@ -212,9 +108,32 @@ const SL_quotation_sent = () => {
   ]
 
   // Get category info helper
-  const getCategoryInfo = (categoryId) => {
-    const category = categories.find(cat => cat._id === categoryId)
-    return category || { name: 'Unknown', color: '#999999', icon: '📋' }
+  const getCategoryInfo = (categoryIdOrObject) => {
+    // Handle null/undefined
+    if (!categoryIdOrObject) {
+      return { name: 'Unknown', color: '#999999', icon: '📋' }
+    }
+    
+    // If category is already populated (object with properties like name, color, icon), return it directly
+    if (typeof categoryIdOrObject === 'object' && categoryIdOrObject.name) {
+      return {
+        name: categoryIdOrObject.name,
+        color: categoryIdOrObject.color || '#999999',
+        icon: categoryIdOrObject.icon || '📋'
+      }
+    }
+    
+    // If category is an ID (string or ObjectId), find it in categories array
+    const categoryId = typeof categoryIdOrObject === 'object' ? categoryIdOrObject._id : categoryIdOrObject
+    if (categoryId) {
+      const category = categories.find(cat => cat._id === categoryId || cat._id?.toString() === categoryId?.toString())
+      if (category) {
+        return category
+      }
+    }
+    
+    // Return default if not found
+    return { name: 'Unknown', color: '#999999', icon: '📋' }
   }
 
   // Status change handler
@@ -292,7 +211,10 @@ const SL_quotation_sent = () => {
   }
 
   // Mobile Lead Card Component
-  const MobileLeadCard = ({ lead }) => (
+  const MobileLeadCard = ({ lead }) => {
+    const categoryInfo = getCategoryInfo(lead.category)
+    
+    return (
     <div className="p-4 space-y-3">
       {/* Header Section */}
       <div className="flex items-center space-x-3">
@@ -315,23 +237,25 @@ const SL_quotation_sent = () => {
           <div className="flex items-center space-x-1 mt-1">
             <span 
               className="text-xs text-gray-500"
-              style={{ color: getCategoryInfo(lead.categoryId).color }}
+              style={{ color: categoryInfo.color }}
             >
-              {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
+              {categoryInfo.icon} {categoryInfo.name}
             </span>
           </div>
         </div>
 
         {/* Amount Badge */}
         <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-blue-600">{lead.amount}</p>
+          <p className="text-sm font-bold text-blue-600">{lead.amount || 'N/A'}</p>
         </div>
       </div>
 
       {/* Quotation Info */}
       <div className="flex justify-between items-center">
-        <span className="text-xs text-gray-500">Sent: {lead.quotationDate}</span>
-        <span className="text-xs text-gray-500">{lead.phone}</span>
+        <span className="text-xs text-gray-500">
+          Sent: {lead.quotationDate || (lead.updatedAt ? new Date(lead.updatedAt).toLocaleDateString() : 'N/A')}
+        </span>
+        <span className="text-xs text-gray-500">{lead.phone || 'No Phone'}</span>
       </div>
 
       {/* Actions Section */}
@@ -341,7 +265,7 @@ const SL_quotation_sent = () => {
         <div className="flex items-center space-x-1">
           {/* Call Button */}
           <button
-            onClick={() => handleCall(lead.phone)}
+            onClick={() => handleCall(lead.phone || '')}
             className="p-2 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200"
             title="Call"
           >
@@ -350,7 +274,7 @@ const SL_quotation_sent = () => {
 
           {/* WhatsApp Button */}
           <button
-            onClick={() => handleWhatsApp(lead.phone)}
+            onClick={() => handleWhatsApp(lead.phone || '')}
             className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
             title="WhatsApp"
           >
@@ -364,7 +288,7 @@ const SL_quotation_sent = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(lead.id)
+              handleProfile(lead._id)
             }}
             className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
             title="Profile"
@@ -430,10 +354,14 @@ const SL_quotation_sent = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   // Desktop Lead Card Component
-  const DesktopLeadCard = ({ lead }) => (
+  const DesktopLeadCard = ({ lead }) => {
+    const categoryInfo = getCategoryInfo(lead.category)
+    
+    return (
     <div className="p-4 space-y-3">
       {/* Header Section */}
       <div className="flex items-center space-x-3">
@@ -456,23 +384,23 @@ const SL_quotation_sent = () => {
           <div className="flex items-center space-x-2 mt-1">
             <span 
               className="text-xs text-gray-500"
-              style={{ color: getCategoryInfo(lead.categoryId).color }}
+              style={{ color: categoryInfo.color }}
             >
-              {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
+              {categoryInfo.icon} {categoryInfo.name}
             </span>
           </div>
         </div>
 
         {/* Amount & Date */}
         <div className="text-right flex-shrink-0">
-          <p className="text-lg font-bold text-blue-600">{lead.amount}</p>
-          <p className="text-xs text-gray-500">{lead.quotationDate}</p>
+          <p className="text-lg font-bold text-blue-600">{lead.amount || 'N/A'}</p>
+          <p className="text-xs text-gray-500">{lead.quotationDate || (lead.updatedAt ? new Date(lead.updatedAt).toLocaleDateString() : 'N/A')}</p>
         </div>
       </div>
 
       {/* Phone & Status */}
       <div className="flex justify-between items-center">
-        <span className="text-sm text-gray-500">{lead.phone}</span>
+        <span className="text-sm text-gray-500">{lead.phone || 'No Phone'}</span>
         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
           Quotation Sent
         </span>
@@ -485,7 +413,7 @@ const SL_quotation_sent = () => {
         <div className="flex items-center space-x-2">
           {/* Call Button */}
           <button
-            onClick={() => handleCall(lead.phone)}
+            onClick={() => handleCall(lead.phone || '')}
             className="px-3 py-1.5 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200 text-sm font-medium flex items-center space-x-1"
           >
             <FiPhone className="w-4 h-4" />
@@ -493,7 +421,7 @@ const SL_quotation_sent = () => {
           </button>
           
           <button
-            onClick={() => handleWhatsApp(lead.phone)}
+            onClick={() => handleWhatsApp(lead.phone || '')}
             className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200 flex items-center space-x-1"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -506,7 +434,7 @@ const SL_quotation_sent = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(lead.id)
+              handleProfile(lead._id)
             }}
             className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200 flex items-center space-x-1"
           >
@@ -571,7 +499,8 @@ const SL_quotation_sent = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -612,7 +541,7 @@ const SL_quotation_sent = () => {
                  <div className="bg-white rounded-lg px-4 py-3 shadow-md border border-white/20 ml-3">
                    <div className="text-center">
                      <p className="text-xs text-blue-600 font-medium mb-0.5">Total</p>
-                     <p className="text-2xl font-bold text-blue-900 leading-none">{quotationSentData.length}</p>
+                     <p className="text-2xl font-bold text-blue-900 leading-none">{leadsData.length}</p>
                      <p className="text-xs text-blue-600 font-medium mt-0.5">Quotations</p>
                    </div>
                  </div>
@@ -692,17 +621,17 @@ const SL_quotation_sent = () => {
                   >
                     All Categories
                   </button>
-                  {leadCategories.map((category) => (
+                  {categories.map((category) => (
                     <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id.toString())}
+                      key={category._id}
+                      onClick={() => setSelectedCategory(category._id)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
-                        selectedCategory === category.id.toString()
+                        selectedCategory === category._id
                           ? 'text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                       style={{
-                        backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                        backgroundColor: selectedCategory === category._id ? category.color : undefined
                       }}
                     >
                       <span>{category.icon}</span>
@@ -722,7 +651,7 @@ const SL_quotation_sent = () => {
             className="mb-4"
           >
             <p className="text-gray-600 text-sm">
-              Showing {filteredLeads.length} of {quotationSentData.length} quotation leads
+              Showing {filteredLeads.length} of {leadsData.length} quotation leads
             </p>
           </motion.div>
 
@@ -789,7 +718,7 @@ const SL_quotation_sent = () => {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl">
-                    <span className="text-sm font-semibold">Total: {quotationSentData.length}</span>
+                    <span className="text-sm font-semibold">Total: {leadsData.length}</span>
                   </div>
                   <div className="bg-white text-gray-600 px-6 py-3 rounded-xl border border-gray-200">
                     <span className="text-sm font-semibold">Showing: {filteredLeads.length}</span>
@@ -870,17 +799,17 @@ const SL_quotation_sent = () => {
                         >
                           All Categories
                         </button>
-                        {leadCategories.map((category) => (
+                        {categories.map((category) => (
                           <button
-                            key={category.id}
-                            onClick={() => setSelectedCategory(category.id.toString())}
+                            key={category._id}
+                            onClick={() => setSelectedCategory(category._id)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
-                              selectedCategory === category.id.toString()
+                              selectedCategory === category._id || selectedCategory === category._id?.toString()
                                 ? 'text-white shadow-md'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                             style={{
-                              backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                              backgroundColor: (selectedCategory === category._id || selectedCategory === category._id?.toString()) ? category.color : undefined
                             }}
                           >
                             <span>{category.icon}</span>
@@ -951,19 +880,31 @@ const SL_quotation_sent = () => {
                  <div className="space-y-4">
                    <div className="flex items-center justify-between">
                      <span className="text-blue-700 text-sm font-medium">Total Quotations</span>
-                     <span className="text-blue-900 text-xl font-bold">{quotationSentData.length}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-blue-700 text-sm font-medium">Total Value</span>
-                     <span className="text-blue-900 text-xl font-bold">₹{quotationSentData.reduce((sum, lead) => sum + parseInt(lead.amount.replace(/[₹,]/g, '')), 0).toLocaleString()}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-blue-700 text-sm font-medium">Avg. Value</span>
-                     <span className="text-blue-900 text-xl font-bold">₹{Math.round(quotationSentData.reduce((sum, lead) => sum + parseInt(lead.amount.replace(/[₹,]/g, '')), 0) / quotationSentData.length).toLocaleString()}</span>
+                     <span className="text-blue-900 text-xl font-bold">{leadsData.length}</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-blue-700 text-sm font-medium">This Week</span>
-                     <span className="text-blue-900 text-xl font-bold">{quotationSentData.filter(lead => lead.quotationDate.includes('day') || lead.quotationDate.includes('week')).length}</span>
+                     <span className="text-blue-900 text-xl font-bold">
+                       {leadsData.filter(lead => {
+                         const weekAgo = new Date()
+                         weekAgo.setDate(weekAgo.getDate() - 7)
+                         return new Date(lead.updatedAt) >= weekAgo
+                       }).length}
+                     </span>
+                   </div>
+                   <div className="flex items-center justify-between">
+                     <span className="text-blue-700 text-sm font-medium">This Month</span>
+                     <span className="text-blue-900 text-xl font-bold">
+                       {leadsData.filter(lead => {
+                         const monthAgo = new Date()
+                         monthAgo.setMonth(monthAgo.getMonth() - 1)
+                         return new Date(lead.updatedAt) >= monthAgo
+                       }).length}
+                     </span>
+                   </div>
+                   <div className="flex items-center justify-between">
+                     <span className="text-blue-700 text-sm font-medium">Pending Response</span>
+                     <span className="text-blue-900 text-xl font-bold">{leadsData.length}</span>
                    </div>
                  </div>
               </motion.div>

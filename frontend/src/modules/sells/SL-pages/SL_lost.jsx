@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { 
@@ -12,151 +12,136 @@ import {
   FiMessageCircle,
   FiMail,
   FiXCircle,
-  FiTag
+  FiTag,
+  FiLoader,
+  FiX,
+  FiFileText
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import { salesLeadService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_lost = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
+  
+  // State for filters and UI
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLeadId, setSelectedLeadId] = useState(null)
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
+  
+  // State for real data
+  const [leadsData, setLeadsData] = useState([])
+  const [categories, setCategories] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
 
-  // Lead categories (matching admin system)
-  const leadCategories = [
-    {
-      id: 1,
-      name: 'Hot Leads',
-      description: 'High priority leads with immediate potential',
-      color: '#EF4444',
-      icon: '🔥'
-    },
-    {
-      id: 2,
-      name: 'Cold Leads',
-      description: 'Leads that need nurturing and follow-up',
-      color: '#3B82F6',
-      icon: '❄️'
-    },
-    {
-      id: 3,
-      name: 'Warm Leads',
-      description: 'Leads showing interest but not ready to convert',
-      color: '#F59E0B',
-      icon: '🌡️'
-    },
-    {
-      id: 4,
-      name: 'Enterprise',
-      description: 'Large enterprise clients and prospects',
-      color: '#8B5CF6',
-      icon: '🏢'
-    },
-    {
-      id: 5,
-      name: 'SME',
-      description: 'Small and medium enterprise prospects',
-      color: '#10B981',
-      icon: '🏪'
+  // State for ContactedForm
+  const [showContactedForm, setShowContactedForm] = useState(false)
+  const [selectedLeadForForm, setSelectedLeadForForm] = useState(null)
+  const [contactedFormData, setContactedFormData] = useState({
+    name: '',
+    description: '',
+    projectType: 'web',
+    estimatedPrice: '50000',
+    quotationSent: false,
+    demoSent: false
+  })
+
+  // Fetch categories from API
+  const fetchCategories = useCallback(async () => {
+    try {
+      const cats = await salesLeadService.getLeadCategories()
+      setCategories(cats || [])
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+      setCategories([])
     }
-  ]
+  }, [])
 
-  // Helper function to get category info by ID
-  const getCategoryInfo = (categoryId) => {
-    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+  // Fetch leads from API
+  const fetchLeads = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const params = {
+        category: selectedCategory !== 'all' ? selectedCategory : undefined,
+        search: searchTerm || undefined,
+        timeFrame: selectedFilter !== 'all' ? selectedFilter : undefined,
+        page: 1,
+        limit: 50
+      }
+      const response = await salesLeadService.getLeadsByStatus('lost', params)
+      
+      // Normalize leads array from response shape
+      const raw = response?.data
+      const leads = Array.isArray(raw) ? raw : (raw?.data ?? [])
+      setLeadsData(Array.isArray(leads) ? leads : [])
+    } catch (error) {
+      console.error('Error fetching leads:', error)
+      toast.error('Failed to fetch leads')
+      setLeadsData([])
+    } finally {
+      setIsLoading(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory, searchTerm, selectedFilter])
+
+  // Fetch categories on component mount
+  useEffect(() => {
+    fetchCategories()
+  }, [fetchCategories])
+
+  // Fetch leads when filters change
+  useEffect(() => {
+    fetchLeads()
+  }, [fetchLeads])
+
+
+  // Helper function to get category info by ID or object
+  const getCategoryInfo = (categoryIdOrObject) => {
+    // Handle null/undefined
+    if (!categoryIdOrObject) {
+      return { name: 'Unknown', color: '#999999', icon: '📋' }
+    }
+    
+    // If category is already populated (object with properties like name, color, icon), return it directly
+    if (typeof categoryIdOrObject === 'object' && categoryIdOrObject.name) {
+      return {
+        name: categoryIdOrObject.name,
+        color: categoryIdOrObject.color || '#999999',
+        icon: categoryIdOrObject.icon || '📋'
+      }
+    }
+    
+    // If category is an ID (string or ObjectId), find it in categories array
+    const categoryId = typeof categoryIdOrObject === 'object' ? categoryIdOrObject._id : categoryIdOrObject
+    if (categoryId) {
+      const category = categories.find(cat => cat._id === categoryId || cat._id?.toString() === categoryId?.toString())
+      if (category) {
+        return category
+      }
+    }
+    
+    // Return default if not found
+    return { name: 'Unknown', color: '#999999', icon: '📋' }
   }
 
-  // Mock lost leads data
-  const lostLeadsData = [
-    {
-      id: 1,
-      name: 'John Smith',
-      phone: '9845637236',
-      company: 'Tech Solutions Inc.',
-      lostDate: '2 days ago',
-      reason: 'Budget constraints',
-      status: 'lost'
-    },
-    {
-      id: 2,
-      name: 'Sarah Johnson',
-      phone: '9876543210',
-      company: 'Digital Marketing Pro',
-      lostDate: '1 week ago',
-      reason: 'Not interested',
-      status: 'lost'
-    },
-    {
-      id: 3,
-      name: 'Michael Brown',
-      phone: '9087654321',
-      company: 'E-commerce Store',
-      lostDate: '3 days ago',
-      reason: 'Found another vendor',
-      status: 'lost'
-    },
-    {
-      id: 4,
-      name: 'Emily Davis',
-      phone: '8765432109',
-      company: 'Restaurant Chain',
-      lostDate: '5 days ago',
-      reason: 'Timing not right',
-      status: 'lost'
-    },
-    {
-      id: 5,
-      name: 'David Wilson',
-      phone: '7654321098',
-      company: 'Fitness Center',
-      lostDate: '1 week ago',
-      reason: 'Budget constraints',
-      status: 'lost'
-    },
-    {
-      id: 6,
-      name: 'Lisa Anderson',
-      phone: '6543210987',
-      company: 'Real Estate Agency',
-      lostDate: '4 days ago',
-      reason: 'Not interested',
-      status: 'lost'
-    },
-    {
-      id: 7,
-      name: 'Robert Garcia',
-      phone: '5432109876',
-      company: 'Healthcare Clinic',
-      lostDate: '6 days ago',
-      reason: 'Found another vendor',
-      status: 'lost'
-    },
-    {
-      id: 8,
-      name: 'Jennifer Lee',
-      phone: '4321098765',
-      company: 'Education Institute',
-      lostDate: '2 weeks ago',
-      reason: 'Timing not right',
-      status: 'lost'
-    }
-  ]
-
   const filters = [
+    { id: 'today', label: 'Today' },
     { id: 'week', label: 'This Week' },
     { id: 'month', label: 'This Month' },
-    { id: 'quarter', label: 'This Quarter' },
     { id: 'all', label: 'All' }
   ]
 
-  const filteredLeads = lostLeadsData.filter(lead => {
-    const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         lead.phone.includes(searchTerm) ||
-                         lead.company.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchesSearch
+  // Client-side filtered list for quick search display (based on fetched leads)
+  const filteredLeads = leadsData.filter((lead) => {
+    const name = (lead.name || '').toLowerCase()
+    const company = (lead.company || '').toLowerCase()
+    const phone = lead.phone || ''
+    const q = (searchTerm || '').toLowerCase()
+    return name.includes(q) || company.includes(q) || phone.includes(searchTerm || '')
   })
 
   const handleCall = (phone) => {
@@ -173,48 +158,166 @@ const SL_lost = () => {
     navigate(`/lead-profile/${leadId}`)
   }
 
-  const handleStatusChange = (leadId, newStatus) => {
-    console.log(`Lead ${leadId} status changed to: ${newStatus}`)
+  // Handle recover and connect functionality
+  const handleRecoverAndConnect = (leadId) => {
+    const lead = leadsData.find(l => l._id === leadId)
+    if (lead) {
+      // Pre-populate form with existing lead data
+      setContactedFormData({
+        name: lead.leadProfile?.name || lead.name || '',
+        description: lead.leadProfile?.description || '',
+        projectType: lead.leadProfile?.projectType?.web ? 'web' : 
+                     lead.leadProfile?.projectType?.app ? 'app' : 
+                     lead.leadProfile?.projectType?.taxi ? 'taxi' : 'web',
+        estimatedPrice: lead.leadProfile?.estimatedCost?.toString() || '50000',
+        quotationSent: lead.leadProfile?.quotationSent || false,
+        demoSent: lead.leadProfile?.demoSent || false
+      })
+      setSelectedLeadForForm(leadId)
+      setShowContactedForm(true)
+    }
+    setShowActionsMenu(null)
+  }
+
+  // Handle contacted form submission
+  const handleContactedFormSubmit = async (e) => {
+    e.preventDefault()
+    try {
+      // First update lead status to connected
+      await salesLeadService.updateLeadStatus(selectedLeadForForm, 'connected')
+      
+      // Then create/update lead profile
+      const profileData = {
+        name: contactedFormData.name,
+        businessName: contactedFormData.name, // Using name as business name
+        email: '', // Will be filled later if available
+        projectType: {
+          web: contactedFormData.projectType === 'web',
+          app: contactedFormData.projectType === 'app',
+          taxi: contactedFormData.projectType === 'taxi'
+        },
+        estimatedCost: parseInt(contactedFormData.estimatedPrice) || 0,
+        description: contactedFormData.description,
+        quotationSent: contactedFormData.quotationSent,
+        demoSent: contactedFormData.demoSent
+      }
+      
+      await salesLeadService.createLeadProfile(selectedLeadForForm, profileData)
+      
+      toast.success('Lead recovered and connected successfully')
+      
+      // Remove lead from current list
+      setLeadsData(prev => prev.filter(lead => lead._id !== selectedLeadForForm))
+      
+      // Refresh dashboard stats
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+      
+      // Reset form and close modal
+      setContactedFormData({
+        name: '',
+        description: '',
+        projectType: 'web',
+        estimatedPrice: '50000',
+        quotationSent: false,
+        demoSent: false
+      })
+      setShowContactedForm(false)
+      setSelectedLeadForForm(null)
+      
+    } catch (error) {
+      console.error('Error recovering and connecting lead:', error)
+      toast.error('Failed to recover and connect lead')
+    }
+  }
+
+  const handleContactedFormChange = (field, value) => {
+    setContactedFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const closeContactedForm = () => {
+    setShowContactedForm(false)
+    setSelectedLeadForForm(null)
+    setContactedFormData({
+      name: '',
+      description: '',
+      projectType: 'web',
+      estimatedPrice: '50000',
+      quotationSent: false,
+      demoSent: false
+    })
+  }
+
+  const handleStatusChange = async (leadId, newStatus) => {
+    try {
+      if (newStatus === 'recover') {
+        // Show recover & connect form
+        handleRecoverAndConnect(leadId)
+      } else {
+        await salesLeadService.updateLeadStatus(leadId, newStatus)
+        toast.success(`Lead status updated to ${salesLeadService.getStatusDisplayName(newStatus)}`)
+        
+        // Remove lead from current list
+        setLeadsData(prev => prev.filter(lead => lead._id !== leadId))
+        
+        // Refresh dashboard stats
+        if (window.refreshDashboardStats) {
+          window.refreshDashboardStats()
+        }
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error)
+      toast.error('Failed to update lead status')
+    }
     setShowActionsMenu(null)
   }
 
   // Mobile Lead Card Component
-  const MobileLeadCard = ({ lead }) => (
-    <div className="p-4 space-y-3">
-      {/* Header Section */}
-      <div className="flex items-center space-x-3">
-        {/* Avatar */}
-        <div className="flex-shrink-0">
-          <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-sm">
-            <FiXCircle className="text-white text-sm" />
+  const MobileLeadCard = ({ lead }) => {
+    const categoryInfo = getCategoryInfo(lead.category)
+    
+    return (
+      <div className="p-4 space-y-3">
+        {/* Header Section */}
+        <div className="flex items-center space-x-3">
+          {/* Avatar */}
+          <div className="flex-shrink-0">
+            <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-sm">
+              <FiXCircle className="text-white text-sm" />
+            </div>
+          </div>
+
+          {/* Lead Info & Category */}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold text-gray-900 truncate">{lead.name || 'Unknown'}</h3>
+            <p className="text-sm text-gray-600 truncate">{lead.company || 'No Company'}</p>
+            {/* Category Tag */}
+            <div className="flex items-center space-x-1 mt-1">
+              <span 
+                className="text-xs text-gray-500"
+                style={{ color: categoryInfo.color }}
+              >
+                {categoryInfo.icon} {categoryInfo.name}
+              </span>
+            </div>
+          </div>
+
+          {/* Lost Date Badge */}
+          <div className="text-right flex-shrink-0">
+            <p className="text-sm font-bold text-red-600">
+              {lead.updatedAt ? new Date(lead.updatedAt).toLocaleDateString() : 'Unknown'}
+            </p>
           </div>
         </div>
-
-        {/* Lead Info & Category */}
-        <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-gray-900 truncate">{lead.name}</h3>
-          <p className="text-sm text-gray-600 truncate">{lead.company}</p>
-          {/* Category Tag */}
-          <div className="flex items-center space-x-1 mt-1">
-            <span 
-              className="text-xs text-gray-500"
-              style={{ color: getCategoryInfo(lead.categoryId).color }}
-            >
-              {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
-            </span>
-          </div>
-        </div>
-
-        {/* Lost Date Badge */}
-        <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-red-600">{lead.lostDate}</p>
-        </div>
-      </div>
 
       {/* Lost Info */}
       <div className="flex justify-between items-center">
-        <span className="text-xs text-gray-500">Reason: {lead.reason}</span>
-        <span className="text-xs text-gray-500">{lead.phone}</span>
+        <span className="text-xs text-gray-500">Reason: Lost</span>
+        <span className="text-xs text-gray-500">{lead.phone || 'No Phone'}</span>
       </div>
 
       {/* Actions Section */}
@@ -224,7 +327,7 @@ const SL_lost = () => {
         <div className="flex items-center space-x-1">
           {/* Call Button */}
           <button
-            onClick={() => handleCall(lead.phone)}
+            onClick={() => handleCall(lead.phone || '')}
             className="p-2 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200"
             title="Call"
           >
@@ -233,7 +336,7 @@ const SL_lost = () => {
 
           {/* WhatsApp Button */}
           <button
-            onClick={() => handleWhatsApp(lead.phone)}
+            onClick={() => handleWhatsApp(lead.phone || '')}
             className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
             title="WhatsApp"
           >
@@ -247,7 +350,7 @@ const SL_lost = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(lead.id)
+              handleProfile(lead._id)
             }}
             className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
             title="Profile"
@@ -258,7 +361,7 @@ const SL_lost = () => {
           {/* More Options */}
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -266,7 +369,7 @@ const SL_lost = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === lead.id && (
+              {showActionsMenu === lead._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -276,10 +379,10 @@ const SL_lost = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'recover')}
+                      onClick={() => handleStatusChange(lead._id, 'recover')}
                       className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200"
                     >
-                      Recover
+                      Recover & Connect
                     </button>
                   </div>
                 </motion.div>
@@ -289,44 +392,50 @@ const SL_lost = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   // Desktop Lead Card Component
-  const DesktopLeadCard = ({ lead }) => (
-    <div className="p-4 space-y-3">
-      {/* Header Section */}
-      <div className="flex items-center space-x-3">
-        {/* Avatar */}
-        <div className="flex-shrink-0">
-          <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-sm">
-            <FiXCircle className="text-white text-lg" />
+  const DesktopLeadCard = ({ lead }) => {
+    const categoryInfo = getCategoryInfo(lead.category)
+    
+    return (
+      <div className="p-4 space-y-3">
+        {/* Header Section */}
+        <div className="flex items-center space-x-3">
+          {/* Avatar */}
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-sm">
+              <FiXCircle className="text-white text-lg" />
+            </div>
+          </div>
+
+          {/* Lead Info & Category */}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.name || 'Unknown'}</h3>
+            <p className="text-sm text-gray-600 truncate">{lead.company || 'No Company'}</p>
+            {/* Category Tag */}
+            <div className="flex items-center space-x-2 mt-1">
+              <span 
+                className="text-xs text-gray-500"
+                style={{ color: categoryInfo.color }}
+              >
+                {categoryInfo.icon} {categoryInfo.name}
+              </span>
+            </div>
+          </div>
+
+          {/* Lost Date */}
+          <div className="text-right flex-shrink-0">
+            <p className="text-lg font-bold text-red-600">
+              {lead.updatedAt ? new Date(lead.updatedAt).toLocaleDateString() : 'Unknown'}
+            </p>
           </div>
         </div>
-
-        {/* Lead Info & Category */}
-        <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.name}</h3>
-          <p className="text-sm text-gray-600 truncate">{lead.company}</p>
-          {/* Category Tag */}
-          <div className="flex items-center space-x-2 mt-1">
-            <span 
-              className="text-xs text-gray-500"
-              style={{ color: getCategoryInfo(lead.categoryId).color }}
-            >
-              {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
-            </span>
-          </div>
-        </div>
-
-        {/* Lost Date */}
-        <div className="text-right flex-shrink-0">
-          <p className="text-lg font-bold text-red-600">{lead.lostDate}</p>
-        </div>
-      </div>
 
       {/* Phone & Status */}
       <div className="flex justify-between items-center">
-        <span className="text-sm text-gray-500">{lead.phone}</span>
+        <span className="text-sm text-gray-500">{lead.phone || 'No Phone'}</span>
         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
           Lost
         </span>
@@ -334,7 +443,7 @@ const SL_lost = () => {
 
       {/* Reason */}
       <div className="flex justify-between items-center">
-        <span className="text-sm text-gray-500">Reason: {lead.reason}</span>
+        <span className="text-sm text-gray-500">Reason: Lost</span>
       </div>
 
       {/* Actions Section */}
@@ -344,7 +453,7 @@ const SL_lost = () => {
         <div className="flex items-center space-x-2">
           {/* Call Button */}
           <button
-            onClick={() => handleCall(lead.phone)}
+            onClick={() => handleCall(lead.phone || '')}
             className="px-3 py-1.5 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200 text-sm font-medium flex items-center space-x-1"
           >
             <FiPhone className="w-4 h-4" />
@@ -352,7 +461,7 @@ const SL_lost = () => {
           </button>
           
           <button
-            onClick={() => handleWhatsApp(lead.phone)}
+            onClick={() => handleWhatsApp(lead.phone || '')}
             className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200 flex items-center space-x-1"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -365,7 +474,7 @@ const SL_lost = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(lead.id)
+              handleProfile(lead._id)
             }}
             className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200 flex items-center space-x-1"
           >
@@ -375,7 +484,7 @@ const SL_lost = () => {
 
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead.id ? null : lead.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
               className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -383,7 +492,7 @@ const SL_lost = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === lead.id && (
+              {showActionsMenu === lead._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -393,10 +502,10 @@ const SL_lost = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(lead.id, 'recover')}
+                      onClick={() => handleStatusChange(lead._id, 'recover')}
                       className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200"
                     >
-                      Recover
+                      Recover & Connect
                     </button>
                   </div>
                 </motion.div>
@@ -406,7 +515,8 @@ const SL_lost = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -447,7 +557,7 @@ const SL_lost = () => {
                  <div className="bg-white rounded-lg px-4 py-3 shadow-md border border-white/20 ml-3">
                    <div className="text-center">
                      <p className="text-xs text-red-600 font-medium mb-0.5">Total</p>
-                     <p className="text-2xl font-bold text-red-900 leading-none">{lostLeadsData.length}</p>
+                     <p className="text-2xl font-bold text-red-900 leading-none">{leadsData.length}</p>
                      <p className="text-xs text-red-600 font-medium mt-0.5">Lost</p>
                    </div>
                  </div>
@@ -527,17 +637,17 @@ const SL_lost = () => {
                   >
                     All Categories
                   </button>
-                  {leadCategories.map((category) => (
+                  {categories.map((category) => (
                     <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id.toString())}
+                      key={category._id}
+                      onClick={() => setSelectedCategory(category._id)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
-                        selectedCategory === category.id.toString()
+                        selectedCategory === category._id
                           ? 'text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                       style={{
-                        backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                        backgroundColor: selectedCategory === category._id ? category.color : undefined
                       }}
                     >
                       <span>{category.icon}</span>
@@ -557,7 +667,7 @@ const SL_lost = () => {
             className="mb-4"
           >
             <p className="text-gray-600 text-sm">
-              Showing {filteredLeads.length} of {lostLeadsData.length} lost leads
+              Showing {filteredLeads.length} of {leadsData.length} lost leads
             </p>
           </motion.div>
 
@@ -569,18 +679,31 @@ const SL_lost = () => {
             className="space-y-3"
           >
             <AnimatePresence>
-              {filteredLeads.map((lead, index) => (
-                <motion.div
-                  key={lead.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
-                >
-                  <MobileLeadCard lead={lead} />
-                </motion.div>
-              ))}
+              {isLoading ? (
+                <div className="flex justify-center items-center py-8">
+                  <FiLoader className="animate-spin text-2xl text-gray-400" />
+                </div>
+              ) : leadsData.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <FiAlertCircle className="mx-auto text-4xl mb-2" />
+                  <p>No lost leads found</p>
+                </div>
+              ) : (
+                <>
+                  {leadsData.map((lead, index) => (
+                    <motion.div
+                      key={lead._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                      className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
+                    >
+                      <MobileLeadCard lead={lead} />
+                    </motion.div>
+                  ))}
+                </>
+              )}
             </AnimatePresence>
 
             {/* Empty State */}
@@ -624,7 +747,7 @@ const SL_lost = () => {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-xl">
-                    <span className="text-sm font-semibold">Total: {lostLeadsData.length}</span>
+                    <span className="text-sm font-semibold">Total: {leadsData.length}</span>
                   </div>
                   <div className="bg-white text-gray-600 px-6 py-3 rounded-xl border border-gray-200">
                     <span className="text-sm font-semibold">Showing: {filteredLeads.length}</span>
@@ -705,17 +828,17 @@ const SL_lost = () => {
                         >
                           All Categories
                         </button>
-                        {leadCategories.map((category) => (
+                        {categories.map((category) => (
                           <button
-                            key={category.id}
-                            onClick={() => setSelectedCategory(category.id.toString())}
+                            key={category._id}
+                            onClick={() => setSelectedCategory(category._id)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
-                              selectedCategory === category.id.toString()
+                              selectedCategory === category._id
                                 ? 'text-white shadow-md'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                             style={{
-                              backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                              backgroundColor: selectedCategory === category._id ? category.color : undefined
                             }}
                           >
                             <span>{category.icon}</span>
@@ -736,18 +859,31 @@ const SL_lost = () => {
                 className="space-y-3"
               >
                 <AnimatePresence>
-                  {filteredLeads.map((lead, index) => (
-                    <motion.div
-                      key={lead.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
-                      className="bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300"
-                    >
-                      <DesktopLeadCard lead={lead} />
-                    </motion.div>
-                  ))}
+                  {isLoading ? (
+                    <div className="flex justify-center items-center py-8">
+                      <FiLoader className="animate-spin text-2xl text-gray-400" />
+                    </div>
+                  ) : leadsData.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <FiAlertCircle className="mx-auto text-4xl mb-2" />
+                      <p>No lost leads found</p>
+                    </div>
+                  ) : (
+                    <>
+                      {leadsData.map((lead, index) => (
+                        <motion.div
+                          key={lead._id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -20 }}
+                          transition={{ duration: 0.3, delay: index * 0.05 }}
+                          className="bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300"
+                        >
+                          <DesktopLeadCard lead={lead} />
+                        </motion.div>
+                      ))}
+                    </>
+                  )}
                 </AnimatePresence>
               </motion.div>
 
@@ -786,19 +922,31 @@ const SL_lost = () => {
                  <div className="space-y-4">
                    <div className="flex items-center justify-between">
                      <span className="text-red-700 text-sm font-medium">Total Lost</span>
-                     <span className="text-red-900 text-xl font-bold">{lostLeadsData.length}</span>
+                     <span className="text-red-900 text-xl font-bold">{leadsData.length}</span>
                    </div>
                    <div className="flex items-center justify-between">
                      <span className="text-red-700 text-sm font-medium">This Week</span>
-                     <span className="text-red-900 text-xl font-bold">{lostLeadsData.filter(lead => lead.lostDate.includes('day') || lead.lostDate.includes('week')).length}</span>
+                     <span className="text-red-900 text-xl font-bold">
+                       {leadsData.filter(lead => {
+                         const weekAgo = new Date()
+                         weekAgo.setDate(weekAgo.getDate() - 7)
+                         return new Date(lead.updatedAt) >= weekAgo
+                       }).length}
+                     </span>
                    </div>
                    <div className="flex items-center justify-between">
-                     <span className="text-red-700 text-sm font-medium">Budget Issues</span>
-                     <span className="text-red-900 text-xl font-bold">{lostLeadsData.filter(lead => lead.reason.includes('Budget')).length}</span>
+                     <span className="text-red-700 text-sm font-medium">This Month</span>
+                     <span className="text-red-900 text-xl font-bold">
+                       {leadsData.filter(lead => {
+                         const monthAgo = new Date()
+                         monthAgo.setMonth(monthAgo.getMonth() - 1)
+                         return new Date(lead.updatedAt) >= monthAgo
+                       }).length}
+                     </span>
                    </div>
                    <div className="flex items-center justify-between">
-                     <span className="text-red-700 text-sm font-medium">Not Interested</span>
-                     <span className="text-red-900 text-xl font-bold">{lostLeadsData.filter(lead => lead.reason.includes('Not interested')).length}</span>
+                     <span className="text-red-700 text-sm font-medium">Recoverable</span>
+                     <span className="text-red-900 text-xl font-bold">{leadsData.length}</span>
                    </div>
                  </div>
               </motion.div>
@@ -870,6 +1018,191 @@ const SL_lost = () => {
           </div>
         </div>
       </main>
+      
+      {/* Contacted Form Modal */}
+      <AnimatePresence>
+        {showContactedForm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={closeContactedForm}
+            />
+
+            {/* Dialog Content */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="relative w-full max-w-md bg-white rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-teal-500 to-teal-600 p-4 text-white rounded-t-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                      <FiUserCheck className="text-white text-lg" />
+                    </div>
+                    <h2 className="text-lg font-bold">Recover & Connect Lead</h2>
+                  </div>
+                  <button
+                    onClick={closeContactedForm}
+                    className="p-1 hover:bg-white/20 rounded-full transition-colors duration-200"
+                  >
+                    <FiX className="text-white text-lg" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleContactedFormSubmit} className="p-6 space-y-6">
+                {/* Name Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Name</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiUser className="text-lg" />
+                    </div>
+                    <input
+                      type="text"
+                      value={contactedFormData.name}
+                      onChange={(e) => handleContactedFormChange('name', e.target.value)}
+                      placeholder="Enter client name"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Description Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Description</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-3 text-teal-600">
+                      <FiFileText className="text-lg" />
+                    </div>
+                    <textarea
+                      value={contactedFormData.description}
+                      onChange={(e) => handleContactedFormChange('description', e.target.value)}
+                      placeholder="Enter project description"
+                      rows={3}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Project Type */}
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-gray-700">Project Type</label>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleContactedFormChange('projectType', 'web')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        contactedFormData.projectType === 'web'
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Web
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleContactedFormChange('projectType', 'app')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        contactedFormData.projectType === 'app'
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      App
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleContactedFormChange('projectType', 'taxi')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        contactedFormData.projectType === 'taxi'
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Taxi
+                    </button>
+                  </div>
+                </div>
+
+                {/* Estimated Price */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Estimated Price</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <span className="text-lg font-bold">₹</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={contactedFormData.estimatedPrice}
+                      onChange={(e) => handleContactedFormChange('estimatedPrice', e.target.value)}
+                      placeholder="Enter amount (e.g., 50000)"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+
+                {/* Checkboxes */}
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="quotationSent"
+                      checked={contactedFormData.quotationSent}
+                      onChange={(e) => handleContactedFormChange('quotationSent', e.target.checked)}
+                      className="w-4 h-4 text-teal-600 bg-gray-100 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
+                    />
+                    <label htmlFor="quotationSent" className="text-sm font-medium text-gray-700">
+                      Quotation sent
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="demoSent"
+                      checked={contactedFormData.demoSent}
+                      onChange={(e) => handleContactedFormChange('demoSent', e.target.checked)}
+                      className="w-4 h-4 text-teal-600 bg-gray-100 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
+                    />
+                    <label htmlFor="demoSent" className="text-sm font-medium text-gray-700">
+                      Demo sent
+                    </label>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeContactedForm}
+                    className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-teal-700 transition-all duration-200 font-medium shadow-lg"
+                  >
+                    Recover & Connect
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

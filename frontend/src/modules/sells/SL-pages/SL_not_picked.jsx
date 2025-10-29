@@ -14,9 +14,11 @@ import {
   FiPhoneOff,
   FiTag,
   FiLoader,
-  FiX
+  FiX,
+  FiFileText
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import FollowUpDialog from '../SL-components/FollowUpDialog'
 import { salesLeadService } from '../SL-services'
 import { useToast } from '../../../contexts/ToastContext'
 
@@ -37,15 +39,18 @@ const SL_not_picked = () => {
   const [categories, setCategories] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   
+  // State for Follow-up dialog
+  const [showFollowupDialog, setShowFollowupDialog] = useState(false)
+  const [selectedLeadForFollowup, setSelectedLeadForFollowup] = useState(null)
+  
   // State for Contacted form modal
   const [showContactedForm, setShowContactedForm] = useState(false)
   const [selectedLeadForForm, setSelectedLeadForForm] = useState(null)
   const [contactedFormData, setContactedFormData] = useState({
     name: '',
-    businessName: '',
-    projectType: '',
     description: '',
-    estimatedCost: '',
+    projectType: 'web',
+    estimatedPrice: '50000',
     quotationSent: false,
     demoSent: false
   })
@@ -96,9 +101,32 @@ const SL_not_picked = () => {
   ]
 
   // Get category info helper
-  const getCategoryInfo = (categoryId) => {
-    const category = categories.find(cat => cat._id === categoryId)
-    return category || { name: 'Unknown', color: '#999999', icon: '📋' }
+  const getCategoryInfo = (categoryIdOrObject) => {
+    // Handle null/undefined
+    if (!categoryIdOrObject) {
+      return { name: 'Unknown', color: '#999999', icon: '📋' }
+    }
+    
+    // If category is already populated (object with properties like name, color, icon), return it directly
+    if (typeof categoryIdOrObject === 'object' && categoryIdOrObject.name) {
+      return {
+        name: categoryIdOrObject.name,
+        color: categoryIdOrObject.color || '#999999',
+        icon: categoryIdOrObject.icon || '📋'
+      }
+    }
+    
+    // If category is an ID (string or ObjectId), find it in categories array
+    const categoryId = typeof categoryIdOrObject === 'object' ? categoryIdOrObject._id : categoryIdOrObject
+    if (categoryId) {
+      const category = categories.find(cat => cat._id === categoryId || cat._id?.toString() === categoryId?.toString())
+      if (category) {
+        return category
+      }
+    }
+    
+    // Return default if not found
+    return { name: 'Unknown', color: '#999999', icon: '📋' }
   }
 
   // Status change handler
@@ -127,6 +155,35 @@ const SL_not_picked = () => {
     setShowActionsMenu(null)
   }
 
+  // Handle follow-up scheduling
+  const handleFollowUp = (leadId) => {
+    setSelectedLeadForFollowup(leadId)
+    setShowFollowupDialog(true)
+    setShowActionsMenu(null)
+  }
+
+  // Handle follow-up form submission
+  const handleFollowUpSubmit = async (followUpData) => {
+    try {
+      await salesLeadService.updateLeadStatus(selectedLeadForFollowup, 'followup', followUpData)
+      toast.success('Follow-up scheduled successfully')
+      
+      // Remove lead from current list
+      setLeadsData(prev => prev.filter(lead => lead._id !== selectedLeadForFollowup))
+      
+      // Refresh dashboard stats
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+      
+      setShowFollowupDialog(false)
+      setSelectedLeadForFollowup(null)
+    } catch (error) {
+      console.error('Error scheduling follow-up:', error)
+      toast.error('Failed to schedule follow-up')
+    }
+  }
+
   // Handle contacted form submission
   const handleContactedFormSubmit = async (e) => {
     e.preventDefault()
@@ -134,8 +191,23 @@ const SL_not_picked = () => {
       // First update lead status to connected
       await salesLeadService.updateLeadStatus(selectedLeadForForm, 'connected')
       
-      // Then create lead profile
-      await salesLeadService.createLeadProfile(selectedLeadForForm, contactedFormData)
+      // Then create/update lead profile
+      const profileData = {
+        name: contactedFormData.name,
+        businessName: contactedFormData.name, // Using name as business name
+        email: '', // Will be filled later if available
+        projectType: {
+          web: contactedFormData.projectType === 'web',
+          app: contactedFormData.projectType === 'app',
+          taxi: contactedFormData.projectType === 'taxi'
+        },
+        estimatedCost: parseInt(contactedFormData.estimatedPrice) || 0,
+        description: contactedFormData.description,
+        quotationSent: contactedFormData.quotationSent,
+        demoSent: contactedFormData.demoSent
+      }
+      
+      await salesLeadService.createLeadProfile(selectedLeadForForm, profileData)
       
       toast.success('Lead marked as contacted and profile created')
       
@@ -150,10 +222,9 @@ const SL_not_picked = () => {
       // Reset form and close modal
       setContactedFormData({
         name: '',
-        businessName: '',
-        projectType: '',
         description: '',
-        estimatedCost: '',
+        projectType: 'web',
+        estimatedPrice: '50000',
         quotationSent: false,
         demoSent: false
       })
@@ -164,6 +235,26 @@ const SL_not_picked = () => {
       console.error('Error creating lead profile:', error)
       toast.error('Failed to create lead profile')
     }
+  }
+
+  const handleContactedFormChange = (field, value) => {
+    setContactedFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const closeContactedForm = () => {
+    setShowContactedForm(false)
+    setSelectedLeadForForm(null)
+    setContactedFormData({
+      name: '',
+      description: '',
+      projectType: 'web',
+      estimatedPrice: '50000',
+      quotationSent: false,
+      demoSent: false
+    })
   }
 
   const handleCall = (phone) => {
@@ -182,7 +273,7 @@ const SL_not_picked = () => {
 
   // Mobile Lead Card Component
   const MobileLeadCard = ({ lead }) => {
-    const categoryInfo = getCategoryInfo(lead.categoryId)
+    const categoryInfo = getCategoryInfo(lead.category)
     
     return (
       <div className="p-4 space-y-3">
@@ -291,10 +382,10 @@ const SL_not_picked = () => {
                       Contacted
                     </button>
                     <button
-                      onClick={() => handleStatusChange(lead._id, 'today_followup')}
+                      onClick={() => handleFollowUp(lead._id)}
                       className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
                     >
-                      Today Followup
+                      Follow Up
                     </button>
                     <button
                       onClick={() => handleStatusChange(lead._id, 'lost')}
@@ -315,7 +406,7 @@ const SL_not_picked = () => {
 
   // Desktop Lead Card Component
   const DesktopLeadCard = ({ lead }) => {
-    const categoryInfo = getCategoryInfo(lead.categoryId)
+    const categoryInfo = getCategoryInfo(lead.category)
     
     return (
       <div className="p-4 space-y-3">
@@ -424,10 +515,10 @@ const SL_not_picked = () => {
                       Contacted
                     </button>
                     <button
-                      onClick={() => handleStatusChange(lead._id, 'today_followup')}
+                      onClick={() => handleFollowUp(lead._id)}
                       className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
                     >
-                      Today Followup
+                      Follow Up
                     </button>
                     <button
                       onClick={() => handleStatusChange(lead._id, 'lost')}
@@ -958,140 +1049,196 @@ const SL_not_picked = () => {
       {/* Contacted Form Modal */}
       <AnimatePresence>
         {showContactedForm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          >
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={closeContactedForm}
+            />
+
+            {/* Dialog Content */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="relative w-full max-w-md bg-white rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Mark as Contacted</h3>
-                <button
-                  onClick={() => setShowContactedForm(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <FiX className="w-5 h-5" />
-                </button>
+              {/* Header */}
+              <div className="bg-gradient-to-r from-teal-500 to-teal-600 p-4 text-white rounded-t-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                      <FiUserCheck className="text-white text-lg" />
+                    </div>
+                    <h2 className="text-lg font-bold">Mark as Contacted</h2>
+                  </div>
+                  <button
+                    onClick={closeContactedForm}
+                    className="p-1 hover:bg-white/20 rounded-full transition-colors duration-200"
+                  >
+                    <FiX className="text-white text-lg" />
+                  </button>
+                </div>
               </div>
 
-              <form onSubmit={handleContactedFormSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Contact Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={contactedFormData.name}
-                    onChange={(e) => setContactedFormData(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                    required
-                  />
+              {/* Form Content */}
+              <form onSubmit={handleContactedFormSubmit} className="p-6 space-y-6">
+                {/* Name Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Name</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiUser className="text-lg" />
+                    </div>
+                    <input
+                      type="text"
+                      value={contactedFormData.name}
+                      onChange={(e) => handleContactedFormChange('name', e.target.value)}
+                      placeholder="Enter client name"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                      required
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Business Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={contactedFormData.businessName}
-                    onChange={(e) => setContactedFormData(prev => ({ ...prev, businessName: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                    required
-                  />
+                {/* Description Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Description</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-3 text-teal-600">
+                      <FiFileText className="text-lg" />
+                    </div>
+                    <textarea
+                      value={contactedFormData.description}
+                      onChange={(e) => handleContactedFormChange('description', e.target.value)}
+                      placeholder="Enter project description"
+                      rows={3}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 resize-none"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Project Type
-                  </label>
-                  <select
-                    value={contactedFormData.projectType}
-                    onChange={(e) => setContactedFormData(prev => ({ ...prev, projectType: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  >
-                    <option value="">Select project type</option>
-                    <option value="Web Development">Web Development</option>
-                    <option value="Mobile App">Mobile App</option>
-                    <option value="E-commerce">E-commerce</option>
-                    <option value="Custom Software">Custom Software</option>
-                    <option value="Consulting">Consulting</option>
-                  </select>
+                {/* Project Type */}
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-gray-700">Project Type</label>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleContactedFormChange('projectType', 'web')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        contactedFormData.projectType === 'web'
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Web
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleContactedFormChange('projectType', 'app')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        contactedFormData.projectType === 'app'
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      App
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleContactedFormChange('projectType', 'taxi')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        contactedFormData.projectType === 'taxi'
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Taxi
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={contactedFormData.description}
-                    onChange={(e) => setContactedFormData(prev => ({ ...prev, description: e.target.value }))}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  />
+                {/* Estimated Price */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Estimated Price</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <span className="text-lg font-bold">₹</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={contactedFormData.estimatedPrice}
+                      onChange={(e) => handleContactedFormChange('estimatedPrice', e.target.value)}
+                      placeholder="Enter amount (e.g., 50000)"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Estimated Cost
-                  </label>
-                  <input
-                    type="number"
-                    value={contactedFormData.estimatedCost}
-                    onChange={(e) => setContactedFormData(prev => ({ ...prev, estimatedCost: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                    placeholder="Enter estimated cost"
-                  />
-                </div>
-
-                <div className="flex items-center space-x-4">
-                  <label className="flex items-center">
+                {/* Checkboxes */}
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3">
                     <input
                       type="checkbox"
+                      id="quotationSent"
                       checked={contactedFormData.quotationSent}
-                      onChange={(e) => setContactedFormData(prev => ({ ...prev, quotationSent: e.target.checked }))}
-                      className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                      onChange={(e) => handleContactedFormChange('quotationSent', e.target.checked)}
+                      className="w-4 h-4 text-teal-600 bg-gray-100 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
                     />
-                    <span className="ml-2 text-sm text-gray-700">Quotation Sent</span>
-                  </label>
-
-                  <label className="flex items-center">
+                    <label htmlFor="quotationSent" className="text-sm font-medium text-gray-700">
+                      Quotation sent
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center space-x-3">
                     <input
                       type="checkbox"
+                      id="demoSent"
                       checked={contactedFormData.demoSent}
-                      onChange={(e) => setContactedFormData(prev => ({ ...prev, demoSent: e.target.checked }))}
-                      className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                      onChange={(e) => handleContactedFormChange('demoSent', e.target.checked)}
+                      className="w-4 h-4 text-teal-600 bg-gray-100 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
                     />
-                    <span className="ml-2 text-sm text-gray-700">Demo Sent</span>
-                  </label>
+                    <label htmlFor="demoSent" className="text-sm font-medium text-gray-700">
+                      Demo sent
+                    </label>
+                  </div>
                 </div>
 
+                {/* Action Buttons */}
                 <div className="flex space-x-3 pt-4">
                   <button
                     type="button"
-                    onClick={() => setShowContactedForm(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    onClick={closeContactedForm}
+                    className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200 font-medium"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-teal-700 transition-all duration-200 font-medium shadow-lg"
                   >
                     Mark as Contacted
                   </button>
                 </div>
               </form>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
+
+      {/* Follow-up Dialog */}
+      <FollowUpDialog
+        isOpen={showFollowupDialog}
+        onClose={() => setShowFollowupDialog(false)}
+        onSubmit={handleFollowUpSubmit}
+        title="Schedule Follow-up"
+        submitText="Schedule Follow-up"
+      />
     </div>
   )
 }

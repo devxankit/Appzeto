@@ -71,9 +71,32 @@ const SL_converted = () => {
   }
 
   // Get category info helper
-  const getCategoryInfo = (categoryId) => {
-    const category = categories.find(cat => cat._id === categoryId)
-    return category || { name: 'Unknown', color: '#999999', icon: '📋' }
+  const getCategoryInfo = (categoryIdOrObject) => {
+    // Handle null/undefined
+    if (!categoryIdOrObject) {
+      return { name: 'Unknown', color: '#999999', icon: '📋' }
+    }
+    
+    // If category is already populated (object with properties like name, color, icon), return it directly
+    if (typeof categoryIdOrObject === 'object' && categoryIdOrObject.name) {
+      return {
+        name: categoryIdOrObject.name,
+        color: categoryIdOrObject.color || '#999999',
+        icon: categoryIdOrObject.icon || '📋'
+      }
+    }
+    
+    // If category is an ID (string or ObjectId), find it in categories array
+    const categoryId = typeof categoryIdOrObject === 'object' ? categoryIdOrObject._id : categoryIdOrObject
+    if (categoryId) {
+      const category = categories.find(cat => cat._id === categoryId || cat._id?.toString() === categoryId?.toString())
+      if (category) {
+        return category
+      }
+    }
+    
+    // Return default if not found
+    return { name: 'Unknown', color: '#999999', icon: '📋' }
   }
 
   const filters = [
@@ -103,7 +126,10 @@ const SL_converted = () => {
   }
 
   // Mobile Client Card Component
-  const MobileClientCard = ({ client }) => (
+  const MobileClientCard = ({ client }) => {
+    const categoryInfo = getCategoryInfo(client.category)
+    
+    return (
     <div className="p-4 space-y-3">
       {/* Header Section */}
       <div className="flex items-center space-x-3">
@@ -117,39 +143,39 @@ const SL_converted = () => {
         {/* Client Info & Category */}
         <div className="flex-1 min-w-0">
           <h3 className="text-base font-semibold text-gray-900 truncate">
-            {lead.leadProfile?.name || lead.name || 'Unknown'}
+            {client.leadProfile?.name || client.name || 'Unknown'}
           </h3>
           <p className="text-sm text-gray-600 truncate">
-            {lead.leadProfile?.businessName || lead.company || 'No company'}
+            {client.leadProfile?.businessName || client.company || 'No company'}
           </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-1 mt-1">
             <span 
               className="text-xs text-gray-500"
-              style={{ color: getCategoryInfo(lead.categoryId).color }}
+              style={{ color: categoryInfo.color }}
             >
-              {getCategoryInfo(client.categoryId).icon} {getCategoryInfo(client.categoryId).name}
+              {categoryInfo.icon} {categoryInfo.name}
             </span>
           </div>
         </div>
 
         {/* Revenue */}
         <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-green-600">₹{client.amount.toLocaleString()}</p>
+          <p className="text-sm font-bold text-green-600">₹{(client.leadProfile?.estimatedCost || 0).toLocaleString()}</p>
         </div>
       </div>
 
       {/* Package Badge */}
       <div className="flex justify-between items-center">
         <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
-          {client.package}
+          {client.leadProfile?.projectType?.web ? 'Web' : client.leadProfile?.projectType?.app ? 'App' : client.leadProfile?.projectType?.taxi ? 'Taxi' : 'N/A'}
         </span>
-        <span className="text-xs text-gray-500">{client.convertedDate}</span>
+        <span className="text-xs text-gray-500">{client.updatedAt ? new Date(client.updatedAt).toLocaleDateString() : 'N/A'}</span>
       </div>
 
       {/* Actions Section */}
       <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <span className="text-xs text-gray-500">{client.phone}</span>
+        <span className="text-xs text-gray-500">{client.phone || 'No phone'}</span>
         
         <div className="flex items-center space-x-1">
           {/* Call Button */}
@@ -177,7 +203,7 @@ const SL_converted = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(client.id)
+              handleProfile(client._id)
             }}
             className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
             title="Profile"
@@ -188,7 +214,7 @@ const SL_converted = () => {
           {/* More Options */}
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === client.id ? null : client.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === client._id ? null : client._id)}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -196,7 +222,7 @@ const SL_converted = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === client.id && (
+              {showActionsMenu === client._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -206,13 +232,13 @@ const SL_converted = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(client.id, 'follow_up')}
+                      onClick={() => handleStatusChange(client._id, 'follow_up')}
                       className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                     >
                       Follow Up
                     </button>
                     <button
-                      onClick={() => handleStatusChange(client.id, 'support')}
+                      onClick={() => handleStatusChange(client._id, 'support')}
                       className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
                     >
                       Support
@@ -225,10 +251,14 @@ const SL_converted = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   // Desktop Client Card Component
-  const DesktopClientCard = ({ client }) => (
+  const DesktopClientCard = ({ client }) => {
+    const categoryInfo = getCategoryInfo(client.category)
+    
+    return (
     <div className="p-4 space-y-3">
       {/* Header Section */}
       <div className="flex items-center space-x-3">
@@ -242,39 +272,39 @@ const SL_converted = () => {
         {/* Client Info & Category */}
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-semibold text-gray-900 truncate">
-            {lead.leadProfile?.name || lead.name || 'Unknown'}
+            {client.leadProfile?.name || client.name || 'Unknown'}
           </h3>
           <p className="text-sm text-gray-600 truncate">
-            {lead.leadProfile?.businessName || lead.company || 'No company'}
+            {client.leadProfile?.businessName || client.company || 'No company'}
           </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-2 mt-1">
             <span 
               className="text-xs text-gray-500"
-              style={{ color: getCategoryInfo(lead.categoryId).color }}
+              style={{ color: categoryInfo.color }}
             >
-              {getCategoryInfo(client.categoryId).icon} {getCategoryInfo(client.categoryId).name}
+              {categoryInfo.icon} {categoryInfo.name}
             </span>
           </div>
         </div>
 
         {/* Revenue */}
         <div className="text-right flex-shrink-0">
-          <p className="text-lg font-bold text-green-600">₹{client.amount.toLocaleString()}</p>
+          <p className="text-lg font-bold text-green-600">₹{(client.leadProfile?.estimatedCost || 0).toLocaleString()}</p>
         </div>
       </div>
 
       {/* Package & Date */}
       <div className="flex justify-between items-center">
         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          {client.package}
+          {client.leadProfile?.projectType?.web ? 'Web' : client.leadProfile?.projectType?.app ? 'App' : client.leadProfile?.projectType?.taxi ? 'Taxi' : 'N/A'}
         </span>
-        <span className="text-xs text-gray-500">{client.convertedDate}</span>
+        <span className="text-xs text-gray-500">{client.updatedAt ? new Date(client.updatedAt).toLocaleDateString() : 'N/A'}</span>
       </div>
 
       {/* Actions Section */}
       <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <span className="text-sm text-gray-500">{client.phone}</span>
+        <span className="text-sm text-gray-500">{client.phone || 'No phone'}</span>
         
         <div className="flex items-center space-x-2">
           {/* Call Button */}
@@ -300,7 +330,7 @@ const SL_converted = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(client.id)
+              handleProfile(client._id)
             }}
             className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200 flex items-center space-x-1"
           >
@@ -310,7 +340,7 @@ const SL_converted = () => {
 
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === client.id ? null : client.id)}
+              onClick={() => setShowActionsMenu(showActionsMenu === client._id ? null : client._id)}
               className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -318,7 +348,7 @@ const SL_converted = () => {
 
             {/* Actions Dropdown */}
             <AnimatePresence>
-              {showActionsMenu === client.id && (
+              {showActionsMenu === client._id && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -328,13 +358,13 @@ const SL_converted = () => {
                 >
                   <div className="py-1">
                     <button
-                      onClick={() => handleStatusChange(client.id, 'follow_up')}
+                      onClick={() => handleStatusChange(client._id, 'follow_up')}
                       className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                     >
                       Follow Up
                     </button>
                     <button
-                      onClick={() => handleStatusChange(client.id, 'support')}
+                      onClick={() => handleStatusChange(client._id, 'support')}
                       className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
                     >
                       Support
@@ -347,7 +377,8 @@ const SL_converted = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -388,7 +419,7 @@ const SL_converted = () => {
                  <div className="bg-white rounded-lg px-4 py-3 shadow-md border border-white/20 ml-3">
                    <div className="text-center">
                      <p className="text-xs text-green-600 font-medium mb-0.5">Total</p>
-                     <p className="text-2xl font-bold text-green-900 leading-none">{convertedClientsData.length}</p>
+                     <p className="text-2xl font-bold text-green-900 leading-none">{leadsData.length}</p>
                      <p className="text-xs text-green-600 font-medium mt-0.5">Clients</p>
                    </div>
                  </div>
@@ -498,7 +529,7 @@ const SL_converted = () => {
             className="mb-4"
           >
             <p className="text-gray-600 text-sm">
-              Showing {filteredClients.length} of {convertedClientsData.length} converted clients
+              Showing {leadsData.length} of {leadsData.length} converted clients
             </p>
           </motion.div>
 
@@ -549,14 +580,14 @@ const SL_converted = () => {
                   transition={{ duration: 0.3, delay: index * 0.05 }}
                   className="bg-white rounded-lg p-3 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
                 >
-                  <MobileClientCard client={client} />
+                  <MobileClientCard client={lead} />
                 </motion.div>
                 ))
               )}
             </AnimatePresence>
 
             {/* Empty State */}
-            {filteredClients.length === 0 && (
+            {leadsData.length === 0 && !isLoading && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -596,10 +627,10 @@ const SL_converted = () => {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-xl">
-                    <span className="text-sm font-semibold">Total: {convertedClientsData.length}</span>
+                    <span className="text-sm font-semibold">Total: {leadsData.length}</span>
                   </div>
                   <div className="bg-white text-gray-600 px-6 py-3 rounded-xl border border-gray-200">
-                    <span className="text-sm font-semibold">Showing: {filteredClients.length}</span>
+                    <span className="text-sm font-semibold">Showing: {leadsData.length}</span>
                   </div>
                 </div>
               </motion.div>
@@ -755,7 +786,7 @@ const SL_converted = () => {
               </motion.div>
 
               {/* Empty State */}
-              {filteredClients.length === 0 && (
+              {leadsData.length === 0 && !isLoading && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -789,20 +820,23 @@ const SL_converted = () => {
                  <div className="space-y-4">
                    <div className="flex items-center justify-between">
                      <span className="text-green-700 text-sm font-medium">Total Clients</span>
-                     <span className="text-green-900 text-xl font-bold">{convertedClientsData.length}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-green-700 text-sm font-medium">Total Revenue</span>
-                     <span className="text-green-900 text-xl font-bold">₹{convertedClientsData.reduce((sum, client) => sum + client.amount, 0).toLocaleString()}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-green-700 text-sm font-medium">Avg. Project Value</span>
-                     <span className="text-green-900 text-xl font-bold">₹{Math.round(convertedClientsData.reduce((sum, client) => sum + client.amount, 0) / convertedClientsData.length).toLocaleString()}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-green-700 text-sm font-medium">This Month</span>
-                     <span className="text-green-900 text-xl font-bold">{convertedClientsData.filter(client => new Date(client.convertedDate).getMonth() === new Date().getMonth()).length}</span>
-                   </div>
+                    <span className="text-green-900 text-xl font-bold">{leadsData.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-green-700 text-sm font-medium">Total Revenue</span>
+                    <span className="text-green-900 text-xl font-bold">₹{leadsData.length > 0 ? leadsData.reduce((sum, lead) => sum + (lead.leadProfile?.estimatedCost || 0), 0).toLocaleString() : '0'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-green-700 text-sm font-medium">Avg. Project Value</span>
+                    <span className="text-green-900 text-xl font-bold">₹{leadsData.length > 0 ? Math.round(leadsData.reduce((sum, lead) => sum + (lead.leadProfile?.estimatedCost || 0), 0) / leadsData.length).toLocaleString() : '0'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-green-700 text-sm font-medium">This Month</span>
+                    <span className="text-green-900 text-xl font-bold">{leadsData.filter(lead => {
+                      const leadDate = lead.updatedAt || lead.createdAt
+                      return leadDate && new Date(leadDate).getMonth() === new Date().getMonth()
+                    }).length}</span>
+                  </div>
                  </div>
               </motion.div>
 

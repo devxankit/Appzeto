@@ -508,6 +508,14 @@ const getMyLeads = async (req, res) => {
 // @access  Private (Sales only)
 const getLeadsByStatus = async (req, res) => {
   try {
+    // Check if sales user is authenticated
+    if (!req.sales || !req.sales.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
     const salesId = req.sales.id;
     const { status } = req.params;
     const { 
@@ -519,8 +527,8 @@ const getLeadsByStatus = async (req, res) => {
       limit = 12 
     } = req.query;
 
-    // Validate status
-    const validStatuses = ['new', 'connected', 'not_picked', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested'];
+    // Validate status (with backward compatibility for today_followup)
+    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -528,10 +536,16 @@ const getLeadsByStatus = async (req, res) => {
       });
     }
 
+    // Handle backward compatibility: treat today_followup as followup
+    let actualStatus = status;
+    if (status === 'today_followup') {
+      actualStatus = 'followup';
+    }
+
     // Build filter object
     let filter = { 
       assignedTo: salesId,
-      status: status 
+      status: actualStatus 
     };
 
     if (category && category !== 'all') {
@@ -551,25 +565,73 @@ const getLeadsByStatus = async (req, res) => {
       ];
     }
 
-    // Add time frame filtering
-    if (timeFrame && timeFrame !== 'all') {
+    // Add time frame filtering for followup status
+    if (actualStatus === 'followup') {
       const now = new Date();
-      let startDate;
+      let startDate, endDate;
+      
+      if (timeFrame && timeFrame !== 'all') {
+        switch(timeFrame) {
+          case 'today':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            break;
+          case 'week':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7, 23, 59, 59, 999);
+            break;
+          case 'month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+            endDate = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate(), 23, 59, 59, 999);
+            break;
+        }
+      } else if (timeFrame === 'all') {
+        // For 'all' filter, show all upcoming follow-ups (from today onwards)
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        endDate = null; // No end date limit
+      } else {
+        // Default: show today's follow-ups
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      }
+      
+      const followUpFilter = {
+        scheduledDate: { $gte: startDate },
+        status: 'pending'
+      };
+      
+      if (endDate) {
+        followUpFilter.scheduledDate.$lte = endDate;
+      }
+      
+      filter.followUps = {
+        $elemMatch: followUpFilter
+      };
+    } else if (timeFrame && timeFrame !== 'all') {
+      // For other statuses, filter by creation date
+      const now = new Date();
+      let startDate, endDate;
       
       switch(timeFrame) {
         case 'today':
-          startDate = new Date(now.setHours(0, 0, 0, 0));
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
           break;
         case 'week':
-          startDate = new Date(now.setDate(now.getDate() - 7));
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
           break;
         case 'month':
-          startDate = new Date(now.setDate(now.getDate() - 30));
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
           break;
       }
       
       if (startDate) {
         filter.createdAt = { $gte: startDate };
+        if (endDate) {
+          filter.createdAt.$lte = endDate;
+        }
       }
     }
 
@@ -599,9 +661,11 @@ const getLeadsByStatus = async (req, res) => {
 
   } catch (error) {
     console.error('Get leads by status error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Server error while fetching leads by status'
+      message: 'Server error while fetching leads by status',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -651,15 +715,21 @@ const updateLeadStatus = async (req, res) => {
   try {
     const salesId = req.sales.id;
     const leadId = req.params.id;
-    const { status, notes } = req.body;
+    const { status, notes, followupDate, followupTime, priority } = req.body;
 
-    // Validate status
-    const validStatuses = ['new', 'connected', 'not_picked', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested'];
+    // Validate status (with backward compatibility for today_followup)
+    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid status'
       });
+    }
+
+    // Handle backward compatibility: treat today_followup as followup
+    let actualStatus = status;
+    if (status === 'today_followup') {
+      actualStatus = 'followup';
     }
 
     // Find lead and verify ownership
@@ -678,9 +748,9 @@ const updateLeadStatus = async (req, res) => {
     // Validate status transition
     const validTransitions = {
       'new': ['connected', 'not_picked', 'lost'],
-      'connected': ['hot', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
-      'not_picked': ['connected', 'today_followup', 'lost'],
-      'today_followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
+      'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
+      'not_picked': ['connected', 'followup', 'lost'],
+      'followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
       'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
       'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
       'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'lost'],
@@ -688,28 +758,100 @@ const updateLeadStatus = async (req, res) => {
       'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost'],
       'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
       'converted': [], // Terminal state
-      'lost': [] // Terminal state
+      'lost': ['connected'] // Can be recovered and connected
     };
 
-    if (!validTransitions[lead.status].includes(status)) {
+    if (!validTransitions[lead.status].includes(actualStatus)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid status transition from ${lead.status} to ${status}`
+        message: `Invalid status transition from ${lead.status} to ${actualStatus}`
       });
     }
 
     // Update lead status
     const oldStatus = lead.status;
-    lead.status = status;
+    lead.status = actualStatus;
     lead.lastContactDate = new Date();
 
-    // Add activity log
-    lead.activities.push({
-      type: 'status_change',
-      description: `Status changed from ${oldStatus} to ${status}${notes ? ` - ${notes}` : ''}`,
-      performedBy: salesId,
-      timestamp: new Date()
-    });
+    // Handle follow-up scheduling
+    if (actualStatus === 'followup' && followupDate && followupTime) {
+      // Validate follow-up data
+      if (!followupDate || !followupTime) {
+        return res.status(400).json({
+          success: false,
+          message: 'Follow-up date and time are required for followup status'
+        });
+      }
+
+      // Add follow-up entry
+      // Ensure the date is parsed correctly (handle both ISO strings and date objects)
+      let parsedDate;
+      if (typeof followupDate === 'string') {
+        // If it's a string, parse it as ISO date
+        parsedDate = new Date(followupDate);
+      } else {
+        parsedDate = new Date(followupDate);
+      }
+      
+      // Validate the parsed date
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid follow-up date format'
+        });
+      }
+      
+      
+      const followUpData = {
+        scheduledDate: parsedDate,
+        scheduledTime: followupTime,
+        notes: notes || '',
+        priority: priority || 'medium',
+        type: 'call',
+        status: 'pending'
+      };
+
+      lead.followUps.push(followUpData);
+      
+      // Update lead priority if provided
+      if (priority) {
+        lead.priority = priority;
+      }
+
+      // Update nextFollowUpDate to the nearest upcoming follow-up (including today)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Start of today
+      
+      const upcomingFollowUps = lead.followUps
+        .filter(fu => fu.status === 'pending' && fu.scheduledDate >= today)
+        .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
+      
+      if (upcomingFollowUps.length > 0) {
+        lead.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
+      }
+
+      // Add activity log for follow-up scheduling
+      lead.activities.push({
+        type: 'status_change',
+        description: `Status changed from ${oldStatus} to ${actualStatus}. Follow-up scheduled for ${followupDate} at ${followupTime}${notes ? ` - ${notes}` : ''}`,
+        performedBy: salesId,
+        timestamp: new Date()
+      });
+    } else {
+      // Add activity log for regular status change
+      lead.activities.push({
+        type: 'status_change',
+        description: `Status changed from ${oldStatus} to ${actualStatus}${notes ? ` - ${notes}` : ''}`,
+        performedBy: salesId,
+        timestamp: new Date()
+      });
+    }
+
+    // Ensure creatorModel is preserved (required field)
+    if (!lead.creatorModel) {
+      // If creatorModel is missing, set it based on context (Sales route)
+      lead.creatorModel = 'Sales';
+    }
 
     await lead.save();
 

@@ -88,9 +88,32 @@ const SL_app_client = () => {
   }
 
   // Get category info helper
-  const getCategoryInfo = (categoryId) => {
-    const category = categories.find(cat => cat._id === categoryId)
-    return category || { name: 'Unknown', color: '#999999', icon: '📋' }
+  const getCategoryInfo = (categoryIdOrObject) => {
+    // Handle null/undefined
+    if (!categoryIdOrObject) {
+      return { name: 'Unknown', color: '#999999', icon: '📋' }
+    }
+    
+    // If category is already populated (object with properties like name, color, icon), return it directly
+    if (typeof categoryIdOrObject === 'object' && categoryIdOrObject.name) {
+      return {
+        name: categoryIdOrObject.name,
+        color: categoryIdOrObject.color || '#999999',
+        icon: categoryIdOrObject.icon || '📋'
+      }
+    }
+    
+    // If category is an ID (string or ObjectId), find it in categories array
+    const categoryId = typeof categoryIdOrObject === 'object' ? categoryIdOrObject._id : categoryIdOrObject
+    if (categoryId) {
+      const category = categories.find(cat => cat._id === categoryId || cat._id?.toString() === categoryId?.toString())
+      if (category) {
+        return category
+      }
+    }
+    
+    // Return default if not found
+    return { name: 'Unknown', color: '#999999', icon: '📋' }
   }
 
   // Status change handler
@@ -175,7 +198,10 @@ const SL_app_client = () => {
   }
 
   // Mobile Lead Card Component
-  const MobileLeadCard = ({ lead }) => (
+  const MobileLeadCard = ({ lead }) => {
+    const categoryInfo = getCategoryInfo(lead.category)
+    
+    return (
     <div className="p-4 space-y-3">
       {/* Header Section */}
       <div className="flex items-center space-x-3">
@@ -198,9 +224,9 @@ const SL_app_client = () => {
           <div className="flex items-center space-x-1 mt-1">
             <span 
               className="text-xs text-gray-500"
-              style={{ color: getCategoryInfo(lead.categoryId).color }}
+              style={{ color: categoryInfo.color }}
             >
-              {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
+              {categoryInfo.icon} {categoryInfo.name}
             </span>
           </div>
         </div>
@@ -325,10 +351,14 @@ const SL_app_client = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   // Desktop Lead Card Component
-  const DesktopLeadCard = ({ lead }) => (
+  const DesktopLeadCard = ({ lead }) => {
+    const categoryInfo = getCategoryInfo(lead.category)
+    
+    return (
     <div className="p-4 space-y-3">
       {/* Header Section */}
       <div className="flex items-center space-x-3">
@@ -351,9 +381,9 @@ const SL_app_client = () => {
           <div className="flex items-center space-x-2 mt-1">
             <span 
               className="text-xs text-gray-500"
-              style={{ color: getCategoryInfo(lead.categoryId).color }}
+              style={{ color: categoryInfo.color }}
             >
-              {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
+              {categoryInfo.icon} {categoryInfo.name}
             </span>
           </div>
         </div>
@@ -477,7 +507,8 @@ const SL_app_client = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

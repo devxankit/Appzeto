@@ -18,6 +18,7 @@ import {
   FiClock
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import FollowUpDialog from '../SL-components/FollowUpDialog'
 import { salesLeadService } from '../SL-services'
 import { useToast } from '../../../contexts/ToastContext'
 
@@ -26,7 +27,7 @@ const SL_today_followup = () => {
   const { toast } = useToast()
   
   // State for filters and UI
-  const [selectedFilter, setSelectedFilter] = useState('all')
+  const [selectedFilter, setSelectedFilter] = useState('today')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLeadId, setSelectedLeadId] = useState(null)
@@ -38,15 +39,9 @@ const SL_today_followup = () => {
   const [categories, setCategories] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   
-  // State for Follow-up form modal
-  const [showFollowupForm, setShowFollowupForm] = useState(false)
+  // State for Follow-up dialog
+  const [showFollowupDialog, setShowFollowupDialog] = useState(false)
   const [selectedLeadForFollowup, setSelectedLeadForFollowup] = useState(null)
-  const [followupFormData, setFollowupFormData] = useState({
-    followupDate: '',
-    followupTime: '',
-    notes: '',
-    priority: 'medium'
-  })
 
   // Fetch categories and leads on component mount
   useEffect(() => {
@@ -71,12 +66,18 @@ const SL_today_followup = () => {
       const params = {
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
         search: searchTerm || undefined,
-        timeFrame: selectedFilter !== 'all' ? selectedFilter : undefined,
+        timeFrame: selectedFilter, // Always send timeFrame, including 'all'
         page: 1,
         limit: 50
       }
-      const response = await salesLeadService.getLeadsByStatus('today_followup', params)
-      setLeadsData(response.data || [])
+      
+      const response = await salesLeadService.getLeadsByStatus('followup', params)
+      
+      // Normalize leads array from response shape
+      const raw = response?.data
+      const leads = Array.isArray(raw) ? raw : (raw?.data ?? [])
+
+      setLeadsData(Array.isArray(leads) ? leads : [])
     } catch (error) {
       console.error('Error fetching leads:', error)
       toast.error('Failed to fetch leads')
@@ -88,15 +89,38 @@ const SL_today_followup = () => {
 
   const filters = [
     { id: 'today', label: 'Today' },
-    { id: 'week', label: 'Last 7 Days' },
-    { id: 'month', label: 'This Month' },
-    { id: 'all', label: 'All' }
+    { id: 'week', label: 'Next 7 Days' },
+    { id: 'month', label: 'Next Month' },
+    { id: 'all', label: 'All Upcoming' }
   ]
 
   // Get category info helper
-  const getCategoryInfo = (categoryId) => {
-    const category = categories.find(cat => cat._id === categoryId)
-    return category || { name: 'Unknown', color: '#999999', icon: '📋' }
+  const getCategoryInfo = (categoryIdOrObject) => {
+    // Handle null/undefined
+    if (!categoryIdOrObject) {
+      return { name: 'Unknown', color: '#999999', icon: '📋' }
+    }
+    
+    // If category is already populated (object with properties like name, color, icon), return it directly
+    if (typeof categoryIdOrObject === 'object' && categoryIdOrObject.name) {
+      return {
+        name: categoryIdOrObject.name,
+        color: categoryIdOrObject.color || '#999999',
+        icon: categoryIdOrObject.icon || '📋'
+      }
+    }
+    
+    // If category is an ID (string or ObjectId), find it in categories array
+    const categoryId = typeof categoryIdOrObject === 'object' ? categoryIdOrObject._id : categoryIdOrObject
+    if (categoryId) {
+      const category = categories.find(cat => cat._id === categoryId || cat._id?.toString() === categoryId?.toString())
+      if (category) {
+        return category
+      }
+    }
+    
+    // Return default if not found
+    return { name: 'Unknown', color: '#999999', icon: '📋' }
   }
 
   // Status change handler
@@ -122,21 +146,14 @@ const SL_today_followup = () => {
   // Handle reschedule follow-up
   const handleRescheduleFollowup = (leadId) => {
     setSelectedLeadForFollowup(leadId)
-    setShowFollowupForm(true)
+    setShowFollowupDialog(true)
     setShowActionsMenu(null)
   }
 
   // Handle follow-up form submission
-  const handleFollowupFormSubmit = async (e) => {
-    e.preventDefault()
+  const handleFollowUpSubmit = async (followUpData) => {
     try {
-      // Update lead with new follow-up details (this could be a note update or a custom field)
-      await salesLeadService.updateLeadStatus(
-        selectedLeadForFollowup, 
-        'today_followup', 
-        `Follow-up rescheduled for ${followupFormData.followupDate} at ${followupFormData.followupTime}. Priority: ${followupFormData.priority}. Notes: ${followupFormData.notes}`
-      )
-      
+      await salesLeadService.updateLeadStatus(selectedLeadForFollowup, 'followup', followUpData)
       toast.success('Follow-up rescheduled successfully')
       
       // Refresh leads list
@@ -147,14 +164,7 @@ const SL_today_followup = () => {
         window.refreshDashboardStats()
       }
       
-      // Reset form and close modal
-      setFollowupFormData({
-        followupDate: '',
-        followupTime: '',
-        notes: '',
-        priority: 'medium'
-      })
-      setShowFollowupForm(false)
+      setShowFollowupDialog(false)
       setSelectedLeadForFollowup(null)
       
     } catch (error) {
@@ -178,7 +188,10 @@ const SL_today_followup = () => {
   }
 
   // Mobile Lead Card Component
-  const MobileLeadCard = ({ lead }) => (
+  const MobileLeadCard = ({ lead }) => {
+    const categoryInfo = getCategoryInfo(lead.category)
+    
+    return (
     <div className="p-4 space-y-3">
       {/* Header Section */}
       <div className="flex items-center space-x-3">
@@ -201,22 +214,26 @@ const SL_today_followup = () => {
           <div className="flex items-center space-x-1 mt-1">
             <span 
               className="text-xs text-black"
-              style={{ color: getCategoryInfo(lead.categoryId).color }}
+              style={{ color: categoryInfo.color }}
             >
-              {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
+              {categoryInfo.icon} {categoryInfo.name}
             </span>
           </div>
         </div>
 
         {/* Time Badge */}
         <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-amber-600">{lead.followupTime || 'Today'}</p>
+          <p className="text-sm font-bold text-amber-600">
+            {lead.nextFollowUpDate ? new Date(lead.nextFollowUpDate).toLocaleDateString() : 'Today'}
+          </p>
         </div>
       </div>
 
       {/* Follow-up Info */}
       <div className="flex justify-between items-center">
-        <span className="text-xs text-gray-500">Follow-up: {lead.followupDate || 'Today'}</span>
+        <span className="text-xs text-gray-500">
+          Follow-up: {lead.nextFollowUpDate ? new Date(lead.nextFollowUpDate).toLocaleDateString() : 'Today'}
+        </span>
         <span className="text-xs text-gray-500">{lead.phone}</span>
       </div>
 
@@ -316,10 +333,14 @@ const SL_today_followup = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   // Desktop Lead Card Component
-  const DesktopLeadCard = ({ lead }) => (
+  const DesktopLeadCard = ({ lead }) => {
+    const categoryInfo = getCategoryInfo(lead.category)
+    
+    return (
     <div className="p-4 space-y-3">
       {/* Header Section */}
       <div className="flex items-center space-x-3">
@@ -342,17 +363,19 @@ const SL_today_followup = () => {
           <div className="flex items-center space-x-2 mt-1">
             <span 
               className="text-xs text-black"
-              style={{ color: getCategoryInfo(lead.categoryId).color }}
-            >
-              {getCategoryInfo(lead.categoryId).icon} {getCategoryInfo(lead.categoryId).name}
-            </span>
+            style={{ color: categoryInfo.color }}
+          >
+            {categoryInfo.icon} {categoryInfo.name}
+          </span>
           </div>
         </div>
 
         {/* Time & Date */}
         <div className="text-right flex-shrink-0">
-          <p className="text-lg font-bold text-amber-600">{lead.followupTime || 'Today'}</p>
-          <p className="text-xs text-gray-500">{lead.followupDate || 'Follow-up'}</p>
+          <p className="text-lg font-bold text-amber-600">
+            {lead.nextFollowUpDate ? new Date(lead.nextFollowUpDate).toLocaleDateString() : 'Today'}
+          </p>
+          <p className="text-xs text-gray-500">Follow-up</p>
         </div>
       </div>
 
@@ -457,7 +480,8 @@ const SL_today_followup = () => {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -968,108 +992,14 @@ const SL_today_followup = () => {
           </div>
         </div>
       </main>
-      {/* Follow-up Form Modal */}
-      <AnimatePresence>
-        {showFollowupForm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Reschedule Follow-up</h3>
-                <button
-                  onClick={() => setShowFollowupForm(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <FiX className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleFollowupFormSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Follow-up Date *
-                  </label>
-                  <input
-                    type="date"
-                    value={followupFormData.followupDate}
-                    onChange={(e) => setFollowupFormData(prev => ({ ...prev, followupDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    required
-                    min={new Date().toISOString().split('T')[0]}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Follow-up Time *
-                  </label>
-                  <input
-                    type="time"
-                    value={followupFormData.followupTime}
-                    onChange={(e) => setFollowupFormData(prev => ({ ...prev, followupTime: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Priority
-                  </label>
-                  <select
-                    value={followupFormData.priority}
-                    onChange={(e) => setFollowupFormData(prev => ({ ...prev, priority: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    value={followupFormData.notes}
-                    onChange={(e) => setFollowupFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    placeholder="Add any notes about this follow-up..."
-                  />
-                </div>
-
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowFollowupForm(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
-                  >
-                    Reschedule Follow-up
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Follow-up Dialog */}
+      <FollowUpDialog
+        isOpen={showFollowupDialog}
+        onClose={() => setShowFollowupDialog(false)}
+        onSubmit={handleFollowUpSubmit}
+        title="Reschedule Follow-up"
+        submitText="Reschedule Follow-up"
+      />
     </div>
   )
 }

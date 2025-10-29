@@ -15,6 +15,7 @@ import {
   FiLoader
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import FollowUpDialog from '../SL-components/FollowUpDialog'
 import { salesLeadService } from '../SL-services'
 import { useToast } from '../../../contexts/ToastContext'
 
@@ -34,6 +35,10 @@ const SL_connected = () => {
   const [leadsData, setLeadsData] = useState([])
   const [categories, setCategories] = useState([])
   const [isLoading, setIsLoading] = useState(false)
+  
+  // State for Follow-up dialog
+  const [showFollowupDialog, setShowFollowupDialog] = useState(false)
+  const [selectedLeadForFollowup, setSelectedLeadForFollowup] = useState(null)
 
   // Fetch categories and leads on component mount
   useEffect(() => {
@@ -81,9 +86,32 @@ const SL_connected = () => {
   ]
 
   // Get category info helper
-  const getCategoryInfo = (categoryId) => {
-    const category = categories.find(cat => cat._id === categoryId)
-    return category || { name: 'Unknown', color: '#999999', icon: '📋' }
+  const getCategoryInfo = (categoryIdOrObject) => {
+    // Handle null/undefined
+    if (!categoryIdOrObject) {
+      return { name: 'Unknown', color: '#999999', icon: '📋' }
+    }
+    
+    // If category is already populated (object with properties like name, color, icon), return it directly
+    if (typeof categoryIdOrObject === 'object' && categoryIdOrObject.name) {
+      return {
+        name: categoryIdOrObject.name,
+        color: categoryIdOrObject.color || '#999999',
+        icon: categoryIdOrObject.icon || '📋'
+      }
+    }
+    
+    // If category is an ID (string or ObjectId), find it in categories array
+    const categoryId = typeof categoryIdOrObject === 'object' ? categoryIdOrObject._id : categoryIdOrObject
+    if (categoryId) {
+      const category = categories.find(cat => cat._id === categoryId || cat._id?.toString() === categoryId?.toString())
+      if (category) {
+        return category
+      }
+    }
+    
+    // Return default if not found
+    return { name: 'Unknown', color: '#999999', icon: '📋' }
   }
 
   // Status change handler
@@ -104,6 +132,35 @@ const SL_connected = () => {
       toast.error('Failed to update lead status')
     }
     setShowActionsMenu(null)
+  }
+
+  // Handle follow-up scheduling
+  const handleFollowUp = (leadId) => {
+    setSelectedLeadForFollowup(leadId)
+    setShowFollowupDialog(true)
+    setShowActionsMenu(null)
+  }
+
+  // Handle follow-up form submission
+  const handleFollowUpSubmit = async (followUpData) => {
+    try {
+      await salesLeadService.updateLeadStatus(selectedLeadForFollowup, 'followup', followUpData)
+      toast.success('Follow-up scheduled successfully')
+      
+      // Remove lead from current list
+      setLeadsData(prev => prev.filter(lead => lead._id !== selectedLeadForFollowup))
+      
+      // Refresh dashboard stats
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+      
+      setShowFollowupDialog(false)
+      setSelectedLeadForFollowup(null)
+    } catch (error) {
+      console.error('Error scheduling follow-up:', error)
+      toast.error('Failed to schedule follow-up')
+    }
   }
 
   const getPriorityColor = (priority) => {
@@ -131,7 +188,7 @@ const SL_connected = () => {
 
   // Mobile Lead Card Component
   const MobileLeadCard = ({ lead }) => {
-    const categoryInfo = getCategoryInfo(lead.categoryId)
+    const categoryInfo = getCategoryInfo(lead.category)
     
     return (
       <div className="flex items-center justify-between">
@@ -224,10 +281,10 @@ const SL_connected = () => {
                     Mark as Hot
                   </button>
                   <button
-                    onClick={() => handleStatusChange(lead._id, 'today_followup')}
+                    onClick={() => handleFollowUp(lead._id)}
                     className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
                   >
-                    Today Followup
+                    Follow Up
                   </button>
                   <button
                     onClick={() => handleStatusChange(lead._id, 'quotation_sent')}
@@ -259,7 +316,7 @@ const SL_connected = () => {
 
   // Desktop Lead Card Component
   const DesktopLeadCard = ({ lead }) => {
-    const categoryInfo = getCategoryInfo(lead.categoryId)
+    const categoryInfo = getCategoryInfo(lead.category)
     
     return (
       <div className="flex items-center justify-between">
@@ -350,10 +407,10 @@ const SL_connected = () => {
                     Mark as Hot
                   </button>
                   <button
-                    onClick={() => handleStatusChange(lead._id, 'today_followup')}
+                    onClick={() => handleFollowUp(lead._id)}
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
                   >
-                    Today Followup
+                    Follow Up
                   </button>
                   <button
                     onClick={() => handleStatusChange(lead._id, 'quotation_sent')}
@@ -893,6 +950,15 @@ const SL_connected = () => {
           </div>
         </div>
       </main>
+
+      {/* Follow-up Dialog */}
+      <FollowUpDialog
+        isOpen={showFollowupDialog}
+        onClose={() => setShowFollowupDialog(false)}
+        onSubmit={handleFollowUpSubmit}
+        title="Schedule Follow-up"
+        submitText="Schedule Follow-up"
+      />
     </div>
   )
 }
