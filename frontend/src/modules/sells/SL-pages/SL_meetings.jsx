@@ -17,6 +17,8 @@ import {
   FiFilter
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import { salesMeetingsService } from '../SL-services'
+import { salesLeadService } from '../SL-services'
 
 const SL_meetings = () => {
   const navigate = useNavigate()
@@ -35,82 +37,13 @@ const SL_meetings = () => {
     meetingType: 'in-person',
     location: '',
     notes: '',
-    assignee: ''
+    assigneeId: ''
   })
 
-  // Mock meetings data
-  const [meetings, setMeetings] = useState([
-    {
-      id: 1,
-      clientName: 'Alice Johnson',
-      meetingDate: '2024-01-20',
-      meetingTime: '5:00 AM',
-      meetingType: 'in-person',
-      location: 'Office Conference Room',
-      notes: 'Discuss project requirements',
-      status: 'upcoming'
-    },
-    {
-      id: 2,
-      clientName: 'Bob Smith',
-      meetingDate: '2024-01-20',
-      meetingTime: '6:00 AM',
-      meetingType: 'video',
-      location: 'Zoom Meeting',
-      notes: 'Product demo session',
-      status: 'upcoming'
-    },
-    {
-      id: 3,
-      clientName: 'Charlie Brown',
-      meetingDate: '2024-01-20',
-      meetingTime: '7:00 AM',
-      meetingType: 'in-person',
-      location: 'Client Office',
-      notes: 'Contract discussion',
-      status: 'upcoming'
-    },
-    {
-      id: 4,
-      clientName: 'Justin Wilson',
-      meetingDate: '2024-01-20',
-      meetingTime: '8:00 AM',
-      meetingType: 'video',
-      location: 'Google Meet',
-      notes: 'Follow-up meeting',
-      status: 'upcoming'
-    },
-    {
-      id: 5,
-      clientName: 'Max Davis',
-      meetingDate: '2024-01-20',
-      meetingTime: '9:00 AM',
-      meetingType: 'in-person',
-      location: 'Coffee Shop',
-      notes: 'Initial consultation',
-      status: 'upcoming'
-    },
-    {
-      id: 6,
-      clientName: 'Stuny Lee',
-      meetingDate: '2024-01-20',
-      meetingTime: '10:00 AM',
-      meetingType: 'video',
-      location: 'Teams Meeting',
-      notes: 'Project review',
-      status: 'upcoming'
-    },
-    {
-      id: 7,
-      clientName: 'Marlie Chen',
-      meetingDate: '2024-01-20',
-      meetingTime: '11:00 AM',
-      meetingType: 'in-person',
-      location: 'Client Site',
-      notes: 'Final presentation',
-      status: 'upcoming'
-    }
-  ])
+  const [meetings, setMeetings] = useState([])
+  const [stats, setStats] = useState({ total: 0, today: 0, upcoming: 0 })
+  const [clients, setClients] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
 
   const filters = [
     { id: 'all', label: 'All Meetings' },
@@ -125,33 +58,30 @@ const SL_meetings = () => {
     { id: 'phone', label: 'Phone Call', icon: FiPhone }
   ]
 
-  const clients = [
-    'Alice Johnson', 'Bob Smith', 'Charlie Brown', 'Justin Wilson', 
-    'Max Davis', 'Stuny Lee', 'Marlie Chen', 'Sarah Wilson', 'Mike Johnson'
-  ]
+  const [salesTeam, setSalesTeam] = useState([])
 
-  const assignees = [
-    'John Developer', 'Sarah Manager', 'Mike Designer', 'Lisa Analyst', 
-    'David Consultant', 'Emma Specialist', 'Tom Expert', 'Anna Coordinator'
-  ]
-
-  const filteredMeetings = meetings.filter(meeting => {
-    const matchesSearch = meeting.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         meeting.location.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    let matchesFilter = true
-    const today = new Date().toISOString().split('T')[0]
-    
-    if (selectedFilter === 'today') {
-      matchesFilter = meeting.meetingDate === today
-    } else if (selectedFilter === 'upcoming') {
-      matchesFilter = meeting.meetingDate >= today
-    } else if (selectedFilter === 'completed') {
-      matchesFilter = meeting.meetingDate < today
+  const fetchMeetings = async () => {
+    try {
+      setIsLoading(true)
+      const [res, cl, team] = await Promise.all([
+        salesMeetingsService.list({ search: searchTerm, filter: selectedFilter }),
+        salesMeetingsService.getMyConvertedClients(),
+        salesLeadService.getSalesTeam()
+      ])
+      setMeetings(res.items || [])
+      setStats(res.stats || { total: 0, today: 0, upcoming: 0 })
+      setClients(cl || [])
+      setSalesTeam(team || [])
+    } catch (e) {
+      console.error('Fetch meetings failed', e)
+    } finally {
+      setIsLoading(false)
     }
-    
-    return matchesSearch && matchesFilter
-  })
+  }
+
+  React.useEffect(() => { fetchMeetings() }, [searchTerm, selectedFilter])
+
+  const filteredMeetings = meetings
 
   const getMeetingTypeIcon = (type) => {
     const typeObj = meetingTypes.find(t => t.id === type)
@@ -173,7 +103,7 @@ const SL_meetings = () => {
       meetingType: 'in-person',
       location: '',
       notes: '',
-      assignee: ''
+      assigneeId: ''
     })
     setShowMeetingDialog(true)
   }
@@ -181,13 +111,13 @@ const SL_meetings = () => {
   const handleEditMeeting = (meeting) => {
     setEditingMeeting(meeting)
     setMeetingForm({
-      clientName: meeting.clientName,
+      clientName: meeting.client?.name || meeting.clientName,
       meetingDate: meeting.meetingDate,
       meetingTime: meeting.meetingTime,
       meetingType: meeting.meetingType,
       location: meeting.location,
       notes: meeting.notes,
-      assignee: meeting.assignee || ''
+      assigneeId: meeting.assignee?._id || ''
     })
     setShowMeetingDialog(true)
   }
@@ -199,32 +129,38 @@ const SL_meetings = () => {
     }))
   }
 
-  const handleSaveMeeting = () => {
+  const handleSaveMeeting = async () => {
     if (!meetingForm.clientName.trim() || !meetingForm.meetingDate || !meetingForm.meetingTime) return
-
-    if (editingMeeting) {
-      // Update existing meeting
-      setMeetings(prev => prev.map(meeting => 
-        meeting.id === editingMeeting.id 
-          ? { ...meeting, ...meetingForm }
-          : meeting
-      ))
-    } else {
-      // Add new meeting
-      const newMeeting = {
-        id: Date.now(),
-        ...meetingForm,
-        status: 'upcoming'
+    try {
+    const payload = {
+        client: clients.find(c => c.name === meetingForm.clientName)?._id,
+        meetingDate: meetingForm.meetingDate,
+        meetingTime: meetingForm.meetingTime,
+        meetingType: meetingForm.meetingType,
+        location: meetingForm.location,
+        notes: meetingForm.notes,
+      assignee: meetingForm.assigneeId
       }
-      setMeetings(prev => [newMeeting, ...prev])
+      if (editingMeeting) {
+        await salesMeetingsService.update(editingMeeting._id, payload)
+      } else {
+        await salesMeetingsService.create(payload)
+      }
+      setShowMeetingDialog(false)
+      setEditingMeeting(null)
+      fetchMeetings()
+    } catch (e) {
+      console.error('Save meeting failed', e)
     }
-
-    setShowMeetingDialog(false)
-    setEditingMeeting(null)
   }
 
-  const handleDeleteMeeting = (meetingId) => {
-    setMeetings(prev => prev.filter(meeting => meeting.id !== meetingId))
+  const handleDeleteMeeting = async (meetingId) => {
+    try {
+      await salesMeetingsService.remove(meetingId)
+      fetchMeetings()
+    } catch (e) {
+      console.error('Delete meeting failed', e)
+    }
   }
 
   const handleCloseDialog = () => {
@@ -246,11 +182,11 @@ const SL_meetings = () => {
   }
 
   const handleAssigneeSelect = (assignee) => {
-    setMeetingForm(prev => ({ ...prev, assignee: assignee }))
+    setMeetingForm(prev => ({ ...prev, assigneeId: assignee }))
     setShowAssigneeDropdown(false)
   }
 
-  const stats = {
+  const computedStats = {
     total: meetings.length,
     today: meetings.filter(m => m.meetingDate === new Date().toISOString().split('T')[0]).length,
     upcoming: meetings.filter(m => m.meetingDate >= new Date().toISOString().split('T')[0]).length
@@ -270,14 +206,14 @@ const SL_meetings = () => {
               {/* Total Meetings */}
               <div className="mb-3">
                 <h2 className="text-xs font-medium mb-1 opacity-90">Total Meetings</h2>
-                <p className="text-lg font-bold">{stats.total}</p>
+                <p className="text-lg font-bold">{computedStats.total}</p>
               </div>
               
               {/* Status Breakdown */}
               <div className="flex items-center space-x-4">
                 {/* Today */}
                 <div className="text-center">
-                  <p className="text-sm font-bold mb-1">{stats.today}</p>
+                  <p className="text-sm font-bold mb-1">{computedStats.today}</p>
                   <div className="flex items-center space-x-1">
                     <div className="w-1.5 h-1.5 bg-orange-300 rounded-full"></div>
                     <span className="text-xs opacity-80">Today</span>
@@ -286,7 +222,7 @@ const SL_meetings = () => {
                 
                 {/* Upcoming */}
                 <div className="text-center">
-                  <p className="text-sm font-bold mb-1">{stats.upcoming}</p>
+                  <p className="text-sm font-bold mb-1">{computedStats.upcoming}</p>
                   <div className="flex items-center space-x-1">
                     <div className="w-1.5 h-1.5 bg-blue-300 rounded-full"></div>
                     <span className="text-xs opacity-80">Upcoming</span>
@@ -513,16 +449,16 @@ const SL_meetings = () => {
                       <div className="py-1">
                         {clients.map((client) => (
                           <button
-                            key={client}
+                            key={client._id}
                             type="button"
-                            onClick={() => handleClientSelect(client)}
+                            onClick={() => handleClientSelect(client.name)}
                             className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-left hover:bg-gray-50 transition-colors duration-200 text-sm sm:text-base ${
-                              meetingForm.clientName === client ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
+                              meetingForm.clientName === client.name ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
                             }`}
                           >
                             <div className="flex items-center space-x-2">
                               <FiUser className="w-4 h-4 text-gray-500" />
-                              <span className="font-medium">{client}</span>
+                              <span className="font-medium">{client.name}</span>
                             </div>
                           </button>
                         ))}
@@ -577,7 +513,7 @@ const SL_meetings = () => {
                     <div className="flex items-center space-x-2">
                       <FiUser className="text-sm text-gray-600" />
                       <span className="text-gray-900">
-                        {meetingForm.assignee || 'Select Assignee'}
+                        {(salesTeam.find(u => u._id === meetingForm.assigneeId)?.name) || 'Select Assignee'}
                       </span>
                     </div>
                     <svg
@@ -601,18 +537,18 @@ const SL_meetings = () => {
                       className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg"
                     >
                       <div className="py-1">
-                        {assignees.map((assignee) => (
+                        {salesTeam.map((member) => (
                           <button
-                            key={assignee}
+                            key={member._id}
                             type="button"
-                            onClick={() => handleAssigneeSelect(assignee)}
+                            onClick={() => handleAssigneeSelect(member._id)}
                             className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-left hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-2 sm:space-x-3 text-sm sm:text-base ${
-                              meetingForm.assignee === assignee ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
+                              meetingForm.assigneeId === member._id ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
                             }`}
                           >
                             <FiUser className="text-sm flex-shrink-0" />
-                            <span className="font-medium">{assignee}</span>
-                            {meetingForm.assignee === assignee && (
+                            <span className="font-medium">{member.name}</span>
+                            {meetingForm.assigneeId === member._id && (
                               <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-auto text-teal-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                               </svg>

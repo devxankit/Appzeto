@@ -7,6 +7,18 @@ export { default as salesAuthService } from './salesAuthService';
 // Sales Lead Management Service
 export { default as salesLeadService } from './salesLeadService';
 
+// Payments / Receivables
+export { default as salesPaymentsService } from './salesPaymentsService';
+
+// Demo Requests
+export { default as salesDemoService } from './salesDemoService';
+
+// Tasks
+export { default as salesTasksService } from './salesTasksService';
+
+// Meetings
+export { default as salesMeetingsService } from './salesMeetingsService';
+
 // Base API Service (for internal use)
 export { default as baseApiService } from './baseApiService';
 

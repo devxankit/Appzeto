@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fi'
 import { FaWhatsapp } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
+import { salesPaymentsService } from '../SL-services'
 
 const SL_payments_recovery = () => {
   const navigate = useNavigate()
@@ -22,7 +23,11 @@ const SL_payments_recovery = () => {
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [paymentForm, setPaymentForm] = useState({
     amount: '',
-    account: 'Vipins account'
+    account: 'Select account',
+    accountId: '',
+    method: 'upi',
+    referenceId: '',
+    notes: ''
   })
   const [showAccountDropdown, setShowAccountDropdown] = useState(false)
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false)
@@ -30,20 +35,40 @@ const SL_payments_recovery = () => {
   const [requestAmount, setRequestAmount] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [selectedPaymentType, setSelectedPaymentType] = useState('all')
+  const [accounts, setAccounts] = useState([])
+  const [receivables, setReceivables] = useState([])
+  const [stats, setStats] = useState({ totalDues: 0, overdueCount: 0, overdueAmount: 0 })
+  const [isLoading, setIsLoading] = useState(false)
 
-  // Mock data for payments
-  const paymentsData = [
-    { id: 1, name: 'Alice', amount: 25000, phone: '+91 98765 43210', paidAmount: 10000 },
-    { id: 2, name: 'Bob', amount: 4500, phone: '+91 98765 43211', paidAmount: 2000 },
-    { id: 3, name: 'Charlie', amount: 3455, phone: '+91 98765 43212', paidAmount: 1000 },
-    { id: 4, name: 'Justin', amount: 1123, phone: '+91 98765 43213', paidAmount: 500 },
-    { id: 5, name: 'Max', amount: 6754, phone: '+91 98765 43214', paidAmount: 3000 },
-    { id: 6, name: 'Stuny', amount: 3444, phone: '+91 98765 43215', paidAmount: 1500 }
-  ]
+  // Fetch data
+  React.useEffect(() => {
+    const run = async () => {
+      try {
+        setIsLoading(true)
+        const [acc, st, list] = await Promise.all([
+          salesPaymentsService.getAccounts(),
+          salesPaymentsService.getReceivableStats(),
+          salesPaymentsService.getReceivables({
+            search: searchTerm,
+            overdue: selectedPaymentType === 'overdue',
+            band: selectedFilter === 'all' ? undefined : selectedFilter
+          })
+        ])
+        setAccounts(acc)
+        setStats({ totalDues: st.totalDue || 0, overdueCount: st.overdueCount || 0, overdueAmount: st.overdueAmount || 0 })
+        setReceivables(list)
+      } catch (e) {
+        console.error('Payments fetch error', e)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    run()
+  }, [searchTerm, selectedPaymentType, selectedFilter])
 
-  const totalDues = paymentsData.reduce((sum, payment) => sum + payment.amount, 0)
-  const overduePayments = paymentsData.filter(payment => payment.amount > 10000)
-  const totalOverdue = overduePayments.reduce((sum, payment) => sum + payment.amount, 0)
+  const totalDues = stats.totalDues || 0
+  const overduePayments = receivables.filter(p => p.dueDate && new Date(p.dueDate) < new Date())
+  const totalOverdue = stats.overdueAmount || 0
 
   const filters = [
     { id: 'all', label: 'All' },
@@ -52,26 +77,7 @@ const SL_payments_recovery = () => {
     { id: 'low', label: 'Low Amount' }
   ]
 
-  const filteredPayments = paymentsData.filter(payment => {
-    const matchesSearch = payment.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         payment.phone.includes(searchTerm)
-    
-    let matchesFilter = true
-    if (selectedFilter === 'high') {
-      matchesFilter = payment.amount >= 10000
-    } else if (selectedFilter === 'medium') {
-      matchesFilter = payment.amount >= 3000 && payment.amount < 10000
-    } else if (selectedFilter === 'low') {
-      matchesFilter = payment.amount < 3000
-    }
-    
-    let matchesPaymentType = true
-    if (selectedPaymentType === 'overdue') {
-      matchesPaymentType = payment.amount > 10000
-    }
-    
-    return matchesSearch && matchesFilter && matchesPaymentType
-  })
+  const filteredPayments = receivables
 
   const handlePaymentAction = (payment) => {
     setSelectedPayment(payment)
@@ -85,19 +91,25 @@ const SL_payments_recovery = () => {
     }))
   }
 
-  const handlePaymentSubmit = () => {
-    if (!paymentForm.amount) {
+  const handlePaymentSubmit = async () => {
+    if (!paymentForm.amount || !paymentForm.accountId) {
       alert('Please enter an amount')
       return
     }
-    console.log('Payment recorded:', {
-      client: selectedPayment.name,
-      amount: paymentForm.amount,
-      account: paymentForm.account
-    })
-    setShowPaymentDialog(false)
-    setPaymentForm({ amount: '', account: 'Vipins account' })
-    setSelectedPayment(null)
+    try {
+      await salesPaymentsService.createReceipt(selectedPayment.projectId, {
+        amount: parseFloat(paymentForm.amount),
+        accountId: paymentForm.accountId,
+        method: paymentForm.method,
+        referenceId: paymentForm.referenceId,
+        notes: paymentForm.notes
+      })
+      setShowPaymentDialog(false)
+      setPaymentForm({ amount: '', account: 'Select account', accountId: '', method: 'upi', referenceId: '', notes: '' })
+      setSelectedPayment(null)
+    } catch (e) {
+      console.error('Create receipt failed', e)
+    }
   }
 
   const handleClosePaymentDialog = () => {
@@ -111,7 +123,12 @@ const SL_payments_recovery = () => {
   }
 
   const handleWhatsApp = (client) => {
-    setSelectedClient(client)
+    // Normalize to expected shape for dialog
+    setSelectedClient({
+      name: client.clientName,
+      phone: client.phone,
+      remainingAmount: client.remainingAmount
+    })
     setShowWhatsAppDialog(true)
   }
 
@@ -119,12 +136,10 @@ const SL_payments_recovery = () => {
     if (!requestAmount || !selectedClient) return
 
     const cleanPhone = selectedClient.phone.replace(/\s+/g, '').replace('+91', '')
-    const remainingAmount = selectedClient.amount - selectedClient.paidAmount
+    const remainingAmount = selectedClient.remainingAmount || 0
     const message = `Hello ${selectedClient.name},
 
 Payment Request Details:
-• Total Amount: ₹${selectedClient.amount.toLocaleString()}
-• Already Paid: ₹${selectedClient.paidAmount.toLocaleString()}
 • Remaining Amount: ₹${remainingAmount.toLocaleString()}
 • Requested Amount: ₹${parseInt(requestAmount).toLocaleString()}
 • Account: ${paymentForm.account}
@@ -153,12 +168,7 @@ Thank you!`
     navigate(`/client-profile/${clientId}`)
   }
 
-  const accountOptions = [
-    'Vipins account',
-    'Business account',
-    'Personal account',
-    'Savings account'
-  ]
+  const accountOptions = accounts
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -208,7 +218,7 @@ Thank you!`
             }`}
           >
             <div className="text-center">
-              <p className="text-xs font-semibold">All: ₹{totalDues.toLocaleString()} ({paymentsData.length})</p>
+              <p className="text-xs font-semibold">All: ₹{totalDues.toLocaleString()} ({receivables.length})</p>
             </div>
           </button>
 
@@ -256,13 +266,13 @@ Thank you!`
         <div className="space-y-4">
           {filteredPayments.map((payment) => (
             <div
-              key={payment.id}
+              key={payment.projectId}
               className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
             >
               {/* Client Info Section */}
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
-                  <h3 className="font-bold text-gray-900 text-lg mb-1">{payment.name}</h3>
+                  <h3 className="font-bold text-gray-900 text-lg mb-1">{payment.clientName}</h3>
                   <p className="text-sm text-gray-600 flex items-center">
                     <FiPhone className="mr-1 text-xs" />
                     {payment.phone}
@@ -271,7 +281,7 @@ Thank you!`
                 
                 {/* Amount Badge */}
                 <div className="bg-red-50 px-3 py-1 rounded-full">
-                  <p className="text-red-700 font-bold text-sm">₹{payment.amount.toLocaleString()}</p>
+                  <p className="text-red-700 font-bold text-sm">₹{payment.remainingAmount.toLocaleString()}</p>
                 </div>
               </div>
 
@@ -298,7 +308,7 @@ Thank you!`
 
                    {/* Profile Button */}
                    <button
-                     onClick={() => handleProfile(payment.id)}
+                     onClick={() => handleProfile(payment.clientId)}
                      className="bg-teal-500 text-white p-1.5 rounded-lg hover:bg-teal-600 transition-all duration-200"
                      title="View Profile"
                    >
@@ -384,15 +394,16 @@ Thank you!`
                         <button
                           key={account}
                           type="button"
-                          onClick={() => {
-                            handlePaymentFormChange('account', account)
+                        onClick={() => {
+                            handlePaymentFormChange('account', account.name)
+                            setPaymentForm(prev => ({ ...prev, accountId: account._id }))
                             setShowAccountDropdown(false)
                           }}
                           className={`w-full px-4 py-3 text-left hover:bg-teal-50 transition-colors duration-200 ${
                             paymentForm.account === account ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
                           }`}
                         >
-                          {account}
+                          {account.name}
                         </button>
                       ))}
                     </motion.div>

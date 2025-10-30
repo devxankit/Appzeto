@@ -386,7 +386,7 @@ const LeadDashboard = () => {
                   to={
                     tile.title === "Connected" ? "/connected" :
                     tile.title === "Not Picked" ? "/not-picked" :
-                    tile.title === "Follow Up" ? "/followup" :
+                    tile.title === "Follow Up" ? "/today-followup" :
                     tile.title === "Quotation Sent" ? "/quotation-sent" :
                     tile.title === "D&Q Sent" ? "/dq-sent" :
                     tile.title === "App Client" ? "/app-client" :
@@ -528,7 +528,7 @@ const LeadDashboard = () => {
                       to={
                         tile.title === "Connected" ? "/connected" :
                         tile.title === "Not Picked" ? "/not-picked" :
-                        tile.title === "Follow Up" ? "/followup" :
+                        tile.title === "Follow Up" ? "/today-followup" :
                         tile.title === "Quotation Sent" ? "/quotation-sent" :
                         tile.title === "D&Q Sent" ? "/dq-sent" :
                         tile.title === "App Client" ? "/app-client" :

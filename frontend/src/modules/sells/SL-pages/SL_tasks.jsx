@@ -15,9 +15,12 @@ import {
   FiFilter
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
+import { salesTasksService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_tasks = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [showFilters, setShowFilters] = useState(false)
@@ -33,59 +36,9 @@ const SL_tasks = () => {
     category: 'work'
   })
 
-  // Mock tasks data
-  const [tasks, setTasks] = useState([
-    {
-      id: 1,
-      title: 'Follow up with John Smith',
-      description: 'Call John about the demo request and schedule a meeting',
-      priority: 'high',
-      dueDate: '2024-01-20',
-      category: 'work',
-      completed: false,
-      createdAt: '2024-01-15'
-    },
-    {
-      id: 2,
-      title: 'Prepare presentation slides',
-      description: 'Create slides for the client presentation next week',
-      priority: 'medium',
-      dueDate: '2024-01-22',
-      category: 'work',
-      completed: false,
-      createdAt: '2024-01-14'
-    },
-    {
-      id: 3,
-      title: 'Update project documentation',
-      description: 'Review and update all project documentation',
-      priority: 'low',
-      dueDate: '2024-01-25',
-      category: 'work',
-      completed: true,
-      createdAt: '2024-01-13'
-    },
-    {
-      id: 4,
-      title: 'Team meeting preparation',
-      description: 'Prepare agenda and materials for weekly team meeting',
-      priority: 'high',
-      dueDate: '2024-01-18',
-      category: 'work',
-      completed: false,
-      createdAt: '2024-01-12'
-    },
-    {
-      id: 5,
-      title: 'Client feedback review',
-      description: 'Review client feedback and prepare response',
-      priority: 'medium',
-      dueDate: '2024-01-21',
-      category: 'work',
-      completed: false,
-      createdAt: '2024-01-11'
-    }
-  ])
+  const [tasks, setTasks] = useState([])
+  const [stats, setStats] = useState({ total: 0, pending: 0, completed: 0, high: 0 })
+  const [isLoading, setIsLoading] = useState(false)
 
   const filters = [
     { id: 'all', label: 'All Tasks' },
@@ -165,41 +118,70 @@ const SL_tasks = () => {
     }))
   }
 
-  const handleSaveTask = () => {
+  const fetchTasks = async () => {
+    try {
+      setIsLoading(true)
+      const res = await salesTasksService.list({ search: searchTerm, filter: selectedFilter })
+      setTasks(res.items || [])
+      setStats(res.stats || { total: 0, pending: 0, completed: 0, high: 0 })
+      if (!isLoading) {
+        // no-op; avoid duplicate toasts on initial mount
+      }
+    } catch (e) {
+      console.error('Fetch tasks failed', e)
+      toast.error('Failed to load tasks')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  React.useEffect(() => { fetchTasks() }, [searchTerm, selectedFilter])
+
+  const handleSaveTask = async () => {
     if (!taskForm.title.trim()) return
 
-    if (editingTask) {
-      // Update existing task
-      setTasks(prev => prev.map(task => 
-        task.id === editingTask.id 
-          ? { ...task, ...taskForm }
-          : task
-      ))
-    } else {
-      // Add new task
-      const newTask = {
-        id: Date.now(),
-        ...taskForm,
-        completed: false,
-        createdAt: new Date().toISOString().split('T')[0]
+    try {
+      if (editingTask) {
+        await salesTasksService.update(editingTask._id, taskForm)
+        toast.success('Task updated')
+      } else {
+        await salesTasksService.create(taskForm)
+        toast.success('Task added')
       }
-      setTasks(prev => [newTask, ...prev])
+      setShowTaskDialog(false)
+      setEditingTask(null)
+      fetchTasks()
+    } catch (e) {
+      console.error('Save task failed', e)
+      toast.error('Failed to save task')
     }
-
-    setShowTaskDialog(false)
-    setEditingTask(null)
   }
 
-  const handleDeleteTask = (taskId) => {
-    setTasks(prev => prev.filter(task => task.id !== taskId))
+  const handleDeleteTask = async (taskId) => {
+    try {
+      await salesTasksService.remove(taskId)
+      toast.success('Task deleted')
+      fetchTasks()
+    } catch (e) {
+      console.error('Delete task failed', e)
+      toast.error('Failed to delete task')
+    }
   }
 
-  const handleToggleComplete = (taskId) => {
-    setTasks(prev => prev.map(task => 
-      task.id === taskId 
-        ? { ...task, completed: !task.completed }
-        : task
-    ))
+  const handleToggleComplete = async (taskId) => {
+    // Optimistic update for instant UI feedback
+    setTasks(prev => prev.map(t => (String(t._id || t.id) === String(taskId) ? { ...t, completed: !t.completed } : t)))
+    try {
+      await salesTasksService.toggle(taskId)
+      toast.success('Task status updated')
+      // Re-sync with server
+      fetchTasks()
+    } catch (e) {
+      console.error('Toggle task failed', e)
+      // Revert optimistic update
+      setTasks(prev => prev.map(t => (String(t._id || t.id) === String(taskId) ? { ...t, completed: !t.completed } : t)))
+      toast.error('Failed to update task status')
+    }
   }
 
   const handleCloseDialog = () => {
@@ -219,12 +201,7 @@ const SL_tasks = () => {
     setShowCategoryDropdown(false)
   }
 
-  const stats = {
-    total: tasks.length,
-    pending: tasks.filter(t => !t.completed).length,
-    completed: tasks.filter(t => t.completed).length,
-    high: tasks.filter(t => t.priority === 'high' && !t.completed).length
-  }
+  const computedStats = stats
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -260,14 +237,14 @@ const SL_tasks = () => {
             {/* Left Section - Total */}
             <div>
               <h2 className="text-sm font-medium mb-2">Total Tasks</h2>
-              <p className="text-3xl font-bold">{stats.total}</p>
+              <p className="text-3xl font-bold">{computedStats.total}</p>
             </div>
             
             {/* Right Section - Status Breakdown */}
             <div className="flex items-center space-x-6">
               {/* Pending */}
               <div className="text-center">
-                <p className="text-lg font-bold mb-1">{stats.pending}</p>
+                  <p className="text-lg font-bold mb-1">{computedStats.pending}</p>
                 <div className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-orange-300 rounded-full"></div>
                   <span className="text-sm">Pending</span>
@@ -276,7 +253,7 @@ const SL_tasks = () => {
               
               {/* Completed */}
               <div className="text-center">
-                <p className="text-lg font-bold mb-1">{stats.completed}</p>
+                  <p className="text-lg font-bold mb-1">{computedStats.completed}</p>
                 <div className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-green-300 rounded-full"></div>
                   <span className="text-sm">Completed</span>
@@ -344,7 +321,7 @@ const SL_tasks = () => {
           ) : (
             filteredTasks.map((task) => (
               <div
-                key={task.id}
+                key={task._id || task.id}
                 className={`bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300 ${
                   task.completed ? 'opacity-60' : ''
                 }`}
@@ -352,7 +329,7 @@ const SL_tasks = () => {
                 <div className="flex items-start space-x-4">
                   {/* Checkbox */}
                   <button
-                    onClick={() => handleToggleComplete(task.id)}
+                    onClick={() => handleToggleComplete(task._id || task.id)}
                     className={`mt-0.5 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all duration-200 ${
                       task.completed
                         ? 'bg-teal-500 border-teal-500 text-white shadow-sm'
@@ -380,7 +357,7 @@ const SL_tasks = () => {
                           <FiEdit2 className="text-sm" />
                         </button>
                         <button
-                          onClick={() => handleDeleteTask(task.id)}
+                          onClick={() => handleDeleteTask(task._id || task.id)}
                           className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-200"
                           title="Delete Task"
                         >

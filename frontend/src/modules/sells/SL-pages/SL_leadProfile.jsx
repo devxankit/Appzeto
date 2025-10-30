@@ -28,6 +28,7 @@ import {
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 import { salesLeadService } from '../SL-services'
+import { salesMeetingsService } from '../SL-services'
 import { useToast } from '../../../contexts/ToastContext'
 
 const SL_leadProfile = () => {
@@ -107,6 +108,7 @@ const SL_leadProfile = () => {
   const [newNote, setNewNote] = useState('')
   const [notes, setNotes] = useState([])
   const [salesTeam, setSalesTeam] = useState([])
+  const [myClients, setMyClients] = useState([])
   const [selectedStatus, setSelectedStatus] = useState('')
 
   // Fetch lead data on component mount
@@ -115,6 +117,20 @@ const SL_leadProfile = () => {
       fetchLeadData()
     }
   }, [id])
+
+  useEffect(() => {
+    const loadAux = async () => {
+      try {
+        const team = await salesLeadService.getSalesTeam()
+        setSalesTeam(team || [])
+        const cl = await salesMeetingsService.getMyConvertedClients()
+        setMyClients(cl || [])
+      } catch (e) {
+        // ignore
+      }
+    }
+    loadAux()
+  }, [])
 
   const fetchLeadData = async () => {
     setIsLoading(true)
@@ -532,10 +548,7 @@ const SL_leadProfile = () => {
     { id: 'phone', label: 'Phone Call', icon: FiPhone }
   ]
 
-  const assignees = [
-    'John Developer', 'Sarah Manager', 'Mike Designer', 'Lisa Analyst', 
-    'David Consultant', 'Emma Specialist', 'Tom Expert', 'Anna Coordinator'
-  ]
+  const assignees = salesTeam.map(m => m.name)
 
   const handleAddMeeting = () => {
     setMeetingForm({
@@ -563,20 +576,35 @@ const SL_leadProfile = () => {
       return
     }
 
+    // Find client by name from my converted clients
+    const clientId = myClients.find(c => c.name === meetingForm.clientName)?._id
+    if (!clientId) {
+      toast.error('Client not found. Convert this lead to a client first')
+      return
+    }
+
+    const assigneeId = salesTeam.find(m => m.name === meetingForm.assignee)?._id
+    if (!assigneeId) {
+      toast.error('Please select an assignee')
+      return
+    }
+
     setIsLoading(true)
-    try {
-      // For now, just simulate the API call since meeting functionality might need backend implementation
-      setTimeout(() => {
-        setIsLoading(false)
-        setShowMeetingDialog(false)
-        toast.success('Meeting scheduled successfully')
-        console.log('Meeting scheduled:', meetingForm)
-      }, 1000)
-    } catch (err) {
+    salesMeetingsService.create({
+      client: clientId,
+      meetingDate: meetingForm.meetingDate,
+      meetingTime: meetingForm.meetingTime,
+      meetingType: meetingForm.meetingType,
+      location: meetingForm.location,
+      notes: meetingForm.notes,
+      assignee: assigneeId
+    }).then(() => {
+      toast.success('Meeting scheduled successfully')
+      setShowMeetingDialog(false)
+    }).catch((err) => {
       console.error('Error scheduling meeting:', err)
       toast.error('Failed to schedule meeting')
-      setIsLoading(false)
-    }
+    }).finally(() => setIsLoading(false))
   }
 
   const handleCloseMeetingDialog = () => {

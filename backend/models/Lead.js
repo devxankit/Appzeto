@@ -73,6 +73,14 @@ const leadSchema = new mongoose.Schema({
     required: true,
     enum: ['Admin', 'Sales']
   },
+  // Demo request info (optional, used by sales demo-requests page)
+  demoRequest: {
+    status: { type: String, enum: ['pending', 'scheduled', 'completed', 'cancelled'], default: undefined },
+    preferredDate: { type: Date },
+    preferredTime: { type: String },
+    notes: { type: String, trim: true },
+    updatedAt: { type: Date }
+  },
   // Link to lead profile (when lead gets contacted and profiled)
   leadProfile: {
     type: mongoose.Schema.Types.ObjectId,

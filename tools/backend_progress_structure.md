@@ -1,6 +1,127 @@
 # Backend Progress & Structure Documentation
 
-## 🎯 **BACKEND DEVELOPMENT PROGRESS: 95% COMPLETE** 🎯
+## 🎯 **BACKEND DEVELOPMENT PROGRESS: 88% COMPLETE** 🎯
+
+This file reflects the latest work landed across the Sales module (tile cards → real pages), new models, routes, and what remains. Figures below supersede older entries in this document.
+
+### ✅ Recently Completed (since last update)
+- Sales → Payment Recovery
+  - Models: `Account`, `PaymentReceipt`
+  - Sales APIs: `GET /api/sales/accounts`, `GET /api/sales/payment-recovery`, `GET /api/sales/payment-recovery/stats`, `POST /api/sales/payment-recovery/:projectId/receipts`
+  - Admin APIs: `GET/POST/PUT/PATCH /api/admin/sales/finance/accounts`, `PATCH /api/admin/sales/finance/receipts/:id/verify` (approval updates `Project.financialDetails.remainingAmount` and `advanceReceived`)
+- Sales → Demo Requests
+  - Lead schema extended: `lead.demoRequest { status, preferredDate, preferredTime, notes }`
+  - Compatibility: also surfaces legacy `status: 'demo_requested'` as `demoRequest.status='pending'`
+  - APIs: `GET /api/sales/demo-requests`, `PATCH /api/sales/demo-requests/:leadId/status`
+- Sales → Personal Tasks
+  - Model: `SalesTask`
+  - APIs: `GET/POST/PUT/PATCH/DELETE /api/sales/tasks` (+ `GET /api/sales/tasks` returns `{ items, stats }`)
+- Sales → Meetings
+  - Model: `SalesMeeting`
+  - APIs: `GET/POST/PUT/DELETE /api/sales/meetings`, `GET /api/sales/clients/my-converted`
+  - Listing fix: now returns meetings where current sales is assignee OR creator
+
+### 🔌 Frontend Integrations (Sales)
+- `SL_payments_recovery.jsx`: real data (accounts, receivables, stats), create receipt, WhatsApp, counts
+- `SL_demo_request.jsx`: list/status update, category via backend, card parity with Connected leads
+- `SL_tasks.jsx`: list/CRUD/toggle with optimistic UI + toasts
+- `SL_meetings.jsx`: list/CRUD, client selector (my converted clients), assignee selector (team)
+- `SL_leadProfile.jsx`: request demo uses backend; meeting creation now stored via API (uses my-converted clients + real assignees)
+
+### 📊 Statistics (updated)
+- Sales module API coverage: ~85% (up from ~65%)
+- Overall backend completeness: ~88% (was 95% previously but adjusted to reflect remaining finance/notifications/reporting gaps enumerated below)
+
+### 🧩 Pending / Known Gaps (Prioritized)
+1) Finance/Payments
+   - Admin UI for Accounts and Receipt verification (backend done; ensure admin panel pages wire-in)
+   - Notifications on receipt approval/rejection (backend+frontend) — P0
+2) Meetings
+   - Optional support for meetings linked to a Lead (not just Client) — P1
+   - Toaster feedback and skeletons on all meeting actions — P2
+3) Tasks
+   - Bulk toggle/delete and pagination — P2
+4) Demo Requests
+   - Server-side filtering/pagination; enrich stats with scheduled/completed by timeframe — P2
+5) Payment Recovery
+   - Pagination/sorting; export; overdue by custom policy (admin-configurable) — P2
+6) Cross-cutting
+   - Request validation (celebrate/zod) + better error messages (dev transparent, prod generic) — P1
+   - E2E tests for all new routes; smoke tests in CI — P1
+   - Rate limits and audit logs for state-changing routes — P2
+   - Notifications (email/WA/SMS) hooks where applicable — P2
+
+> Note: The previous “95% complete” headline masked remaining work; this update corrects the figure and itemizes the missing parts.
+
+## 🛡️ Process Guidelines: Protect Working Functionality During Changes
+
+To prevent regressions when introducing changes (e.g., sales conversion, admin pending projects), follow these guardrails:
+
+1) Safe Query Patterns
+- Always convert string IDs to ObjectId for fields stored as ObjectId in MongoDB.
+- Use consistently in find/aggregate/count. Prefer safe casting with fallback to avoid 500s:
+  - Example:
+    - `let v = salesId; try { v = new mongoose.Types.ObjectId(salesId); } catch { v = salesId; }`
+    - `filter.assignedTo = v`
+
+2) Idempotent Endpoints
+- For create flows, check for existing linked records and return them if found to avoid duplicates.
+- Example: on lead conversion, check `Project.findOne({ originLead })` before creating.
+
+3) Backward-Compatible Responses
+- Maintain existing response shapes; if changes are needed, add new fields and deprecate gradually.
+
+4) Dev Error Transparency
+- Log `error.message` and `error.stack` in development; return detailed messages only in dev.
+
+5) Regression Checklist (quick pass before merge)
+- Sales pages: connected, not_picked, followup, quotation_sent, dq_sent, web, app_client, converted.
+- Admin Pending Projects lists `pending-assignment` with `submittedBy` populated.
+- Client OTP login flow unaffected.
+
+6) Transaction Safety
+- Use Mongo transactions for multi-write operations (if replica set). Otherwise, implement cleanup on partial failures.
+
+7) Feature Flags (when practical)
+- Gate new logic to allow quick rollback if issues arise.
+
+8) Post-Change Verifications
+- Verify `/api/sales/leads/status/quotation_sent?page=1&limit=50` returns 200.
+- Convert a lead and confirm project appears in Admin Pending and lead is `converted`.
+
+9) Enum Consistency
+- Ensure status values used in controllers match enums in models (Lead, Project).
+
+10) Mongoose Model Registration Before Populate
+- Always ensure models referenced in `.populate()` are registered first.
+- Example (controller/module top): `require('../models/LeadProfile')` before any populate using `leadProfile`.
+- Symptom if missed: `Schema hasn't been registered for model "LeadProfile"` → prevents 500s.
+
+11) Route & Navigation Consistency (Frontend)
+- Keep route paths in `App.jsx` and all navigation links/cards in sync.
+- Example: Follow Up page uses `/today-followup` route; ensure all links point to `/today-followup` (not `/followup`).
+- Add a quick link-audit when adding/updating pages: search for the route string and confirm all usages.
+
+12) Status Name Mapping Consistency
+- Backend canonical status is `followup` (not `today_followup`).
+- Frontend may show "Today Followup" label, but all API calls must use `followup`.
+- Keep `salesLeadService.getLeadsByStatus('followup', ...)` consistent across pages.
+
+13) Idempotent Lead Conversion
+- Before creating Client/Project during conversion, check for existing project linked by `originLead`.
+- Return existing client/project to avoid duplicates and UI inconsistencies if conversion is retriggered.
+
+14) Dev Error Surfaces Root Cause
+- In development, include the underlying error message in API responses for faster fixes.
+- Keep production responses generic.
+
+15) Post-Fix Verification Checklist (Sales)
+- Pages open without 500/404: Connected, Not Picked, Follow Up (/today-followup), Quotation Sent, D&Q Sent, App Client, Web, Converted, Lost.
+- Follow Up navigation works from:
+  - Sales sidebar (`/today-followup`)
+  - Sales leads tiles (both mobile and desktop grids)
+- Lead conversion: creates `pending-assignment` project; Admin Pending lists it with `submittedBy` populated.
+
 
 ## 🚨 **MANDATORY PRE-DEVELOPMENT CHECKLIST** 🚨
 

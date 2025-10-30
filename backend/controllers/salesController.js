@@ -3,12 +3,386 @@ const mongoose = require('mongoose');
 const Sales = require('../models/Sales');
 const Lead = require('../models/Lead');
 const LeadCategory = require('../models/LeadCategory');
+const Account = require('../models/Account');
+const PaymentReceipt = require('../models/PaymentReceipt');
+const SalesTask = require('../models/SalesTask');
+const SalesMeeting = require('../models/SalesMeeting');
+const Project = require('../models/Project');
+const Client = require('../models/Client');
+// Ensure LeadProfile model is registered before any populate calls
+require('../models/LeadProfile');
 
 // Generate JWT Token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '7d'
   });
+};
+
+// @desc    List active accounts for payments (sales read-only)
+// @route   GET /api/sales/accounts
+// @access  Private (Sales)
+const getAccounts = async (req, res) => {
+  try {
+    const accounts = await Account.find({ isActive: true }).select('name bankName accountNumber ifsc upiId');
+    res.json({ success: true, data: accounts, message: 'Accounts fetched' });
+  } catch (error) {
+    console.error('getAccounts error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch accounts' });
+  }
+};
+
+// Helper to safely cast id
+const safeObjectId = (value) => {
+  try { return new mongoose.Types.ObjectId(value); } catch { return value; }
+};
+
+// @desc    List receivables (projects for my converted clients) with filters
+// @route   GET /api/sales/payment-recovery
+// @access  Private (Sales)
+const getPaymentRecovery = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const { search = '', overdue, band } = req.query;
+
+    const clientMatch = { convertedBy: salesId };
+    if (search) {
+      clientMatch.$or = [
+        { name: new RegExp(search, 'i') },
+        { phoneNumber: new RegExp(search, 'i') }
+      ];
+    }
+
+    // Find clients converted by me
+    const myClients = await Client.find(clientMatch).select('_id name phoneNumber');
+    const clientIds = myClients.map(c => c._id);
+
+    const projectFilter = { client: { $in: clientIds } };
+    if (overdue === 'true') {
+      projectFilter.dueDate = { $lt: new Date() };
+    }
+
+    // Fetch projects and compute remaining based on financialDetails
+    const projects = await Project.find(projectFilter)
+      .select('client dueDate financialDetails')
+      .populate('client', 'name phoneNumber');
+
+    const bandFilter = (amount) => {
+      if (!band) return true;
+      if (band === 'high') return amount >= 10000;
+      if (band === 'medium') return amount >= 3000 && amount < 10000;
+      if (band === 'low') return amount < 3000;
+      return true;
+    };
+
+    const list = projects
+      .map(p => {
+        const rem = (p.financialDetails?.remainingAmount || 0);
+        return rem > 0 ? {
+          projectId: p._id,
+          clientId: p.client?._id,
+          clientName: p.client?.name,
+          phone: p.client?.phoneNumber,
+          dueDate: p.dueDate,
+          remainingAmount: rem
+        } : null;
+      })
+      .filter(Boolean)
+      .filter(r => bandFilter(r.remainingAmount));
+
+    res.json({ success: true, data: list, message: 'Receivables fetched' });
+  } catch (error) {
+    console.error('getPaymentRecovery error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch receivables' });
+  }
+};
+
+// @desc    Summary stats for receivables
+// @route   GET /api/sales/payment-recovery/stats
+const getPaymentRecoveryStats = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const myClients = await Client.find({ convertedBy: salesId }).select('_id');
+    const clientIds = myClients.map(c => c._id);
+    const projects = await Project.find({ client: { $in: clientIds } }).select('dueDate financialDetails');
+    let totalDue = 0, overdueCount = 0, overdueAmount = 0;
+    const now = new Date();
+    projects.forEach(p => {
+      const rem = p.financialDetails?.remainingAmount || 0;
+      totalDue += rem;
+      if (p.dueDate && p.dueDate < now && rem > 0) {
+        overdueCount += 1;
+        overdueAmount += rem;
+      }
+    });
+    res.json({ success: true, data: { totalDue, overdueCount, overdueAmount }, message: 'Stats fetched' });
+  } catch (error) {
+    console.error('getPaymentRecoveryStats error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch stats' });
+  }
+};
+
+// @desc    Create payment receipt (pending verification)
+// @route   POST /api/sales/payment-recovery/:projectId/receipts
+const createPaymentReceipt = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const { projectId } = req.params;
+    const { amount, accountId, method = 'upi', referenceId, notes } = req.body;
+
+    if (!amount || !accountId) {
+      return res.status(400).json({ success: false, message: 'Amount and account are required' });
+    }
+
+    const project = await Project.findById(projectId).populate('client');
+    if (!project) return res.status(404).json({ success: false, message: 'Project not found' });
+
+    // ensure client is converted by this sales user
+    const client = await Client.findById(project.client);
+    if (!client || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({ success: false, message: 'Not authorized for this client' });
+    }
+
+    const receipt = await PaymentReceipt.create({
+      client: client._id,
+      project: project._id,
+      amount,
+      account: accountId,
+      method,
+      referenceId,
+      notes,
+      createdBy: salesId,
+      status: 'pending'
+    });
+
+    res.status(201).json({ success: true, data: receipt, message: 'Receipt created and pending verification' });
+  } catch (error) {
+    console.error('createPaymentReceipt error:', error);
+    res.status(500).json({ success: false, message: 'Failed to create receipt' });
+  }
+};
+
+// Demo Requests
+// @desc    List my demo requests stored on leads.demoRequest
+// @route   GET /api/sales/demo-requests
+const getDemoRequests = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const { search = '', status, category } = req.query;
+    // Include leads marked via legacy status 'demo_requested' or with demoRequest subdoc
+    const filter = { 
+      assignedTo: salesId, 
+      $or: [
+        { 'demoRequest.status': { $exists: true } },
+        { status: 'demo_requested' }
+      ]
+    };
+    if (status && status !== 'all') filter['demoRequest.status'] = status;
+    if (category && category !== 'all') filter.category = safeObjectId(category);
+    if (search) filter.$or = [
+      { name: new RegExp(search, 'i') },
+      { company: new RegExp(search, 'i') },
+      { email: new RegExp(search, 'i') }
+    ];
+    let leads = await Lead.find(filter)
+      .populate('category', 'name color icon')
+      .populate('leadProfile', 'name businessName');
+    // Normalize: if demoRequest missing but status is demo_requested, treat as pending
+    leads = leads.map(l => {
+      if (!l.demoRequest || !l.demoRequest.status) {
+        if (l.status === 'demo_requested') {
+          l = l.toObject();
+          l.demoRequest = { status: 'pending' };
+          return l;
+        }
+      }
+      return l.toObject ? l.toObject() : l;
+    });
+    const stats = {
+      total: leads.length,
+      pending: leads.filter(l => l.demoRequest && l.demoRequest.status === 'pending').length,
+      scheduled: leads.filter(l => l.demoRequest && l.demoRequest.status === 'scheduled').length,
+      completed: leads.filter(l => l.demoRequest && l.demoRequest.status === 'completed').length
+    };
+    res.json({ success: true, data: { items: leads, stats }, message: 'Demo requests fetched' });
+  } catch (error) {
+    console.error('getDemoRequests error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch demo requests' });
+  }
+};
+
+// @desc    Update demo request status on a lead
+// @route   PATCH /api/sales/demo-requests/:leadId/status
+const updateDemoRequestStatus = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const { leadId } = req.params;
+    const { status } = req.body; // 'pending' | 'scheduled' | 'completed' | 'cancelled'
+    if (!['pending','scheduled','completed','cancelled'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+    const lead = await Lead.findOne({ _id: leadId, assignedTo: salesId });
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+    lead.demoRequest = { ...(lead.demoRequest||{}), status, updatedAt: new Date() };
+    await lead.save();
+    res.json({ success: true, data: lead, message: 'Demo status updated' });
+  } catch (error) {
+    console.error('updateDemoRequestStatus error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update demo status' });
+  }
+};
+
+// Sales Tasks CRUD
+const listSalesTasks = async (req, res) => {
+  try {
+    const owner = safeObjectId(req.sales.id);
+    const { search = '', filter = 'all' } = req.query;
+    const q = { owner };
+    if (search) {
+      q.$or = [{ title: new RegExp(search, 'i') }, { description: new RegExp(search, 'i') }];
+    }
+    if (['pending','completed'].includes(filter)) q.completed = filter === 'completed';
+    if (['high','medium','low'].includes(filter)) q.priority = filter;
+    const items = await SalesTask.find(q).sort({ createdAt: -1 });
+    const stats = {
+      total: await SalesTask.countDocuments({ owner }),
+      pending: await SalesTask.countDocuments({ owner, completed: false }),
+      completed: await SalesTask.countDocuments({ owner, completed: true }),
+      high: await SalesTask.countDocuments({ owner, completed: false, priority: 'high' })
+    };
+    res.json({ success: true, data: { items, stats }, message: 'Tasks fetched' });
+  } catch (error) {
+    console.error('listSalesTasks error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch tasks' });
+  }
+};
+
+const createSalesTask = async (req, res) => {
+  try {
+    const owner = safeObjectId(req.sales.id);
+    const task = await SalesTask.create({ owner, ...req.body });
+    res.status(201).json({ success: true, data: task, message: 'Task created' });
+  } catch (error) {
+    console.error('createSalesTask error:', error);
+    res.status(500).json({ success: false, message: 'Failed to create task' });
+  }
+};
+
+const updateSalesTask = async (req, res) => {
+  try {
+    const owner = safeObjectId(req.sales.id);
+    const task = await SalesTask.findOneAndUpdate({ _id: req.params.id, owner }, req.body, { new: true });
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+    res.json({ success: true, data: task, message: 'Task updated' });
+  } catch (error) {
+    console.error('updateSalesTask error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update task' });
+  }
+};
+
+const toggleSalesTask = async (req, res) => {
+  try {
+    const owner = safeObjectId(req.sales.id);
+    const task = await SalesTask.findOne({ _id: req.params.id, owner });
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+    task.completed = !task.completed;
+    await task.save();
+    res.json({ success: true, data: task, message: 'Task toggled' });
+  } catch (error) {
+    console.error('toggleSalesTask error:', error);
+    res.status(500).json({ success: false, message: 'Failed to toggle task' });
+  }
+};
+
+const deleteSalesTask = async (req, res) => {
+  try {
+    const owner = safeObjectId(req.sales.id);
+    const task = await SalesTask.findOneAndDelete({ _id: req.params.id, owner });
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+    res.json({ success: true, data: task, message: 'Task deleted' });
+  } catch (error) {
+    console.error('deleteSalesTask error:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete task' });
+  }
+};
+
+// Meetings
+const listSalesMeetings = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const { search = '', filter = 'all' } = req.query;
+    const q = { $or: [ { assignee: salesId }, { createdBy: salesId } ] };
+    if (search) {
+      q.$or = [ { location: new RegExp(search,'i') } ];
+    }
+    const items = await SalesMeeting.find(q)
+      .populate('client', 'name phoneNumber')
+      .populate('assignee', 'name');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const classify = (m) => {
+      const d = new Date(m.meetingDate).toISOString().split('T')[0];
+      if (d === todayStr) return 'today';
+      return (new Date(m.meetingDate) >= new Date()) ? 'upcoming' : 'completed';
+    };
+    const filtered = items.filter(m => filter === 'all' || classify(m) === filter);
+    const stats = {
+      total: items.length,
+      today: items.filter(m => classify(m) === 'today').length,
+      upcoming: items.filter(m => classify(m) === 'upcoming').length
+    };
+    res.json({ success: true, data: { items: filtered, stats }, message: 'Meetings fetched' });
+  } catch (error) {
+    console.error('listSalesMeetings error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch meetings' });
+  }
+};
+
+const createSalesMeeting = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const payload = { ...req.body, createdBy: salesId };
+    const meeting = await SalesMeeting.create(payload);
+    res.status(201).json({ success: true, data: meeting, message: 'Meeting created' });
+  } catch (error) {
+    console.error('createSalesMeeting error:', error);
+    res.status(500).json({ success: false, message: 'Failed to create meeting' });
+  }
+};
+
+const updateSalesMeeting = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const meeting = await SalesMeeting.findOneAndUpdate({ _id: req.params.id, createdBy: salesId }, req.body, { new: true });
+    if (!meeting) return res.status(404).json({ success: false, message: 'Meeting not found' });
+    res.json({ success: true, data: meeting, message: 'Meeting updated' });
+  } catch (error) {
+    console.error('updateSalesMeeting error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update meeting' });
+  }
+};
+
+const deleteSalesMeeting = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const meeting = await SalesMeeting.findOneAndDelete({ _id: req.params.id, createdBy: salesId });
+    if (!meeting) return res.status(404).json({ success: false, message: 'Meeting not found' });
+    res.json({ success: true, data: meeting, message: 'Meeting deleted' });
+  } catch (error) {
+    console.error('deleteSalesMeeting error:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete meeting' });
+  }
+};
+
+// Clients converted by me (for meetings dropdown)
+const getMyConvertedClients = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const clients = await Client.find({ convertedBy: salesId }).select('name phoneNumber');
+    res.json({ success: true, data: clients, message: 'Clients fetched' });
+  } catch (error) {
+    console.error('getMyConvertedClients error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch clients' });
+  }
 };
 
 // @desc    Login Sales
@@ -480,7 +854,10 @@ const getMyLeads = async (req, res) => {
     } = req.query;
 
     // Build filter object
-    let filter = { assignedTo: salesId };
+    // Ensure proper ObjectId for assignedTo in "get my leads" too
+    let myAssignedTo = salesId;
+    try { myAssignedTo = new mongoose.Types.ObjectId(salesId); } catch (_) { myAssignedTo = salesId; }
+    let filter = { assignedTo: myAssignedTo };
 
     if (status && status !== 'all') {
       filter.status = status;
@@ -579,8 +956,16 @@ const getLeadsByStatus = async (req, res) => {
     }
 
     // Build filter object
+    // Ensure proper ObjectId matching for assignedTo (with safe fallback)
+    let assignedToValue = salesId;
+    try {
+      assignedToValue = new mongoose.Types.ObjectId(salesId);
+    } catch (e) {
+      // Fallback to string matching if casting fails (should not happen in normal flow)
+      assignedToValue = salesId;
+    }
     let filter = { 
-      assignedTo: salesId,
+      assignedTo: assignedToValue,
       status: actualStatus 
     };
 
@@ -696,12 +1081,14 @@ const getLeadsByStatus = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get leads by status error:', error);
-    console.error('Error stack:', error.stack);
+    const errMsg = error && error.message ? error.message : String(error);
+    console.error('Get leads by status error:', errMsg);
+    if (error && error.stack) console.error(error.stack);
+    const isDev = process.env.NODE_ENV !== 'production';
     res.status(500).json({
       success: false,
-      message: 'Server error while fetching leads by status',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: isDev ? `Server error while fetching leads by status: ${errMsg}` : 'Server error while fetching leads by status',
+      error: isDev ? errMsg : undefined
     });
   }
 };
@@ -1030,89 +1417,101 @@ const updateLeadProfile = async (req, res) => {
   }
 };
 
-// @desc    Convert lead to client and create project
+// @desc    Convert lead to client and create project (pending-assignment)
 // @route   POST /api/sales/leads/:id/convert
 // @access  Private (Sales only)
 const convertLeadToClient = async (req, res) => {
   try {
     const { id } = req.params;
-    const { projectData } = req.body; // projectName, projectType, estimatedBudget, startDate
-    
+    const { projectData } = req.body; // { projectName, projectType, estimatedBudget, startDate, description }
+
     const lead = await Lead.findById(id).populate('leadProfile');
-    
+
     if (!lead) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lead not found'
-      });
+      return res.status(404).json({ success: false, message: 'Lead not found' });
     }
-    
-    // Verify lead belongs to sales employee
-    if (lead.assignedTo.toString() !== req.sales.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to convert this lead'
-      });
+
+    // Verify lead belongs to current sales employee
+    if (!lead.assignedTo || lead.assignedTo.toString() !== req.sales.id) {
+      return res.status(403).json({ success: false, message: 'Not authorized to convert this lead' });
     }
-    
+
     // Verify lead has profile
     if (!lead.leadProfile) {
-      return res.status(400).json({
-        success: false,
-        message: 'Lead must have a profile before conversion'
+      return res.status(400).json({ success: false, message: 'Lead must have a profile before conversion' });
+    }
+
+    // Idempotency: if a project already exists for this lead, return it
+    const Project = require('../models/Project');
+    const existingProject = await Project.findOne({ originLead: id }).populate('client');
+    if (lead.status === 'converted' && existingProject) {
+      return res.status(409).json({
+        success: true,
+        message: 'Lead already converted',
+        data: { client: existingProject.client, project: existingProject, lead }
       });
     }
-    
-    // Create Client from LeadProfile
+
+    // Upsert Client by phone number
     const Client = require('../models/Client');
-    const newClient = await Client.create({
-      phoneNumber: lead.phone,
-      name: lead.leadProfile.name || lead.name,
-      companyName: lead.leadProfile.businessName || lead.company,
-      email: lead.email,
-      isActive: true,
-      // OTP will be generated when client first logs in
-    });
-    
-    // Create Project
-    const Project = require('../models/Project');
+    const phoneNumber = lead.phone;
+    let client = await Client.findOne({ phoneNumber });
+    if (!client) {
+      client = await Client.create({
+        phoneNumber,
+        name: lead.leadProfile.name || lead.name || 'Client',
+        companyName: lead.leadProfile.businessName || lead.company || '',
+        email: lead.email || undefined,
+        isActive: true
+        // OTP is generated during client login via existing OTP flow
+      });
+    }
+
+    // Prepare project fields
+    const budget = (projectData && typeof projectData.estimatedBudget !== 'undefined')
+      ? Number(projectData.estimatedBudget) || 0
+      : (lead.leadProfile.estimatedCost || 0);
+
+    const name = projectData?.projectName || 'Sales Converted Project';
+    const description = projectData?.description || lead.leadProfile.description || 'Created from sales conversion';
+    const projectType = projectData?.projectType || lead.leadProfile.projectType || { web: false, app: false, taxi: false };
+    const startDate = projectData?.startDate ? new Date(projectData.startDate) : new Date();
+
+    // Create Project with pending-assignment status and submittedBy
     const newProject = await Project.create({
-      name: projectData.projectName,
-      description: lead.leadProfile.description || '',
-      client: newClient._id,
-      projectType: projectData.projectType || lead.leadProfile.projectType,
-      status: 'pending-assignment', // Admin needs to assign PM
-      estimatedBudget: projectData.estimatedBudget || lead.leadProfile.estimatedCost,
-      startDate: projectData.startDate || new Date(),
+      name,
+      description,
+      client: client._id,
+      projectType,
+      status: 'pending-assignment',
+      budget: budget,
+      startDate,
       submittedBy: req.sales.id,
-      submittedByModel: 'Sales'
+      originLead: lead._id
     });
-    
-    // Update lead status to converted
+
+    // Update lead status/value
     lead.status = 'converted';
-    lead.value = projectData.estimatedBudget || lead.leadProfile.estimatedCost || 0;
+    lead.value = budget;
+    lead.lastContactDate = new Date();
     await lead.save();
-    
+
     // Update sales stats
     const sales = await Sales.findById(req.sales.id);
-    await sales.updateLeadStats();
-    
-    res.status(201).json({
+    if (sales && sales.updateLeadStats) {
+      await sales.updateLeadStats();
+    }
+
+    // Respond
+    const populatedProject = await Project.findById(newProject._id).populate('client');
+    return res.status(201).json({
       success: true,
       message: 'Lead converted successfully',
-      data: {
-        client: newClient,
-        project: newProject,
-        lead: lead
-      }
+      data: { client, project: populatedProject, lead }
     });
-    
   } catch (error) {
     console.error('Convert lead error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error while converting lead'
-    });
+    return res.status(500).json({ success: false, message: 'Server error while converting lead' });
   }
 };
 
@@ -1373,5 +1772,23 @@ module.exports = {
   getSalesTeam,
   requestDemo,
   transferLead,
-  addNoteToLead
+  addNoteToLead,
+  getAccounts,
+  getPaymentRecovery,
+  getPaymentRecoveryStats,
+  createPaymentReceipt
+  ,
+  getDemoRequests,
+  updateDemoRequestStatus
+  ,
+  listSalesTasks,
+  createSalesTask,
+  updateSalesTask,
+  toggleSalesTask,
+  deleteSalesTask,
+  listSalesMeetings,
+  createSalesMeeting,
+  updateSalesMeeting,
+  deleteSalesMeeting,
+  getMyConvertedClients
 };
