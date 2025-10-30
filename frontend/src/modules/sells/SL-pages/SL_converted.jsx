@@ -11,7 +11,8 @@ import {
   FiMail,
   FiTag,
   FiLoader,
-  FiExternalLink
+  FiExternalLink,
+  FiMoreVertical
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 import { salesLeadService } from '../SL-services'
@@ -26,6 +27,7 @@ const SL_converted = () => {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [showActionsMenu, setShowActionsMenu] = useState(null)
   
   // State for real data
   const [leadsData, setLeadsData] = useState([])
@@ -116,7 +118,6 @@ const SL_converted = () => {
   }
 
   const handleProfile = (clientId) => {
-    console.log('Navigating to profile for client ID:', clientId)
     navigate(`/client-profile/${clientId}`)
   }
 
@@ -126,7 +127,7 @@ const SL_converted = () => {
   }
 
   // Mobile Client Card Component
-  const MobileClientCard = ({ client }) => {
+  const MobileClientCard = ({ client, showActionsMenu, setShowActionsMenu }) => {
     const categoryInfo = getCategoryInfo(client.category)
     
     return (
@@ -161,14 +162,14 @@ const SL_converted = () => {
 
         {/* Revenue */}
         <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-green-600">₹{(client.leadProfile?.estimatedCost || 0).toLocaleString()}</p>
+          <p className="text-sm font-bold text-green-600">₹{(client.project?.financialDetails?.totalCost || client.project?.budget || client.leadProfile?.estimatedCost || 0).toLocaleString()}</p>
         </div>
       </div>
 
       {/* Package Badge */}
       <div className="flex justify-between items-center">
         <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
-          {client.leadProfile?.projectType?.web ? 'Web' : client.leadProfile?.projectType?.app ? 'App' : client.leadProfile?.projectType?.taxi ? 'Taxi' : 'N/A'}
+          {client.project?.projectType?.web ? 'Web' : client.project?.projectType?.app ? 'App' : client.project?.projectType?.taxi ? 'Taxi' : client.leadProfile?.projectType?.web ? 'Web' : client.leadProfile?.projectType?.app ? 'App' : client.leadProfile?.projectType?.taxi ? 'Taxi' : 'N/A'}
         </span>
         <span className="text-xs text-gray-500">{client.updatedAt ? new Date(client.updatedAt).toLocaleDateString() : 'N/A'}</span>
       </div>
@@ -255,7 +256,7 @@ const SL_converted = () => {
   }
 
   // Desktop Client Card Component
-  const DesktopClientCard = ({ client }) => {
+  const DesktopClientCard = ({ client, showActionsMenu, setShowActionsMenu }) => {
     const categoryInfo = getCategoryInfo(client.category)
     
     return (
@@ -290,14 +291,14 @@ const SL_converted = () => {
 
         {/* Revenue */}
         <div className="text-right flex-shrink-0">
-          <p className="text-lg font-bold text-green-600">₹{(client.leadProfile?.estimatedCost || 0).toLocaleString()}</p>
+          <p className="text-lg font-bold text-green-600">₹{(client.project?.financialDetails?.totalCost || client.project?.budget || client.leadProfile?.estimatedCost || 0).toLocaleString()}</p>
         </div>
       </div>
 
       {/* Package & Date */}
       <div className="flex justify-between items-center">
         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          {client.leadProfile?.projectType?.web ? 'Web' : client.leadProfile?.projectType?.app ? 'App' : client.leadProfile?.projectType?.taxi ? 'Taxi' : 'N/A'}
+          {client.project?.projectType?.web ? 'Web' : client.project?.projectType?.app ? 'App' : client.project?.projectType?.taxi ? 'Taxi' : client.leadProfile?.projectType?.web ? 'Web' : client.leadProfile?.projectType?.app ? 'App' : client.leadProfile?.projectType?.taxi ? 'Taxi' : 'N/A'}
         </span>
         <span className="text-xs text-gray-500">{client.updatedAt ? new Date(client.updatedAt).toLocaleDateString() : 'N/A'}</span>
       </div>
@@ -580,7 +581,7 @@ const SL_converted = () => {
                   transition={{ duration: 0.3, delay: index * 0.05 }}
                   className="bg-white rounded-lg p-3 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
                 >
-                  <MobileClientCard client={lead} />
+                  <MobileClientCard client={lead} showActionsMenu={showActionsMenu} setShowActionsMenu={setShowActionsMenu} />
                 </motion.div>
                 ))
               )}
@@ -778,7 +779,7 @@ const SL_converted = () => {
                       transition={{ duration: 0.3, delay: index * 0.05 }}
                       className="bg-white rounded-lg p-4 shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300"
                     >
-                      <DesktopClientCard client={client} />
+                      <DesktopClientCard client={lead} showActionsMenu={showActionsMenu} setShowActionsMenu={setShowActionsMenu} />
                     </motion.div>
                     ))
                   )}
@@ -824,11 +825,17 @@ const SL_converted = () => {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-green-700 text-sm font-medium">Total Revenue</span>
-                    <span className="text-green-900 text-xl font-bold">₹{leadsData.length > 0 ? leadsData.reduce((sum, lead) => sum + (lead.leadProfile?.estimatedCost || 0), 0).toLocaleString() : '0'}</span>
+                    <span className="text-green-900 text-xl font-bold">₹{leadsData.length > 0 ? leadsData.reduce((sum, lead) => {
+                      const cost = lead.project?.financialDetails?.totalCost || lead.project?.budget || lead.leadProfile?.estimatedCost || 0;
+                      return sum + cost;
+                    }, 0).toLocaleString() : '0'}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-green-700 text-sm font-medium">Avg. Project Value</span>
-                    <span className="text-green-900 text-xl font-bold">₹{leadsData.length > 0 ? Math.round(leadsData.reduce((sum, lead) => sum + (lead.leadProfile?.estimatedCost || 0), 0) / leadsData.length).toLocaleString() : '0'}</span>
+                    <span className="text-green-900 text-xl font-bold">₹{leadsData.length > 0 ? Math.round(leadsData.reduce((sum, lead) => {
+                      const cost = lead.project?.financialDetails?.totalCost || lead.project?.budget || lead.leadProfile?.estimatedCost || 0;
+                      return sum + cost;
+                    }, 0) / leadsData.length).toLocaleString() : '0'}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-green-700 text-sm font-medium">This Month</span>

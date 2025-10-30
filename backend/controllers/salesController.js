@@ -37,6 +37,17 @@ const safeObjectId = (value) => {
   try { return new mongoose.Types.ObjectId(value); } catch { return value; }
 };
 
+// Helper: build last N months labels (ending current month)
+const getLastNMonths = (n) => {
+  const months = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: `${d.getFullYear()}-${d.getMonth() + 1}`, label: d.toLocaleString('en-US', { month: 'short' }), year: d.getFullYear(), monthIndex: d.getMonth() + 1 });
+  }
+  return months;
+};
+
 // @desc    List receivables (projects for my converted clients) with filters
 // @route   GET /api/sales/payment-recovery
 // @access  Private (Sales)
@@ -317,7 +328,8 @@ const listSalesMeetings = async (req, res) => {
     }
     const items = await SalesMeeting.find(q)
       .populate('client', 'name phoneNumber')
-      .populate('assignee', 'name');
+      .populate('assignee', 'name')
+      .sort({ meetingDate: 1, meetingTime: 1 });
     const todayStr = new Date().toISOString().split('T')[0];
     const classify = (m) => {
       const d = new Date(m.meetingDate).toISOString().split('T')[0];
@@ -352,7 +364,19 @@ const createSalesMeeting = async (req, res) => {
 const updateSalesMeeting = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
-    const meeting = await SalesMeeting.findOneAndUpdate({ _id: req.params.id, createdBy: salesId }, req.body, { new: true });
+    const updateData = { ...req.body };
+    
+    // If status is being set to completed, add completedAt timestamp
+    if (updateData.status === 'completed' && !updateData.completedAt) {
+      updateData.completedAt = new Date();
+    }
+    
+    const meeting = await SalesMeeting.findOneAndUpdate(
+      { _id: req.params.id, createdBy: salesId }, 
+      updateData, 
+      { new: true }
+    ).populate('client', 'name phoneNumber').populate('assignee', 'name');
+    
     if (!meeting) return res.status(404).json({ success: false, message: 'Meeting not found' });
     res.json({ success: true, data: meeting, message: 'Meeting updated' });
   } catch (error) {
@@ -377,7 +401,41 @@ const deleteSalesMeeting = async (req, res) => {
 const getMyConvertedClients = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
-    const clients = await Client.find({ convertedBy: salesId }).select('name phoneNumber');
+    const Project = require('../models/Project');
+    
+    // First, get clients directly converted by this sales employee
+    let clientIds = new Set();
+    const directClients = await Client.find({ convertedBy: salesId }).select('_id');
+    directClients.forEach(c => clientIds.add(c._id.toString()));
+    
+    // Also find clients through projects submitted by this sales employee
+    // (for backward compatibility - projects have submittedBy field)
+    const projects = await Project.find({ submittedBy: salesId }).select('client');
+    projects.forEach(p => {
+      if (p.client) {
+        clientIds.add(p.client.toString());
+      }
+    });
+    
+    // Also find clients through converted leads assigned to this sales employee
+    // (additional way to find clients if convertedBy wasn't set)
+    const convertedLeads = await Lead.find({ 
+      assignedTo: salesId, 
+      status: 'converted' 
+    }).select('phone');
+    
+    if (convertedLeads.length > 0) {
+      const phoneNumbers = convertedLeads.map(l => l.phone).filter(Boolean);
+      const clientsFromLeads = await Client.find({ phoneNumber: { $in: phoneNumbers } }).select('_id');
+      clientsFromLeads.forEach(c => clientIds.add(c._id.toString()));
+    }
+    
+    // Fetch all unique clients
+    const clientIdArray = Array.from(clientIds).map(id => safeObjectId(id));
+    const clients = await Client.find({ _id: { $in: clientIdArray } })
+      .select('name phoneNumber companyName email')
+      .sort({ name: 1 });
+    
     res.json({ success: true, data: clients, message: 'Clients fetched' });
   } catch (error) {
     console.error('getMyConvertedClients error:', error);
@@ -768,6 +826,132 @@ const debugLeads = async (req, res) => {
   }
 };
 
+// @desc    Get tile card statistics for dashboard
+// @route   GET /api/sales/dashboard/tile-stats
+// @access  Private (Sales only)
+const getTileCardStats = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+    const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+    const yesterdayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+
+    // 1. Payment Recovery Stats
+    const myClients = await Client.find({ convertedBy: salesId }).select('_id');
+    const clientIds = myClients.map(c => c._id);
+    const projects = await Project.find({ client: { $in: clientIds } }).select('dueDate financialDetails updatedAt createdAt');
+    
+    // Count pending payments (projects with remainingAmount > 0)
+    let pendingPayments = 0;
+    let paymentsThisWeek = 0;
+    const allPendingProjects = [];
+    
+    projects.forEach(p => {
+      const rem = p.financialDetails?.remainingAmount || 0;
+      if (rem > 0) {
+        pendingPayments += 1;
+        allPendingProjects.push(p);
+      }
+    });
+    
+    // Count payments added this week (new projects with pending payments created this week)
+    paymentsThisWeek = allPendingProjects.filter(p => {
+      const createdDate = p.createdAt || p.updatedAt;
+      return createdDate && createdDate >= weekStart;
+    }).length;
+
+    // 2. Demo Requests Stats
+    const demoRequests = await Lead.find({ 
+      assignedTo: salesId,
+      $or: [
+        { 'demoRequest.status': { $exists: true } },
+        { status: 'demo_requested' }
+      ]
+    });
+    
+    let newDemoRequests = 0;
+    let demosToday = 0;
+    demoRequests.forEach(lead => {
+      const demoStatus = lead.demoRequest?.status || (lead.status === 'demo_requested' ? 'pending' : null);
+      if (demoStatus === 'pending' || demoStatus === 'new') {
+        newDemoRequests += 1;
+      }
+      // Check if created today
+      if (lead.createdAt && lead.createdAt >= todayStart && lead.createdAt <= todayEnd) {
+        demosToday += 1;
+      }
+    });
+
+    // 3. Tasks Stats
+    const allTasks = await SalesTask.find({ owner: salesId });
+    const pendingTasks = allTasks.filter(t => !t.completed).length;
+    
+    // Count completed tasks today
+    const tasksCompletedToday = allTasks.filter(t => 
+      t.completed && 
+      t.updatedAt && 
+      t.updatedAt >= todayStart && 
+      t.updatedAt <= todayEnd
+    ).length;
+    
+    // Count completed tasks yesterday
+    const tasksCompletedYesterday = allTasks.filter(t => 
+      t.completed && 
+      t.updatedAt && 
+      t.updatedAt >= yesterdayStart && 
+      t.updatedAt <= yesterdayEnd
+    ).length;
+    
+    const tasksChange = tasksCompletedToday - tasksCompletedYesterday;
+
+    // 4. Meetings Stats
+    const allMeetings = await SalesMeeting.find({
+      $or: [
+        { assignee: salesId },
+        { createdBy: salesId }
+      ]
+    });
+    
+    const todayMeetings = allMeetings.filter(m => {
+      const meetingDate = new Date(m.meetingDate);
+      return meetingDate >= todayStart && meetingDate <= todayEnd && m.status !== 'cancelled';
+    }).length;
+    
+    const upcomingMeetings = allMeetings.filter(m => {
+      const meetingDate = new Date(m.meetingDate);
+      return meetingDate > todayEnd && m.status === 'scheduled';
+    }).length;
+
+    res.json({
+      success: true,
+      data: {
+        paymentRecovery: {
+          pending: pendingPayments,
+          changeThisWeek: paymentsThisWeek
+        },
+        demoRequests: {
+          new: newDemoRequests,
+          today: demosToday
+        },
+        tasks: {
+          pending: pendingTasks,
+          change: tasksChange
+        },
+        meetings: {
+          today: todayMeetings,
+          upcoming: upcomingMeetings
+        }
+      }
+    });
+  } catch (error) {
+    console.error('getTileCardStats error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch tile card stats' });
+  }
+};
+
 // @desc    Get sales dashboard statistics
 // @route   GET /api/sales/dashboard/statistics
 // @access  Private (Sales only)
@@ -802,7 +986,8 @@ const getSalesDashboardStats = async (req, res) => {
       converted: 0,
       lost: 0,
       hot: 0,
-      demo_requested: 0
+      demo_requested: 0,
+      not_interested: 0
     };
 
     // Map aggregation results to status counts
@@ -833,6 +1018,61 @@ const getSalesDashboardStats = async (req, res) => {
       success: false,
       message: 'Server error while fetching dashboard statistics'
     });
+  }
+};
+
+// @desc    Monthly conversions for bar chart (last N months)
+// @route   GET /api/sales/analytics/conversions/monthly
+// @access  Private (Sales only)
+const getMonthlyConversions = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const months = Math.min(parseInt(req.query.months || '12', 10) || 12, 24);
+    const salesObjectId = new mongoose.Types.ObjectId(salesId);
+
+    // Use convertedAt if present else updatedAt
+    const dateField = '$convertedAt';
+
+    const since = new Date();
+    since.setMonth(since.getMonth() - (months - 1));
+    since.setDate(1);
+    since.setHours(0,0,0,0);
+
+    const agg = await Lead.aggregate([
+      { $match: { assignedTo: salesObjectId, status: 'converted', $or: [ { convertedAt: { $exists: true } }, { updatedAt: { $exists: true } } ] } },
+      { $addFields: { metricDate: { $ifNull: ['$convertedAt', '$updatedAt'] } } },
+      { $match: { metricDate: { $gte: since } } },
+      { $group: {
+          _id: {
+            y: { $year: '$metricDate' },
+            m: { $month: '$metricDate' }
+          },
+          converted: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Build 12-month series with zeros filled
+    const frames = getLastNMonths(months);
+    const map = new Map();
+    agg.forEach(r => {
+      map.set(`${r._id.y}-${r._id.m}`, r.converted);
+    });
+
+    const items = frames.map(f => ({
+      month: f.label,
+      year: f.year,
+      converted: map.get(`${f.year}-${f.monthIndex}`) || 0
+    }));
+
+    const totalConverted = items.reduce((s, x) => s + x.converted, 0);
+    const best = items.reduce((b, x) => (x.converted > (b?.converted || 0) ? { label: x.month, converted: x.converted } : b), { label: items[0]?.month || '', converted: items[0]?.converted || 0 });
+    const avgRate = items.length ? Number((totalConverted / items.length).toFixed(1)) : 0;
+
+    res.status(200).json({ success: true, data: { items, best, avgRate, totalConverted } });
+  } catch (error) {
+    console.error('Get monthly conversions error:', error);
+    res.status(500).json({ success: false, message: 'Server error while fetching monthly conversions' });
   }
 };
 
@@ -941,7 +1181,7 @@ const getLeadsByStatus = async (req, res) => {
     } = req.query;
 
     // Validate status (with backward compatibility for today_followup)
-    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested'];
+    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested', 'not_interested'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -1061,12 +1301,38 @@ const getLeadsByStatus = async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const leads = await Lead.find(filter)
+    let leads = await Lead.find(filter)
       .populate('category', 'name color icon')
       .populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum);
+
+    // For converted leads, populate associated project with financial details
+    if (status === 'converted') {
+      const Project = require('../models/Project');
+      const leadIds = leads.map(lead => lead._id);
+      const projects = await Project.find({ originLead: { $in: leadIds } })
+        .select('originLead financialDetails budget projectType');
+      
+      // Create a map of leadId -> project
+      const projectMap = {};
+      projects.forEach(project => {
+        if (project.originLead) {
+          projectMap[project.originLead.toString()] = project;
+        }
+      });
+      
+      // Attach project data to each lead
+      leads = leads.map(lead => {
+        const leadObj = lead.toObject();
+        const project = projectMap[lead._id.toString()];
+        if (project) {
+          leadObj.project = project;
+        }
+        return leadObj;
+      });
+    }
 
     const totalLeads = await Lead.countDocuments(filter);
 
@@ -1141,7 +1407,7 @@ const updateLeadStatus = async (req, res) => {
     const { status, notes, followupDate, followupTime, priority } = req.body;
 
     // Validate status (with backward compatibility for today_followup)
-    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested'];
+    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested', 'not_interested'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -1170,18 +1436,19 @@ const updateLeadStatus = async (req, res) => {
 
     // Validate status transition
     const validTransitions = {
-      'new': ['connected', 'not_picked', 'lost'],
-      'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
-      'not_picked': ['connected', 'followup', 'lost'],
-      'followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
-      'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
-      'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
-      'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'lost'],
-      'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'lost'],
-      'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost'],
-      'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
-      'converted': [], // Terminal state
-      'lost': ['connected'] // Can be recovered and connected
+      'new': ['connected', 'not_picked', 'not_interested', 'lost'],
+      'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'],
+      'not_picked': ['connected', 'followup', 'not_interested', 'lost'],
+      'followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'],
+      'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+      'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+      'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+      'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'not_interested', 'lost'],
+      'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'not_interested', 'lost'],
+      'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+      'converted': [],
+      'lost': ['connected'],
+      'not_interested': ['connected']
     };
 
     if (!validTransitions[lead.status].includes(actualStatus)) {
@@ -1195,6 +1462,11 @@ const updateLeadStatus = async (req, res) => {
     const oldStatus = lead.status;
     lead.status = actualStatus;
     lead.lastContactDate = new Date();
+
+    // If converting, stamp convertedAt if missing
+    if (actualStatus === 'converted' && !lead.convertedAt) {
+      lead.convertedAt = new Date();
+    }
 
     // Handle follow-up scheduling
     if (actualStatus === 'followup' && followupDate && followupTime) {
@@ -1423,8 +1695,26 @@ const updateLeadProfile = async (req, res) => {
 const convertLeadToClient = async (req, res) => {
   try {
     const { id } = req.params;
-    const { projectData } = req.body; // { projectName, projectType, estimatedBudget, startDate, description }
+    
+    // Handle both FormData and JSON requests
+    let projectData;
+    if (req.body.projectData) {
+      // JSON request
+      projectData = req.body.projectData;
+    } else {
+      // FormData request - parse fields
+      projectData = {
+        projectName: req.body.projectName,
+        projectType: req.body.projectType ? (typeof req.body.projectType === 'string' ? JSON.parse(req.body.projectType) : req.body.projectType) : { web: false, app: false, taxi: false },
+        totalCost: req.body.totalCost ? parseFloat(req.body.totalCost) : 0,
+        finishedDays: req.body.finishedDays ? parseInt(req.body.finishedDays) : undefined,
+        advanceReceived: req.body.advanceReceived ? parseFloat(req.body.advanceReceived) : 0,
+        includeGST: req.body.includeGST === 'true' || req.body.includeGST === true,
+        description: req.body.description || ''
+      };
+    }
 
+    const { uploadToCloudinary } = require('../services/cloudinaryService');
     const lead = await Lead.findById(id).populate('leadProfile');
 
     if (!lead) {
@@ -1462,38 +1752,110 @@ const convertLeadToClient = async (req, res) => {
         name: lead.leadProfile.name || lead.name || 'Client',
         companyName: lead.leadProfile.businessName || lead.company || '',
         email: lead.email || undefined,
-        isActive: true
+        isActive: true,
+        convertedBy: req.sales.id,
+        conversionDate: new Date(),
+        originLead: lead._id
         // OTP is generated during client login via existing OTP flow
       });
+    } else {
+      // Update existing client with conversion info if not already set
+      if (!client.convertedBy) {
+        client.convertedBy = req.sales.id;
+        client.conversionDate = new Date();
+        client.originLead = lead._id;
+        await client.save();
+      }
     }
 
     // Prepare project fields
-    const budget = (projectData && typeof projectData.estimatedBudget !== 'undefined')
-      ? Number(projectData.estimatedBudget) || 0
-      : (lead.leadProfile.estimatedCost || 0);
+    const totalCost = projectData?.totalCost ? Number(projectData.totalCost) : (lead.leadProfile.estimatedCost || 0);
+    const advanceReceived = projectData?.advanceReceived ? Number(projectData.advanceReceived) : 0;
+    const includeGST = projectData?.includeGST || false;
+    const remainingAmount = totalCost - advanceReceived;
 
     const name = projectData?.projectName || 'Sales Converted Project';
     const description = projectData?.description || lead.leadProfile.description || 'Created from sales conversion';
     const projectType = projectData?.projectType || lead.leadProfile.projectType || { web: false, app: false, taxi: false };
-    const startDate = projectData?.startDate ? new Date(projectData.startDate) : new Date();
+    const finishedDays = projectData?.finishedDays ? parseInt(projectData.finishedDays) : undefined;
+
+    // Handle screenshot upload if present
+    let screenshotAttachment = null;
+    if (req.file) {
+      try {
+        // Check if Cloudinary is configured
+        const cloudinaryConfig = process.env.CLOUDINARY_CLOUD_NAME && 
+                                 process.env.CLOUDINARY_API_KEY && 
+                                 process.env.CLOUDINARY_API_SECRET;
+        
+        if (!cloudinaryConfig) {
+          console.warn('Cloudinary not configured, skipping screenshot upload');
+        } else {
+          const uploadResult = await uploadToCloudinary(req.file, 'projects/conversions');
+          
+          // Check if upload was successful
+          if (uploadResult.success && uploadResult.data) {
+            const result = uploadResult.data;
+            screenshotAttachment = {
+              public_id: result.public_id,
+              secure_url: result.secure_url,
+              originalName: result.original_filename || req.file.originalname,
+              original_filename: result.original_filename || req.file.originalname,
+              format: result.format,
+              size: result.bytes,
+              bytes: result.bytes,
+              width: result.width,
+              height: result.height,
+              resource_type: 'image',
+              uploadedAt: new Date()
+            };
+          } else {
+            console.warn('Screenshot upload failed:', uploadResult.error || 'Unknown error');
+            // Continue without screenshot if upload fails
+          }
+        }
+      } catch (uploadError) {
+        console.error('Error uploading screenshot:', uploadError.message || uploadError);
+        // Continue without screenshot if upload fails - conversion should still succeed
+      }
+    }
 
     // Create Project with pending-assignment status and submittedBy
-    const newProject = await Project.create({
+    const projectFields = {
       name,
       description,
       client: client._id,
       projectType,
       status: 'pending-assignment',
-      budget: budget,
-      startDate,
+      budget: totalCost,
+      startDate: new Date(),
       submittedBy: req.sales.id,
-      originLead: lead._id
-    });
+      originLead: lead._id,
+      financialDetails: {
+        totalCost,
+        advanceReceived,
+        includeGST,
+        remainingAmount
+      }
+    };
+
+    if (finishedDays) {
+      projectFields.finishedDays = finishedDays;
+    }
+
+    if (screenshotAttachment) {
+      projectFields.attachments = [screenshotAttachment];
+    }
+
+    const newProject = await Project.create(projectFields);
 
     // Update lead status/value
     lead.status = 'converted';
-    lead.value = budget;
+    lead.value = totalCost;
     lead.lastContactDate = new Date();
+    if (!lead.convertedAt) {
+      lead.convertedAt = new Date();
+    }
     await lead.save();
 
     // Update sales stats
@@ -1511,7 +1873,7 @@ const convertLeadToClient = async (req, res) => {
     });
   } catch (error) {
     console.error('Convert lead error:', error);
-    return res.status(500).json({ success: false, message: 'Server error while converting lead' });
+    return res.status(500).json({ success: false, message: 'Server error while converting lead', error: error.message });
   }
 };
 
@@ -1761,7 +2123,11 @@ module.exports = {
   createLeadBySales,
   getLeadCategories,
   debugLeads,
+  getTileCardStats,
   getSalesDashboardStats,
+  // alias export for new route path
+  getDashboardStats: getSalesDashboardStats,
+  getMonthlyConversions,
   getMyLeads,
   getLeadsByStatus,
   getLeadDetail,

@@ -1,19 +1,11 @@
 const { cloudinary, uploadToCloudinary, deleteFromCloudinary, getFileInfo } = require('../config/cloudinary');
 const multer = require('multer');
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// Configure multer with Cloudinary storage
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'appzeto',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'],
-    transformation: [{ width: 1000, height: 1000, crop: 'limit' }],
-    resource_type: 'auto'
-  }
-});
+// Use memory storage instead of CloudinaryStorage to handle uploads manually
+// This allows us to check Cloudinary config before uploading
+const storage = multer.memoryStorage();
 
-// Multer configuration
+// Multer configuration with memory storage
 const upload = multer({
   storage: storage,
   limits: {

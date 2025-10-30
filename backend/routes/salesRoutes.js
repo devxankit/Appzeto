@@ -8,6 +8,8 @@ const {
   getLeadCategories,
   debugLeads,
   getSalesDashboardStats,
+  getDashboardStats,
+  getMonthlyConversions,
   getMyLeads,
   getLeadsByStatus,
   getLeadDetail,
@@ -21,6 +23,7 @@ const {
   addNoteToLead
 } = require('../controllers/salesController');
 const { protect } = require('../middlewares/auth');
+const upload = require('../middlewares/upload');
 
 const router = express.Router();
 
@@ -45,7 +48,12 @@ router.get('/lead-categories', getLeadCategories);
 
 // Dashboard & Statistics
 router.get('/debug/leads', debugLeads);
+router.get('/dashboard/tile-stats', require('../controllers/salesController').getTileCardStats);
 router.get('/dashboard/statistics', getSalesDashboardStats);
+// Alias path per plan
+router.get('/dashboard/stats', getDashboardStats);
+// Monthly conversions for bar chart
+router.get('/analytics/conversions/monthly', getMonthlyConversions);
 
 // Lead Management
 router.get('/leads', getMyLeads);
@@ -58,7 +66,7 @@ router.post('/leads/:id/profile', createLeadProfile);
 router.put('/leads/:id/profile', updateLeadProfile);
 
 // Lead Conversion
-router.post('/leads/:id/convert', convertLeadToClient);
+router.post('/leads/:id/convert', upload.single('screenshot'), convertLeadToClient);
 
 // Team Management
 router.get('/team', getSalesTeam);

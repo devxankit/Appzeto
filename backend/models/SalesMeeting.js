@@ -8,7 +8,13 @@ const salesMeetingSchema = new mongoose.Schema({
   meetingTime: { type: String, required: true },
   meetingType: { type: String, enum: ['in-person', 'video', 'phone'], default: 'in-person' },
   location: { type: String, trim: true },
-  notes: { type: String, trim: true }
+  notes: { type: String, trim: true },
+  status: { 
+    type: String, 
+    enum: ['scheduled', 'completed', 'cancelled'], 
+    default: 'scheduled' 
+  },
+  completedAt: { type: Date }
 }, { timestamps: true });
 
 salesMeetingSchema.index({ assignee: 1, meetingDate: 1 });

@@ -193,7 +193,6 @@ const SL_app_client = () => {
   }
 
   const handleProfile = (leadId) => {
-    console.log('Navigating to profile for lead ID:', leadId)
     navigate(`/lead-profile/${leadId}`)
   }
 
@@ -338,7 +337,7 @@ const SL_app_client = () => {
                       Converted
                     </button>
                     <button
-                      onClick={() => handleStatusChange(lead._id, 'lost')}
+                    onClick={() => handleStatusChange(lead._id, 'not_interested')}
                       className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
                     >
                       Not Interested
@@ -494,7 +493,7 @@ const SL_app_client = () => {
                       Converted
                     </button>
                     <button
-                      onClick={() => handleStatusChange(lead._id, 'lost')}
+                    onClick={() => handleStatusChange(lead._id, 'not_interested')}
                       className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
                     >
                       Not Interested

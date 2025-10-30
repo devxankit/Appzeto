@@ -14,7 +14,8 @@ import {
   FiMapPin,
   FiVideo,
   FiPhone,
-  FiFilter
+  FiFilter,
+  FiCheckCircle
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 import { salesMeetingsService } from '../SL-services'
@@ -49,7 +50,8 @@ const SL_meetings = () => {
     { id: 'all', label: 'All Meetings' },
     { id: 'today', label: 'Today' },
     { id: 'upcoming', label: 'Upcoming' },
-    { id: 'completed', label: 'Completed' }
+    { id: 'completed', label: 'Completed' },
+    { id: 'scheduled', label: 'Scheduled' }
   ]
 
   const meetingTypes = [
@@ -70,10 +72,14 @@ const SL_meetings = () => {
       ])
       setMeetings(res.items || [])
       setStats(res.stats || { total: 0, today: 0, upcoming: 0 })
-      setClients(cl || [])
-      setSalesTeam(team || [])
+      setClients(Array.isArray(cl) ? cl : [])
+      setSalesTeam(Array.isArray(team) ? team : [])
     } catch (e) {
       console.error('Fetch meetings failed', e)
+      // Set empty arrays on error
+      setMeetings([])
+      setClients([])
+      setSalesTeam([])
     } finally {
       setIsLoading(false)
     }
@@ -94,7 +100,28 @@ const SL_meetings = () => {
     return 'text-green-600'
   }
 
-  const handleAddMeeting = () => {
+  const getStatusColor = (status) => {
+    if (status === 'completed') return 'bg-green-100 text-green-700 border-green-300'
+    if (status === 'cancelled') return 'bg-red-100 text-red-700 border-red-300'
+    return 'bg-blue-100 text-blue-700 border-blue-300'
+  }
+
+  const getStatusLabel = (status) => {
+    if (status === 'completed') return 'Completed'
+    if (status === 'cancelled') return 'Cancelled'
+    return 'Scheduled'
+  }
+
+  const handleMarkAsCompleted = async (meetingId) => {
+    try {
+      await salesMeetingsService.update(meetingId, { status: 'completed' })
+      fetchMeetings()
+    } catch (e) {
+      console.error('Mark as completed failed', e)
+    }
+  }
+
+  const handleAddMeeting = async () => {
     setEditingMeeting(null)
     setMeetingForm({
       clientName: '',
@@ -105,19 +132,27 @@ const SL_meetings = () => {
       notes: '',
       assigneeId: ''
     })
+    // Refresh clients list when opening dialog
+    try {
+      const cl = await salesMeetingsService.getMyConvertedClients()
+      setClients(Array.isArray(cl) ? cl : [])
+    } catch (e) {
+      console.error('Failed to fetch clients:', e)
+      setClients([])
+    }
     setShowMeetingDialog(true)
   }
 
   const handleEditMeeting = (meeting) => {
     setEditingMeeting(meeting)
     setMeetingForm({
-      clientName: meeting.client?.name || meeting.clientName,
-      meetingDate: meeting.meetingDate,
-      meetingTime: meeting.meetingTime,
-      meetingType: meeting.meetingType,
-      location: meeting.location,
-      notes: meeting.notes,
-      assigneeId: meeting.assignee?._id || ''
+      clientName: meeting.client?.name || meeting.clientName || '',
+      meetingDate: meeting.meetingDate || '',
+      meetingTime: meeting.meetingTime || '',
+      meetingType: meeting.meetingType || 'in-person',
+      location: meeting.location || '',
+      notes: meeting.notes || '',
+      assigneeId: meeting.assignee?._id || meeting.assignee || ''
     })
     setShowMeetingDialog(true)
   }
@@ -142,7 +177,7 @@ const SL_meetings = () => {
       assignee: meetingForm.assigneeId
       }
       if (editingMeeting) {
-        await salesMeetingsService.update(editingMeeting._id, payload)
+        await salesMeetingsService.update(editingMeeting._id || editingMeeting.id, payload)
       } else {
         await salesMeetingsService.create(payload)
       }
@@ -300,22 +335,41 @@ const SL_meetings = () => {
               <p className="text-gray-400 text-sm">Try adjusting your search terms or filters</p>
             </div>
           ) : (
-            filteredMeetings.map((meeting) => {
+            filteredMeetings.map((meeting, index) => {
               const TypeIcon = getMeetingTypeIcon(meeting.meetingType)
+              const meetingId = meeting.id || meeting._id || `meeting-${index}`
               return (
                 <div
-                  key={meeting.id}
+                  key={meetingId}
                   className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
                 >
                   <div className="flex items-center justify-between">
                     {/* Left Section - Meeting Info */}
                     <div className="flex-1 min-w-0">
-                      {/* Client Name and Time */}
+                      {/* Client Name and Status */}
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-bold text-gray-900 text-base leading-tight">
-                          {meeting.clientName}
-                        </h3>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-gray-900 text-base leading-tight">
+                            {meeting.clientName || meeting.client?.name || 'Unknown Client'}
+                          </h3>
+                          {/* Status Badge */}
+                          <div className="mt-1">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(meeting.status || 'scheduled')}`}>
+                              {meeting.status === 'completed' && <FiCheckCircle className="w-3 h-3 mr-1" />}
+                              {getStatusLabel(meeting.status || 'scheduled')}
+                            </span>
+                          </div>
+                        </div>
                         <div className="flex items-center space-x-2 ml-4">
+                          {meeting.status !== 'completed' && (
+                            <button
+                              onClick={() => handleMarkAsCompleted(meeting.id || meeting._id)}
+                              className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors duration-200"
+                              title="Mark as Completed"
+                            >
+                              <FiCheckCircle className="text-sm" />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleEditMeeting(meeting)}
                             className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-200"
@@ -324,7 +378,7 @@ const SL_meetings = () => {
                             <FiEdit2 className="text-sm" />
                           </button>
                           <button
-                            onClick={() => handleDeleteMeeting(meeting.id)}
+                            onClick={() => handleDeleteMeeting(meeting.id || meeting._id)}
                             className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-200"
                             title="Delete Meeting"
                           >
@@ -355,7 +409,7 @@ const SL_meetings = () => {
                       {meeting.assignee && (
                         <div className="flex items-center space-x-1 text-gray-600 mt-2">
                           <FiUser className="text-sm" />
-                          <span className="text-xs">Assigned to: {meeting.assignee}</span>
+                          <span className="text-xs">Assigned to: {typeof meeting.assignee === 'string' ? meeting.assignee : (meeting.assignee?.name || 'Unknown')}</span>
                         </div>
                       )}
 
@@ -387,7 +441,8 @@ const SL_meetings = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl p-4 sm:p-6 w-full max-w-lg mx-4 sm:mx-0 shadow-2xl max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl p-4 sm:p-6 w-full max-w-lg mx-4 sm:mx-0 shadow-2xl max-h-[90vh] overflow-y-auto relative"
+              onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
               <div className="flex items-center justify-between mb-4 sm:mb-6">
@@ -410,13 +465,15 @@ const SL_meetings = () => {
               {/* Form */}
               <div className="space-y-4 sm:space-y-5">
                 {/* Client Name */}
-                <div className="relative">
+                <div className="relative z-10">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Client Name *
                   </label>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
                       setShowClientDropdown(!showClientDropdown)
                       setShowMeetingTypeDropdown(false)
                       setShowAssigneeDropdown(false)
@@ -440,30 +497,47 @@ const SL_meetings = () => {
 
                   {/* Client Dropdown */}
                   {showClientDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg"
+                    <div
+                      className="absolute z-[9999] w-full mt-1 bg-white border-2 border-teal-500 rounded-xl shadow-2xl max-h-60 overflow-y-auto"
+                      style={{ top: '100%', left: 0 }}
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <div className="py-1">
-                        {clients.map((client) => (
-                          <button
-                            key={client._id}
-                            type="button"
-                            onClick={() => handleClientSelect(client.name)}
-                            className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-left hover:bg-gray-50 transition-colors duration-200 text-sm sm:text-base ${
-                              meetingForm.clientName === client.name ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
-                            }`}
-                          >
-                            <div className="flex items-center space-x-2">
-                              <FiUser className="w-4 h-4 text-gray-500" />
-                              <span className="font-medium">{client.name}</span>
-                            </div>
-                          </button>
-                        ))}
+                        {!clients || !Array.isArray(clients) || clients.length === 0 ? (
+                          <div className="px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-gray-500 text-center">
+                            <p>No converted clients found</p>
+                            <p className="text-xs mt-1">Convert a lead to client first</p>
+                          </div>
+                        ) : (
+                          clients.map((client, index) => {
+                            const clientId = client._id || client.id || `client-${index}`
+                            const clientName = client.name || client.Name || 'Unknown Client'
+                            return (
+                              <button
+                                key={clientId}
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  handleClientSelect(clientName)
+                                }}
+                                className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 text-left hover:bg-gray-50 transition-colors duration-200 text-sm sm:text-base border-b border-gray-100 last:border-b-0 ${
+                                  meetingForm.clientName === clientName ? 'bg-teal-50 text-teal-700' : 'text-gray-900'
+                                }`}
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <FiUser className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                  <span className="font-medium truncate">{clientName}</span>
+                                  {client.companyName && (
+                                    <span className="text-xs text-gray-500 truncate">({client.companyName})</span>
+                                  )}
+                                </div>
+                              </button>
+                            )
+                          })
+                        )}
                       </div>
-                    </motion.div>
+                    </div>
                   )}
                 </div>
 

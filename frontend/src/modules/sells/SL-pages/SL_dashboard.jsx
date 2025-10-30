@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Sparklines, SparklinesLine, SparklinesSpots } from 'react-sparklines'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
@@ -40,6 +40,7 @@ import {
 import SL_navbar from '../SL-components/SL_navbar'
 import { Link } from 'react-router-dom'
 import { colors, gradients } from '../../../lib/colors'
+import { salesAnalyticsService } from '../SL-services'
 
 const SL_dashboard = () => {
   // Refs for scroll-triggered animations
@@ -61,30 +62,92 @@ const SL_dashboard = () => {
     }, 4000)
   }
 
-  // Lead conversion chart data - showing conversion funnel
-  const chartData = [
-    { name: 'Connected', value: 80, color: '#06B6D4', amount: '80 leads' },
-    { name: 'Converted', value: 40, color: '#10B981', amount: '40 leads' },
-    { name: 'Lost', value: 28, color: '#EF4444', amount: '28 leads' },
-    { name: 'Not Interested', value: 15, color: '#F59E0B', amount: '15 leads' },
-    { name: 'Not Picked', value: 12, color: '#8B5CF6', amount: '12 leads' }
-  ]
+  // Live stats state
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [statsError, setStatsError] = useState(null)
+  const [totalLeads, setTotalLeads] = useState(0)
+  const [funnelData, setFunnelData] = useState([
+    { name: 'Connected', key: 'connected', value: 0, color: '#06B6D4', amount: '0 leads' },
+    { name: 'Converted', key: 'converted', value: 0, color: '#10B981', amount: '0 leads' },
+    { name: 'Lost', key: 'lost', value: 0, color: '#EF4444', amount: '0 leads' },
+    { name: 'Not Interested', key: 'not_interested', value: 0, color: '#F59E0B', amount: '0 leads' },
+    { name: 'Not Picked', key: 'not_picked', value: 0, color: '#8B5CF6', amount: '0 leads' }
+  ])
 
-  // Monthly conversion data for bar chart - 12 months for scrolling
-  const monthlyData = [
-    { month: 'Jan', totalLeads: 120, converted: 15, conversionRate: 12.5 },
-    { month: 'Feb', totalLeads: 135, converted: 18, conversionRate: 13.3 },
-    { month: 'Mar', totalLeads: 148, converted: 22, conversionRate: 14.9 },
-    { month: 'Apr', totalLeads: 142, converted: 20, conversionRate: 14.1 },
-    { month: 'May', totalLeads: 156, converted: 25, conversionRate: 16.0 },
-    { month: 'Jun', totalLeads: 148, converted: 40, conversionRate: 27.0 },
-    { month: 'Jul', totalLeads: 165, converted: 35, conversionRate: 21.2 },
-    { month: 'Aug', totalLeads: 158, converted: 28, conversionRate: 17.7 },
-    { month: 'Sep', totalLeads: 172, converted: 32, conversionRate: 18.6 },
-    { month: 'Oct', totalLeads: 168, converted: 38, conversionRate: 22.6 },
-    { month: 'Nov', totalLeads: 175, converted: 42, conversionRate: 24.0 },
-    { month: 'Dec', totalLeads: 180, converted: 45, conversionRate: 25.0 }
-  ]
+  // Tile card stats state
+  const [tileStats, setTileStats] = useState({
+    paymentRecovery: { pending: 0, changeThisWeek: 0 },
+    demoRequests: { new: 0, today: 0 },
+    tasks: { pending: 0, change: 0 },
+    meetings: { today: 0, upcoming: 0 }
+  })
+  const [tileStatsLoading, setTileStatsLoading] = useState(true)
+
+  // Monthly conversions state
+  const [monthlyLoading, setMonthlyLoading] = useState(true)
+  const [monthlyError, setMonthlyError] = useState(null)
+  const [monthlyData, setMonthlyData] = useState([])
+  const [bestMonth, setBestMonth] = useState({ label: '-', converted: 0 })
+  const [avgRate, setAvgRate] = useState(0)
+  const [totalConverted, setTotalConverted] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      try {
+        setStatsLoading(true)
+        const s = await salesAnalyticsService.getDashboardStats()
+        if (!active) return
+        const statusCounts = s?.data?.statusCounts || {}
+        const total = s?.data?.totalLeads ?? Object.values(statusCounts).reduce((a,b)=>a+b,0)
+        setTotalLeads(total)
+        setFunnelData(prev => prev.map(row => {
+          const val = Number(statusCounts[row.key] || 0)
+          return { ...row, value: total ? Math.round((val/total)*100) : 0, amount: `${val} leads` }
+        }))
+        setStatsError(null)
+      } catch (e) {
+        setStatsError(e?.message || 'Failed to load dashboard stats')
+      } finally {
+        setStatsLoading(false)
+      }
+
+      try {
+        setMonthlyLoading(true)
+        const m = await salesAnalyticsService.getMonthlyConversions({ months: 12 })
+        if (!active) return
+        const items = m?.data?.items || []
+        setMonthlyData(items)
+        setBestMonth(m?.data?.best || { label: '-', converted: 0 })
+        setAvgRate(m?.data?.avgRate || 0)
+        setTotalConverted(m?.data?.totalConverted || 0)
+        setMonthlyError(null)
+      } catch (e) {
+        setMonthlyError(e?.message || 'Failed to load monthly conversions')
+      } finally {
+        setMonthlyLoading(false)
+      }
+
+      // Load tile card stats
+      try {
+        setTileStatsLoading(true)
+        const tileData = await salesAnalyticsService.getTileCardStats()
+        if (!active) return
+        setTileStats(tileData?.data || {
+          paymentRecovery: { pending: 0, changeThisWeek: 0 },
+          demoRequests: { new: 0, today: 0 },
+          tasks: { pending: 0, change: 0 },
+          meetings: { today: 0, upcoming: 0 }
+        })
+      } catch (e) {
+        console.error('Failed to load tile card stats:', e)
+      } finally {
+        setTileStatsLoading(false)
+      }
+    }
+    load()
+    return () => { active = false }
+  }, [])
 
   // Sparkline data for sales trends
   const salesTrendData = [2.1, 2.3, 2.5, 2.2, 2.8, 2.6, 2.9, 2.7, 2.85]
@@ -417,14 +480,20 @@ const SL_dashboard = () => {
                     <h3 className="font-bold text-sm mb-1.5 leading-tight text-emerald-800">Payment Recovery</h3>
                     <div className="flex items-center justify-center space-x-2 mb-2.5">
                       <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                      <p className="text-xs font-semibold opacity-95 text-emerald-700">12 Pendings</p>
+                      <p className="text-xs font-semibold opacity-95 text-emerald-700">{tileStats.paymentRecovery.pending} Pendings</p>
                     </div>
                   </div>
                   
                   {/* Enhanced Trend Section */}
                   <div className="flex items-center justify-center space-x-1.5 mt-auto bg-emerald-100 rounded-lg px-2.5 py-1.5">
-                    <FaArrowUp className="text-xs text-emerald-600" />
-                    <span className="text-xs font-semibold text-emerald-600">+2 this week</span>
+                    {tileStats.paymentRecovery.changeThisWeek >= 0 ? (
+                      <FaArrowUp className="text-xs text-emerald-600" />
+                    ) : (
+                      <FaArrowDown className="text-xs text-emerald-600" />
+                    )}
+                    <span className="text-xs font-semibold text-emerald-600">
+                      {tileStats.paymentRecovery.changeThisWeek >= 0 ? '+' : ''}{tileStats.paymentRecovery.changeThisWeek} this week
+                    </span>
                   </div>
                 </div>
               </div>
@@ -457,14 +526,18 @@ const SL_dashboard = () => {
                     <h3 className="font-bold text-sm mb-1.5 leading-tight text-blue-800">Demo Requests</h3>
                     <div className="flex items-center justify-center space-x-2 mb-2.5">
                       <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shadow-sm"></div>
-                      <p className="text-xs font-semibold opacity-95 text-blue-700">5 New</p>
+                      <p className="text-xs font-semibold opacity-95 text-blue-700">{tileStats.demoRequests.new} New</p>
                     </div>
                   </div>
                   
                   {/* Enhanced Trend Section */}
                   <div className="flex items-center justify-center space-x-1.5 mt-auto bg-blue-100 rounded-lg px-2.5 py-1.5">
-                    <FaArrowUp className="text-xs text-blue-600" />
-                    <span className="text-xs font-semibold text-blue-600">+3 today</span>
+                    {tileStats.demoRequests.today > 0 ? (
+                      <FaArrowUp className="text-xs text-blue-600" />
+                    ) : null}
+                    <span className="text-xs font-semibold text-blue-600">
+                      {tileStats.demoRequests.today > 0 ? '+' : ''}{tileStats.demoRequests.today} today
+                    </span>
                   </div>
                 </div>
               </div>
@@ -497,14 +570,20 @@ const SL_dashboard = () => {
                     <h3 className="font-bold text-sm mb-1.5 leading-tight text-purple-800">Tasks</h3>
                     <div className="flex items-center justify-center space-x-2 mb-2.5">
                       <div className="w-2 h-2 bg-purple-500 rounded-full shadow-sm"></div>
-                      <p className="text-xs font-semibold opacity-95 text-purple-700">8 Pending</p>
+                      <p className="text-xs font-semibold opacity-95 text-purple-700">{tileStats.tasks.pending} Pending</p>
                     </div>
                   </div>
                   
                   {/* Enhanced Trend Section */}
                   <div className="flex items-center justify-center space-x-1.5 mt-auto bg-purple-100 rounded-lg px-2.5 py-1.5">
-                    <FaArrowDown className="text-xs text-purple-600" />
-                    <span className="text-xs font-semibold text-purple-600">-1 completed</span>
+                    {tileStats.tasks.change >= 0 ? (
+                      <FaArrowUp className="text-xs text-purple-600" />
+                    ) : (
+                      <FaArrowDown className="text-xs text-purple-600" />
+                    )}
+                    <span className="text-xs font-semibold text-purple-600">
+                      {tileStats.tasks.change >= 0 ? '+' : ''}{tileStats.tasks.change} completed
+                    </span>
                   </div>
                 </div>
               </div>
@@ -537,14 +616,14 @@ const SL_dashboard = () => {
                     <h3 className="font-bold text-sm mb-1.5 leading-tight text-orange-800">Meetings</h3>
                     <div className="flex items-center justify-center space-x-2 mb-2.5">
                       <div className="w-2 h-2 bg-orange-500 rounded-full shadow-sm"></div>
-                      <p className="text-xs font-semibold opacity-95 text-orange-700">3 Today</p>
+                      <p className="text-xs font-semibold opacity-95 text-orange-700">{tileStats.meetings.today} Today</p>
                     </div>
                   </div>
                   
                   {/* Enhanced Trend Section */}
                   <div className="flex items-center justify-center space-x-1.5 mt-auto bg-orange-100 rounded-lg px-2.5 py-1.5">
                     <FaClock className="text-xs text-orange-600" />
-                    <span className="text-xs font-semibold text-orange-600">2 upcoming</span>
+                    <span className="text-xs font-semibold text-orange-600">{tileStats.meetings.upcoming} upcoming</span>
                   </div>
                 </div>
               </div>
@@ -576,7 +655,7 @@ const SL_dashboard = () => {
                 <div className="relative">
                   <PieChart width={240} height={240}>
                     <Pie
-                      data={chartData}
+                      data={funnelData}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
@@ -584,7 +663,7 @@ const SL_dashboard = () => {
                       paddingAngle={2}
                       dataKey="value"
                     >
-                      {chartData.map((entry, index) => (
+                      {funnelData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -593,7 +672,7 @@ const SL_dashboard = () => {
                   {/* Center Text */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-gray-900">175</p>
+                      <p className="text-2xl font-bold text-gray-900">{totalLeads}</p>
                       <p className="text-xs text-gray-600">Total Leads</p>
                     </div>
                   </div>
@@ -602,7 +681,7 @@ const SL_dashboard = () => {
 
               {/* Enhanced Legend */}
               <div className="space-y-3">
-                {chartData.map((item, index) => (
+                {funnelData.map((item, index) => (
                   <motion.div 
                     key={index}
                     initial={{ opacity: 0, x: -30 }}
@@ -648,8 +727,8 @@ const SL_dashboard = () => {
                      <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
                      <p className="text-xs font-semibold text-emerald-700">Conversion Rate</p>
                    </div>
-                   <p className="text-base font-bold text-emerald-900">22.9%</p>
-                   <p className="text-xs text-emerald-600">40/175 converted</p>
+                   <p className="text-base font-bold text-emerald-900">{totalLeads ? Math.round(((Number((funnelData.find(f=>f.key==='converted')?.amount||'0').split(' ')[0]))/totalLeads)*100) : 0}%</p>
+                   <p className="text-xs text-emerald-600">{(funnelData.find(f=>f.key==='converted')?.amount)||'0 leads'} converted</p>
                  </div>
                  
                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200/50">
@@ -657,8 +736,8 @@ const SL_dashboard = () => {
                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                      <p className="text-xs font-semibold text-blue-700">Connected Rate</p>
                    </div>
-                   <p className="text-base font-bold text-blue-900">45.7%</p>
-                   <p className="text-xs text-blue-600">80/175 connected</p>
+                   <p className="text-base font-bold text-blue-900">{totalLeads ? Math.round(((Number((funnelData.find(f=>f.key==='connected')?.amount||'0').split(' ')[0]))/totalLeads)*100) : 0}%</p>
+                   <p className="text-xs text-blue-600">{(funnelData.find(f=>f.key==='connected')?.amount)||'0 leads'} connected</p>
                  </div>
                </motion.div>
              </div>
@@ -734,17 +813,17 @@ const SL_dashboard = () => {
              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                <div className="bg-emerald-50 rounded-md p-2 border border-emerald-200/50">
                  <p className="text-xs font-semibold text-emerald-700 mb-0.5">Best Month</p>
-                 <p className="text-xs font-bold text-emerald-900">Dec</p>
-                 <p className="text-xs text-emerald-600">45 converted</p>
+                 <p className="text-xs font-bold text-emerald-900">{bestMonth.label}</p>
+                 <p className="text-xs text-emerald-600">{bestMonth.converted} converted</p>
                </div>
                <div className="bg-blue-50 rounded-md p-2 border border-blue-200/50">
                  <p className="text-xs font-semibold text-blue-700 mb-0.5">Avg Conversion</p>
-                 <p className="text-xs font-bold text-blue-900">19.8%</p>
+                 <p className="text-xs font-bold text-blue-900">{avgRate}</p>
                  <p className="text-xs text-blue-600">per month</p>
                </div>
                <div className="bg-purple-50 rounded-md p-2 border border-purple-200/50">
                  <p className="text-xs font-semibold text-purple-700 mb-0.5">Total Converted</p>
-                 <p className="text-xs font-bold text-purple-900">360</p>
+                 <p className="text-xs font-bold text-purple-900">{totalConverted}</p>
                  <p className="text-xs text-purple-600">12 months</p>
                </div>
              </div>
@@ -852,11 +931,17 @@ const SL_dashboard = () => {
                     <h3 className="font-semibold text-sm mb-1 leading-tight">Payment Recovery</h3>
                     <div className="flex items-center space-x-2 mb-1">
                       <div className="w-2 h-2 bg-white bg-opacity-60 rounded-full flex-shrink-0"></div>
-                      <p className="text-xs font-medium opacity-95 truncate">12 Pendings</p>
+                      <p className="text-xs font-medium opacity-95 truncate">{tileStats.paymentRecovery.pending} Pendings</p>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
-                      <span className="text-xs opacity-75 font-medium">+2 this week</span>
+                      {tileStats.paymentRecovery.changeThisWeek >= 0 ? (
+                        <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
+                      ) : (
+                        <FaArrowDown className="text-xs opacity-70 flex-shrink-0" />
+                      )}
+                      <span className="text-xs opacity-75 font-medium">
+                        {tileStats.paymentRecovery.changeThisWeek >= 0 ? '+' : ''}{tileStats.paymentRecovery.changeThisWeek} this week
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -872,11 +957,15 @@ const SL_dashboard = () => {
                     <h3 className="font-semibold text-sm mb-1 leading-tight">Demo Requests</h3>
                     <div className="flex items-center space-x-2 mb-1">
                       <div className="w-2 h-2 bg-white rounded-full animate-pulse shadow-sm flex-shrink-0"></div>
-                      <p className="text-xs font-medium opacity-95 truncate">5 New</p>
+                      <p className="text-xs font-medium opacity-95 truncate">{tileStats.demoRequests.new} New</p>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
-                      <span className="text-xs opacity-75 font-medium">+3 today</span>
+                      {tileStats.demoRequests.today > 0 && (
+                        <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
+                      )}
+                      <span className="text-xs opacity-75 font-medium">
+                        {tileStats.demoRequests.today > 0 ? '+' : ''}{tileStats.demoRequests.today} today
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -892,11 +981,17 @@ const SL_dashboard = () => {
                     <h3 className="font-semibold text-sm mb-1 leading-tight">Tasks</h3>
                     <div className="flex items-center space-x-2 mb-1">
                       <div className="w-2 h-2 bg-yellow-200 rounded-full shadow-sm flex-shrink-0"></div>
-                      <p className="text-xs font-medium opacity-95 truncate">8 Pending</p>
+                      <p className="text-xs font-medium opacity-95 truncate">{tileStats.tasks.pending} Pending</p>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <FaArrowDown className="text-xs opacity-70 flex-shrink-0" />
-                      <span className="text-xs opacity-75 font-medium">-1 completed</span>
+                      {tileStats.tasks.change >= 0 ? (
+                        <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
+                      ) : (
+                        <FaArrowDown className="text-xs opacity-70 flex-shrink-0" />
+                      )}
+                      <span className="text-xs opacity-75 font-medium">
+                        {tileStats.tasks.change >= 0 ? '+' : ''}{tileStats.tasks.change} completed
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -911,11 +1006,11 @@ const SL_dashboard = () => {
                     <h3 className="font-semibold text-sm mb-1 leading-tight">Meetings</h3>
                     <div className="flex items-center space-x-2 mb-1">
                       <div className="w-2 h-2 bg-green-200 rounded-full shadow-sm flex-shrink-0"></div>
-                      <p className="text-xs font-medium opacity-95 truncate">3 Today</p>
+                      <p className="text-xs font-medium opacity-95 truncate">{tileStats.meetings.today} Today</p>
                     </div>
                     <div className="flex items-center space-x-1">
                       <FaClock className="text-xs opacity-70 flex-shrink-0" />
-                      <span className="text-xs opacity-75 font-medium">2 upcoming</span>
+                      <span className="text-xs opacity-75 font-medium">{tileStats.meetings.upcoming} upcoming</span>
                     </div>
                   </div>
                 </div>
@@ -936,7 +1031,7 @@ const SL_dashboard = () => {
                 <div className="relative">
                   <PieChart width={300} height={300}>
                     <Pie
-                      data={chartData}
+                      data={funnelData}
                       cx="50%"
                       cy="50%"
                       innerRadius={80}
@@ -944,7 +1039,7 @@ const SL_dashboard = () => {
                       paddingAngle={2}
                       dataKey="value"
                     >
-                      {chartData.map((entry, index) => (
+                      {funnelData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -953,7 +1048,7 @@ const SL_dashboard = () => {
                   {/* Center Text */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-3xl font-bold text-gray-900">175</p>
+                      <p className="text-3xl font-bold text-gray-900">{totalLeads}</p>
                       <p className="text-sm text-gray-600">Total Leads</p>
                     </div>
                   </div>
@@ -963,7 +1058,7 @@ const SL_dashboard = () => {
               {/* Legend */}
               <div className="flex-1 pl-8">
                 <div className="space-y-4">
-                  {chartData.map((item, index) => (
+                  {funnelData.map((item, index) => (
                     <div key={index} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200/50 hover:shadow-md transition-all duration-300">
                       <div className="flex items-center space-x-4">
                         <div 

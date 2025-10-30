@@ -30,7 +30,8 @@ export const getDashboardStatistics = async () => {
         converted: 0,
         lost: 0,
         hot: 0,
-        demo_requested: 0
+        demo_requested: 0,
+        not_interested: 0
       },
       totalLeads: 0
     };
@@ -171,11 +172,48 @@ export const updateLeadProfile = async (leadId, profileData) => {
 
 export const convertLeadToClient = async (leadId, projectData) => {
   try {
-    const response = await apiRequest(`/sales/leads/${leadId}/convert`, {
-      method: 'POST',
-      body: JSON.stringify({ projectData })
-    });
-    return response.data;
+    const token = localStorage.getItem('salesToken');
+    const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/sales/leads/${leadId}/convert`;
+    
+    // Check if screenshot file exists
+    if (projectData.screenshot && projectData.screenshot instanceof File) {
+      // Use FormData for file upload
+      const formData = new FormData();
+      
+      // Append all fields to FormData
+      formData.append('projectName', projectData.projectName || '');
+      formData.append('projectType', JSON.stringify(projectData.projectType || { web: false, app: false, taxi: false }));
+      formData.append('totalCost', projectData.totalCost || 0);
+      if (projectData.finishedDays) formData.append('finishedDays', projectData.finishedDays);
+      formData.append('advanceReceived', projectData.advanceReceived || 0);
+      formData.append('includeGST', projectData.includeGST || false);
+      formData.append('description', projectData.description || '');
+      formData.append('screenshot', projectData.screenshot);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: formData,
+        credentials: 'include'
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Something went wrong');
+      }
+      
+      return data.data || data;
+    } else {
+      // Use JSON for regular request
+      const response = await apiRequest(`/sales/leads/${leadId}/convert`, {
+        method: 'POST',
+        body: JSON.stringify({ projectData })
+      });
+      return response.data;
+    }
   } catch (error) {
     console.error('Error converting lead:', error);
     throw error;
@@ -208,6 +246,7 @@ export const getStatusDisplayName = (status) => {
     'web': 'Web',
     'converted': 'Converted',
     'lost': 'Lost',
+    'not_interested': 'Not Interested',
     'hot': 'Hot',
     'demo_requested': 'Demo Requested'
   };
@@ -227,6 +266,7 @@ export const getStatusColor = (status) => {
     'web': 'bg-cyan-100 text-cyan-800',
     'converted': 'bg-emerald-100 text-emerald-800',
     'lost': 'bg-red-100 text-red-800',
+    'not_interested': 'bg-orange-100 text-orange-800',
     'hot': 'bg-orange-100 text-orange-800',
     'demo_requested': 'bg-teal-100 text-teal-800'
   };
@@ -235,19 +275,20 @@ export const getStatusColor = (status) => {
 
 export const getValidStatusTransitions = (currentStatus) => {
   const transitions = {
-    'new': ['connected', 'not_picked', 'lost'],
-    'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
-    'not_picked': ['connected', 'followup', 'lost'],
-    'followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
-    'today_followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'], // Backward compatibility
-    'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
-    'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
-    'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'lost'],
-    'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'lost'],
-    'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost'],
-    'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
-    'converted': [], // Terminal state
-    'lost': ['connected'] // Can be recovered and connected
+    'new': ['connected', 'not_picked', 'not_interested', 'lost'],
+    'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'],
+    'not_picked': ['connected', 'followup', 'not_interested', 'lost'],
+    'followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'],
+    'today_followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'], // Backward compatibility
+    'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'not_interested', 'lost'],
+    'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'converted': [],
+    'lost': ['connected'],
+    'not_interested': ['connected']
   };
   return transitions[currentStatus] || [];
 };

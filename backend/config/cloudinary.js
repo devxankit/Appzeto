@@ -24,19 +24,35 @@ const testCloudinaryConnection = async () => {
 // Upload file to Cloudinary
 const uploadToCloudinary = async (file, folder = 'appzeto') => {
   try {
-    const result = await cloudinary.uploader.upload(file.path, {
-      folder: folder,
-      resource_type: 'auto',
-      quality: 'auto',
-      fetch_format: 'auto'
-    });
+    let result;
+    
+    if (file.buffer) {
+      // Memory storage - upload from buffer using data URI format
+      const dataUri = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+      result = await cloudinary.uploader.upload(dataUri, {
+        folder: folder,
+        resource_type: 'auto',
+        quality: 'auto',
+        fetch_format: 'auto'
+      });
+    } else if (file.path) {
+      // Disk storage - upload from path
+      result = await cloudinary.uploader.upload(file.path, {
+        folder: folder,
+        resource_type: 'auto',
+        quality: 'auto',
+        fetch_format: 'auto'
+      });
+    } else {
+      throw new Error('File must have either buffer or path property');
+    }
     
     return {
       success: true,
       data: {
         public_id: result.public_id,
         secure_url: result.secure_url,
-        original_filename: result.original_filename,
+        original_filename: result.original_filename || file.originalname,
         format: result.format,
         bytes: result.bytes,
         width: result.width,

@@ -147,7 +147,6 @@ const SL_hot_leads = () => {
   }
 
   const handleProfile = (leadId) => {
-    console.log('Navigating to profile for lead ID:', leadId)
     navigate(`/lead-profile/${leadId}`)
   }
 

@@ -200,7 +200,7 @@ const SL_newLeads = () => {
 
   const handleNotInterested = async (leadId) => {
     try {
-      await salesLeadService.updateLeadStatus(leadId, 'lost', 'Not interested')
+      await salesLeadService.updateLeadStatus(leadId, 'not_interested', 'Not interested')
       toast.success('Lead marked as not interested')
       // Refresh leads data
       fetchLeads()
@@ -218,7 +218,7 @@ const SL_newLeads = () => {
   const confirmDelete = async () => {
     if (leadToDelete) {
       try {
-        await salesLeadService.updateLeadStatus(leadToDelete, 'lost', 'Not interested')
+        await salesLeadService.updateLeadStatus(leadToDelete, 'not_interested', 'Not interested')
         toast({
           title: 'Success',
           description: 'Lead marked as not interested',

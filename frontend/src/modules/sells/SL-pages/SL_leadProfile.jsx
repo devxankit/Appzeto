@@ -82,9 +82,12 @@ const SL_leadProfile = () => {
   const [conversionData, setConversionData] = useState({
     projectName: '',
     projectType: { web: false, app: false, taxi: false },
-    estimatedBudget: '',
-    startDate: '',
-    description: ''
+    totalCost: '',
+    finishedDays: '',
+    advanceReceived: '',
+    includeGST: false,
+    description: '',
+    screenshot: null
   })
   const [lostReason, setLostReason] = useState('')
   const [showTypeDropdown, setShowTypeDropdown] = useState(false)
@@ -161,9 +164,12 @@ const SL_leadProfile = () => {
             app: lp?.projectType?.app || false,
             taxi: lp?.projectType?.taxi || false
           },
-          estimatedBudget: lp?.estimatedCost?.toString() || '',
-          startDate: new Date().toISOString().split('T')[0],
-          description: lp?.description || ''
+          totalCost: lp?.estimatedCost?.toString() || '',
+          finishedDays: '',
+          advanceReceived: '',
+          includeGST: false,
+          description: lp?.description || '',
+          screenshot: null
         })
         
         setMeetingForm(prev => ({
@@ -640,33 +646,46 @@ const SL_leadProfile = () => {
       toast.error('Please enter project name')
       return
     }
-    if (!conversionData.estimatedBudget.trim() || parseFloat(conversionData.estimatedBudget) < 0) {
-      toast.error('Please enter a valid estimated budget')
+    if (!conversionData.totalCost.trim() || parseFloat(conversionData.totalCost) < 0) {
+      toast.error('Please enter a valid total cost')
       return
     }
     if (!conversionData.projectType.web && !conversionData.projectType.app && !conversionData.projectType.taxi) {
       toast.error('Please select at least one project type')
       return
     }
-    if (!conversionData.startDate) {
-      toast.error('Please select a start date')
-      return
-    }
 
     setIsLoading(true)
     try {
-      // Transform form data to match backend API structure
+      // Prepare project data
       const projectData = {
         projectName: conversionData.projectName.trim(),
         projectType: conversionData.projectType,
-        estimatedBudget: parseFloat(conversionData.estimatedBudget) || 0,
-        startDate: conversionData.startDate || new Date().toISOString()
+        totalCost: parseFloat(conversionData.totalCost) || 0,
+        finishedDays: conversionData.finishedDays ? parseInt(conversionData.finishedDays) : undefined,
+        advanceReceived: conversionData.advanceReceived ? parseFloat(conversionData.advanceReceived) : 0,
+        includeGST: conversionData.includeGST || false,
+        description: conversionData.description.trim() || '',
+        screenshot: conversionData.screenshot || null
       }
 
       await salesLeadService.convertLeadToClient(id, projectData)
       
       toast.success('Lead converted to client successfully')
       setShowConvertedDialog(false)
+      
+      // Reset form
+      setConversionData({
+        projectName: '',
+        projectType: { web: false, app: false, taxi: false },
+        totalCost: '',
+        finishedDays: '',
+        advanceReceived: '',
+        includeGST: false,
+        description: '',
+        screenshot: null
+      })
+      
       navigate('/leads')
       
       // Refresh dashboard stats if available
@@ -1005,17 +1024,72 @@ const SL_leadProfile = () => {
 
               {/* Form Fields */}
               <div className="space-y-4">
+                {/* Client Name - Pre-filled, Read-only */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Client Name</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiUser className="text-lg" />
+                    </div>
+                    <input
+                      type="text"
+                      value={displayName}
+                      readOnly
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-900 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
                 {/* Project Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Project Name <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    value={conversionData.projectName}
-                    onChange={(e) => setConversionData({ ...conversionData, projectName: e.target.value })}
-                    placeholder="Enter project name"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    required
-                  />
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiFolder className="text-lg" />
+                    </div>
+                    <input
+                      type="text"
+                      value={conversionData.projectName}
+                      onChange={(e) => setConversionData({ ...conversionData, projectName: e.target.value })}
+                      placeholder="Project name"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Phone Number - Pre-filled, Read-only */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiPhone className="text-lg" />
+                    </div>
+                    <input
+                      type="text"
+                      value={displayPhone}
+                      readOnly
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-900 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                {/* Finished Days */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Finished Days</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiCalendar className="text-lg" />
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      value={conversionData.finishedDays}
+                      onChange={(e) => setConversionData({ ...conversionData, finishedDays: e.target.value })}
+                      placeholder="Finished days"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                    />
+                  </div>
                 </div>
 
                 {/* Project Type */}
@@ -1030,7 +1104,7 @@ const SL_leadProfile = () => {
                           ...conversionData,
                           projectType: { ...conversionData.projectType, web: e.target.checked }
                         })}
-                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                        className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
                       />
                       <span className="ml-2 text-sm text-gray-700">Web</span>
                     </label>
@@ -1042,7 +1116,7 @@ const SL_leadProfile = () => {
                           ...conversionData,
                           projectType: { ...conversionData.projectType, app: e.target.checked }
                         })}
-                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                        className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
                       />
                       <span className="ml-2 text-sm text-gray-700">App</span>
                     </label>
@@ -1054,65 +1128,139 @@ const SL_leadProfile = () => {
                           ...conversionData,
                           projectType: { ...conversionData.projectType, taxi: e.target.checked }
                         })}
-                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                        className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
                       />
                       <span className="ml-2 text-sm text-gray-700">Taxi</span>
                     </label>
                   </div>
                 </div>
 
-                {/* Estimated Budget */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Budget <span className="text-red-500">*</span></label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={conversionData.estimatedBudget}
-                    onChange={(e) => setConversionData({ ...conversionData, estimatedBudget: e.target.value })}
-                    placeholder="Enter estimated budget"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    required
-                  />
-                </div>
-
-                {/* Start Date */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date <span className="text-red-500">*</span></label>
-                  <input
-                    type="date"
-                    value={conversionData.startDate}
-                    onChange={(e) => setConversionData({ ...conversionData, startDate: e.target.value })}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    required
-                  />
-                </div>
-
                 {/* Description */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <textarea
-                    value={conversionData.description}
-                    onChange={(e) => setConversionData({ ...conversionData, description: e.target.value })}
-                    placeholder="Enter project description (optional)"
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  />
+                  <div className="relative">
+                    <div className="absolute left-3 top-3 text-teal-600">
+                      <FiFileText className="text-lg" />
+                    </div>
+                    <textarea
+                      value={conversionData.description}
+                      onChange={(e) => setConversionData({ ...conversionData, description: e.target.value })}
+                      placeholder="Description"
+                      rows={3}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 resize-none"
+                    />
+                  </div>
                 </div>
 
-                <div className="flex justify-end space-x-3 pt-2">
-                  <button
-                    onClick={() => setShowConvertedDialog(false)}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                {/* Total Cost */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Total Cost <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiDollarSign className="text-lg" />
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={conversionData.totalCost}
+                      onChange={(e) => setConversionData({ ...conversionData, totalCost: e.target.value })}
+                      placeholder="Total cost"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Advance Received */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Advance Received</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiCheck className="text-lg" />
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={conversionData.advanceReceived}
+                      onChange={(e) => setConversionData({ ...conversionData, advanceReceived: e.target.value })}
+                      placeholder="Advance received"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+
+                {/* Upload Screenshot */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Upload Screenshot</label>
+                  <div
+                    onClick={() => document.getElementById('screenshot-upload').click()}
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-teal-500 transition-colors duration-200"
                   >
-                    Cancel
-                  </button>
+                    <input
+                      id="screenshot-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0]
+                        if (file) {
+                          setConversionData({ ...conversionData, screenshot: file })
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    {conversionData.screenshot ? (
+                      <div className="space-y-2">
+                        <FiImage className="text-4xl text-teal-600 mx-auto" />
+                        <p className="text-sm text-gray-700">{conversionData.screenshot.name}</p>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setConversionData({ ...conversionData, screenshot: null })
+                            document.getElementById('screenshot-upload').value = ''
+                          }}
+                          className="text-xs text-red-600 hover:text-red-800"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <FiUpload className="text-4xl text-gray-400 mx-auto" />
+                        <p className="text-sm text-gray-600">Drop image here or click to upload</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Include GST */}
+                <div>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={conversionData.includeGST}
+                      onChange={(e) => setConversionData({ ...conversionData, includeGST: e.target.checked })}
+                      className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Include GST</span>
+                  </label>
+                </div>
+
+                {/* Submit Button */}
+                <div className="pt-4">
                   <button
                     onClick={handleConvertedSubmit}
-                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    disabled={isLoading}
+                    className="w-full bg-gradient-to-r from-teal-500 to-blue-600 text-white py-4 px-6 rounded-xl font-semibold flex items-center justify-center space-x-2 hover:from-teal-600 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 shadow-lg hover:shadow-xl"
                   >
-                    Convert to Client
+                    {isLoading ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <FiCheck className="text-lg" />
+                    )}
+                    <span>{isLoading ? 'Converting...' : 'Converted'}</span>
                   </button>
                 </div>
               </div>

@@ -26,7 +26,7 @@ const leadSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['new', 'connected', 'hot', 'converted', 'lost', 'not_picked', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested'],
+    enum: ['new', 'connected', 'hot', 'converted', 'lost', 'not_picked', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested'],
     default: 'new'
   },
   priority: {
@@ -167,18 +167,19 @@ leadSchema.virtual('daysUntilFollowUp').get(function() {
 // Method to update status
 leadSchema.methods.updateStatus = function(newStatus) {
   const validTransitions = {
-    'new': ['connected', 'not_picked', 'lost'],
-    'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
-    'not_picked': ['connected', 'followup', 'lost'],
-    'followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'lost'],
-    'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
-    'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
-    'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'lost'],
-    'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'lost'],
-    'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost'],
-    'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'lost'],
+    'new': ['connected', 'not_picked', 'not_interested', 'lost'],
+    'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'],
+    'not_picked': ['connected', 'followup', 'not_interested', 'lost'],
+    'followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'],
+    'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'not_interested', 'lost'],
+    'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
     'converted': [], // Final state
-    'lost': ['connected'] // Can be recovered and connected
+    'lost': ['connected'], // Can be recovered and connected
+    'not_interested': ['connected'] // Recoverable to connected
   };
 
   if (!validTransitions[this.status].includes(newStatus)) {
@@ -186,7 +187,7 @@ leadSchema.methods.updateStatus = function(newStatus) {
   }
 
   this.status = newStatus;
-  if (newStatus === 'converted' || newStatus === 'lost') {
+  if (newStatus === 'converted' || newStatus === 'lost' || newStatus === 'not_interested') {
     this.lastContactDate = new Date();
   }
   return this.save();
