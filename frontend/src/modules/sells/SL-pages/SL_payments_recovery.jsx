@@ -104,9 +104,25 @@ const SL_payments_recovery = () => {
         referenceId: paymentForm.referenceId,
         notes: paymentForm.notes
       })
+      // Reset dialog
       setShowPaymentDialog(false)
       setPaymentForm({ amount: '', account: 'Select account', accountId: '', method: 'upi', referenceId: '', notes: '' })
       setSelectedPayment(null)
+      // Refresh receivables and stats after recording receipt
+      try {
+        const [st, list] = await Promise.all([
+          salesPaymentsService.getReceivableStats(),
+          salesPaymentsService.getReceivables({
+            search: searchTerm,
+            overdue: selectedPaymentType === 'overdue',
+            band: selectedFilter === 'all' ? undefined : selectedFilter
+          })
+        ])
+        setStats({ totalDue: st.totalDue || 0, overdueCount: st.overdueCount || 0, overdueAmount: st.overdueAmount || 0 })
+        setReceivables(list)
+      } catch (e) {
+        console.error('Refresh after receipt failed', e)
+      }
     } catch (e) {
       console.error('Create receipt failed', e)
     }
@@ -114,7 +130,7 @@ const SL_payments_recovery = () => {
 
   const handleClosePaymentDialog = () => {
     setShowPaymentDialog(false)
-    setPaymentForm({ amount: '', account: 'Vipins account' })
+    setPaymentForm({ amount: '', account: 'Select account', accountId: '', method: 'upi', referenceId: '', notes: '' })
     setSelectedPayment(null)
   }
 
@@ -392,15 +408,15 @@ Thank you!`
                     >
                       {accountOptions.map((account) => (
                         <button
-                          key={account}
+                          key={account._id}
                           type="button"
-                        onClick={() => {
+                          onClick={() => {
                             handlePaymentFormChange('account', account.name)
                             setPaymentForm(prev => ({ ...prev, accountId: account._id }))
                             setShowAccountDropdown(false)
                           }}
                           className={`w-full px-4 py-3 text-left hover:bg-teal-50 transition-colors duration-200 ${
-                            paymentForm.account === account ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
+                            paymentForm.accountId === account._id ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
                           }`}
                         >
                           {account.name}
@@ -455,9 +471,7 @@ Thank you!`
             {/* Client Info */}
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600">Client: <span className="font-semibold text-gray-900">{selectedClient.name}</span></p>
-              <p className="text-sm text-gray-600">Total Amount: <span className="font-semibold text-gray-900">₹{selectedClient.amount.toLocaleString()}</span></p>
-              <p className="text-sm text-gray-600">Already Paid: <span className="font-semibold text-green-600">₹{selectedClient.paidAmount.toLocaleString()}</span></p>
-              <p className="text-sm text-gray-600">Remaining: <span className="font-semibold text-red-600">₹{(selectedClient.amount - selectedClient.paidAmount).toLocaleString()}</span></p>
+              <p className="text-sm text-gray-600">Remaining: <span className="font-semibold text-red-600">₹{(selectedClient.remainingAmount || 0).toLocaleString()}</span></p>
             </div>
 
             {/* Form Fields */}

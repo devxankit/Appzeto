@@ -91,6 +91,21 @@ const SL_dashboard = () => {
   const [avgRate, setAvgRate] = useState(0)
   const [totalConverted, setTotalConverted] = useState(0)
 
+  // Hero card stats state
+  const [heroStats, setHeroStats] = useState({
+    employeeName: 'Employee',
+    monthlySales: 0,
+    target: 0,
+    progressToTarget: 0,
+    reward: 0,
+    todaysSales: 0,
+    todaysIncentive: 0,
+    monthlyIncentive: 0,
+    totalLeads: 0,
+    totalClients: 0
+  })
+  const [heroStatsLoading, setHeroStatsLoading] = useState(true)
+
   useEffect(() => {
     let active = true
     const load = async () => {
@@ -143,6 +158,29 @@ const SL_dashboard = () => {
         console.error('Failed to load tile card stats:', e)
       } finally {
         setTileStatsLoading(false)
+      }
+
+      // Load hero card stats
+      try {
+        setHeroStatsLoading(true)
+        const heroData = await salesAnalyticsService.getDashboardHeroStats()
+        if (!active) return
+        setHeroStats(heroData?.data || {
+          employeeName: 'Employee',
+          monthlySales: 0,
+          target: 0,
+          progressToTarget: 0,
+          reward: 0,
+          todaysSales: 0,
+          todaysIncentive: 0,
+          monthlyIncentive: 0,
+          totalLeads: 0,
+          totalClients: 0
+        })
+      } catch (e) {
+        console.error('Failed to load hero stats:', e)
+      } finally {
+        setHeroStatsLoading(false)
       }
     }
     load()
@@ -217,7 +255,7 @@ const SL_dashboard = () => {
                   </button>
                 </motion.div>
                 <div>
-                  <h1 className="text-lg font-bold mb-0.5 text-gray-900">Hi, Sumit</h1>
+                  <h1 className="text-lg font-bold mb-0.5 text-gray-900">Hi, {heroStats.employeeName}</h1>
                   <p className="text-teal-700 text-xs font-medium">Welcome back!</p>
                 </div>
               </div>
@@ -285,7 +323,7 @@ const SL_dashboard = () => {
                     <FaChartLine className="text-white text-sm" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-gray-900">₹2,850</p>
+                <p className="text-2xl font-bold text-gray-900">₹{heroStats.monthlySales.toLocaleString()}</p>
               </motion.div>
               
               <motion.div 
@@ -305,7 +343,7 @@ const SL_dashboard = () => {
                     <FaStar className="text-white text-sm" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-gray-900">₹75,000</p>
+                <p className="text-2xl font-bold text-gray-900">₹{heroStats.target.toLocaleString()}</p>
               </motion.div>
             </motion.div>
 
@@ -318,12 +356,12 @@ const SL_dashboard = () => {
             >
               <div className="flex justify-between items-center mb-3">
                 <span className="text-teal-800 text-sm font-semibold">Progress to Target</span>
-                <span className="text-gray-900 font-bold text-lg">85%</span>
+                <span className="text-gray-900 font-bold text-lg">{heroStats.progressToTarget}%</span>
               </div>
               <div className="relative w-full bg-white/50 rounded-full h-2.5 overflow-hidden shadow-inner">
                 <motion.div 
                   initial={{ width: 0 }}
-                  animate={{ width: '85%' }}
+                  animate={{ width: `${heroStats.progressToTarget}%` }}
                   transition={{ duration: 1.5, delay: 0.8, ease: "easeOut" }}
                   className="bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700 h-2.5 rounded-full relative shadow-sm"
                 >
@@ -348,10 +386,10 @@ const SL_dashboard = () => {
                 >
                   <FaGem className="text-white text-sm" />
                 </div>
-                <span className="text-teal-800 text-sm font-semibold">Reward Points</span>
+                <span className="text-teal-800 text-sm font-semibold">Reward</span>
               </div>
               <div className="flex items-center space-x-1.5">
-                <span className="text-gray-900 font-bold text-xl">10k</span>
+                <span className="text-gray-900 font-bold text-xl">{heroStats.reward >= 1000 ? `${(heroStats.reward / 1000).toFixed(heroStats.reward % 1000 === 0 ? 0 : 1)}k` : heroStats.reward}</span>
                 <FaRocket className="text-teal-600 text-base" />
               </div>
             </motion.div>
@@ -380,7 +418,7 @@ const SL_dashboard = () => {
                     <FaArrowUp className="text-white text-sm" />
                   </div>
                 </div>
-                <p className="text-xl font-bold text-gray-900">₹20k</p>
+                <p className="text-xl font-bold text-gray-900">₹{heroStats.todaysSales >= 1000 ? `${(heroStats.todaysSales / 1000).toFixed(heroStats.todaysSales % 1000 === 0 ? 0 : 1)}k` : heroStats.todaysSales.toLocaleString()}</p>
               </motion.div>
               
               <motion.div 
@@ -400,7 +438,7 @@ const SL_dashboard = () => {
                     <FaChartLine className="text-white text-sm" />
                   </div>
                 </div>
-                <p className="text-xl font-bold text-gray-900">₹1,000</p>
+                <p className="text-xl font-bold text-gray-900">₹{heroStats.todaysIncentive.toLocaleString()}</p>
               </motion.div>
             </motion.div>
 
@@ -418,8 +456,8 @@ const SL_dashboard = () => {
                   boxShadow: '0 8px 25px -5px rgba(14, 165, 233, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
                 }}
               >
-                <p className="text-sky-800 text-sm mb-1.5 font-semibold">Total Deals</p>
-                <p className="text-gray-900 text-lg font-bold">24</p>
+                <p className="text-sky-800 text-sm mb-1.5 font-semibold">Total Clients</p>
+                <p className="text-gray-900 text-lg font-bold">{heroStats.totalClients}</p>
               </motion.div>
               
               <motion.div 
@@ -430,7 +468,7 @@ const SL_dashboard = () => {
                 }}
               >
                 <p className="text-emerald-800 text-sm mb-1.5 font-semibold">Total Leads</p>
-                <p className="text-gray-900 text-lg font-bold">48</p>
+                <p className="text-gray-900 text-lg font-bold">{heroStats.totalLeads}</p>
               </motion.div>
               
               <motion.div 
@@ -441,7 +479,7 @@ const SL_dashboard = () => {
                 }}
               >
                 <p className="text-violet-800 text-sm mb-1.5 font-semibold">Monthly Incentive</p>
-                <p className="text-gray-900 text-lg font-bold">₹8,250</p>
+                <p className="text-gray-900 text-lg font-bold">₹{heroStats.monthlyIncentive.toLocaleString()}</p>
               </motion.div>
             </motion.div>
           </motion.div>
@@ -852,7 +890,7 @@ const SL_dashboard = () => {
                       <FaUser className="text-white text-xl" />
                     </div>
                     <div>
-                      <h1 className="text-2xl font-bold mb-1">Hi, Sumit</h1>
+                      <h1 className="text-2xl font-bold mb-1">Hi, {heroStats.employeeName}</h1>
                       <p className="text-white/80 text-sm">Welcome back!</p>
                     </div>
                   </div>
@@ -868,7 +906,7 @@ const SL_dashboard = () => {
                       <p className="text-white/80 text-xs font-medium">Monthly Sales</p>
                       <FaChartLine className="text-white/60 text-sm" />
                     </div>
-                    <p className="text-2xl font-bold mb-2">₹2,850</p>
+                    <p className="text-2xl font-bold mb-2">₹{heroStats.monthlySales.toLocaleString()}</p>
                     <div className="h-8">
                       <Sparklines data={salesTrendData} width={120} height={32} margin={0}>
                         <SparklinesLine color="#ffffff" style={{ strokeWidth: 1.5 }} />
@@ -881,7 +919,7 @@ const SL_dashboard = () => {
                       <p className="text-white/80 text-xs font-medium">Target</p>
                       <FaStar className="text-yellow-300 text-sm" />
                     </div>
-                    <p className="text-2xl font-bold mb-2">₹75,000</p>
+                    <p className="text-2xl font-bold mb-2">₹{heroStats.target.toLocaleString()}</p>
                     <div className="h-8">
                       <Sparklines data={targetTrendData} width={120} height={32} margin={0}>
                         <SparklinesLine color="#fbbf24" style={{ strokeWidth: 1.5 }} />
@@ -894,9 +932,9 @@ const SL_dashboard = () => {
                       <p className="text-white/80 text-xs font-medium">Progress</p>
                       <FaTrophy className="text-yellow-300 text-sm" />
                     </div>
-                    <p className="text-2xl font-bold mb-2">85%</p>
+                    <p className="text-2xl font-bold mb-2">{heroStats.progressToTarget}%</p>
                     <div className="w-full bg-white/20 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-white to-yellow-200 h-2 rounded-full" style={{ width: '85%' }}></div>
+                      <div className="bg-gradient-to-r from-white to-yellow-200 h-2 rounded-full" style={{ width: `${heroStats.progressToTarget}%` }}></div>
                     </div>
                   </div>
                 </div>
@@ -907,14 +945,14 @@ const SL_dashboard = () => {
                       <p className="text-white/80 text-xs font-medium">Today's Sales</p>
                       <FaArrowUp className="text-green-300 text-sm" />
                     </div>
-                    <p className="text-xl font-bold">20k</p>
+                    <p className="text-xl font-bold">{heroStats.todaysSales >= 1000 ? `${(heroStats.todaysSales / 1000).toFixed(heroStats.todaysSales % 1000 === 0 ? 0 : 1)}k` : heroStats.todaysSales.toLocaleString()}</p>
                   </div>
                   <div className="bg-white/15 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/20 transition-all duration-300">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-white/80 text-xs font-medium">Total Incentive</p>
+                      <p className="text-white/80 text-xs font-medium">Today's Incentive</p>
                       <FaChartLine className="text-blue-300 text-sm" />
                     </div>
-                    <p className="text-xl font-bold">1000</p>
+                    <p className="text-xl font-bold">{heroStats.todaysIncentive.toLocaleString()}</p>
                   </div>
                 </div>
               </div>

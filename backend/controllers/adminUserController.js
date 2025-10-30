@@ -61,7 +61,7 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
   // Get users from all collections with enhanced data
   const [admins, pms, sales, employees, clients] = await Promise.all([
     Admin.find(filter).select('-password -loginAttempts -lockUntil').skip(skip).limit(limitNum),
-    PM.find(filter).select('-password -loginAttempts -lockUntil').populate('projectsManaged', 'name status').skip(skip).limit(limitNum),
+    PM.find(filter).select('-password -loginAttempts -lockUntil').populate('projectsManaged', 'name status dueDate').skip(skip).limit(limitNum),
     Sales.find(filter).select('-password -loginAttempts -lockUntil').skip(skip).limit(limitNum),
     Employee.find(filter).select('-password -loginAttempts -lockUntil').populate('projectsAssigned', 'name status').populate('tasksAssigned', 'name status').skip(skip).limit(limitNum),
     Client.find(filter).select('-otp -otpExpires -otpAttempts -otpLockUntil -loginAttempts -lockUntil').skip(skip).limit(limitNum)
@@ -93,22 +93,53 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
     ...admins.map(user => ({ ...user.toObject(), userType: 'admin' })),
     ...pms.map(user => {
       const userObj = user.toObject();
+      const now = new Date();
+      
+      // Filter projects by status
       const activeProjects = user.projectsManaged.filter(p => 
-        ['untouched', 'started', 'active'].includes(p.status)
-      ).length;
+        ['untouched', 'started', 'active', 'on-hold', 'testing'].includes(p.status)
+      );
       const completedProjects = user.projectsManaged.filter(p => 
         p.status === 'completed'
-      ).length;
+      );
       const totalProjects = user.projectsManaged.length;
+      
+      // Calculate completion rate
       const completionRate = totalProjects > 0 ? 
-        Math.round((completedProjects / totalProjects) * 100) : 0;
+        Math.round((completedProjects.length / totalProjects) * 100) : 0;
+      
+      // Calculate overdue projects (not completed/cancelled and past due date)
+      const overdueProjects = activeProjects.filter(p => {
+        if (!p.dueDate) return false; // No due date means not overdue
+        const dueDate = new Date(p.dueDate);
+        return dueDate < now && !['completed', 'cancelled'].includes(p.status);
+      }).length;
+      
+      // Calculate performance based on completion rate and overdue projects
+      let performance = 0;
+      
+      if (totalProjects > 0) {
+        performance = completionRate;
+        
+        // Penalty for overdue projects: -5% per overdue project, max -30%
+        const overduePenalty = Math.min(30, overdueProjects * 5);
+        performance -= overduePenalty;
+        
+        // Bonus for zero overdue projects: +10%
+        if (overdueProjects === 0) {
+          performance += 10;
+        }
+      }
+      
+      // Ensure performance is between 0 and 100
+      performance = Math.min(100, Math.max(0, Math.round(performance)));
       
       return {
         ...userObj,
         userType: 'project-manager',
-        projects: activeProjects,
+        projects: activeProjects.length,
         completionRate,
-        performance: Math.min(100, Math.max(0, completionRate + (activeProjects < 5 ? 10 : 0))),
+        performance,
         teamSize: user.projectsManaged.reduce((sum, p) => sum + (p.assignedTeam?.length || 0), 0)
       };
     }),

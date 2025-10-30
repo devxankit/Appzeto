@@ -15,6 +15,7 @@ export { default as salesDemoService } from './salesDemoService';
 
 // Analytics
 export { default as salesAnalyticsService } from './salesAnalyticsService';
+export { default as salesWalletService } from './salesWalletService';
 
 // Tasks
 export { default as salesTasksService } from './salesTasksService';

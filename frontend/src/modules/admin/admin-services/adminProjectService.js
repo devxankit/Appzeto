@@ -37,13 +37,17 @@ class AdminProjectService {
     try {
       const queryParams = new URLSearchParams();
       
-      if (params.status) queryParams.append('status', params.status);
+      // Always filter by active status for active projects tab
+      queryParams.append('status', 'active');
+      
       if (params.priority) queryParams.append('priority', params.priority);
       if (params.client) queryParams.append('client', params.client);
       if (params.pm) queryParams.append('pm', params.pm);
       if (params.search) queryParams.append('search', params.search);
       if (params.page) queryParams.append('page', params.page);
       if (params.limit) queryParams.append('limit', params.limit);
+      // Add flag to indicate we want only projects with PM assigned
+      queryParams.append('hasPM', 'true');
 
       const response = await apiRequest(`${API_BASE_URL}?${queryParams}`);
       return response;
@@ -58,6 +62,8 @@ class AdminProjectService {
     try {
       const queryParams = new URLSearchParams();
       queryParams.append('status', 'completed');
+      // Only show completed projects with PM assigned
+      queryParams.append('hasPM', 'true');
       
       if (params.priority) queryParams.append('priority', params.priority);
       if (params.search) queryParams.append('search', params.search);

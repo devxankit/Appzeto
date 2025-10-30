@@ -75,106 +75,106 @@ import ChartContainer from '../admin-components/ChartContainer'
 import NotificationPanel from '../admin-components/NotificationPanel'
 import QuickActionButton from '../admin-components/QuickActionButton'
 
+// Import dashboard service
+import adminDashboardService from '../admin-services/adminDashboardService'
+
 const Admin_dashboard = () => {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('overview')
   const [timeRange, setTimeRange] = useState('7d')
   const [notifications, setNotifications] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  // Mock dashboard data - replace with actual API calls
+  // Dashboard data - loaded from API
   const [dashboardData, setDashboardData] = useState({
     // User Statistics
     users: {
-      total: 1234,
-      sales: 45,
-      pm: 12,
-      employees: 89,
-      clients: 1088,
-      active: 1156,
-      newThisMonth: 67,
-      growth: 12.5
+      total: 0,
+      sales: 0,
+      pm: 0,
+      employees: 0,
+      clients: 0,
+      active: 0,
+      newThisMonth: 0,
+      growth: 0
     },
     
     // Project Statistics
     projects: {
-      total: 234,
-      active: 89,
-      completed: 123,
-      onHold: 15,
-      overdue: 7,
-      totalRevenue: 2340000,
-      avgProjectValue: 10000,
-      completionRate: 78.5
+      total: 0,
+      active: 0,
+      completed: 0,
+      onHold: 0,
+      overdue: 0,
+      totalRevenue: 0,
+      avgProjectValue: 0,
+      completionRate: 0
     },
     
     // Sales Statistics
     sales: {
-      totalLeads: 6853,
-      converted: 65,
-      conversionRate: 0.95,
-      totalRevenue: 2340000,
-      avgDealSize: 36000,
-      growth: 18.2
+      totalLeads: 0,
+      converted: 0,
+      conversionRate: 0,
+      totalRevenue: 0,
+      avgDealSize: 0,
+      growth: 0
     },
     
     // Financial Statistics
     finance: {
-      totalRevenue: 2340000,
-      outstandingPayments: 450000,
-      expenses: 890000,
-      profit: 1450000,
-      profitMargin: 62,
-      growth: 15.8
+      totalRevenue: 0,
+      outstandingPayments: 0,
+      expenses: 0,
+      profit: 0,
+      profitMargin: 0,
+      growth: 0
     },
 
     // Today's Financial Metrics
     today: {
-      earnings: 125000,
-      expenses: 45000,
-      sales: 180000,
-      pendingAmount: 75000,
-      profit: 80000,
-      loss: 15000
+      earnings: 0,
+      expenses: 0,
+      sales: 0,
+      pendingAmount: 0,
+      profit: 0,
+      loss: 0,
+      earningsGrowth: 0,
+      expensesGrowth: 0,
+      salesGrowth: 0,
+      profitGrowth: 0
     },
 
     // System Health
     system: {
-      uptime: 99.9,
-      performance: 95,
-      errors: 2,
-      activeUsers: 156,
-      serverLoad: 45
-    }
+      uptime: 0,
+      performance: 0,
+      errors: 0,
+      activeUsers: 0,
+      serverLoad: 0
+    },
+
+    // Revenue trend data
+    revenueTrend: [],
+
+    // Project status distribution
+    projectStatusDistribution: []
   })
 
-  // Chart data
-  const revenueData = [
-    { month: 'Jan', revenue: 180000, projects: 15 },
-    { month: 'Feb', revenue: 220000, projects: 18 },
-    { month: 'Mar', revenue: 190000, projects: 16 },
-    { month: 'Apr', revenue: 250000, projects: 20 },
-    { month: 'May', revenue: 280000, projects: 22 },
-    { month: 'Jun', revenue: 320000, projects: 25 },
-    { month: 'Jul', revenue: 350000, projects: 28 }
-  ]
+  // Chart data from API
+  const revenueData = dashboardData.revenueTrend || []
 
+  // Project status data from API
+  const projectStatusData = dashboardData.projectStatusDistribution || []
 
-  const projectStatusData = [
-    { name: 'Active', value: 89, color: '#10B981' },
-    { name: 'Completed', value: 123, color: '#3B82F6' },
-    { name: 'On Hold', value: 15, color: '#F59E0B' },
-    { name: 'Overdue', value: 7, color: '#EF4444' }
-  ]
-
-
-  // Mock notifications
+  // Mock notifications (can be replaced with real API later)
   const mockNotifications = [
     {
       id: 1,
       type: 'warning',
       title: 'Payment Overdue',
-      message: '3 projects have overdue payments totaling ₹125,000',
+      message: `${dashboardData.projects.overdue || 0} projects have overdue payments totaling ${dashboardData.finance.outstandingPayments ? `₹${(dashboardData.finance.outstandingPayments / 1000).toFixed(0)}k` : '₹0'}`,
       time: '2 hours ago',
       icon: AlertTriangle
     },
@@ -182,7 +182,7 @@ const Admin_dashboard = () => {
       id: 2,
       type: 'success',
       title: 'Project Completed',
-      message: 'E-commerce Website project completed successfully',
+      message: `${dashboardData.projects.completed || 0} projects completed successfully`,
       time: '4 hours ago',
       icon: CheckCircle
     },
@@ -190,7 +190,7 @@ const Admin_dashboard = () => {
       id: 3,
       type: 'info',
       title: 'New User Registration',
-      message: '5 new clients registered in the last hour',
+      message: `${dashboardData.users.newThisMonth || 0} new users registered this month`,
       time: '6 hours ago',
       icon: Users
     },
@@ -198,21 +198,74 @@ const Admin_dashboard = () => {
       id: 4,
       type: 'error',
       title: 'System Alert',
-      message: 'High server load detected - 85% CPU usage',
+      message: `Server load: ${dashboardData.system.serverLoad || 0}%`,
       time: '1 day ago',
       icon: Server
     }
   ]
 
   useEffect(() => {
-    // Simulate loading data
-    const loadData = async () => {
-      setIsLoading(true)
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      setNotifications(mockNotifications)
-      setIsLoading(false)
+    // Load dashboard data from API
+    const loadDashboardData = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        
+        const response = await adminDashboardService.getDashboardStats()
+        
+        if (response.success && response.data) {
+          setDashboardData(response.data)
+          
+          // Update notifications with real data
+          const updatedNotifications = [
+            {
+              id: 1,
+              type: 'warning',
+              title: 'Payment Overdue',
+              message: `${response.data.projects.overdue || 0} projects have overdue payments`,
+              time: 'Just now',
+              icon: AlertTriangle
+            },
+            {
+              id: 2,
+              type: 'success',
+              title: 'Project Completed',
+              message: `${response.data.projects.completed || 0} projects completed successfully`,
+              time: 'Just now',
+              icon: CheckCircle
+            },
+            {
+              id: 3,
+              type: 'info',
+              title: 'New User Registration',
+              message: `${response.data.users.newThisMonth || 0} new users registered this month`,
+              time: 'Just now',
+              icon: Users
+            },
+            {
+              id: 4,
+              type: 'error',
+              title: 'System Alert',
+              message: `Server load: ${response.data.system.serverLoad || 0}%`,
+              time: 'Just now',
+              icon: Server
+            }
+          ]
+          setNotifications(updatedNotifications)
+        } else {
+          throw new Error('Failed to load dashboard data')
+        }
+      } catch (err) {
+        console.error('Error loading dashboard data:', err)
+        setError(err.message || 'Failed to load dashboard data')
+        // Set notifications with mock data on error
+        setNotifications(mockNotifications)
+      } finally {
+        setIsLoading(false)
+      }
     }
-    loadData()
+
+    loadDashboardData()
   }, [])
 
   const handleQuickAction = (action) => {
@@ -266,6 +319,43 @@ const Admin_dashboard = () => {
     )
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Admin_navbar />
+        <Admin_sidebar />
+        <div className="ml-64 pt-20 p-8">
+          <div className="max-w-7xl mx-auto">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+              <AlertTriangle className="h-12 w-12 text-red-600 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-red-900 mb-2">Error Loading Dashboard</h3>
+              <p className="text-red-700 mb-4">{error}</p>
+              <Button 
+                onClick={async () => {
+                  setIsLoading(true)
+                  setError(null)
+                  try {
+                    const response = await adminDashboardService.getDashboardStats()
+                    if (response.success && response.data) {
+                      setDashboardData(response.data)
+                    }
+                  } catch (err) {
+                    setError(err.message || 'Failed to load dashboard data')
+                  } finally {
+                    setIsLoading(false)
+                  }
+                }}
+                variant="outline"
+              >
+                Retry
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       {/* Navbar */}
@@ -294,7 +384,25 @@ const Admin_dashboard = () => {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+                onClick={async () => {
+                  setIsLoading(true)
+                  try {
+                    const response = await adminDashboardService.getDashboardStats()
+                    if (response.success && response.data) {
+                      setDashboardData(response.data)
+                    }
+                  } catch (err) {
+                    console.error('Error refreshing dashboard:', err)
+                    setError(err.message || 'Failed to refresh dashboard')
+                  } finally {
+                    setIsLoading(false)
+                  }
+                }}
+              >
                 <RefreshCw className="h-4 w-4" />
                 Refresh
               </Button>
@@ -321,7 +429,9 @@ const Admin_dashboard = () => {
                     <TrendingUp className="h-4 w-4 text-emerald-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-emerald-700">+12.5%</p>
+                    <p className={`text-xs font-medium ${dashboardData.today.earningsGrowth >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                      {dashboardData.today.earningsGrowth >= 0 ? '+' : ''}{dashboardData.today.earningsGrowth?.toFixed(1) || 0}%
+                    </p>
                     <p className="text-xs text-emerald-600">vs yesterday</p>
                   </div>
                 </div>
@@ -341,7 +451,9 @@ const Admin_dashboard = () => {
                     <TrendingDown className="h-4 w-4 text-red-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-red-700">-8.2%</p>
+                    <p className={`text-xs font-medium ${dashboardData.today.expensesGrowth >= 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                      {dashboardData.today.expensesGrowth >= 0 ? '+' : ''}{dashboardData.today.expensesGrowth?.toFixed(1) || 0}%
+                    </p>
                     <p className="text-xs text-red-600">vs yesterday</p>
                   </div>
                 </div>
@@ -361,7 +473,9 @@ const Admin_dashboard = () => {
                     <IndianRupee className="h-4 w-4 text-blue-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-blue-700">+15.3%</p>
+                    <p className={`text-xs font-medium ${dashboardData.today.salesGrowth >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
+                      {dashboardData.today.salesGrowth >= 0 ? '+' : ''}{dashboardData.today.salesGrowth?.toFixed(1) || 0}%
+                    </p>
                     <p className="text-xs text-blue-600">vs yesterday</p>
                   </div>
                 </div>
@@ -381,7 +495,9 @@ const Admin_dashboard = () => {
                     <CreditCard className="h-4 w-4 text-orange-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-orange-700">3</p>
+                    <p className="text-xs font-medium text-orange-700">
+                      {dashboardData.today.pendingAmount > 0 ? 'Yes' : 'No'}
+                    </p>
                     <p className="text-xs text-orange-600">pending</p>
                   </div>
                 </div>
@@ -401,7 +517,9 @@ const Admin_dashboard = () => {
                     <Plus className="h-4 w-4 text-teal-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-teal-700">+22.1%</p>
+                    <p className={`text-xs font-medium ${dashboardData.today.profitGrowth >= 0 ? 'text-teal-700' : 'text-red-700'}`}>
+                      {dashboardData.today.profitGrowth >= 0 ? '+' : ''}{dashboardData.today.profitGrowth?.toFixed(1) || 0}%
+                    </p>
                     <p className="text-xs text-teal-600">vs yesterday</p>
                   </div>
                 </div>
@@ -421,7 +539,9 @@ const Admin_dashboard = () => {
                     <Minus className="h-4 w-4 text-rose-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-rose-700">-5.4%</p>
+                    <p className="text-xs font-medium text-rose-700">
+                      {dashboardData.today.loss > 0 ? `-${((dashboardData.today.loss / dashboardData.today.expenses) * 100).toFixed(1)}%` : '0%'}
+                    </p>
                     <p className="text-xs text-rose-600">vs yesterday</p>
                   </div>
                 </div>
@@ -447,7 +567,9 @@ const Admin_dashboard = () => {
                   <DollarSign className="h-3 w-3 text-emerald-600" />
                 </div>
                 <div className="text-right">
-                  <p className="text-xs font-medium text-emerald-700">+15.8%</p>
+                  <p className={`text-xs font-medium ${dashboardData.finance.growth >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {dashboardData.finance.growth >= 0 ? '+' : ''}{dashboardData.finance.growth?.toFixed(1) || 0}%
+                  </p>
                   <p className="text-xs text-emerald-600">this month</p>
                 </div>
               </div>
@@ -465,8 +587,10 @@ const Admin_dashboard = () => {
                   <Trophy className="h-3 w-3 text-orange-600" />
                 </div>
                 <div className="text-right">
-                  <p className="text-xs font-medium text-orange-700">+8.2%</p>
-                  <p className="text-xs text-orange-600">this week</p>
+                  <p className={`text-xs font-medium ${dashboardData.sales.growth >= 0 ? 'text-orange-700' : 'text-red-700'}`}>
+                    {dashboardData.sales.growth >= 0 ? '+' : ''}{dashboardData.sales.growth?.toFixed(1) || 0}%
+                  </p>
+                  <p className="text-xs text-orange-600">this month</p>
                 </div>
               </div>
               <div>
@@ -483,13 +607,15 @@ const Admin_dashboard = () => {
                   <Target className="h-3 w-3 text-blue-600" />
                 </div>
                 <div className="text-right">
-                  <p className="text-xs font-medium text-blue-700">+2.1%</p>
-                  <p className="text-xs text-blue-600">this week</p>
+                  <p className="text-xs font-medium text-blue-700">
+                    {dashboardData.sales.conversionRate?.toFixed(2) || 0}%
+                  </p>
+                  <p className="text-xs text-blue-600">conversion</p>
                 </div>
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-600 mb-1">Conversion Rate</p>
-                <p className="text-lg font-bold text-blue-700">{dashboardData.sales.conversionRate}%</p>
+                <p className="text-lg font-bold text-blue-700">{dashboardData.sales.conversionRate?.toFixed(2) || 0}%</p>
                 <p className="text-xs text-gray-500 mt-1">Lead to customer</p>
               </div>
             </div>
@@ -501,8 +627,10 @@ const Admin_dashboard = () => {
                   <AlertTriangle className="h-3 w-3 text-red-600" />
                 </div>
                 <div className="text-right">
-                  <p className="text-xs font-medium text-red-700">-3</p>
-                  <p className="text-xs text-red-600">this week</p>
+                  <p className="text-xs font-medium text-red-700">
+                    {dashboardData.projects.overdue || 0}
+                  </p>
+                  <p className="text-xs text-red-600">projects</p>
                 </div>
               </div>
               <div>
@@ -519,8 +647,10 @@ const Admin_dashboard = () => {
                   <Users className="h-3 w-3 text-indigo-600" />
                 </div>
                 <div className="text-right">
-                  <p className="text-xs font-medium text-indigo-700">+12</p>
-                  <p className="text-xs text-indigo-600">this week</p>
+                  <p className={`text-xs font-medium ${dashboardData.users.growth >= 0 ? 'text-indigo-700' : 'text-red-700'}`}>
+                    {dashboardData.users.growth >= 0 ? '+' : ''}{dashboardData.users.growth?.toFixed(1) || 0}%
+                  </p>
+                  <p className="text-xs text-indigo-600">this month</p>
                 </div>
               </div>
               <div>

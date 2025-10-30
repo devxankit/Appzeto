@@ -27,7 +27,8 @@ const getAuthHeaders = () => {
 // Base API request helper
 export const apiRequest = async (url, options = {}) => {
   try {
-    const response = await fetch(getApiUrl(url), {
+    const primaryUrl = getApiUrl(url);
+    const response = await fetch(primaryUrl, {
       ...options,
       headers: {
         ...getAuthHeaders(),
@@ -44,6 +45,28 @@ export const apiRequest = async (url, options = {}) => {
 
     return data;
   } catch (error) {
+    // Fallback: if direct host failed (e.g., backend not running on 5000), try same-origin /api path
+    try {
+      if (error && (error.name === 'TypeError' || String(error).includes('Failed to fetch'))) {
+        const sameOriginUrl = `/api${url.startsWith('/') ? url : `/${url}`}`;
+        const response = await fetch(sameOriginUrl, {
+          ...options,
+          headers: {
+            ...getAuthHeaders(),
+            ...options.headers
+          },
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || 'Something went wrong');
+        }
+        return data;
+      }
+    } catch (fallbackError) {
+      console.error('API Request Error (fallback failed):', fallbackError);
+      throw fallbackError;
+    }
     console.error('API Request Error:', error);
     throw error;
   }

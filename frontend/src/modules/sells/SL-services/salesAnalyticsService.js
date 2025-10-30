@@ -20,10 +20,16 @@ const getTileCardStats = async () => {
   return apiRequest(url, { method: 'GET' });
 };
 
+const getDashboardHeroStats = async () => {
+  const url = `/sales/dashboard/hero-stats`;
+  return apiRequest(url, { method: 'GET' });
+};
+
 export default {
   getDashboardStats,
   getMonthlyConversions,
-  getTileCardStats
+  getTileCardStats,
+  getDashboardHeroStats
 };
 
 

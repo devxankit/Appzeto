@@ -1,5 +1,5 @@
 // Professional Wallet Dashboard component with enhanced UI
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   FiCreditCard,
@@ -7,36 +7,64 @@ import {
   FiArrowDown,
   FiCalendar,
   FiTrendingUp,
-  FiDollarSign,
   FiActivity,
   FiX
 } from 'react-icons/fi'
+import { FaRupeeSign } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
+import { salesWalletService } from '../SL-services'
 
 const SL_wallet = () => {
-  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false)
-  const [withdrawAmount, setWithdrawAmount] = useState('')
-  
-  // Mock data - Employee's personal wallet with mixed earnings and withdrawals
-  const walletData = {
-    currentBalance: 22750,
-    monthlyEarning: 18500,
-    totalEarning: 89200,
-    transactions: [
-      { id: 1, amount: 12000, type: "income", date: "15/12/2023", category: "Salary", description: "Monthly Salary - December 2023" },
-       { id: 2, amount: 5000, type: "withdrawal", date: "12/12/2023", category: "Withdrawal", description: "Bank Withdrawal", method: "Bank", status: "Completed" },
-       { id: 3, amount: 3200, type: "income", date: "10/12/2023", category: "Reward", description: "Performance Bonus - December" },
-       { id: 4, amount: 1500, type: "income", date: "08/12/2023", category: "Reward", description: "Sales Achievement Bonus" },
-       { id: 5, amount: 3000, type: "withdrawal", date: "05/12/2023", category: "Withdrawal", description: "UPI Withdrawal", method: "UPI", status: "Completed" },
-      { id: 6, amount: 2150, type: "income", date: "01/12/2023", category: "Reward", description: "Team Collaboration Award" },
-      { id: 7, amount: 1680, type: "income", date: "28/11/2023", category: "Salary", description: "Monthly Salary - November 2023" },
-       { id: 8, amount: 7500, type: "withdrawal", date: "20/11/2023", category: "Withdrawal", description: "Bank Withdrawal", method: "Bank", status: "Completed" },
-       { id: 9, amount: 2400, type: "income", date: "18/11/2023", category: "Reward", description: "Client Satisfaction Bonus" },
-       { id: 10, amount: 2000, type: "withdrawal", date: "15/11/2023", category: "Withdrawal", description: "UPI Withdrawal", method: "UPI", status: "Completed" },
-      { id: 11, amount: 2750, type: "income", date: "15/11/2023", category: "Salary", description: "Monthly Salary - November 2023" },
-      { id: 12, amount: 1200, type: "income", date: "10/11/2023", category: "Reward", description: "Project Completion Bonus" }
-    ]
-  }
+  // Withdrawal removed as per requirement
+
+  // Live state
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [wallet, setWallet] = useState({
+    currentBalance: 0,
+    monthlyEarning: 0,
+    totalEarning: 0,
+    monthlySalary: 0,
+    transactions: []
+  })
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true)
+        const data = await salesWalletService.getWalletSummary()
+        const current = Number(data?.incentive?.current || 0)
+        const pending = Number(data?.incentive?.pending || 0)
+        const monthly = Number(data?.incentive?.monthly || 0)
+        const allTime = Number(data?.incentive?.allTime || 0)
+        const fixedSalary = Number(data?.salary?.fixedSalary || 0)
+
+        setWallet({
+          currentBalance: current,
+          monthlyEarning: monthly,
+          totalEarning: allTime,
+          monthlySalary: fixedSalary,
+          transactions: (data?.transactions || []).map(t => ({
+            id: t.id || `${t.type}-${t.date}`,
+            amount: Number(t.amount || 0),
+            type: 'income',
+            date: new Date(t.date).toLocaleDateString(),
+            category: t.type === 'salary' ? 'Salary' : 'Reward',
+            description: t.type === 'salary' ? 'Monthly Salary' : (t.clientName ? `Incentive - ${t.clientName}` : 'Incentive')
+          }))
+        })
+        setError(null)
+      } catch (e) {
+        setError(e?.message || 'Failed to load wallet')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  // Filter out withdrawals from visible history
+  const visibleTransactions = wallet.transactions
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString()}`
@@ -130,9 +158,25 @@ const SL_wallet = () => {
               <div className="bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-teal-300/50 shadow-sm">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-teal-800 text-xs font-semibold">Current Balance</span>
-                  <FiDollarSign className="text-teal-600 text-sm" />
+                  <FaRupeeSign className="text-teal-600 text-sm" />
                 </div>
-                <p className="text-gray-900 text-lg font-bold">{formatCurrency(walletData.currentBalance)}</p>
+                <p className="text-gray-900 text-lg font-bold">{formatCurrency(wallet.currentBalance)}</p>
+              </div>
+            </motion.div>
+
+            {/* Monthly Fixed Salary */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.5 }}
+              className="mb-3"
+            >
+              <div className="bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-teal-300/50 shadow-sm">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-teal-800 text-xs font-semibold">Monthly Salary</span>
+                  <FaRupeeSign className="text-teal-600 text-sm" />
+                </div>
+                <p className="text-gray-900 text-lg font-bold">{formatCurrency(wallet.monthlySalary)}</p>
               </div>
             </motion.div>
 
@@ -152,7 +196,7 @@ const SL_wallet = () => {
                   <span className="text-emerald-800 text-xs font-semibold">Total Incentive</span>
                   <FiTrendingUp className="text-emerald-600 text-xs" />
                 </div>
-                <p className="text-gray-900 text-sm font-bold">{formatCurrency(walletData.totalEarning)}</p>
+                <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet.totalEarning)}</p>
                 <p className="text-emerald-600 text-xs">All Time</p>
               </motion.div>
               
@@ -165,7 +209,7 @@ const SL_wallet = () => {
                   <span className="text-yellow-800 text-xs font-semibold">Pending Incentive</span>
                   <FiCalendar className="text-yellow-600 text-xs" />
                 </div>
-                <p className="text-gray-900 text-sm font-bold">{formatCurrency(walletData.monthlyEarning)}</p>
+                <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet.monthlyEarning)}</p>
                 <p className="text-yellow-600 text-xs">Awaiting Recovery</p>
                 
                 {/* Hover Tooltip */}
@@ -181,30 +225,24 @@ const SL_wallet = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.8 }}
-              className="grid grid-cols-3 gap-2"
+              className="grid grid-cols-2 gap-2"
             >
               <motion.div 
                 whileHover={{ scale: 1.05 }}
                 className="bg-white/60 backdrop-blur-sm rounded-lg p-2 border border-cyan-300/50 text-center hover:border-cyan-400/70 transition-all duration-300 shadow-sm"
               >
                 <p className="text-cyan-800 text-xs font-semibold mb-0.5">This Month</p>
-                <p className="text-gray-900 text-xs font-bold">{formatCurrency(walletData.monthlyEarning)}</p>
+                <p className="text-gray-900 text-xs font-bold">{formatCurrency(wallet.monthlyEarning)}</p>
               </motion.div>
               
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="bg-white/60 backdrop-blur-sm rounded-lg p-2 border border-indigo-300/50 text-center hover:border-indigo-400/70 transition-all duration-300 shadow-sm"
-              >
-                <p className="text-indigo-800 text-xs font-semibold mb-0.5">Total Balance</p>
-                <p className="text-gray-900 text-xs font-bold">{formatCurrency(walletData.currentBalance)}</p>
-              </motion.div>
+              {/* Removed Total Balance (duplicate of Current Balance) */}
               
               <motion.div 
                 whileHover={{ scale: 1.05 }}
                 className="bg-white/60 backdrop-blur-sm rounded-lg p-2 border border-violet-300/50 text-center hover:border-violet-400/70 transition-all duration-300 shadow-sm"
               >
                 <p className="text-violet-800 text-xs font-semibold mb-0.5">All Time</p>
-                <p className="text-gray-900 text-xs font-bold">{formatCurrency(walletData.totalEarning)}</p>
+                <p className="text-gray-900 text-xs font-bold">{formatCurrency(wallet.totalEarning)}</p>
               </motion.div>
             </motion.div>
           </motion.div>
@@ -213,22 +251,14 @@ const SL_wallet = () => {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-bold text-gray-900">Transaction History</h3>
-              <p className="text-sm text-gray-600 mt-1">{walletData.transactions.length} recent transactions</p>
+              <p className="text-sm text-gray-600 mt-1">{visibleTransactions.length} recent transactions</p>
             </div>
-              <div className="flex items-center space-x-2">
-                <button 
-                onClick={() => setIsWithdrawModalOpen(true)}
-                className="bg-teal-500 px-4 py-2 rounded-lg text-white hover:bg-teal-600 transition-colors duration-200 flex items-center space-x-2"
-              >
-                <FiArrowUp className="text-lg" />
-                <span className="text-sm font-medium">Withdraw</span>
-              </button>
-            </div>
+              <div className="flex items-center space-x-2" />
           </div>
 
           {/* Transaction List */}
           <div className="space-y-3">
-            {walletData.transactions.map((transaction, index) => {
+            {visibleTransactions.map((transaction, index) => {
               const IconComponent = getTransactionIcon(transaction.category)
               
               return (
@@ -294,7 +324,7 @@ const SL_wallet = () => {
                      </div>
                      <div className="flex items-center space-x-4">
                        <div className="text-right">
-                         <p className="text-white text-4xl font-bold">{formatCurrency(walletData.currentBalance)}</p>
+                        <p className="text-white text-4xl font-bold">{formatCurrency(wallet.currentBalance)}</p>
                          <div className="flex items-center mt-1">
                            <FiTrendingUp className="text-white/60 text-sm mr-1" />
                            <span className="text-white/80 text-xs">+12% from last month</span>
@@ -322,7 +352,7 @@ const SL_wallet = () => {
                      <FiTrendingUp className="text-green-500 text-lg" />
                    </div>
                    <h4 className="text-gray-600 text-sm font-medium mb-2">Monthly Earning</h4>
-                   <p className="text-gray-900 text-2xl font-bold">{formatCurrency(walletData.monthlyEarning)}</p>
+                  <p className="text-gray-900 text-2xl font-bold">{formatCurrency(wallet.monthlyEarning)}</p>
                    <p className="text-green-600 text-xs font-semibold mt-1">+₹2,500 this week</p>
                  </motion.div>
                  
@@ -334,11 +364,11 @@ const SL_wallet = () => {
                    className="bg-white rounded-2xl p-6 shadow-xl border border-gray-100"
                  >
                    <div className="flex items-center justify-between mb-4">
-                     <FiDollarSign className="text-teal-600 text-xl" />
+                    <FaRupeeSign className="text-teal-600 text-xl" />
                      <FiActivity className="text-blue-500 text-lg" />
                    </div>
                    <h4 className="text-gray-600 text-sm font-medium mb-2">Total Earning</h4>
-                   <p className="text-gray-900 text-2xl font-bold">{formatCurrency(walletData.totalEarning)}</p>
+                  <p className="text-gray-900 text-2xl font-bold">{formatCurrency(wallet.totalEarning)}</p>
                    <p className="text-blue-600 text-xs font-semibold mt-1">All time earnings</p>
                  </motion.div>
                </div>
@@ -353,23 +383,14 @@ const SL_wallet = () => {
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h3 className="text-xl font-bold text-gray-900">Recent Transactions</h3>
-                    <p className="text-sm text-gray-600 mt-1">Latest {walletData.transactions.length} transactions</p>
+                <p className="text-sm text-gray-600 mt-1">Latest {visibleTransactions.length} transactions</p>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <button 
-                      onClick={() => setIsWithdrawModalOpen(true)}
-                      className="bg-teal-500 px-4 py-2 rounded-lg text-white hover:bg-teal-600 transition-colors duration-200 flex items-center space-x-2"
-                      title="Withdraw funds"
-                    >
-                      <FiArrowUp className="text-lg" />
-                      <span className="text-sm font-medium">Withdraw</span>
-                    </button>
-                  </div>
+                  <div className="flex items-center space-x-2" />
                 </div>
                 
                 <div className="overflow-hidden">
                   <div className="space-y-3">
-                    {walletData.transactions.slice(0, 8).map((transaction, index) => {
+                    {visibleTransactions.slice(0, 8).map((transaction, index) => {
                       const IconComponent = getTransactionIcon(transaction.category)
                       
                       return (
@@ -420,13 +441,7 @@ const SL_wallet = () => {
                 <h3 className="text-lg font-bold text-slate-800 mb-4">Quick Actions</h3>
                 
                  <div className="space-y-3">
-                   <button 
-                     onClick={() => setIsWithdrawModalOpen(true)}
-                     className="w-full bg-teal-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-teal-600 transition-colors duration-200 flex items-center justify-center space-x-2"
-                   >
-                     <FiArrowUp className="text-lg" />
-                     <span>Withdraw Funds</span>
-                   </button>
+                  {/* Withdrawal option removed */}
                    
                  </div>
               </motion.div>
@@ -443,17 +458,17 @@ const SL_wallet = () => {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">This Month</span>
-                    <span className="font-semibold text-green-600">{formatCurrency(walletData.monthlyEarning)}</span>
+                    <span className="font-semibold text-green-600">{formatCurrency(wallet.monthlyEarning)}</span>
                   </div>
                   
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">Total Balance</span>
-                    <span className="font-semibold text-teal-600">{formatCurrency(walletData.currentBalance)}</span>
+                    <span className="font-semibold text-teal-600">{formatCurrency(wallet.currentBalance)}</span>
                   </div>
                   
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">All Time Earnings</span>
-                    <span className="font-semibold text-blue-600">{formatCurrency(walletData.totalEarning)}</span>
+                    <span className="font-semibold text-blue-600">{formatCurrency(wallet.totalEarning)}</span>
                   </div>
                 </div>
               </motion.div>
@@ -464,100 +479,7 @@ const SL_wallet = () => {
         
       </main>
 
-      {/* Withdrawal Modal */}
-      <AnimatePresence>
-        {isWithdrawModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={() => setIsWithdrawModalOpen(false)}
-            />
-
-            {/* Modal Content */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl"
-            >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700 p-6 text-white rounded-t-2xl">
-                <button
-                  onClick={() => setIsWithdrawModalOpen(false)}
-                  className="absolute top-6 left-6 p-2 hover:bg-teal-600/50 rounded-full transition-colors duration-200"
-                  aria-label="Close modal"
-                >
-                  <FiX className="text-xl" />
-                </button>
-                <h2 className="text-xl font-bold text-center">Withdraw Funds</h2>
-              </div>
-
-              {/* Form Content */}
-              <div className="p-6 space-y-6">
-                {/* Current Balance Display */}
-                <div className="bg-teal-50 rounded-xl p-4 border border-teal-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-teal-700 text-sm font-medium">Available Balance</span>
-                    <FiCreditCard className="text-teal-600" />
-                  </div>
-                  <p className="text-teal-900 text-2xl font-bold mt-1">{formatCurrency(walletData.currentBalance)}</p>
-                </div>
-
-                {/* Amount Input */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Withdrawal Amount</label>
-                  <div className="relative">
-                    <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
-                      ₹
-                    </div>
-                    <input
-                      type="number"
-                      value={withdrawAmount}
-                      onChange={(e) => setWithdrawAmount(e.target.value)}
-                      placeholder="Enter amount"
-                      className="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                      max={walletData.currentBalance}
-                      min="1"
-                    />
-                  </div>
-                  {withdrawAmount && parseFloat(withdrawAmount) > walletData.currentBalance && (
-                    <p className="text-red-500 text-xs">Amount exceeds available balance</p>
-                  )}
-                </div>
-
-
-                {/* Submit Button */}
-                <button
-                  onClick={() => {
-                    if (withdrawAmount && parseFloat(withdrawAmount) <= walletData.currentBalance) {
-                      // Handle withdrawal logic here
-                      console.log('Withdrawal:', { withdrawAmount })
-                      alert(`Withdrawal request for ₹${parseInt(withdrawAmount).toLocaleString()} submitted successfully!`)
-                      setIsWithdrawModalOpen(false)
-                      setWithdrawAmount('')
-                    }
-                  }}
-                  disabled={!withdrawAmount || parseFloat(withdrawAmount) > walletData.currentBalance}
-                  className="w-full bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700 text-white font-bold py-4 rounded-lg shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border border-teal-400/20"
-                >
-                  Request Withdrawal
-                </button>
-
-                {/* Disclaimer */}
-                <p className="text-xs text-gray-500 text-center">
-                  Withdrawals are processed within 1-2 business days. Fees may apply.
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Withdrawal modal removed */}
     </div>
   )
 }

@@ -130,7 +130,34 @@ const clientSchema = new mongoose.Schema({
   lastActivity: {
     type: Date,
     default: Date.now
-  }
+  },
+  // Transfer history (tracking client transfers between sales employees)
+  transferHistory: [{
+    fromSales: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Sales',
+      required: true
+    },
+    toSales: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Sales',
+      required: true
+    },
+    reason: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Transfer reason cannot exceed 500 characters']
+    },
+    transferredAt: {
+      type: Date,
+      default: Date.now
+    },
+    transferredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Sales',
+      required: true
+    }
+  }]
 }, {
   timestamps: true
 });

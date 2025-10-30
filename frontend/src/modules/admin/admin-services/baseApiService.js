@@ -24,10 +24,46 @@ const getAuthHeaders = () => {
   };
 };
 
+// Helper to safely parse JSON response
+const safeJsonParse = async (response) => {
+  const contentType = response.headers.get('content-type');
+  
+  // Check if response has content
+  const text = await response.text();
+  
+  // If empty response
+  if (!text || !text.trim()) {
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status} ${response.statusText} (Empty response)`);
+    }
+    return {};
+  }
+  
+  // If not JSON (e.g., HTML error page)
+  if (!contentType || !contentType.includes('application/json')) {
+    if (!response.ok) {
+      // Try to extract error message from HTML or use status
+      throw new Error(`Server error: ${response.status} ${response.statusText}`);
+    }
+    return { message: text };
+  }
+  
+  // Parse JSON
+  try {
+    return JSON.parse(text);
+  } catch (parseError) {
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status} ${response.statusText}`);
+    }
+    throw new Error('Invalid JSON response from server');
+  }
+};
+
 // Base API request helper
 export const apiRequest = async (url, options = {}) => {
   try {
-    const response = await fetch(getApiUrl(url), {
+    const primaryUrl = getApiUrl(url);
+    const response = await fetch(primaryUrl, {
       ...options,
       headers: {
         ...getAuthHeaders(),
@@ -36,15 +72,46 @@ export const apiRequest = async (url, options = {}) => {
       credentials: 'include' // Include cookies for CORS
     });
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
 
     if (!response.ok) {
-      throw new Error(data.message || 'Something went wrong');
+      throw new Error(data.message || data.error || `Server error: ${response.status}`);
     }
 
     return data;
   } catch (error) {
-    console.error('API Request Error:', error);
+    // Fallback: if direct host failed (e.g., backend not running on 5000), try same-origin /api path
+    try {
+      if (error && (error.name === 'TypeError' || String(error).includes('Failed to fetch') || String(error).includes('ERR_CONNECTION_REFUSED'))) {
+        const sameOriginUrl = `/api${url.startsWith('/') ? url : `/${url}`}`;
+        const fallbackResponse = await fetch(sameOriginUrl, {
+          ...options,
+          headers: {
+            ...getAuthHeaders(),
+            ...options.headers
+          },
+          credentials: 'include'
+        });
+        
+        const fallbackData = await safeJsonParse(fallbackResponse);
+        
+        if (!fallbackResponse.ok) {
+          throw new Error(fallbackData.message || fallbackData.error || `Server error: ${fallbackResponse.status}`);
+        }
+        return fallbackData;
+      }
+    } catch (fallbackError) {
+      // Don't log connection errors for generation endpoint (404 is expected if already generated)
+      if (!String(fallbackError).includes('404') || !url.includes('/salary/generate')) {
+        console.error('API Request Error (fallback failed):', fallbackError);
+      }
+      throw fallbackError;
+    }
+    
+    // Don't log connection errors for generation endpoint
+    if (!String(error).includes('404') || !url.includes('/salary/generate')) {
+      console.error('API Request Error:', error);
+    }
     throw error;
   }
 };

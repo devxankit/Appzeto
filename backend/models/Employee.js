@@ -89,6 +89,11 @@ const employeeSchema = new mongoose.Schema({
     min: 0,
     default: 0
   },
+  fixedSalary: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
   skills: [{
     type: String,
     trim: true

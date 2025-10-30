@@ -30,4 +30,11 @@ router.post('/logout', logoutAdmin);
 // router.get('/hr-access', canAccessHR, hrAccessFunction);
 // router.get('/specific-roles', authorize('admin', 'hr'), specificRoleFunction);
 
+// Attendance (Admin/HR)
+const upload = require('../middlewares/upload');
+const { uploadAttendance, getAttendance } = require('../controllers/adminAttendanceController');
+router.use(authorize('admin', 'hr'));
+router.post('/attendance/upload', upload.single('file'), uploadAttendance);
+router.get('/attendance', getAttendance);
+
 module.exports = router;

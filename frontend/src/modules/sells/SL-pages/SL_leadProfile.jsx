@@ -18,7 +18,6 @@ import {
   FiFolder,
   FiCalendar,
   FiFileText,
-  FiDollarSign,
   FiImage,
   FiUpload,
   FiClock,
@@ -26,6 +25,7 @@ import {
   FiMapPin,
   FiVideo
 } from 'react-icons/fi'
+import { FaRupeeSign } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
 import { salesLeadService } from '../SL-services'
 import { salesMeetingsService } from '../SL-services'
@@ -1047,14 +1047,14 @@ const SL_leadProfile = () => {
                     <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
                       <FiFolder className="text-lg" />
                     </div>
-                    <input
-                      type="text"
-                      value={conversionData.projectName}
-                      onChange={(e) => setConversionData({ ...conversionData, projectName: e.target.value })}
+                  <input
+                    type="text"
+                    value={conversionData.projectName}
+                    onChange={(e) => setConversionData({ ...conversionData, projectName: e.target.value })}
                       placeholder="Project name"
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                      required
-                    />
+                    required
+                  />
                   </div>
                 </div>
 
@@ -1157,18 +1157,18 @@ const SL_leadProfile = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Total Cost <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
-                      <FiDollarSign className="text-lg" />
+                      <FaRupeeSign className="text-lg" />
                     </div>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
                       value={conversionData.totalCost}
                       onChange={(e) => setConversionData({ ...conversionData, totalCost: e.target.value })}
                       placeholder="Total cost"
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                      required
-                    />
+                    required
+                  />
                   </div>
                 </div>
 
@@ -1179,7 +1179,7 @@ const SL_leadProfile = () => {
                     <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
                       <FiCheck className="text-lg" />
                     </div>
-                    <input
+                  <input
                       type="number"
                       min="0"
                       step="0.01"
@@ -1187,7 +1187,7 @@ const SL_leadProfile = () => {
                       onChange={(e) => setConversionData({ ...conversionData, advanceReceived: e.target.value })}
                       placeholder="Advance received"
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                    />
+                  />
                   </div>
                 </div>
 
@@ -1214,7 +1214,7 @@ const SL_leadProfile = () => {
                       <div className="space-y-2">
                         <FiImage className="text-4xl text-teal-600 mx-auto" />
                         <p className="text-sm text-gray-700">{conversionData.screenshot.name}</p>
-                        <button
+                  <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation()
@@ -1222,9 +1222,9 @@ const SL_leadProfile = () => {
                             document.getElementById('screenshot-upload').value = ''
                           }}
                           className="text-xs text-red-600 hover:text-red-800"
-                        >
+                  >
                           Remove
-                        </button>
+                  </button>
                       </div>
                     ) : (
                       <div className="space-y-2">

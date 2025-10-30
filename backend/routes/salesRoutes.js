@@ -10,6 +10,7 @@ const {
   getSalesDashboardStats,
   getDashboardStats,
   getMonthlyConversions,
+  getWalletSummary,
   getMyLeads,
   getLeadsByStatus,
   getLeadDetail,
@@ -49,6 +50,7 @@ router.get('/lead-categories', getLeadCategories);
 // Dashboard & Statistics
 router.get('/debug/leads', debugLeads);
 router.get('/dashboard/tile-stats', require('../controllers/salesController').getTileCardStats);
+router.get('/dashboard/hero-stats', require('../controllers/salesController').getDashboardHeroStats);
 router.get('/dashboard/statistics', getSalesDashboardStats);
 // Alias path per plan
 router.get('/dashboard/stats', getDashboardStats);
@@ -101,5 +103,18 @@ router.post('/meetings', require('../controllers/salesController').createSalesMe
 router.put('/meetings/:id', require('../controllers/salesController').updateSalesMeeting);
 router.delete('/meetings/:id', require('../controllers/salesController').deleteSalesMeeting);
 router.get('/clients/my-converted', require('../controllers/salesController').getMyConvertedClients);
+
+// Client Profile Management
+router.get('/clients/:id/profile', require('../controllers/salesController').getClientProfile);
+router.post('/clients/:clientId/payments', require('../controllers/salesController').createClientPayment);
+router.post('/clients/:clientId/project-requests', require('../controllers/salesController').createProjectRequest);
+router.get('/clients/:clientId/project-requests', require('../controllers/salesController').getProjectRequests);
+router.post('/clients/:clientId/increase-cost', require('../controllers/salesController').increaseProjectCost);
+router.post('/clients/:clientId/transfer', require('../controllers/salesController').transferClient);
+router.post('/clients/:clientId/mark-completed', require('../controllers/salesController').markProjectCompleted);
+router.get('/clients/:clientId/transactions', require('../controllers/salesController').getClientTransactions);
+
+// Wallet
+router.get('/wallet/summary', getWalletSummary);
 
 module.exports = router;

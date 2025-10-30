@@ -3,6 +3,8 @@ import { motion } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
+import { adminFinanceService } from '../admin-services/adminFinanceService'
+import { useToast } from '../../../contexts/ToastContext'
 import { 
   FiDollarSign,
   FiTrendingUp,
@@ -28,6 +30,8 @@ import {
 } from 'react-icons/fi'
 
 const Admin_finance_management = () => {
+  const { toast } = useToast()
+  
   // State management
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('transactions')
@@ -37,6 +41,7 @@ const Admin_finance_management = () => {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(20)
   const [timeFilter, setTimeFilter] = useState('all')
+  const [error, setError] = useState(null)
   
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -168,79 +173,11 @@ const Admin_finance_management = () => {
     }
   }
 
-  // Mock data - Transactions
-  const [transactions, setTransactions] = useState([
-    {
-      id: 1,
-      type: 'incoming',
-      category: 'Project Payment',
-      amount: 150000,
-      client: 'TechCorp Solutions',
-      project: 'E-commerce Platform',
-      date: '2024-01-15',
-      status: 'completed',
-      method: 'Bank Transfer',
-      description: 'Milestone payment for Phase 2 completion'
-    },
-    {
-      id: 2,
-      type: 'outgoing',
-      category: 'Salary',
-      amount: 35000,
-      employee: 'John Doe',
-      role: 'Senior Developer',
-      date: '2024-01-01',
-      status: 'completed',
-      method: 'Bank Transfer',
-      description: 'Monthly salary payment'
-    },
-    {
-      id: 3,
-      type: 'incoming',
-      category: 'Consulting',
-      amount: 75000,
-      client: 'StartupXYZ',
-      project: 'Mobile App Development',
-      date: '2024-01-20',
-      status: 'pending',
-      method: 'UPI',
-      description: 'Consulting fee for app architecture'
-    },
-    {
-      id: 4,
-      type: 'outgoing',
-      category: 'Office Rent',
-      amount: 25000,
-      vendor: 'Prime Properties',
-      date: '2024-01-01',
-      status: 'completed',
-      method: 'Bank Transfer',
-      description: 'Monthly office rent payment'
-    },
-    {
-      id: 5,
-      type: 'incoming',
-      category: 'Maintenance',
-      amount: 12000,
-      client: 'RetailChain',
-      project: 'Website Maintenance',
-      date: '2024-01-25',
-      status: 'completed',
-      method: 'Credit Card',
-      description: 'Monthly maintenance contract'
-    },
-    {
-      id: 6,
-      type: 'outgoing',
-      category: 'Software License',
-      amount: 5000,
-      vendor: 'Adobe Inc.',
-      date: '2024-01-10',
-      status: 'completed',
-      method: 'Credit Card',
-      description: 'Annual Creative Suite license'
-    }
-  ])
+  // Transactions state - fetched from API
+  const [transactions, setTransactions] = useState([])
+  const [transactionsLoading, setTransactionsLoading] = useState(false)
+  const [transactionsTotal, setTransactionsTotal] = useState(0)
+  const [transactionsPages, setTransactionsPages] = useState(1)
 
   // Mock data - Budgets
   const [budgets, setBudgets] = useState([
@@ -419,17 +356,61 @@ const Admin_finance_management = () => {
     }
   ])
 
-  // Simulate data loading
-  const loadData = async () => {
-    setLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setLoading(false)
+  // Fetch transactions from API
+  const fetchTransactions = async () => {
+    try {
+      setTransactionsLoading(true)
+      setError(null)
+      
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage
+      }
+      
+      // Add filters
+      if (transactionTypeFilter !== 'all') {
+        params.type = transactionTypeFilter
+      }
+      if (selectedFilter !== 'all') {
+        params.status = selectedFilter
+      }
+      if (searchTerm) {
+        params.search = searchTerm
+      }
+      
+      const response = await adminFinanceService.getTransactions(params)
+      
+      if (response.success && response.data) {
+        setTransactions(response.data)
+        setTransactionsTotal(response.total || response.data.length)
+        setTransactionsPages(response.pages || 1)
+      }
+    } catch (err) {
+      console.error('Error fetching transactions:', err)
+      setError(err.message || 'Failed to fetch transactions')
+      toast.error('Failed to load transactions')
+    } finally {
+      setTransactionsLoading(false)
+      setLoading(false)
+    }
   }
 
+  // Reset to page 1 when filters change
   useEffect(() => {
-    loadData()
-  }, [])
+    if (activeTab === 'transactions') {
+      setCurrentPage(1)
+    }
+  }, [transactionTypeFilter, selectedFilter, searchTerm, activeTab])
+
+  // Load transactions when component mounts or filters change
+  useEffect(() => {
+    if (activeTab === 'transactions') {
+      fetchTransactions()
+    } else {
+      setLoading(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, currentPage, transactionTypeFilter, selectedFilter, searchTerm])
 
   // Helper functions
   const getStatusColor = (status) => {
@@ -473,7 +454,12 @@ const Admin_finance_management = () => {
   const getCurrentData = () => {
     switch (activeTab) {
       case 'transactions':
-        return transactions
+        return transactions.map(t => ({
+          ...t,
+          id: t._id || t.id,
+          type: t.transactionType || t.type,
+          date: t.transactionDate || t.date || t.createdAt
+        }))
       case 'budgets':
         return budgets
       case 'invoices':
@@ -488,8 +474,16 @@ const Admin_finance_management = () => {
   }
 
   // Filter data based on search and filter criteria
+  // Note: Transactions are filtered on the backend, so we skip client-side filtering for them
   const filteredData = useMemo(() => {
     const data = getCurrentData()
+    
+    // For transactions, backend handles filtering, so return data as-is
+    if (activeTab === 'transactions') {
+      return data
+    }
+    
+    // For other tabs (still using mock data), apply client-side filtering
     return data.filter(item => {
       const matchesSearch = Object.values(item).some(value =>
         value?.toString().toLowerCase().includes(searchTerm.toLowerCase())
@@ -497,9 +491,7 @@ const Admin_finance_management = () => {
       
       let matchesFilter = true
       if (selectedFilter !== 'all') {
-        if (activeTab === 'transactions') {
-          matchesFilter = item.status === selectedFilter
-        } else if (activeTab === 'budgets') {
+        if (activeTab === 'budgets') {
           matchesFilter = item.status === selectedFilter
         } else if (activeTab === 'invoices') {
           matchesFilter = item.status === selectedFilter
@@ -509,24 +501,25 @@ const Admin_finance_management = () => {
           matchesFilter = item.isActive === (selectedFilter === 'active')
         }
       }
-
-      // Handle transaction type filter for transactions tab
-      let matchesTransactionType = true
-      if (activeTab === 'transactions' && transactionTypeFilter !== 'all') {
-        matchesTransactionType = item.type === transactionTypeFilter
-      }
       
-      return matchesSearch && matchesFilter && matchesTransactionType
+      return matchesSearch && matchesFilter
     })
-  }, [activeTab, searchTerm, selectedFilter, transactionTypeFilter])
+  }, [activeTab, searchTerm, selectedFilter, transactionTypeFilter, transactions])
 
   // Pagination
   const paginatedData = useMemo(() => {
+    // For transactions, backend handles pagination, so return data as-is
+    if (activeTab === 'transactions') {
+      return filteredData
+    }
+    // For other tabs, apply client-side pagination
     const startIndex = (currentPage - 1) * itemsPerPage
     return filteredData.slice(startIndex, startIndex + itemsPerPage)
-  }, [filteredData, currentPage, itemsPerPage])
+  }, [filteredData, currentPage, itemsPerPage, activeTab])
 
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage)
+  const totalPages = activeTab === 'transactions' 
+    ? transactionsPages 
+    : Math.ceil(filteredData.length / itemsPerPage)
 
   // Management functions
   const handleCreate = () => {
@@ -745,22 +738,57 @@ const Admin_finance_management = () => {
     setShowExpenseModal(true)
   }
 
-  const handleSaveTransaction = () => {
-    if (!transactionFormData.category || !transactionFormData.amount) {
-      alert('Please fill in all required fields')
+  const handleSaveTransaction = async () => {
+    if (!transactionFormData.category || !transactionFormData.amount || !transactionFormData.date) {
+      toast.error('Please fill in all required fields')
       return
     }
 
-    const newTransaction = {
-      id: transactions.length + 1,
-      ...transactionFormData,
-      amount: parseFloat(transactionFormData.amount),
-      status: 'completed'
-    }
+    try {
+      setLoading(true)
+      
+      const transactionData = {
+        type: transactionFormData.type,
+        category: transactionFormData.category,
+        amount: parseFloat(transactionFormData.amount),
+        date: transactionFormData.date,
+        method: transactionFormData.method || 'Bank Transfer',
+        description: transactionFormData.description || ''
+      }
 
-    setTransactions([...transactions, newTransaction])
-    setShowTransactionModal(false)
-    closeModals()
+      // Add optional fields
+      if (transactionFormData.client) {
+        transactionData.client = transactionFormData.client
+      }
+      if (transactionFormData.project) {
+        transactionData.project = transactionFormData.project
+      }
+      if (transactionFormData.employee) {
+        transactionData.employee = transactionFormData.employee
+      }
+      if (transactionFormData.vendor) {
+        transactionData.vendor = transactionFormData.vendor
+      }
+
+      console.log('Creating transaction with data:', transactionData)
+      const response = await adminFinanceService.createTransaction(transactionData)
+      console.log('Transaction creation response:', response)
+      
+      if (response && response.success) {
+        toast.success(response.message || 'Transaction created successfully')
+        setShowTransactionModal(false)
+        closeModals()
+        // Refresh transactions list
+        await fetchTransactions()
+      } else {
+        toast.error(response?.message || 'Failed to create transaction')
+      }
+    } catch (err) {
+      console.error('Error creating transaction:', err)
+      toast.error(err.message || 'Failed to create transaction')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSaveBudget = () => {
@@ -861,7 +889,11 @@ const Admin_finance_management = () => {
                 </p>
               </div>
               <button
-                onClick={loadData}
+                onClick={() => {
+                  if (activeTab === 'transactions') {
+                    fetchTransactions()
+                  }
+                }}
                 className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
               >
                 <FiRefreshCw className="text-sm" />
@@ -1340,10 +1372,35 @@ const Admin_finance_management = () => {
           </div>
 
           {/* Content Grid */}
+          {transactionsLoading && activeTab === 'transactions' ? (
+            <div className="flex justify-center items-center py-12">
+              <Loading size="medium" />
+            </div>
+          ) : error && activeTab === 'transactions' ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+              <p className="text-red-600">{error}</p>
+              <button
+                onClick={fetchTransactions}
+                className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          ) : paginatedData.length === 0 && activeTab === 'transactions' ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+              <p className="text-gray-600">No transactions found</p>
+              <button
+                onClick={handleCreateTransaction}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Add First Transaction
+              </button>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {paginatedData.map((item, index) => (
               <motion.div
-                key={item.id}
+                key={item._id || item.id || `item-${index}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
@@ -1353,8 +1410,8 @@ const Admin_finance_management = () => {
                 {activeTab === 'transactions' && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className={`text-sm font-medium ${getTypeColor(item.type)}`}>
-                        {item.type === 'incoming' ? '+' : '-'}{formatCurrency(item.amount)}
+                      <span className={`text-sm font-medium ${getTypeColor(item.transactionType || item.type)}`}>
+                        {(item.transactionType || item.type) === 'incoming' ? '+' : '-'}{formatCurrency(item.amount)}
                       </span>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
                         {item.status}
@@ -1362,11 +1419,13 @@ const Admin_finance_management = () => {
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900 text-sm">{item.category}</h3>
-                      <p className="text-xs text-gray-600 mt-1">{item.description}</p>
+                      <p className="text-xs text-gray-600 mt-1">{item.description || 'No description'}</p>
                     </div>
                     <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>{item.client || item.employee || item.vendor}</span>
-                      <span>{formatDate(item.date)}</span>
+                      <span>
+                        {item.client?.name || item.employee?.name || item.vendor || 'N/A'}
+                      </span>
+                      <span>{formatDate(item.transactionDate || item.date || item.createdAt)}</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <button
@@ -1590,12 +1649,17 @@ const Admin_finance_management = () => {
               </motion.div>
             ))}
           </div>
+          )}
 
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="mt-8 flex items-center justify-between">
               <div className="text-sm text-gray-700">
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results
+                {activeTab === 'transactions' ? (
+                  <>Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, transactionsTotal)} of {transactionsTotal} results</>
+                ) : (
+                  <>Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results</>
+                )}
               </div>
               <div className="flex items-center space-x-2">
                 <button
@@ -2010,7 +2074,10 @@ const Admin_finance_management = () => {
               </button>
             </div>
 
-            <form onSubmit={(e) => { e.preventDefault(); handleSaveTransaction(); }} className="space-y-4">
+            <form onSubmit={async (e) => { 
+              e.preventDefault(); 
+              await handleSaveTransaction(); 
+            }} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Transaction Type *</label>

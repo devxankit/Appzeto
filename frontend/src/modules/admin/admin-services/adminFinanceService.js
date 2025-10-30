@@ -98,6 +98,30 @@ export const adminFinanceService = {
     } catch (error) {
       throw error;
     }
+  },
+
+  // Get transaction statistics
+  getTransactionStats: async (timeFilter = 'all') => {
+    try {
+      const response = await apiRequest(`/admin/finance/transactions/stats?timeFilter=${timeFilter}`, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get single transaction
+  getTransaction: async (transactionId) => {
+    try {
+      const response = await apiRequest(`/admin/finance/transactions/${transactionId}`, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 

@@ -9,6 +9,7 @@ const SalesTask = require('../models/SalesTask');
 const SalesMeeting = require('../models/SalesMeeting');
 const Project = require('../models/Project');
 const Client = require('../models/Client');
+const Request = require('../models/Request');
 // Ensure LeadProfile model is registered before any populate calls
 require('../models/LeadProfile');
 
@@ -55,7 +56,7 @@ const getPaymentRecovery = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
     const { search = '', overdue, band } = req.query;
-
+    // Primary path: clients converted by me
     const clientMatch = { convertedBy: salesId };
     if (search) {
       clientMatch.$or = [
@@ -63,12 +64,16 @@ const getPaymentRecovery = async (req, res) => {
         { phoneNumber: new RegExp(search, 'i') }
       ];
     }
-
-    // Find clients converted by me
     const myClients = await Client.find(clientMatch).select('_id name phoneNumber');
     const clientIds = myClients.map(c => c._id);
 
-    const projectFilter = { client: { $in: clientIds } };
+    // Build project filter: include both clients converted by me and projects I submitted
+    const projectFilter = {
+      $or: [
+        { client: { $in: clientIds } },
+        { submittedBy: salesId }
+      ]
+    };
     if (overdue === 'true') {
       projectFilter.dueDate = { $lt: new Date() };
     }
@@ -113,9 +118,11 @@ const getPaymentRecovery = async (req, res) => {
 const getPaymentRecoveryStats = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
+    // Prefer clients converted by me; fallback to projects submitted by me
     const myClients = await Client.find({ convertedBy: salesId }).select('_id');
     const clientIds = myClients.map(c => c._id);
-    const projects = await Project.find({ client: { $in: clientIds } }).select('dueDate financialDetails');
+    const projectQuery = { $or: [ { client: { $in: clientIds } }, { submittedBy: salesId } ] };
+    const projects = await Project.find(projectQuery).select('dueDate financialDetails');
     let totalDue = 0, overdueCount = 0, overdueAmount = 0;
     const now = new Date();
     projects.forEach(p => {
@@ -949,6 +956,119 @@ const getTileCardStats = async (req, res) => {
   } catch (error) {
     console.error('getTileCardStats error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch tile card stats' });
+  }
+};
+
+// @desc    Get dashboard hero card statistics (monthly sales, target, reward, incentives, etc.)
+// @route   GET /api/sales/dashboard/hero-stats
+// @access  Private (Sales only)
+const getDashboardHeroStats = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const Sales = require('../models/Sales');
+    const Client = require('../models/Client');
+    const Project = require('../models/Project');
+    const Lead = require('../models/Lead');
+    
+    // Get sales employee data
+    const sales = await Sales.findById(salesId).select('name salesTarget reward incentivePerClient');
+    if (!sales) {
+      return res.status(404).json({ success: false, message: 'Sales employee not found' });
+    }
+    
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    
+    // Get clients converted by this sales employee
+    const convertedClients = await Client.find({ convertedBy: salesId })
+      .select('_id conversionDate');
+    
+    // Filter clients converted this month and today
+    const monthlyClientIds = convertedClients
+      .filter(c => c.conversionDate && c.conversionDate >= monthStart && c.conversionDate <= monthEnd)
+      .map(c => c._id.toString());
+    
+    const todayClientIds = convertedClients
+      .filter(c => c.conversionDate && c.conversionDate >= todayStart && c.conversionDate <= todayEnd)
+      .map(c => c._id.toString());
+    
+    // Get all projects for clients converted this month and today
+    const allClientIds = convertedClients.map(c => c._id);
+    const projects = await Project.find({ client: { $in: allClientIds } })
+      .select('client financialDetails.totalCost budget createdAt');
+    
+    // Calculate monthly sales (sum of project costs for clients converted this month)
+    let monthlySales = 0;
+    projects.forEach(p => {
+      const clientIdStr = p.client.toString();
+      if (monthlyClientIds.includes(clientIdStr)) {
+        const cost = p.financialDetails?.totalCost || p.budget || 0;
+        monthlySales += cost;
+      }
+    });
+    
+    // Calculate today's sales (sum of project costs for clients converted today)
+    let todaysSales = 0;
+    projects.forEach(p => {
+      const clientIdStr = p.client.toString();
+      if (todayClientIds.includes(clientIdStr)) {
+        const cost = p.financialDetails?.totalCost || p.budget || 0;
+        todaysSales += cost;
+      }
+    });
+    
+    // Count clients converted this month
+    const monthlyConvertedCount = monthlyClientIds.length;
+    
+    // Count clients converted today
+    const todayConvertedCount = todayClientIds.length;
+    
+    // Calculate incentives
+    const incentivePerClient = sales.incentivePerClient || 0;
+    const todaysIncentive = todayConvertedCount * incentivePerClient;
+    const monthlyIncentive = monthlyConvertedCount * incentivePerClient;
+    
+    // Calculate progress to target
+    const target = sales.salesTarget || 0;
+    const progressToTarget = target > 0 ? Math.round((monthlySales / target) * 100) : 0;
+    
+    // Get total leads count
+    const totalLeads = await Lead.countDocuments({ assignedTo: salesId });
+    
+    // Get total clients count
+    const totalClients = convertedClients.length;
+    
+    // Get reward
+    const reward = sales.reward || 0;
+    
+    // Extract first name from full name
+    const getFirstName = (fullName) => {
+      if (!fullName) return 'Employee';
+      const nameParts = fullName.trim().split(/\s+/);
+      return nameParts[0] || 'Employee';
+    };
+    
+    res.json({
+      success: true,
+      data: {
+        employeeName: getFirstName(sales.name),
+        monthlySales: Math.round(monthlySales),
+        target: target,
+        progressToTarget: Math.min(progressToTarget, 100), // Cap at 100%
+        reward: reward,
+        todaysSales: Math.round(todaysSales),
+        todaysIncentive: Math.round(todaysIncentive),
+        monthlyIncentive: Math.round(monthlyIncentive),
+        totalLeads: totalLeads,
+        totalClients: totalClients
+      }
+    });
+  } catch (error) {
+    console.error('getDashboardHeroStats error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch dashboard hero stats' });
   }
 };
 
@@ -2115,6 +2235,715 @@ const addNoteToLead = async (req, res) => {
   }
 };
 
+// @desc    Get client profile with project details
+// @route   GET /api/sales/clients/:id/profile
+// @access  Private (Sales only - only converter can access)
+const getClientProfile = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const clientId = req.params.id;
+
+    // Find client and verify it was converted by this sales employee
+    const client = await Client.findById(clientId);
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found'
+      });
+    }
+
+    // Verify access - only the sales employee who converted can access
+    if (!client.convertedBy || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this client'
+      });
+    }
+
+    // Find associated project(s) for this client
+    const projects = await Project.find({ client: clientId })
+      .select('name description status progress projectType financialDetails budget startDate dueDate finishedDays')
+      .sort({ createdAt: -1 });
+
+    // Use primary project (most recent or first one)
+    const primaryProject = projects[0] || null;
+
+    // Calculate financial summary from primary project
+    let totalCost = 0;
+    let advanceReceived = 0;
+    let pending = 0;
+    let workProgress = 0;
+    let status = 'N/A';
+    let projectType = 'N/A';
+    let startDate = null;
+    let expectedCompletion = null;
+
+    if (primaryProject) {
+      totalCost = primaryProject.financialDetails?.totalCost || primaryProject.budget || 0;
+      advanceReceived = primaryProject.financialDetails?.advanceReceived || 0;
+      pending = primaryProject.financialDetails?.remainingAmount || (totalCost - advanceReceived);
+      workProgress = primaryProject.progress || 0;
+      status = primaryProject.status || 'N/A';
+      
+      // Format project type
+      const pt = primaryProject.projectType || {};
+      if (pt.web) projectType = 'Web';
+      else if (pt.app) projectType = 'App';
+      else if (pt.taxi) projectType = 'Taxi';
+      else projectType = 'N/A';
+
+      startDate = primaryProject.startDate;
+      expectedCompletion = primaryProject.dueDate;
+    }
+
+    // Generate avatar from name
+    const avatar = client.name ? client.name.charAt(0).toUpperCase() : 'C';
+
+    res.status(200).json({
+      success: true,
+      data: {
+        client: {
+          id: client._id,
+          name: client.name,
+          phone: client.phoneNumber,
+          avatar: avatar,
+          company: client.companyName || ''
+        },
+        financial: {
+          totalCost,
+          advanceReceived,
+          pending
+        },
+        project: {
+          workProgress,
+          status,
+          projectType,
+          startDate,
+          expectedCompletion,
+          projectDetails: primaryProject
+        },
+        allProjects: projects
+      }
+    });
+  } catch (error) {
+    console.error('Get client profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching client profile'
+    });
+  }
+};
+
+// @desc    Create payment receipt for client
+// @route   POST /api/sales/clients/:clientId/payments
+// @access  Private (Sales only - only converter can access)
+const createClientPayment = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const clientId = req.params.clientId;
+    const { amount, accountId, method = 'upi', referenceId, notes } = req.body;
+
+    // Validate required fields
+    if (!amount || !accountId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount and account are required'
+      });
+    }
+
+    // Find client and verify access
+    const client = await Client.findById(clientId);
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found'
+      });
+    }
+
+    if (!client.convertedBy || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized for this client'
+      });
+    }
+
+    // Find primary project for this client
+    const project = await Project.findOne({ client: clientId })
+      .sort({ createdAt: -1 });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'No project found for this client'
+      });
+    }
+
+    // Verify account exists
+    const account = await Account.findById(accountId);
+    if (!account || !account.isActive) {
+      return res.status(404).json({
+        success: false,
+        message: 'Account not found or inactive'
+      });
+    }
+
+    // Create payment receipt
+    const receipt = await PaymentReceipt.create({
+      client: client._id,
+      project: project._id,
+      amount: parseFloat(amount),
+      account: accountId,
+      method,
+      referenceId: referenceId || undefined,
+      notes: notes || undefined,
+      createdBy: salesId,
+      status: 'pending'
+    });
+
+    res.status(201).json({
+      success: true,
+      data: receipt,
+      message: 'Payment receipt created and pending verification'
+    });
+  } catch (error) {
+    console.error('Create client payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create payment receipt'
+    });
+  }
+};
+
+// @desc    Create project request (accelerate/hold work)
+// @route   POST /api/sales/clients/:clientId/project-requests
+// @access  Private (Sales only - only converter can access)
+const createProjectRequest = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const clientId = req.params.clientId;
+    const { requestType, reason } = req.body;
+
+    // Validate required fields
+    if (!requestType || !reason) {
+      return res.status(400).json({
+        success: false,
+        message: 'Request type and reason are required'
+      });
+    }
+
+    if (!['accelerate_work', 'hold_work'].includes(requestType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request type. Must be accelerate_work or hold_work'
+      });
+    }
+
+    // Find client and verify access
+    const client = await Client.findById(clientId);
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found'
+      });
+    }
+
+    if (!client.convertedBy || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized for this client'
+      });
+    }
+
+    // Find primary project for this client
+    const project = await Project.findOne({ client: clientId })
+      .sort({ createdAt: -1 });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'No project found for this client'
+      });
+    }
+
+    // Create request
+    const request = await Request.create({
+      module: 'sales',
+      requestType,
+      client: client._id,
+      project: project._id,
+      reason: reason.trim(),
+      requestedBy: salesId,
+      requestedByModel: 'Sales',
+      status: 'pending'
+    });
+
+    res.status(201).json({
+      success: true,
+      data: request,
+      message: 'Request created successfully'
+    });
+  } catch (error) {
+    console.error('Create project request error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create project request'
+    });
+  }
+};
+
+// @desc    Get project requests for client
+// @route   GET /api/sales/clients/:clientId/project-requests
+// @access  Private (Sales only - only converter can access)
+const getProjectRequests = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const clientId = req.params.clientId;
+
+    // Find client and verify access
+    const client = await Client.findById(clientId);
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found'
+      });
+    }
+
+    if (!client.convertedBy || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized for this client'
+      });
+    }
+
+    // Fetch requests for this client
+    const requests = await Request.find({
+      client: clientId,
+      module: 'sales'
+    })
+      .populate('project', 'name status')
+      .populate('requestedBy', 'name email')
+      .populate('handledBy', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: requests,
+      message: 'Requests fetched successfully'
+    });
+  } catch (error) {
+    console.error('Get project requests error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch project requests'
+    });
+  }
+};
+
+// @desc    Increase project cost
+// @route   POST /api/sales/clients/:clientId/increase-cost
+// @access  Private (Sales only - only converter can access)
+const increaseProjectCost = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const clientId = req.params.clientId;
+    const { amount, reason } = req.body;
+
+    // Validate required fields
+    if (!amount || !reason) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount and reason are required'
+      });
+    }
+
+    const increaseAmount = parseFloat(amount);
+    if (isNaN(increaseAmount) || increaseAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount must be a positive number'
+      });
+    }
+
+    // Find client and verify access
+    const client = await Client.findById(clientId);
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found'
+      });
+    }
+
+    if (!client.convertedBy || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized for this client'
+      });
+    }
+
+    // Find primary project for this client
+    const project = await Project.findOne({ client: clientId })
+      .sort({ createdAt: -1 });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'No project found for this client'
+      });
+    }
+
+    // Store previous cost for history
+    const previousCost = project.financialDetails?.totalCost || project.budget || 0;
+    const newCost = previousCost + increaseAmount;
+
+    // Update financial details
+    const currentAdvanceReceived = project.financialDetails?.advanceReceived || 0;
+    project.financialDetails = {
+      totalCost: newCost,
+      advanceReceived: currentAdvanceReceived,
+      includeGST: project.financialDetails?.includeGST || false,
+      remainingAmount: newCost - currentAdvanceReceived
+    };
+
+    // Update budget
+    project.budget = newCost;
+
+    // Add to cost history
+    if (!project.costHistory) {
+      project.costHistory = [];
+    }
+    project.costHistory.push({
+      previousCost,
+      newCost,
+      reason: reason.trim(),
+      changedBy: salesId,
+      changedByModel: 'Sales',
+      changedAt: new Date()
+    });
+
+    await project.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        project: {
+          _id: project._id,
+          financialDetails: project.financialDetails,
+          budget: project.budget
+        },
+        costIncrease: increaseAmount,
+        previousCost,
+        newCost
+      },
+      message: 'Project cost increased successfully'
+    });
+  } catch (error) {
+    console.error('Increase project cost error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to increase project cost'
+    });
+  }
+};
+
+// @desc    Transfer client to another sales employee
+// @route   POST /api/sales/clients/:clientId/transfer
+// @access  Private (Sales only - only converter can access)
+const transferClient = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const clientId = req.params.clientId;
+    const { toSalesId, reason } = req.body;
+
+    // Validate required fields
+    if (!toSalesId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Target sales employee ID is required'
+      });
+    }
+
+    // Find client and verify access
+    const client = await Client.findById(clientId);
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found'
+      });
+    }
+
+    if (!client.convertedBy || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized for this client'
+      });
+    }
+
+    // Verify target sales employee exists
+    const targetSales = await Sales.findById(toSalesId);
+    if (!targetSales) {
+      return res.status(404).json({
+        success: false,
+        message: 'Target sales employee not found'
+      });
+    }
+
+    // Prevent transferring to self
+    if (String(toSalesId) === String(salesId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot transfer client to yourself'
+      });
+    }
+
+    // Initialize transferHistory if it doesn't exist
+    if (!client.transferHistory) {
+      client.transferHistory = [];
+    }
+
+    // Add transfer history entry
+    client.transferHistory.push({
+      fromSales: client.convertedBy,
+      toSales: toSalesId,
+      reason: reason ? reason.trim() : undefined,
+      transferredAt: new Date(),
+      transferredBy: salesId
+    });
+
+    // Update convertedBy
+    client.convertedBy = toSalesId;
+    await client.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        client: {
+          _id: client._id,
+          name: client.name,
+          convertedBy: client.convertedBy
+        },
+        transfer: {
+          fromSales: salesId,
+          toSales: toSalesId
+        }
+      },
+      message: 'Client transferred successfully'
+    });
+  } catch (error) {
+    console.error('Transfer client error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to transfer client'
+    });
+  }
+};
+
+// @desc    Mark project as completed (No Dues)
+// @route   POST /api/sales/clients/:clientId/mark-completed
+// @access  Private (Sales only - only converter can access)
+const markProjectCompleted = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const clientId = req.params.clientId;
+
+    // Find client and verify access
+    const client = await Client.findById(clientId);
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found'
+      });
+    }
+
+    if (!client.convertedBy || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized for this client'
+      });
+    }
+
+    // Find primary project for this client
+    const project = await Project.findOne({ client: clientId })
+      .sort({ createdAt: -1 });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'No project found for this client'
+      });
+    }
+
+    // Check if all payments are received
+    const remainingAmount = project.financialDetails?.remainingAmount || 0;
+    if (remainingAmount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot mark as completed. Remaining amount: ₹${remainingAmount.toLocaleString()}`
+      });
+    }
+
+    // Update project status
+    project.status = 'completed';
+    await project.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        project: {
+          _id: project._id,
+          name: project.name,
+          status: project.status
+        }
+      },
+      message: 'Project marked as completed successfully'
+    });
+  } catch (error) {
+    console.error('Mark project completed error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to mark project as completed'
+    });
+  }
+};
+
+// @desc    Get transaction history for client
+// @route   GET /api/sales/clients/:clientId/transactions
+// @access  Private (Sales only - only converter can access)
+const getClientTransactions = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const clientId = req.params.clientId;
+
+    // Find client and verify access
+    const client = await Client.findById(clientId);
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found'
+      });
+    }
+
+    if (!client.convertedBy || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized for this client'
+      });
+    }
+
+    // Find all projects for this client
+    const projects = await Project.find({ client: clientId }).select('_id name');
+    const projectIds = projects.map(p => p._id);
+
+    // Fetch all payment receipts for these projects
+    const transactions = await PaymentReceipt.find({
+      project: { $in: projectIds }
+    })
+      .populate('project', 'name')
+      .populate('account', 'name bankName accountNumber ifsc upiId')
+      .populate('createdBy', 'name email')
+      .populate('verifiedBy', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: transactions,
+      message: 'Transactions fetched successfully'
+    });
+  } catch (error) {
+    console.error('Get client transactions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch transactions'
+    });
+  }
+};
+
+// @desc    Get sales wallet summary
+// @route   GET /api/sales/wallet/summary
+// @access  Private (Sales only)
+const getWalletSummary = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+
+    // Load sales employee for salary and per-client incentive
+    const me = await Sales.findById(salesId).select('fixedSalary incentivePerClient name');
+    const perClient = Number(me?.incentivePerClient || 0);
+    const fixedSalary = Number(me?.fixedSalary || 0);
+
+    // Get clients converted by me
+    const clients = await Client.find({ convertedBy: salesId }).select('_id name conversionDate');
+    const clientIds = clients.map(c => c._id);
+
+    // Map clientId -> latest project
+    const projects = await Project.aggregate([
+      { $match: { client: { $in: clientIds } } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: '$client',
+          project: { $first: '$$ROOT' }
+        }
+      }
+    ]);
+
+    const clientIdToProject = new Map();
+    projects.forEach(p => clientIdToProject.set(String(p._id), p.project));
+
+    // Compute incentive breakdown
+    let allConvertedCount = clients.length;
+    let pending = 0;
+    let current = 0;
+    const breakdown = clients.map(c => {
+      const proj = clientIdToProject.get(String(c._id));
+      const remaining = proj?.financialDetails?.remainingAmount ?? (proj?.financialDetails?.totalCost || 0) - (proj?.financialDetails?.advanceReceived || 0);
+      const isNoDues = !!(proj && proj.status === 'completed' && Number(remaining) === 0);
+      if (isNoDues) current += perClient; else pending += perClient;
+      return {
+        clientId: c._id,
+        clientName: c.name,
+        projectId: proj?._id || null,
+        isNoDues,
+        convertedAt: c.conversionDate || null,
+        amount: perClient
+      };
+    });
+
+    // Monthly incentive: based on leads.convertedAt in current month
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const monthlyConverted = await require('../models/Lead').countDocuments({
+      assignedTo: salesId,
+      status: 'converted',
+      convertedAt: { $gte: monthStart, $lte: monthEnd }
+    });
+    const monthly = monthlyConverted * perClient;
+
+    const allTime = allConvertedCount * perClient;
+
+    // Transactions view: incentive (per converted client) + salary (current month)
+    const transactions = breakdown
+      .map(b => ({ id: `${b.clientId}`, type: 'incentive', amount: b.amount, date: b.convertedAt || me?.createdAt || new Date(), clientName: b.clientName }))
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    // Salary credit for this month (computed record)
+    const salaryTxDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (fixedSalary > 0) {
+      transactions.unshift({ id: `salary-${salaryTxDate.toISOString()}`, type: 'salary', amount: fixedSalary, date: salaryTxDate });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        salary: { fixedSalary },
+        incentive: { perClient, current, pending, monthly, allTime, breakdown },
+        transactions
+      }
+    });
+  } catch (error) {
+    console.error('Get wallet summary error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch wallet summary' });
+  }
+};
+
 module.exports = {
   loginSales,
   getSalesProfile,
@@ -2124,6 +2953,7 @@ module.exports = {
   getLeadCategories,
   debugLeads,
   getTileCardStats,
+  getDashboardHeroStats,
   getSalesDashboardStats,
   // alias export for new route path
   getDashboardStats: getSalesDashboardStats,
@@ -2142,11 +2972,9 @@ module.exports = {
   getAccounts,
   getPaymentRecovery,
   getPaymentRecoveryStats,
-  createPaymentReceipt
-  ,
+  createPaymentReceipt,
   getDemoRequests,
-  updateDemoRequestStatus
-  ,
+  updateDemoRequestStatus,
   listSalesTasks,
   createSalesTask,
   updateSalesTask,
@@ -2156,5 +2984,14 @@ module.exports = {
   createSalesMeeting,
   updateSalesMeeting,
   deleteSalesMeeting,
-  getMyConvertedClients
+  getMyConvertedClients,
+  getWalletSummary,
+  getClientProfile,
+  createClientPayment,
+  createProjectRequest,
+  getProjectRequests,
+  increaseProjectCost,
+  transferClient,
+  markProjectCompleted,
+  getClientTransactions
 };

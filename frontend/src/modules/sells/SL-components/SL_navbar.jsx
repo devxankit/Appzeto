@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { 
   FiHome, 
@@ -13,12 +13,31 @@ import {
 } from 'react-icons/fi'
 import logo from '../../../assets/images/logo.png'
 import SL_sideBar from './SL_sideBar'
+import { salesWalletService } from '../SL-services'
 
 function SL_navbar() {
   const location = useLocation()
   
-  // Mock wallet balance - Employee's current available balance
-  const [walletBalance] = useState(22750)
+  // Live wallet balance shown in navbar
+  const [walletBalance, setWalletBalance] = useState(0)
+  // Load current balance from wallet summary
+  useEffect(() => {
+    let mounted = true
+    const load = async () => {
+      try {
+        const data = await salesWalletService.getWalletSummary()
+        if (mounted) setWalletBalance(Number(data?.incentive?.current || 0))
+      } catch (e) {
+        // silent fail, keep 0
+      }
+    }
+    load()
+
+    // Optional: listen for manual refresh events triggered elsewhere
+    const refresh = () => load()
+    window.addEventListener('wallet:refresh', refresh)
+    return () => { mounted = false; window.removeEventListener('wallet:refresh', refresh) }
+  }, [])
   
   // Mock notification count
   const [notificationCount] = useState(3)

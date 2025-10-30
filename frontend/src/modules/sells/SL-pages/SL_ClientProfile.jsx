@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useToast } from '../../../contexts/ToastContext'
 import { 
   FiPhone, 
   FiPlus,
@@ -19,62 +20,32 @@ import {
   FiMessageCircle,
   FiEdit3,
   FiDownload,
-  FiShare2
+  FiShare2,
+  FiLoader
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 import { colors, gradients } from '../../../lib/colors'
+import salesClientService from '../SL-services/salesClientService'
 
 const SL_ClientProfile = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { toast } = useToast()
   
-  console.log('Client Profile loaded with ID:', id)
-  
-  // Mock client data - in real app, fetch based on ID
-  const clientData = {
-    1: {
-      id: 1,
-      name: 'Teris',
-      phone: '7846378987',
-      avatar: 'T',
-      totalCost: 50000,
-      advanceReceived: 20000,
-      pending: 30000,
-      workProgress: 85,
-      status: 'In Progress',
-      projectType: 'E-commerce Website',
-      startDate: '2024-01-15',
-      expectedCompletion: '2024-03-15',
-      lastPayment: '2024-02-01',
-      nextPayment: '2024-02-15'
-    },
-    2: {
-      id: 2,
-      name: 'Ankit Ahirwar',
-      phone: '9876543210',
-      avatar: 'A',
-      totalCost: 75000,
-      advanceReceived: 50000,
-      pending: 25000,
-      workProgress: 100,
-      status: 'Completed',
-      projectType: 'Mobile App Development',
-      startDate: '2024-01-01',
-      expectedCompletion: '2024-02-15',
-      lastPayment: '2024-02-15',
-      nextPayment: 'N/A'
-    }
-  }
-  
-  const client = clientData[id] || clientData[1]
+  // Client profile data state
+  const [clientData, setClientData] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
   
   const [showAddMoneyModal, setShowAddMoneyModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [showTransferConfirmation, setShowTransferConfirmation] = useState(false)
   const [selectedUser, setSelectedUser] = useState('')
+  const [selectedUserId, setSelectedUserId] = useState('')
   const [showUserDropdown, setShowUserDropdown] = useState(false)
   const [amount, setAmount] = useState('')
-  const [selectedAccount, setSelectedAccount] = useState('Vipin\'s account')
+  const [selectedAccount, setSelectedAccount] = useState('')
+  const [selectedAccountId, setSelectedAccountId] = useState('')
   const [showAccountDropdown, setShowAccountDropdown] = useState(false)
   const [showAccelerateModal, setShowAccelerateModal] = useState(false)
   const [showHoldModal, setShowHoldModal] = useState(false)
@@ -83,23 +54,92 @@ const SL_ClientProfile = () => {
   const [holdReason, setHoldReason] = useState('')
   const [increaseAmount, setIncreaseAmount] = useState('')
   const [increaseReason, setIncreaseReason] = useState('')
+  const [accounts, setAccounts] = useState([])
+  const [salesTeam, setSalesTeam] = useState([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const dropdownRef = useRef(null)
   
-  const handleAddMoney = () => {
-    if (amount) {
-      console.log('Adding money:', amount, 'to account:', selectedAccount)
-      setShowAddMoneyModal(false)
-      setAmount('')
-      setSelectedAccount('Vipin\'s account')
-      setShowAccountDropdown(false)
+  // Fetch client profile data
+  useEffect(() => {
+    if (id) {
+      fetchClientProfile()
+      fetchAccounts()
+      fetchSalesTeam()
+    }
+  }, [id])
+
+  const fetchClientProfile = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await salesClientService.getClientProfile(id)
+      if (response.success && response.data) {
+        setClientData(response.data)
+      } else {
+        throw new Error(response.message || 'Failed to fetch client profile')
+      }
+    } catch (err) {
+      console.error('Error fetching client profile:', err)
+      setError(err.message || 'Failed to load client profile')
+      toast.error(err.message || 'Failed to load client profile')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const accountOptions = [
-    'Vipin\'s account',
-    'Company account',
-    'Personal account'
-  ]
+  const fetchAccounts = async () => {
+    try {
+      const response = await salesClientService.getAccounts()
+      if (response.success && response.data) {
+        setAccounts(response.data || [])
+      }
+    } catch (err) {
+      console.error('Error fetching accounts:', err)
+    }
+  }
+
+  const fetchSalesTeam = async () => {
+    try {
+      const response = await salesClientService.getSalesTeam()
+      // Backend returns { success: true, data: [...] }
+      if (response?.success && Array.isArray(response.data)) {
+        setSalesTeam(response.data)
+      } else if (Array.isArray(response)) {
+        setSalesTeam(response)
+      }
+    } catch (err) {
+      console.error('Error fetching sales team:', err)
+    }
+  }
+
+  const handleAddMoney = async () => {
+    if (!amount || !selectedAccountId) {
+      toast.error('Please enter amount and select an account')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await salesClientService.createPayment(id, {
+        amount: parseFloat(amount),
+        accountId: selectedAccountId,
+        method: 'upi'
+      })
+      toast.success('Payment receipt created successfully. Pending admin approval.')
+      setShowAddMoneyModal(false)
+      setAmount('')
+      setSelectedAccount('')
+      setSelectedAccountId('')
+      setShowAccountDropdown(false)
+      // Refresh client data to update financial info
+      fetchClientProfile()
+    } catch (err) {
+      console.error('Error creating payment:', err)
+      toast.error(err.message || 'Failed to create payment receipt')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -122,56 +162,181 @@ const SL_ClientProfile = () => {
     }
   }
 
-  const handleConfirmTransfer = () => {
-    console.log('Transferring client to:', selectedUser)
-    setShowTransferConfirmation(false)
-    setSelectedUser('')
-    setShowUserDropdown(false)
-  }
+  const handleConfirmTransfer = async () => {
+    if (!selectedUserId) {
+      toast.error('Please select a team member')
+      return
+    }
 
-  const userOptions = [
-    'John Smith',
-    'Sarah Johnson',
-    'Mike Wilson',
-    'Emily Davis',
-    'David Brown',
-    'Lisa Anderson'
-  ]
-  
-  const handleCompleteProject = () => {
-    console.log('Completing project')
-    // Navigate to completion page or show success message
+    setIsSubmitting(true)
+    try {
+      await salesClientService.transferClient(id, selectedUserId)
+      toast.success('Client transferred successfully')
+      setShowTransferConfirmation(false)
+      setSelectedUser('')
+      setSelectedUserId('')
+      setShowUserDropdown(false)
+      // Refresh client data
+      fetchClientProfile()
+    } catch (err) {
+      console.error('Error transferring client:', err)
+      toast.error(err.message || 'Failed to transfer client')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
   
-  const handleAccelerateWork = () => {
-    if (accelerateReason) {
-      console.log('Accelerating work with reason:', accelerateReason)
+  const handleCompleteProject = async () => {
+    setIsSubmitting(true)
+    try {
+      await salesClientService.markCompleted(id)
+      toast.success('Project marked as completed successfully')
+      // Refresh client data
+      fetchClientProfile()
+    } catch (err) {
+      console.error('Error marking project as completed:', err)
+      toast.error(err.message || 'Failed to mark project as completed')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+  
+  const handleAccelerateWork = async () => {
+    if (!accelerateReason.trim()) {
+      toast.error('Please enter a reason')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await salesClientService.createProjectRequest(id, {
+        requestType: 'accelerate_work',
+        reason: accelerateReason.trim()
+      })
+      toast.success('Request sent successfully. Admin will review it.')
       setShowAccelerateModal(false)
       setAccelerateReason('')
+    } catch (err) {
+      console.error('Error creating accelerate request:', err)
+      toast.error(err.message || 'Failed to create request')
+    } finally {
+      setIsSubmitting(false)
     }
   }
   
-  const handleHoldWork = () => {
-    if (holdReason) {
-      console.log('Holding work with reason:', holdReason)
+  const handleHoldWork = async () => {
+    if (!holdReason.trim()) {
+      toast.error('Please enter a reason')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await salesClientService.createProjectRequest(id, {
+        requestType: 'hold_work',
+        reason: holdReason.trim()
+      })
+      toast.success('Request sent successfully. Admin will review it.')
       setShowHoldModal(false)
       setHoldReason('')
+    } catch (err) {
+      console.error('Error creating hold request:', err)
+      toast.error(err.message || 'Failed to create request')
+    } finally {
+      setIsSubmitting(false)
     }
   }
   
-  const handleIncreaseCost = () => {
-    if (increaseAmount && increaseReason) {
-      console.log('Increasing cost:', increaseAmount, 'with reason:', increaseReason)
+  const handleIncreaseCost = async () => {
+    if (!increaseAmount || !increaseReason.trim()) {
+      toast.error('Please enter amount and reason')
+      return
+    }
+
+    const amountValue = parseFloat(increaseAmount)
+    if (isNaN(amountValue) || amountValue <= 0) {
+      toast.error('Please enter a valid positive amount')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await salesClientService.increaseCost(id, {
+        amount: amountValue,
+        reason: increaseReason.trim()
+      })
+      toast.success('Project cost increased successfully')
       setShowIncreaseCostModal(false)
       setIncreaseAmount('')
       setIncreaseReason('')
+      // Refresh client data to show updated cost
+      fetchClientProfile()
+    } catch (err) {
+      console.error('Error increasing cost:', err)
+      toast.error(err.message || 'Failed to increase cost')
+    } finally {
+      setIsSubmitting(false)
     }
   }
   
   const handleViewTransactions = () => {
-    console.log('Viewing transactions')
     navigate(`/client-transaction/${id}`)
   }
+
+  // Helper to format project status for display
+  const formatProjectStatus = (status) => {
+    if (!status) return 'N/A'
+    const statusMap = {
+      'pending-assignment': 'Pending Assignment',
+      'untouched': 'Untouched',
+      'started': 'Started',
+      'active': 'Active',
+      'on-hold': 'On Hold',
+      'testing': 'Testing',
+      'completed': 'Completed',
+      'cancelled': 'Cancelled'
+    }
+    return statusMap[status] || status
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
+        <SL_navbar />
+        <main className="max-w-md mx-auto min-h-screen pt-16 pb-20 flex items-center justify-center">
+          <div className="text-center">
+            <FiLoader className="w-8 h-8 animate-spin text-teal-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading client profile...</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error || !clientData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
+        <SL_navbar />
+        <main className="max-w-md mx-auto min-h-screen pt-16 pb-20 flex items-center justify-center">
+          <div className="text-center px-4">
+            <p className="text-red-600 mb-4">{error || 'Client not found'}</p>
+            <button
+              onClick={() => navigate(-1)}
+              className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+            >
+              Go Back
+            </button>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  const client = clientData.client
+  const financial = clientData.financial
+  const project = clientData.project
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
@@ -206,15 +371,15 @@ const SL_ClientProfile = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-teal-700 text-sm">Total Cost</span>
-                    <span className="text-teal-800 font-semibold">₹{client.totalCost.toLocaleString()}</span>
+                    <span className="text-teal-800 font-semibold">₹{(financial?.totalCost || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-teal-700 text-sm">Advance Received</span>
-                    <span className="text-teal-800 font-semibold">₹{client.advanceReceived.toLocaleString()}</span>
+                    <span className="text-teal-800 font-semibold">₹{(financial?.advanceReceived || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-teal-700 text-sm">Pending</span>
-                    <span className="text-teal-800 font-semibold">₹{client.pending.toLocaleString()}</span>
+                    <span className="text-teal-800 font-semibold">₹{(financial?.pending || 0).toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -234,13 +399,13 @@ const SL_ClientProfile = () => {
         >
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-lg font-semibold text-gray-800">Work Progress</h3>
-            <span className="text-lg font-semibold text-gray-600">{client.workProgress}%</span>
+            <span className="text-lg font-semibold text-gray-600">{project?.workProgress || 0}%</span>
           </div>
           
           <div className="w-full bg-gray-200 rounded-full h-3">
             <motion.div 
               initial={{ width: 0 }}
-              animate={{ width: `${client.workProgress}%` }}
+              animate={{ width: `${project?.workProgress || 0}%` }}
               transition={{ duration: 1, delay: 0.3 }}
               className="h-3 rounded-full"
               style={{ background: gradients.primary }}
@@ -248,8 +413,8 @@ const SL_ClientProfile = () => {
           </div>
           
           <div className="mt-4 text-sm text-gray-600">
-            <p>Status: <span className="font-medium text-teal-700">{client.status}</span></p>
-            <p>Project: <span className="text-teal-600">{client.projectType}</span></p>
+            <p>Status: <span className="font-medium text-teal-700">{formatProjectStatus(project?.status)}</span></p>
+            <p>Project: <span className="text-teal-600">{project?.projectType || 'N/A'}</span></p>
           </div>
         </motion.div>
 
@@ -442,7 +607,7 @@ const SL_ClientProfile = () => {
                       onClick={() => setShowAccountDropdown(!showAccountDropdown)}
                       className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 bg-white text-left flex items-center justify-between"
                     >
-                      <span className="text-gray-800">{selectedAccount}</span>
+                      <span className="text-gray-800">{selectedAccount || 'Select Account'}</span>
                       <svg 
                         className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${showAccountDropdown ? 'rotate-180' : ''}`} 
                         fill="none" 
@@ -459,23 +624,35 @@ const SL_ClientProfile = () => {
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
-                        className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10"
+                        className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto"
                       >
-                        {accountOptions.map((option, index) => (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={() => {
-                              setSelectedAccount(option)
-                              setShowAccountDropdown(false)
-                            }}
-                            className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                              selectedAccount === option ? 'bg-teal-50 text-teal-700' : 'text-gray-800'
-                            }`}
-                          >
-                            {option}
-                          </button>
-                        ))}
+                        {accounts.length === 0 ? (
+                          <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                            No accounts available
+                          </div>
+                        ) : (
+                          accounts.map((account) => (
+                            <button
+                              key={account._id || account.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedAccount(account.name)
+                                setSelectedAccountId(account._id || account.id)
+                                setShowAccountDropdown(false)
+                              }}
+                              className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                                selectedAccountId === (account._id || account.id) ? 'bg-teal-50 text-teal-700' : 'text-gray-800'
+                              }`}
+                            >
+                              <div>
+                                <div className="font-medium">{account.name}</div>
+                                {account.bankName && (
+                                  <div className="text-xs text-gray-500">{account.bankName}</div>
+                                )}
+                              </div>
+                            </button>
+                          ))
+                        )}
                       </motion.div>
                     )}
                   </div>
@@ -491,10 +668,11 @@ const SL_ClientProfile = () => {
                   </button>
                   <button
                     onClick={handleAddMoney}
-                    className="flex-1 px-4 py-3 rounded-lg text-white font-medium"
+                    disabled={isSubmitting}
+                    className={`flex-1 px-4 py-3 rounded-lg text-white font-medium ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                     style={{ background: gradients.primary }}
                   >
-                    Add money
+                    {isSubmitting ? 'Adding...' : 'Add money'}
                   </button>
                 </div>
               </div>
@@ -551,21 +729,28 @@ const SL_ClientProfile = () => {
                         exit={{ opacity: 0, y: -10 }}
                         className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto"
                       >
-                        {userOptions.map((user, index) => (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={() => {
-                              setSelectedUser(user)
-                              setShowUserDropdown(false)
-                            }}
-                            className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                              selectedUser === user ? 'bg-teal-50 text-teal-700' : 'text-gray-800'
-                            }`}
-                          >
-                            {user}
-                          </button>
-                        ))}
+                        {salesTeam.length === 0 ? (
+                          <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                            No team members available
+                          </div>
+                        ) : (
+                          salesTeam.map((member) => (
+                            <button
+                              key={member._id || member.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedUser(member.name)
+                                setSelectedUserId(member._id || member.id)
+                                setShowUserDropdown(false)
+                              }}
+                              className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                                selectedUserId === (member._id || member.id) ? 'bg-teal-50 text-teal-700' : 'text-gray-800'
+                              }`}
+                            >
+                              {member.name}
+                            </button>
+                          ))
+                        )}
                       </motion.div>
                     )}
                   </div>
@@ -624,10 +809,11 @@ const SL_ClientProfile = () => {
                 </button>
                 <button
                   onClick={handleConfirmTransfer}
-                  className="flex-1 px-4 py-3 rounded-lg text-white font-medium"
+                  disabled={isSubmitting}
+                  className={`flex-1 px-4 py-3 rounded-lg text-white font-medium ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                   style={{ background: gradients.primary }}
                 >
-                  Transfer
+                  {isSubmitting ? 'Transferring...' : 'Transfer'}
                 </button>
               </div>
             </motion.div>
@@ -675,10 +861,11 @@ const SL_ClientProfile = () => {
                   </button>
                   <button
                     onClick={handleAccelerateWork}
-                    className="px-4 py-2 rounded-lg text-white font-medium"
+                    disabled={isSubmitting}
+                    className={`px-4 py-2 rounded-lg text-white font-medium ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                     style={{ background: gradients.primary }}
                   >
-                    Ok
+                    {isSubmitting ? 'Sending...' : 'Ok'}
                   </button>
                 </div>
               </div>
@@ -730,10 +917,11 @@ const SL_ClientProfile = () => {
                   </button>
                   <button
                     onClick={handleHoldWork}
-                    className="px-4 py-2 rounded-lg text-white font-medium"
+                    disabled={isSubmitting}
+                    className={`px-4 py-2 rounded-lg text-white font-medium ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                     style={{ background: gradients.primary }}
                   >
-                    Ok
+                    {isSubmitting ? 'Sending...' : 'Ok'}
                   </button>
                 </div>
               </div>
@@ -796,10 +984,11 @@ const SL_ClientProfile = () => {
                   </button>
                   <button
                     onClick={handleIncreaseCost}
-                    className="px-4 py-2 rounded-lg text-white font-medium"
+                    disabled={isSubmitting}
+                    className={`px-4 py-2 rounded-lg text-white font-medium ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                     style={{ background: gradients.primary }}
                   >
-                    Ok
+                    {isSubmitting ? 'Updating...' : 'Ok'}
                   </button>
                 </div>
               </div>

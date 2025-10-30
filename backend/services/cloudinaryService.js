@@ -13,14 +13,17 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     // Check file type
-    const allowedTypes = /jpeg|jpg|png|pdf|doc|docx/;
+    const allowedTypes = /jpeg|jpg|png|pdf|doc|docx|xlsx|xls|csv/;
     const extname = allowedTypes.test(file.originalname.toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+    const mimetype = allowedTypes.test(file.mimetype) || 
+                     /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/.test(file.mimetype) ||
+                     /application\/vnd\.ms-excel/.test(file.mimetype) ||
+                     /text\/csv/.test(file.mimetype);
 
-    if (mimetype && extname) {
+    if (mimetype || extname) {
       return cb(null, true);
     } else {
-      cb(new Error('Only images (JPEG, JPG, PNG) and documents (PDF, DOC, DOCX) are allowed'));
+      cb(new Error('Only images (JPEG, JPG, PNG), documents (PDF, DOC, DOCX), and spreadsheets (XLSX, XLS, CSV) are allowed'));
     }
   }
 });

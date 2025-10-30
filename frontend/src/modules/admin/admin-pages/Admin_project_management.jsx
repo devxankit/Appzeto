@@ -1139,25 +1139,27 @@ const Admin_project_management = () => {
                           {/* Content Section */}
                           <div className="p-3 space-y-3">
                             {/* Client Contact */}
-                            <div className="flex items-center space-x-2">
-                              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                <FiUser className="h-3 w-3 text-blue-600" />
+                            {(pendingProject.clientContact || pendingProject.clientPhone) && (
+                              <div className="flex items-center space-x-2">
+                                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <FiUser className="h-3 w-3 text-blue-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  {pendingProject.clientContact && (
+                                    <p className="text-xs font-medium text-gray-900 truncate">{pendingProject.clientContact}</p>
+                                  )}
+                                  {pendingProject.clientPhone && (
+                                    <p className="text-xs text-gray-500 truncate">{pendingProject.clientPhone}</p>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium text-gray-900 truncate">{pendingProject.clientContact}</p>
-                                <p className="text-xs text-gray-500 truncate">{pendingProject.clientPhone}</p>
-                              </div>
-                            </div>
+                            )}
 
-                            {/* Package & Budget Row */}
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="bg-blue-50 rounded-md p-2">
-                                <div className="text-xs text-blue-600 font-medium mb-0.5">Package</div>
-                                <div className="text-xs font-bold text-blue-800 line-clamp-2">{pendingProject.package}</div>
-                              </div>
+                            {/* Total Cost Row */}
+                            <div className="grid grid-cols-1 gap-2">
                               <div className="bg-green-50 rounded-md p-2">
-                                <div className="text-xs text-green-600 font-medium mb-0.5">Budget</div>
-                                <div className="text-xs font-bold text-green-700">{formatCurrency(pendingProject.budget)}</div>
+                                <div className="text-xs text-green-600 font-medium mb-0.5">Total Cost</div>
+                                <div className="text-xs font-bold text-green-700">{formatCurrency(pendingProject.financialDetails?.totalCost || pendingProject.budget || 0)}</div>
                               </div>
                             </div>
 
@@ -1275,10 +1277,7 @@ const Admin_project_management = () => {
                                 }
                               </p>
                               <p className="text-xs text-gray-400">
-                                PM: {typeof project.pm === 'string' 
-                                  ? project.pm 
-                                  : project.pm?.name || 'Unassigned'
-                                }
+                                PM: {project.pm || (typeof project.projectManager === 'object' && project.projectManager?.name) || (typeof project.projectManager === 'string' && project.projectManager) || 'Unassigned'}
                               </p>
                             </div>
                             <div className="flex flex-col space-y-1 ml-2">
@@ -1296,10 +1295,10 @@ const Admin_project_management = () => {
                         <div className="mb-3">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs font-semibold text-gray-700">Progress</span>
-                            <span className="text-sm font-bold text-primary">{project.progress}%</span>
+                            <span className="text-sm font-bold text-primary">{(project.progress !== null && project.progress !== undefined) ? project.progress : (project.status === 'completed' ? 100 : 0)}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                            <div className="bg-gradient-to-r from-primary to-primary-dark h-1.5 rounded-full transition-all duration-500" style={{ width: `${project.progress}%` }}></div>
+                            <div className="bg-gradient-to-r from-primary to-primary-dark h-1.5 rounded-full transition-all duration-500" style={{ width: `${(project.progress !== null && project.progress !== undefined) ? project.progress : (project.status === 'completed' ? 100 : 0)}%` }}></div>
                           </div>
                         </div>
                         
@@ -1311,14 +1310,18 @@ const Admin_project_management = () => {
                           </div>
                           <div className="bg-purple-50 rounded-lg p-2">
                             <div className="text-xs text-purple-600 font-medium mb-1">Team Size</div>
-                            <div className="text-xs font-bold text-purple-800">{project.teamSize}</div>
+                            <div className="text-xs font-bold text-purple-800">
+                              {project.teamSize !== null && project.teamSize !== undefined 
+                                ? project.teamSize 
+                                : project.assignedTeam?.length || 0}
+                            </div>
                           </div>
                         </div>
                         
-                        {/* Budget Highlight */}
+                        {/* Total Cost Highlight */}
                         <div className="bg-green-50 rounded-lg p-2 mb-3">
-                          <div className="text-xs text-green-600 font-medium mb-1">Budget</div>
-                          <div className="text-sm font-bold text-green-700">{formatCurrency(project.budget)}</div>
+                          <div className="text-xs text-green-600 font-medium mb-1">Total Cost</div>
+                          <div className="text-sm font-bold text-green-700">{formatCurrency(project.financialDetails?.totalCost || project.budget || 0)}</div>
                         </div>
 
                         {/* Footer */}
@@ -1444,10 +1447,7 @@ const Admin_project_management = () => {
                                 }
                               </p>
                               <p className="text-xs text-gray-400">
-                                PM: {typeof project.pm === 'string' 
-                                  ? project.pm 
-                                  : project.pm?.name || 'Unassigned'
-                                }
+                                PM: {project.pm || (typeof project.projectManager === 'object' && project.projectManager?.name) || (typeof project.projectManager === 'string' && project.projectManager) || 'Unassigned'}
                               </p>
                             </div>
                             <div className="flex flex-col space-y-1 ml-2">
@@ -1461,35 +1461,77 @@ const Admin_project_management = () => {
                           </div>
                         </div>
 
+                        {/* Progress Section */}
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-gray-700">Progress</span>
+                            <span className="text-sm font-bold text-green-600">{(project.progress !== null && project.progress !== undefined) ? project.progress : (project.status === 'completed' ? 100 : 0)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                            <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${(project.progress !== null && project.progress !== undefined) ? project.progress : (project.status === 'completed' ? 100 : 0)}%` }}></div>
+                          </div>
+                        </div>
+
                         {/* Completion Info */}
                         <div className="mb-3">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs font-semibold text-gray-700">Completed</span>
                             <span className="text-sm font-bold text-green-600">{formatDate(project.completedDate)}</span>
+                          </div>
+                        </div>
+
+                        {/* Client Contact */}
+                        {((typeof project.client === 'object' && (project.client?.name || project.client?.phoneNumber || project.client?.email)) || (typeof project.client === 'string' && project.client)) && (
+                          <div className="flex items-center space-x-2 mb-3">
+                            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <FiUser className="h-3 w-3 text-blue-600" />
                             </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                            <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-1.5 rounded-full w-full"></div>
+                            <div className="flex-1 min-w-0">
+                              {typeof project.client === 'object' ? (
+                                <>
+                                  {project.client?.name && (
+                                    <p className="text-xs font-medium text-gray-900 truncate">{project.client.name}</p>
+                                  )}
+                                  {project.client?.phoneNumber && (
+                                    <p className="text-xs text-gray-500 truncate">{project.client.phoneNumber}</p>
+                                  )}
+                                  {project.client?.email && !project.client?.phoneNumber && (
+                                    <p className="text-xs text-gray-500 truncate">{project.client.email}</p>
+                                  )}
+                                </>
+                              ) : (
+                                <p className="text-xs font-medium text-gray-900 truncate">{project.client}</p>
+                              )}
                             </div>
                           </div>
+                        )}
 
                         {/* Key Metrics */}
                         <div className="grid grid-cols-2 gap-2 mb-3">
                           <div className="bg-blue-50 rounded-lg p-2">
-                              <div className="text-xs text-blue-600 font-medium mb-1">Duration</div>
+                            <div className="text-xs text-blue-600 font-medium mb-1">Duration</div>
                             <div className="text-xs font-bold text-blue-800">
-                                {Math.ceil((new Date(project.completedDate) - new Date(project.startDate)) / (1000 * 60 * 60 * 24))} days
-                              </div>
-                            </div>
-                          <div className="bg-purple-50 rounded-lg p-2">
-                            <div className="text-xs text-purple-600 font-medium mb-1">Team Size</div>
-                            <div className="text-xs font-bold text-purple-800">{project.teamSize}</div>
+                              {project.duration !== null && project.duration !== undefined 
+                                ? `${project.duration} days`
+                                : project.completedDate && project.createdAt
+                                ? `${Math.ceil((new Date(project.completedDate || project.updatedAt) - new Date(project.createdAt)) / (1000 * 60 * 60 * 24))} days`
+                                : 'N/A'}
                             </div>
                           </div>
+                          <div className="bg-purple-50 rounded-lg p-2">
+                            <div className="text-xs text-purple-600 font-medium mb-1">Team Size</div>
+                            <div className="text-xs font-bold text-purple-800">
+                              {project.teamSize !== null && project.teamSize !== undefined 
+                                ? project.teamSize 
+                                : project.assignedTeam?.length || 0}
+                            </div>
+                          </div>
+                        </div>
 
-                        {/* Budget Highlight */}
+                        {/* Total Cost Highlight */}
                         <div className="bg-green-50 rounded-lg p-2 mb-3">
-                          <div className="text-xs text-green-600 font-medium mb-1">Budget</div>
-                          <div className="text-sm font-bold text-green-700">{formatCurrency(project.budget)}</div>
+                          <div className="text-xs text-green-600 font-medium mb-1">Total Cost</div>
+                          <div className="text-sm font-bold text-green-700">{formatCurrency(project.financialDetails?.totalCost || project.budget || 0)}</div>
                         </div>
 
                         {/* Footer */}
@@ -2282,8 +2324,10 @@ const Admin_project_management = () => {
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
                         <h4 className="text-xl font-bold text-gray-900 mb-2">{selectedItem.name}</h4>
-                        <p className="text-gray-600 font-medium mb-1">{selectedItem.client}</p>
-                        <p className="text-gray-500">PM: {selectedItem.pm}</p>
+                        <p className="text-gray-600 font-medium mb-1">{typeof selectedItem.client === 'string' 
+                          ? selectedItem.client 
+                          : selectedItem.client?.name || 'Unknown Client'}</p>
+                        <p className="text-gray-500">PM: {selectedItem.pm || (typeof selectedItem.projectManager === 'object' && selectedItem.projectManager?.name) || (typeof selectedItem.projectManager === 'string' && selectedItem.projectManager) || 'Unassigned'}</p>
                       </div>
                       <div className="flex flex-col space-y-2">
                         <span className={`inline-flex px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedItem.status)}`}>
@@ -2298,11 +2342,11 @@ const Admin_project_management = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="bg-white rounded-lg p-3">
                         <div className="text-sm text-blue-600 font-medium mb-1">Progress</div>
-                        <div className="text-lg font-bold text-blue-800">{selectedItem.progress}%</div>
+                        <div className="text-lg font-bold text-blue-800">{(selectedItem.progress !== null && selectedItem.progress !== undefined) ? selectedItem.progress : (selectedItem.status === 'completed' ? 100 : 0)}%</div>
                       </div>
                       <div className="bg-white rounded-lg p-3">
-                        <div className="text-sm text-green-600 font-medium mb-1">Budget</div>
-                        <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem.budget)}</div>
+                        <div className="text-sm text-green-600 font-medium mb-1">Total Cost</div>
+                        <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem.financialDetails?.totalCost || selectedItem.budget || 0)}</div>
                       </div>
                     </div>
                   </div>
@@ -2316,19 +2360,39 @@ const Admin_project_management = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="bg-gray-50 rounded-lg p-4">
                         <div className="text-sm text-gray-600 font-medium mb-1">Start Date</div>
-                        <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.startDate)}</div>
+                        <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.startDate || selectedItem.createdAt)}</div>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-4">
                         <div className="text-sm text-gray-600 font-medium mb-1">Due Date</div>
                         <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.dueDate)}</div>
                       </div>
+                      {selectedItem.status === 'completed' && (
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="text-sm text-gray-600 font-medium mb-1">Duration</div>
+                          <div className="text-base font-semibold text-gray-900">
+                            {selectedItem.duration !== null && selectedItem.duration !== undefined 
+                              ? `${selectedItem.duration} days`
+                              : selectedItem.createdAt && (selectedItem.completedDate || selectedItem.updatedAt)
+                              ? `${Math.ceil((new Date(selectedItem.completedDate || selectedItem.updatedAt) - new Date(selectedItem.createdAt)) / (1000 * 60 * 60 * 24))} days`
+                              : 'N/A'}
+                          </div>
+                        </div>
+                      )}
                       <div className="bg-gray-50 rounded-lg p-4">
                         <div className="text-sm text-gray-600 font-medium mb-1">Team Size</div>
-                        <div className="text-base font-semibold text-gray-900">{selectedItem.teamSize} members</div>
+                        <div className="text-base font-semibold text-gray-900">
+                          {(selectedItem.teamSize !== null && selectedItem.teamSize !== undefined) 
+                            ? `${selectedItem.teamSize} members`
+                            : selectedItem.assignedTeam?.length 
+                            ? `${selectedItem.assignedTeam.length} members`
+                            : '0 members'}
+                        </div>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-4">
                         <div className="text-sm text-gray-600 font-medium mb-1">Project Manager</div>
-                        <div className="text-base font-semibold text-gray-900">{selectedItem.pm}</div>
+                        <div className="text-base font-semibold text-gray-900">
+                          {selectedItem.pm || (typeof selectedItem.projectManager === 'object' && selectedItem.projectManager?.name) || (typeof selectedItem.projectManager === 'string' && selectedItem.projectManager) || 'Unassigned'}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2343,22 +2407,30 @@ const Admin_project_management = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-gray-50 rounded-lg p-4">
                           <div className="text-sm text-gray-600 font-medium mb-1">Client Name</div>
-                          <div className="text-base font-semibold text-gray-900">{selectedItem.client}</div>
+                          <div className="text-base font-semibold text-gray-900">{typeof selectedItem.client === 'string' 
+                            ? selectedItem.client 
+                            : selectedItem.client?.name || 'Unknown Client'}</div>
                         </div>
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <div className="text-sm text-gray-600 font-medium mb-1">Contact Person</div>
-                          <div className="text-base font-semibold text-gray-900">{selectedItem.clientContact}</div>
-                        </div>
-                        {selectedItem.clientPhone && (
+                        {selectedItem.clientContact && (
                           <div className="bg-gray-50 rounded-lg p-4">
-                            <div className="text-sm text-gray-600 font-medium mb-1">Phone Number</div>
-                            <div className="text-base font-semibold text-gray-900">{selectedItem.clientPhone}</div>
+                            <div className="text-sm text-gray-600 font-medium mb-1">Contact Person</div>
+                            <div className="text-base font-semibold text-gray-900">{selectedItem.clientContact}</div>
                           </div>
                         )}
-                        {selectedItem.clientEmail && (
+                        {(selectedItem.clientPhone || (typeof selectedItem.client === 'object' && selectedItem.client?.phoneNumber)) && (
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="text-sm text-gray-600 font-medium mb-1">Phone Number</div>
+                            <div className="text-base font-semibold text-gray-900">{typeof selectedItem.client === 'object' && selectedItem.client?.phoneNumber 
+                              ? selectedItem.client.phoneNumber 
+                              : selectedItem.clientPhone}</div>
+                          </div>
+                        )}
+                        {(selectedItem.clientEmail || (typeof selectedItem.client === 'object' && selectedItem.client?.email)) && (
                           <div className="bg-gray-50 rounded-lg p-4">
                             <div className="text-sm text-gray-600 font-medium mb-1">Email Address</div>
-                            <div className="text-base font-semibold text-gray-900">{selectedItem.clientEmail}</div>
+                            <div className="text-base font-semibold text-gray-900">{typeof selectedItem.client === 'object' && selectedItem.client?.email 
+                              ? selectedItem.client.email 
+                              : selectedItem.clientEmail}</div>
                           </div>
                         )}
                       </div>
@@ -2555,7 +2627,13 @@ const Admin_project_management = () => {
                       </div>
                       <div className="bg-gray-50 rounded-lg p-4">
                         <div className="text-sm text-gray-600 font-medium mb-1">Team Size</div>
-                        <div className="text-base font-semibold text-gray-900">{selectedItem.teamSize} members</div>
+                        <div className="text-base font-semibold text-gray-900">
+                          {(selectedItem.teamSize !== null && selectedItem.teamSize !== undefined) 
+                            ? `${selectedItem.teamSize} members`
+                            : selectedItem.assignedTeam?.length 
+                            ? `${selectedItem.assignedTeam.length} members`
+                            : '0 members'}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2618,8 +2696,10 @@ const Admin_project_management = () => {
               <div className="bg-orange-50 rounded-lg p-3 mb-4 border border-orange-200">
                 <h4 className="font-semibold text-gray-900 text-sm mb-1 truncate">{selectedPendingProject.name}</h4>
                 <div className="space-y-0.5 text-xs text-gray-600">
-                  <div><span className="font-medium">Client:</span> {selectedPendingProject.client}</div>
-                  <div><span className="font-medium">Budget:</span> {formatCurrency(selectedPendingProject.budget)}</div>
+                  <div><span className="font-medium">Client:</span> {typeof selectedPendingProject.client === 'string' 
+                    ? selectedPendingProject.client 
+                    : selectedPendingProject.client?.name || 'Unknown Client'}</div>
+                  <div><span className="font-medium">Total Cost:</span> {formatCurrency(selectedPendingProject.financialDetails?.totalCost || selectedPendingProject.budget || 0)}</div>
                   <div><span className="font-medium">Priority:</span> <span className="capitalize">{selectedPendingProject.priority}</span></div>
                 </div>
               </div>
@@ -2710,7 +2790,9 @@ const Admin_project_management = () => {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <h4 className="text-xl font-bold text-gray-900 mb-2">{selectedPendingProject.name}</h4>
-                    <p className="text-gray-600 font-medium mb-1">{selectedPendingProject.client}</p>
+                    <p className="text-gray-600 font-medium mb-1">{typeof selectedPendingProject.client === 'string' 
+                      ? selectedPendingProject.client 
+                      : selectedPendingProject.client?.name || 'Unknown Client'}</p>
                     <p className="text-gray-500">{selectedPendingProject.clientContact}</p>
                   </div>
                   <span className={`inline-flex px-3 py-1 text-sm font-bold rounded-full ${getPriorityColor(selectedPendingProject.priority)}`}>
@@ -2718,14 +2800,10 @@ const Admin_project_management = () => {
                   </span>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <div className="bg-white rounded-lg p-3">
-                    <div className="text-sm text-blue-600 font-medium mb-1">Package</div>
-                    <div className="text-sm font-bold text-blue-800">{selectedPendingProject.package}</div>
-                  </div>
-                  <div className="bg-white rounded-lg p-3">
-                    <div className="text-sm text-green-600 font-medium mb-1">Budget</div>
-                    <div className="text-lg font-bold text-green-700">{formatCurrency(selectedPendingProject.budget)}</div>
+                    <div className="text-sm text-green-600 font-medium mb-1">Total Cost</div>
+                    <div className="text-lg font-bold text-green-700">{formatCurrency(selectedPendingProject.financialDetails?.totalCost || selectedPendingProject.budget || 0)}</div>
                   </div>
                 </div>
               </div>
@@ -2739,20 +2817,32 @@ const Admin_project_management = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="text-sm text-gray-600 font-medium mb-1">Client Name</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedPendingProject.client}</div>
+                    <div className="text-base font-semibold text-gray-900">{typeof selectedPendingProject.client === 'string' 
+                      ? selectedPendingProject.client 
+                      : selectedPendingProject.client?.name || 'Unknown Client'}</div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Contact Person</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedPendingProject.clientContact}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Phone Number</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedPendingProject.clientPhone}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Email Address</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedPendingProject.clientEmail}</div>
-                  </div>
+                  {selectedPendingProject.clientContact && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 font-medium mb-1">Contact Person</div>
+                      <div className="text-base font-semibold text-gray-900">{selectedPendingProject.clientContact}</div>
+                    </div>
+                  )}
+                  {(selectedPendingProject.clientPhone || (typeof selectedPendingProject.client === 'object' && selectedPendingProject.client?.phoneNumber)) && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 font-medium mb-1">Phone Number</div>
+                      <div className="text-base font-semibold text-gray-900">{typeof selectedPendingProject.client === 'object' && selectedPendingProject.client?.phoneNumber 
+                        ? selectedPendingProject.client.phoneNumber 
+                        : selectedPendingProject.clientPhone}</div>
+                    </div>
+                  )}
+                  {(selectedPendingProject.clientEmail || (typeof selectedPendingProject.client === 'object' && selectedPendingProject.client?.email)) && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-sm text-gray-600 font-medium mb-1">Email Address</div>
+                      <div className="text-base font-semibold text-gray-900">{typeof selectedPendingProject.client === 'object' && selectedPendingProject.client?.email 
+                        ? selectedPendingProject.client.email 
+                        : selectedPendingProject.clientEmail}</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2776,11 +2866,13 @@ const Admin_project_management = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="text-sm text-gray-600 font-medium mb-1">Submitted By</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedPendingProject.submittedBy}</div>
+                    <div className="text-base font-semibold text-gray-900">{typeof selectedPendingProject.submittedBy === 'string' 
+                      ? selectedPendingProject.submittedBy.split(' - ')[1] || selectedPendingProject.submittedBy
+                      : selectedPendingProject.submittedBy?.name || 'Unknown'}</div>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="text-sm text-gray-600 font-medium mb-1">Submission Date</div>
-                    <div className="text-base font-semibold text-gray-900">{formatDate(selectedPendingProject.submittedDate)}</div>
+                    <div className="text-base font-semibold text-gray-900">{formatDate(selectedPendingProject.submittedDate || selectedPendingProject.createdAt)}</div>
                   </div>
                 </div>
               </div>

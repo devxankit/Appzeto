@@ -80,6 +80,11 @@ const pmSchema = new mongoose.Schema({
     type: Number,
     min: 0,
     default: 0
+  },
+  fixedSalary: {
+    type: Number,
+    min: 0,
+    default: 0
   }
 }, {
   timestamps: true

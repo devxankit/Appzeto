@@ -95,6 +95,24 @@ const salesSchema = new mongoose.Schema({
     max: 100,
     default: 0
   },
+  // Reward points (admin-defined)
+  reward: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  // Incentive amount per converted client (admin-defined)
+  incentivePerClient: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  // Fixed monthly salary (admin-defined)
+  fixedSalary: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
   skills: [{
     type: String,
     trim: true

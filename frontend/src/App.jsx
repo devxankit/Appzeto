@@ -24,6 +24,7 @@ import SL_newLeads from './modules/sells/SL-pages/SL_newLeads'
 import SL_connected from './modules/sells/SL-pages/SL_connected'
 import SL_leadProfile from './modules/sells/SL-pages/SL_leadProfile'
 import SL_ClientProfile from './modules/sells/SL-pages/SL_ClientProfile'
+import SL_ClientTransaction from './modules/sells/SL-pages/SL_ClientTransaction'
 import SL_client_transaction from './modules/sells/SL-pages/SL_client_transaction'
 import SL_notes from './modules/sells/SL-pages/SL_notes'
 import SL_payments_recovery from './modules/sells/SL-pages/SL_payments_recovery'
@@ -150,7 +151,7 @@ function App() {
           } />
           <Route path="/client-transaction/:id" element={
             <SalesProtectedRoute>
-              <SL_client_transaction />
+              <SL_ClientTransaction />
             </SalesProtectedRoute>
           } />
           <Route path="/client-notes/:id" element={

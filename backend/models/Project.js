@@ -146,7 +146,40 @@ const projectSchema = new mongoose.Schema({
   finishedDays: {
     type: Number,
     min: 0
-  }
+  },
+  // Cost change history (embedded array for tracking cost increases)
+  costHistory: [{
+    previousCost: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    newCost: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    reason: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: [500, 'Reason cannot exceed 500 characters']
+    },
+    changedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      refPath: 'changedByModel'
+    },
+    changedByModel: {
+      type: String,
+      required: true,
+      enum: ['Sales', 'Admin', 'PM']
+    },
+    changedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }]
 }, {
   timestamps: true
 });

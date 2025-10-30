@@ -180,17 +180,6 @@ router.get('/analytics/team', getTeamPerformance);
 
 module.exports = router;
 
-// Finance management (Accounts & Receipts) — appended routes
-const {
-  listAccounts,
-  createAccount,
-  updateAccount,
-  toggleAccount,
-  verifyReceipt
-} = require('../controllers/adminFinanceController');
-
-router.get('/finance/accounts', listAccounts);
-router.post('/finance/accounts', createAccount);
-router.put('/finance/accounts/:id', updateAccount);
-router.patch('/finance/accounts/:id/toggle', toggleAccount);
-router.patch('/finance/receipts/:id/verify', verifyReceipt);
+// Note: Account management routes have been moved to adminFinanceRoutes.js
+// These routes are for managing accounts (Account model) and payment receipts
+// which are separate from AdminFinance transactions/budgets/invoices/expenses

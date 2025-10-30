@@ -27,6 +27,7 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 const adminProjectRoutes = require('./routes/adminProjectRoutes');
 const adminAnalyticsRoutes = require('./routes/adminAnalyticsRoutes');
 const adminSalesRoutes = require('./routes/adminSalesRoutes');
+const adminFinanceRoutes = require('./routes/adminFinanceRoutes');
 const employeeProjectRoutes = require('./routes/employeeProjectRoutes');
 const employeeTaskRoutes = require('./routes/employeeTaskRoutes');
 const employeeAnalyticsRoutes = require('./routes/employeeAnalyticsRoutes');
@@ -129,6 +130,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin/projects', adminProjectRoutes);
 app.use('/api/admin/analytics', adminAnalyticsRoutes);
 app.use('/api/admin/sales', adminSalesRoutes);
+app.use('/api/admin/finance', adminFinanceRoutes);
 
 // Employee routes
 app.use('/api/employee/projects', employeeProjectRoutes);
@@ -316,10 +318,16 @@ app.use('*', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    error: 'Something went wrong!',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  console.error('Error occurred:', err);
+  console.error('Error stack:', err.stack);
+  
+  const statusCode = err.statusCode || 500;
+  const message = err.message || 'Internal server error';
+  
+  res.status(statusCode).json({
+    success: false,
+    error: statusCode === 500 ? 'Something went wrong!' : 'Request failed',
+    message: process.env.NODE_ENV === 'development' ? message : (statusCode === 500 ? 'Internal server error' : message)
   });
 });
 

@@ -13,14 +13,20 @@ const socketService = require('../services/socketService');
 // @route   GET /api/admin/projects
 // @access  Admin only
 const getAllProjects = asyncHandler(async (req, res, next) => {
-  const { status, priority, client, pm, page = 1, limit = 20, search } = req.query;
+  const { status, priority, client, pm, page = 1, limit = 20, search, hasPM } = req.query;
   
   // Build filter object
   const filter = {};
   if (status) filter.status = status;
   if (priority) filter.priority = priority;
   if (client) filter.client = client;
-  if (pm) filter.projectManager = pm;
+  if (pm) {
+    filter.projectManager = pm;
+  } else if (hasPM === 'true') {
+    // Filter for projects with PM assigned (for active projects tab)
+    // Only apply if pm is not already specified
+    filter.projectManager = { $exists: true, $ne: null };
+  }
   if (search) {
     filter.$or = [
       { name: { $regex: search, $options: 'i' } },
@@ -48,11 +54,31 @@ const getAllProjects = asyncHandler(async (req, res, next) => {
       // Get milestone count and progress
       const milestones = await Milestone.find({ project: project._id });
       const completedMilestones = milestones.filter(m => m.status === 'completed').length;
-      const progress = milestones.length > 0 ? 
-        Math.round((completedMilestones / milestones.length) * 100) : 0;
+      
+      // For completed projects, always set progress to 100%
+      let progress;
+      if (project.status === 'completed') {
+        progress = 100;
+      } else {
+        progress = milestones.length > 0 ? 
+          Math.round((completedMilestones / milestones.length) * 100) : (project.progress || 0);
+      }
 
       // Get task count
       const taskCount = await Task.countDocuments({ project: project._id });
+
+      // Calculate team size from assignedTeam
+      const teamSize = project.assignedTeam?.length || 0;
+
+      // Calculate duration (from creation to completion, or current date if not completed)
+      let duration = null;
+      if (project.status === 'completed') {
+        // For completed projects, calculate from createdAt to updatedAt (when marked as completed)
+        const createdAt = new Date(project.createdAt);
+        const completedAt = project.updatedAt || new Date(); // Use updatedAt as completion time
+        const diffTime = completedAt - createdAt;
+        duration = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
 
       // Calculate days remaining
       let daysRemaining = null;
@@ -63,11 +89,21 @@ const getAllProjects = asyncHandler(async (req, res, next) => {
         daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       }
 
+      // Map projectManager to pm for easier frontend access
+      const projectObj = project.toObject();
+      if (projectObj.projectManager && typeof projectObj.projectManager === 'object') {
+        projectObj.pm = projectObj.projectManager.name || projectObj.projectManager;
+      } else if (projectObj.projectManager) {
+        projectObj.pm = projectObj.projectManager;
+      }
+
       return {
-        ...project.toObject(),
+        ...projectObj,
         progress,
         milestoneCount: milestones.length,
         taskCount,
+        teamSize,
+        duration,
         daysRemaining,
         isOverdue: daysRemaining !== null && daysRemaining < 0 && !['completed', 'cancelled'].includes(project.status)
       };
@@ -571,24 +607,52 @@ const getPMsForAssignment = asyncHandler(async (req, res, next) => {
   try {
     const pms = await PM.find({ isActive: true })
       .select('name email projectsManaged')
-      .populate('projectsManaged', 'name status');
+      .populate('projectsManaged', 'name status dueDate');
 
+    const now = new Date();
+    
     const pmOptions = pms.map(pm => {
-      const activeProjects = pm.projectsManaged.filter(p => 
-        ['untouched', 'started', 'active'].includes(p.status)
-      ).length;
+      // Filter projects by status
+      const activeProjectsList = pm.projectsManaged.filter(p => 
+        ['untouched', 'started', 'active', 'on-hold', 'testing'].includes(p.status)
+      );
+      const activeProjects = activeProjectsList.length;
       
       const completedProjects = pm.projectsManaged.filter(p => 
         p.status === 'completed'
-      ).length;
+      );
       
       const totalProjects = pm.projectsManaged.length;
-      const completionRate = totalProjects > 0 ? 
-        Math.round((completedProjects / totalProjects) * 100) : 0;
       
-      const performance = Math.min(100, Math.max(0, 
-        completionRate + (activeProjects < 5 ? 10 : 0) // Bonus for manageable workload
-      ));
+      // Calculate completion rate
+      const completionRate = totalProjects > 0 ? 
+        Math.round((completedProjects.length / totalProjects) * 100) : 0;
+      
+      // Calculate overdue projects (not completed/cancelled and past due date)
+      const overdueProjects = activeProjectsList.filter(p => {
+        if (!p.dueDate) return false; // No due date means not overdue
+        const dueDate = new Date(p.dueDate);
+        return dueDate < now && !['completed', 'cancelled'].includes(p.status);
+      }).length;
+      
+      // Calculate performance based on completion rate and overdue projects
+      let performance = 0;
+      
+      if (totalProjects > 0) {
+        performance = completionRate;
+        
+        // Penalty for overdue projects: -5% per overdue project, max -30%
+        const overduePenalty = Math.min(30, overdueProjects * 5);
+        performance -= overduePenalty;
+        
+        // Bonus for zero overdue projects: +10%
+        if (overdueProjects === 0) {
+          performance += 10;
+        }
+      }
+      
+      // Ensure performance is between 0 and 100
+      performance = Math.min(100, Math.max(0, Math.round(performance)));
 
       return {
         value: pm._id.toString(),

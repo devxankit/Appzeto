@@ -63,8 +63,25 @@ import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Combobox } from '../../../components/ui/combobox'
 import Loading from '../../../components/ui/loading'
+import adminAttendanceService from '../admin-services/adminAttendanceService'
+import { useToast } from '../../../contexts/ToastContext'
+import { adminUserService } from '../admin-services'
+import adminSalaryService from '../admin-services/adminSalaryService'
 
 const Admin_hr_management = () => {
+  const { addToast } = useToast()
+  const normalizePhone = (value) => {
+    if (!value) return ''
+    const trimmed = String(value).trim()
+    const hasPlus = trimmed.startsWith('+')
+    const digits = trimmed.replace(/[^0-9]/g, '')
+    return hasPlus ? `+${digits}` : digits
+  }
+
+  const isValidPhone = (value) => {
+    const phone = normalizePhone(value)
+    return /^[\+]?[1-9]\d{9,15}$/.test(phone)
+  }
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('team')
   const [searchTerm, setSearchTerm] = useState('')
@@ -114,6 +131,10 @@ const Admin_hr_management = () => {
   const [showEditSalaryModal, setShowEditSalaryModal] = useState(false)
   const [showAddEmployeeSalaryModal, setShowAddEmployeeSalaryModal] = useState(false)
   const [showDeleteSalaryModal, setShowDeleteSalaryModal] = useState(false)
+  const [showSalaryHistoryModal, setShowSalaryHistoryModal] = useState(false)
+  const [salaryHistory, setSalaryHistory] = useState([])
+  const [selectedHistoryEmployee, setSelectedHistoryEmployee] = useState(null)
+  const [loadingHistory, setLoadingHistory] = useState(false)
   const [salaryToDelete, setSalaryToDelete] = useState(null)
   const [newEmployeeSalaryData, setNewEmployeeSalaryData] = useState({
     employeeId: '',
@@ -206,7 +227,7 @@ const Admin_hr_management = () => {
     thisMonthBirthdays: 8
   })
 
-  // Mock data
+  // Users data (from backend)
   const [employees, setEmployees] = useState([])
   const [projectManagers, setProjectManagers] = useState([])
   const [birthdays, setBirthdays] = useState([])
@@ -216,226 +237,73 @@ const Admin_hr_management = () => {
     loadData()
   }, [])
 
+  // Build department options dynamically from loaded users
+  const departmentFilterOptions = React.useMemo(() => {
+    const unique = new Set()
+    allUsers.forEach(u => {
+      const dept = u.department || u.team || 'General'
+      if (dept) unique.add(dept)
+    })
+    return Array.from(unique).sort()
+  }, [allUsers])
+
   const loadData = async () => {
     setLoading(true)
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      // Mock employees data with birthdays
-      const mockEmployees = [
-        {
-          id: 1,
-          name: "Priya Sharma",
-          email: "priya.sharma@company.com",
-          phone: "+91 98765 43210",
-          role: "Senior Developer",
-          department: "Engineering",
-          status: "active",
-          joinDate: "2023-06-01",
-          birthday: "1995-03-15",
-          age: 29,
-          experience: 4.5,
-          salary: 55000,
-          performance: 95,
-          avatar: "PS",
-          team: "developer",
-          manager: "Sarah Johnson"
-        },
-        {
-          id: 2,
-          name: "Rajesh Kumar",
-          email: "rajesh.kumar@company.com",
-          phone: "+91 87654 32109",
-          role: "UI/UX Designer",
-          department: "Design",
-          status: "active",
-          joinDate: "2023-08-15",
-          birthday: "1992-07-22",
-          age: 32,
-          experience: 6.2,
-          salary: 48000,
-          performance: 88,
-          avatar: "RK",
-          team: "developer",
-          manager: "Mike Wilson"
-        },
-        {
-          id: 3,
-          name: "Anjali Singh",
-          email: "anjali.singh@company.com",
-          phone: "+91 76543 21098",
-          role: "QA Engineer",
-          department: "Engineering",
-          status: "active",
-          joinDate: "2023-04-10",
-          birthday: "1998-01-08",
-          age: 26,
-          experience: 2.8,
-          salary: 42000,
-          performance: 92,
-          avatar: "AS",
-          team: "developer",
-          manager: "Lisa Davis"
-        },
-        {
-          id: 4,
-          name: "Vikram Mehta",
-          email: "vikram.mehta@company.com",
-          phone: "+91 65432 10987",
-          role: "DevOps Engineer",
-          department: "Engineering",
-          status: "on-leave",
-          joinDate: "2023-02-01",
-          birthday: "1990-12-03",
-          age: 34,
-          experience: 8.1,
-          salary: 60000,
-          performance: 98,
-          avatar: "VM",
-          team: "developer",
-          manager: "David Brown"
-        },
-        {
-          id: 5,
-          name: "Sneha Gupta",
-          email: "sneha.gupta@company.com",
-          phone: "+91 54321 09876",
-          role: "Sales Executive",
-          department: "Sales",
-          status: "active",
-          joinDate: "2023-09-01",
-          birthday: "1996-05-18",
-          age: 28,
-          experience: 3.5,
-          salary: 38000,
-          performance: 85,
-          avatar: "SG",
-          team: "sales",
-          manager: "Emma Taylor"
-        },
-        {
-          id: 6,
-          name: "Amit Patel",
-          email: "amit.patel@company.com",
-          phone: "+91 43210 98765",
-          role: "Marketing Specialist",
-          department: "Marketing",
-          status: "active",
-          joinDate: "2023-11-15",
-          birthday: "1994-09-12",
-          age: 30,
-          experience: 5.2,
-          salary: 45000,
-          performance: 90,
-          avatar: "AP",
-          team: "sales",
-          manager: "Emma Taylor"
-        }
-      ]
+      const [usersResponse] = await Promise.all([
+        adminUserService.getAllUsers({ role: 'all' })
+      ])
 
-      // Mock project managers data with birthdays
-      const mockPMs = [
-        {
-          id: 101,
-          name: "Sarah Johnson",
-          email: "sarah.johnson@company.com",
-          phone: "+91 98765 12345",
-          role: "Senior Project Manager",
-          department: "Management",
-          status: "active",
-          joinDate: "2023-02-01",
-          birthday: "1988-04-25",
-          age: 36,
-          experience: 10.5,
-          salary: 75000,
-          performance: 98,
-          avatar: "SJ",
-          projects: 5,
-          teamSize: 12
-        },
-        {
-          id: 102,
-          name: "Mike Wilson",
-          email: "mike.wilson@company.com",
-          phone: "+91 87654 23456",
-          role: "Project Manager",
-          department: "Management",
-          status: "active",
-          joinDate: "2023-05-15",
-          birthday: "1991-11-14",
-          age: 33,
-          experience: 8.2,
-          salary: 68000,
-          performance: 92,
-          avatar: "MW",
-          projects: 4,
-          teamSize: 8
-        },
-        {
-          id: 103,
-          name: "Lisa Davis",
-          email: "lisa.davis@company.com",
-          phone: "+91 76543 34567",
-          role: "Project Manager",
-          department: "Management",
-          status: "active",
-          joinDate: "2023-08-01",
-          birthday: "1989-06-30",
-          age: 35,
-          experience: 9.1,
-          salary: 72000,
-          performance: 95,
-          avatar: "LD",
-          projects: 3,
-          teamSize: 6
-        }
-      ]
+      const formatted = usersResponse.data.map(u => adminUserService.formatUserForDisplay(u))
 
-      // Mock birthdays data
-      const mockBirthdays = [
-        {
-          id: 1,
-          personId: 1,
-          personName: "Priya Sharma",
-          personType: "employee",
-          birthday: "1995-03-15",
-          age: 29,
-          department: "Engineering",
-          role: "Senior Developer"
-        },
-        {
-          id: 2,
-          personId: 2,
-          personName: "Rajesh Kumar",
-          personType: "employee",
-          birthday: "1992-07-22",
-          age: 32,
-          department: "Design",
-          role: "UI/UX Designer"
-        },
-        {
-          id: 3,
-          personId: 101,
-          personName: "Sarah Johnson",
-          personType: "pm",
-          birthday: "1988-04-25",
-          age: 36,
-          department: "Management",
-          role: "Senior Project Manager"
-        }
-      ]
+      // Split into employees and PMs for existing UI
+      const emps = formatted.filter(u => u.userType === 'employee' || u.userType === 'sales').map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        role: u.roleLabel || 'Employee',
+        department: u.department || u.team || 'General',
+        status: u.status,
+        joinDate: u.joiningDate,
+        birthday: u.dateOfBirth,
+        avatar: u.avatar || (u.name ? u.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'U'),
+        team: u.team
+      }))
 
-      setEmployees(mockEmployees)
-      setProjectManagers(mockPMs)
+      const pms = formatted.filter(u => u.userType === 'project-manager').map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        role: 'Project Manager',
+        department: 'Management',
+        status: u.status,
+        joinDate: u.joiningDate,
+        birthday: u.dateOfBirth,
+        avatar: u.avatar || (u.name ? u.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'P')
+      }))
+
+      setEmployees(emps)
+      setProjectManagers(pms)
+
+      // Birthdays list derived from both
+      const mockBirthdays = [...emps, ...pms]
+        .filter(p => !!p.birthday)
+        .slice(0, 10)
+        .map((p, idx) => ({
+          id: idx + 1,
+          personId: p.id,
+          personName: p.name,
+          personType: p.role === 'Project Manager' ? 'pm' : 'employee',
+          birthday: p.birthday,
+          age: new Date().getFullYear() - new Date(p.birthday).getFullYear(),
+          department: p.department,
+          role: p.role
+        }))
       setBirthdays(mockBirthdays)
-      
-      // Combine all users for team management
-      const combinedUsers = [
-        ...mockEmployees.map(emp => ({ ...emp, role: 'employee' })),
-        ...mockPMs.map(pm => ({ ...pm, role: 'project-manager' }))
-      ]
-      setAllUsers(combinedUsers)
+
+      setAllUsers([...emps.map(emp => ({ ...emp, role: 'employee' })), ...pms.map(pm => ({ ...pm, role: 'project-manager' }))])
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
@@ -1288,65 +1156,126 @@ const Admin_hr_management = () => {
     setShowDeleteModal(true)
   }
 
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
     // Validation
     if (showCreateModal && (!formData.password || !formData.confirmPassword)) {
-      alert('Please fill in both password fields')
+      addToast({ type: 'error', message: 'Password and confirm password are required' })
       return
     }
     
     if (formData.password && formData.password !== formData.confirmPassword) {
-      alert('Passwords do not match')
+      addToast({ type: 'error', message: 'Passwords do not match' })
       return
     }
     
     if (formData.password && formData.password.length < 6) {
-      alert('Password must be at least 6 characters long')
+      addToast({ type: 'error', message: 'Password must be at least 6 characters long' })
       return
     }
 
     // Validation for department field when role is employee and team is developer
     if (formData.role === 'employee' && formData.team === 'developer' && !formData.department) {
-      alert('Please select a department for developer employees')
+      addToast({ type: 'error', message: 'Please select a department for developer employees' })
       return
     }
 
     // Validation for required date fields
     if (!formData.dateOfBirth) {
-      alert('Please select date of birth')
+      addToast({ type: 'error', message: 'Please select date of birth' })
       return
     }
 
     if (!formData.joiningDate) {
-      alert('Please select joining date')
+      addToast({ type: 'error', message: 'Please select joining date' })
       return
     }
 
     // Validation for document field
     if (!formData.document) {
-      alert('Please upload a document')
+      addToast({ type: 'error', message: 'Please upload a document' })
       return
     }
 
-    // Simulate API call
-    console.log('Saving user:', formData)
-    setShowCreateModal(false)
-    setShowEditModal(false)
-    setSelectedUser(null)
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      role: '',
-      team: '',
-      department: '',
-      status: 'active',
-      dateOfBirth: '',
-      joiningDate: '',
-      document: null,
-      password: '',
-      confirmPassword: ''
-    })
+    // Only allow creation of Project Manager and Employee
+    if (!['employee', 'project-manager'].includes(formData.role)) {
+      addToast({ type: 'error', message: 'Only Employee or Project Manager can be created here' })
+      return
+    }
+
+    try {
+      // Phone normalization + validation to satisfy backend schema
+      const normalizedPhone = normalizePhone(formData.phone)
+      if (!isValidPhone(normalizedPhone)) {
+        addToast({ type: 'error', message: 'Please enter a valid phone number' })
+        return
+      }
+      // Run shared validation like Admin_user_management
+      const validationErrors = adminUserService.validateUserData(formData, !!showEditModal)
+      if (validationErrors.length) {
+        addToast({ type: 'error', message: validationErrors[0] })
+        return
+      }
+      let response
+      if (showCreateModal) {
+        // Create new user via admin service
+        response = await adminUserService.createUser({
+          name: formData.name,
+          email: formData.email,
+          phone: normalizedPhone,
+          role: formData.role,
+          team: formData.team || undefined,
+          department: formData.department || undefined,
+          status: formData.status || 'active',
+          dateOfBirth: formData.dateOfBirth,
+          joiningDate: formData.joiningDate,
+          document: formData.document,
+          password: formData.password,
+          confirmPassword: formData.confirmPassword
+        })
+        addToast({ type: 'success', message: 'User created successfully' })
+      } else if (showEditModal && selectedUser) {
+        // Update existing user
+        const userType = selectedUser.role === 'project-manager' ? 'project-manager' : 'employee'
+        response = await adminUserService.updateUser(userType, selectedUser.id, {
+          name: formData.name,
+          email: formData.email,
+          phone: normalizedPhone,
+          role: formData.role,
+          team: formData.team || undefined,
+          department: formData.department || undefined,
+          status: formData.status || 'active',
+          dateOfBirth: formData.dateOfBirth,
+          joiningDate: formData.joiningDate,
+          document: formData.document,
+          password: formData.password || undefined,
+          confirmPassword: formData.confirmPassword || undefined
+        })
+        addToast({ type: 'success', message: 'User updated successfully' })
+      }
+
+      // Reset UI and reload users
+      setShowCreateModal(false)
+      setShowEditModal(false)
+      setSelectedUser(null)
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        role: '',
+        team: '',
+        department: '',
+        status: 'active',
+        dateOfBirth: '',
+        joiningDate: '',
+        document: null,
+        password: '',
+        confirmPassword: ''
+      })
+      await loadData()
+    } catch (error) {
+      console.error('Save user failed:', error)
+      addToast({ type: 'error', message: error?.response?.data?.message || error?.message || 'Failed to save user' })
+    }
   }
 
   const confirmDelete = () => {
@@ -1367,6 +1296,7 @@ const Admin_hr_management = () => {
     setShowEditSalaryModal(false)
     setShowAddEmployeeSalaryModal(false)
     setShowDeleteSalaryModal(false)
+    setShowSalaryHistoryModal(false)
     setShowRequestModal(false)
     setShowAllowanceModal(false)
     setShowExpenseModal(false)
@@ -1424,101 +1354,104 @@ const Admin_hr_management = () => {
     }
   }, [activeTab])
 
-  // Generate data on component mount
+  // Generate data on component mount (salary data is loaded dynamically when tab is active)
   useEffect(() => {
-    generateSalaryData()
+    // generateSalaryData() - Removed: salary data now loads dynamically when salary tab is active
     generateRequestsData()
     generateAllowancesData()
     generateRecurringExpensesData()
   }, [])
 
   // Attendance functions
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0]
-    if (file && file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-      setAttendanceFile(file)
-      processAttendanceFile(file)
-    } else {
-      alert('Please upload a valid Excel file (.xlsx)')
+  // Load attendance data for selected month
+  const loadAttendanceData = async (month) => {
+    try {
+      const res = await adminAttendanceService.get(month)
+      const recs = res.data?.records || []
+
+      // Simple data model: Name, Present Days, Absent Days
+      const processedData = recs.map((r, idx) => ({
+        id: idx + 1,
+        employeeName: r.name.trim(),
+        presentDays: r.attendedDays || 0,
+        absentDays: r.absentDays || 0,
+        requiredDays: r.requiredDays || 0
+      }))
+
+      setAttendanceData(processedData)
+      
+      // Calculate statistics correctly from stored data
+      // Total Employee Count = number of employees with attendance records
+      const totalEmployeeCount = processedData.length
+      
+      // Total Working Days = sum of all requiredDays (office working days * number of employees)
+      const totalWorkingDays = processedData.reduce((sum, r) => sum + (r.requiredDays || 0), 0)
+      // Total Attendance = sum of all attendedDays (present days)
+      const totalAttendance = processedData.reduce((sum, r) => sum + (r.presentDays || 0), 0)
+      // Total Absents = sum of all absentDays
+      const totalAbsents = processedData.reduce((sum, r) => sum + (r.absentDays || 0), 0)
+      
+      // If requiredDays is not available, calculate from present + absent as fallback
+      const totalDaysForRate = totalWorkingDays > 0 ? totalWorkingDays : (totalAttendance + totalAbsents)
+      
+      // Attendance Rate = (Total Attendance / Total Working Days) * 100
+      const attendanceRate = totalDaysForRate > 0 ? Math.round((totalAttendance / totalDaysForRate) * 10000) / 100 : 0
+      
+      setAttendanceStats({ 
+        totalDays: totalEmployeeCount, // Total Employee Count (displayed in UI)
+        presentDays: totalAttendance, // Total Attendance
+        absentDays: totalAbsents, // Total Absents
+        lateDays: 0, 
+        attendanceRate 
+      })
+    } catch (error) {
+      console.error('Error loading attendance data:', error)
+      // If error (like 404), set empty data
+      setAttendanceData([])
+      setAttendanceStats({
+        totalDays: 0,
+        presentDays: 0,
+        absentDays: 0,
+        lateDays: 0,
+        attendanceRate: 0
+      })
     }
+  }
+
+  // Load attendance when selectedMonth changes
+  useEffect(() => {
+    if (activeTab === 'attendance') {
+      loadAttendanceData(selectedMonth)
+    }
+  }, [selectedMonth, activeTab])
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+    const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']
+    if (!validTypes.includes(file.type)) {
+      addToast({ type: 'error', message: 'Please upload a valid Excel file (.xlsx)' })
+      return
+    }
+    setAttendanceFile(file)
+    await processAttendanceFile(file)
   }
 
   const processAttendanceFile = async (file) => {
     setIsProcessingFile(true)
     try {
-      // Simulate file processing - in real app, you'd use a library like xlsx
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Upload and parse on backend (saves month-wise)
+      const uploadResult = await adminAttendanceService.upload(file, selectedMonth)
       
-      // Mock processed attendance data
-      const processedData = [
-        {
-          id: 1,
-          employeeId: 1,
-          employeeName: 'John Doe',
-          date: '2024-01-15',
-          checkIn: '09:15',
-          checkOut: '18:30',
-          status: 'present',
-          hoursWorked: 8.25,
-          isLate: true,
-          lateMinutes: 15
-        },
-        {
-          id: 2,
-          employeeId: 1,
-          employeeName: 'John Doe',
-          date: '2024-01-16',
-          checkIn: '09:00',
-          checkOut: '18:00',
-          status: 'present',
-          hoursWorked: 8.0,
-          isLate: false,
-          lateMinutes: 0
-        },
-        {
-          id: 3,
-          employeeId: 2,
-          employeeName: 'Jane Smith',
-          date: '2024-01-15',
-          checkIn: '08:45',
-          checkOut: '17:45',
-          status: 'present',
-          hoursWorked: 8.0,
-          isLate: false,
-          lateMinutes: 0
-        },
-        {
-          id: 4,
-          employeeId: 2,
-          employeeName: 'Jane Smith',
-          date: '2024-01-16',
-          checkIn: '09:30',
-          checkOut: '18:30',
-          status: 'present',
-          hoursWorked: 8.0,
-          isLate: true,
-          lateMinutes: 30
-        },
-        {
-          id: 5,
-          employeeId: 3,
-          employeeName: 'Mike Johnson',
-          date: '2024-01-15',
-          checkIn: null,
-          checkOut: null,
-          status: 'absent',
-          hoursWorked: 0,
-          isLate: false,
-          lateMinutes: 0
-        }
-      ]
+      // Reload the data for the selected month after upload
+      await loadAttendanceData(selectedMonth)
       
-      setAttendanceData(processedData)
-      calculateAttendanceStats(processedData)
-      alert('Attendance file processed successfully!')
+      // Show detailed success message from backend
+      const successMessage = uploadResult?.message || 'Attendance uploaded successfully!'
+      addToast({ type: 'success', message: successMessage })
     } catch (error) {
       console.error('Error processing file:', error)
-      alert('Error processing attendance file. Please try again.')
+      addToast({ type: 'error', message: error?.message || 'Error processing attendance file. Please check the file format and try again.' })
     } finally {
       setIsProcessingFile(false)
     }
@@ -1540,49 +1473,13 @@ const Admin_hr_management = () => {
     })
   }
 
-  const getAttendanceByMonth = () => {
-    const [year, month] = selectedMonth.split('-')
-    return attendanceData.filter(record => {
-      const recordDate = new Date(record.date)
-      return recordDate.getFullYear() == year && recordDate.getMonth() + 1 == month
-    })
-  }
-
+  // Simple summary: just return the processed data as-is (already has Name, Present Days, Absent Days)
   const getEmployeeAttendanceSummary = () => {
-    const monthlyData = getAttendanceByMonth()
-    const summary = {}
-    
-    monthlyData.forEach(record => {
-      if (!summary[record.employeeId]) {
-        summary[record.employeeId] = {
-          employeeName: record.employeeName,
-          totalDays: 0,
-          presentDays: 0,
-          absentDays: 0,
-          lateDays: 0,
-          totalHours: 0,
-          attendanceRate: 0
-        }
-      }
-      
-      summary[record.employeeId].totalDays++
-      if (record.status === 'present') {
-        summary[record.employeeId].presentDays++
-        summary[record.employeeId].totalHours += record.hoursWorked
-      } else if (record.status === 'absent') {
-        summary[record.employeeId].absentDays++
-      }
-      if (record.isLate) {
-        summary[record.employeeId].lateDays++
-      }
-    })
-    
-    // Calculate attendance rates
-    Object.values(summary).forEach(emp => {
-      emp.attendanceRate = emp.totalDays > 0 ? Math.round((emp.presentDays / emp.totalDays) * 100 * 100) / 100 : 0
-    })
-    
-    return Object.values(summary)
+    return attendanceData.map(record => ({
+      employeeName: record.employeeName,
+      presentDays: record.presentDays,
+      absentDays: record.absentDays
+    }))
   }
 
   const getAttendanceStatusColor = (status) => {
@@ -1603,170 +1500,111 @@ const Admin_hr_management = () => {
     }
   }
 
-  // Salary functions
-  const generateSalaryData = () => {
-    const currentDate = new Date()
-    const currentMonth = currentDate.toISOString().slice(0, 7)
-    
-    // Mock salary data based on employees
-    const mockSalaryData = [
-      {
-        id: 1,
-        employeeId: 1,
-        employeeName: 'John Doe',
-        department: 'nodejs',
-        team: 'developer',
-        role: 'employee',
-        basicSalary: 45000,
-        allowances: 5000,
-        deductions: 2000,
-        netSalary: 48000,
-        month: currentMonth,
-        joiningDate: '2022-01-15',
-        salaryDate: '2024-01-15', // Based on joining date
-        paymentDate: getPaymentDate('2022-01-15'),
-        paymentWeek: getWeekOfMonth(getPaymentDate('2022-01-15')),
-        status: 'paid',
-        paidDate: '2024-01-16',
-        paymentMethod: 'Bank Transfer',
-        remarks: 'Salary paid on time'
-      },
-      {
-        id: 2,
-        employeeId: 2,
-        employeeName: 'Jane Smith',
-        department: 'flutter',
-        team: 'developer',
-        role: 'employee',
-        basicSalary: 42000,
-        allowances: 4500,
-        deductions: 1800,
-        netSalary: 44700,
-        month: currentMonth,
-        joiningDate: '2021-08-20',
-        salaryDate: '2024-01-20', // Based on joining date
-        paymentDate: getPaymentDate('2021-08-20'),
-        paymentWeek: getWeekOfMonth(getPaymentDate('2021-08-20')),
-        status: 'pending',
-        paidDate: null,
-        paymentMethod: null,
-        remarks: 'Pending approval'
-      },
-      {
-        id: 3,
-        employeeId: 3,
-        employeeName: 'Mike Johnson',
-        department: 'web',
-        team: 'sales',
-        role: 'employee',
-        basicSalary: 38000,
-        allowances: 4000,
-        deductions: 1500,
-        netSalary: 40500,
-        month: currentMonth,
-        joiningDate: '2023-03-10',
-        salaryDate: '2024-01-10', // Based on joining date
-        paymentDate: getPaymentDate('2023-03-10'),
-        paymentWeek: getWeekOfMonth(getPaymentDate('2023-03-10')),
-        status: 'paid',
-        paidDate: '2024-01-11',
-        paymentMethod: 'Bank Transfer',
-        remarks: 'Salary paid'
-      },
-      {
-        id: 4,
-        employeeId: 4,
-        employeeName: 'Sarah Wilson',
-        department: 'management',
-        team: 'developer',
-        role: 'project-manager',
-        basicSalary: 65000,
-        allowances: 8000,
-        deductions: 3000,
-        netSalary: 70000,
-        month: currentMonth,
-        joiningDate: '2020-11-05',
-        salaryDate: '2024-01-05', // Based on joining date
-        paymentDate: getPaymentDate('2020-11-05'),
-        paymentWeek: getWeekOfMonth(getPaymentDate('2020-11-05')),
-        status: 'paid',
-        paidDate: '2024-01-06',
-        paymentMethod: 'Bank Transfer',
-        remarks: 'PM salary paid'
-      },
-      {
-        id: 5,
-        employeeId: 5,
-        employeeName: 'David Brown',
-        department: 'management',
-        team: 'sales',
-        role: 'project-manager',
-        basicSalary: 62000,
-        allowances: 7500,
-        deductions: 2800,
-        netSalary: 66700,
-        month: currentMonth,
-        joiningDate: '2021-02-28',
-        salaryDate: '2024-01-28', // Based on joining date
-        paymentDate: getPaymentDate('2021-02-28'),
-        paymentWeek: getWeekOfMonth(getPaymentDate('2021-02-28')),
-        status: 'pending',
-        paidDate: null,
-        paymentMethod: null,
-        remarks: 'Awaiting final approval'
+  // Load salary data from backend
+  const loadSalaryData = async (month) => {
+    try {
+      // First, try to generate salaries for the month (auto-generation)
+      // 404 is expected if salaries are already generated, so we ignore that
+      try {
+        await adminSalaryService.generateMonthlySalaries(month)
+      } catch (genError) {
+        // If generation fails (404 = already generated, or connection error), continue to fetch
+        // Only log if it's not a 404 (which is expected)
+        if (!String(genError).includes('404') && !String(genError).includes('Connection')) {
+          console.log('Salary generation note:', genError.message || 'Salaries may already be generated')
+        }
       }
-    ]
-    
-    setSalaryData(mockSalaryData)
-    calculateSalaryStats(mockSalaryData)
+
+      // Fetch salary records for the month
+      const res = await adminSalaryService.getSalaryRecords({
+        month,
+        department: selectedSalaryDepartment !== 'all' ? selectedSalaryDepartment : undefined,
+        status: selectedPaymentStatus !== 'all' ? selectedPaymentStatus : undefined
+      })
+
+      // Transform backend data to frontend format
+      const transformedData = (res.data || []).map((record, idx) => ({
+        id: record._id || idx + 1,
+        employeeId: record.employeeId,
+        employeeName: record.employeeName,
+        department: record.department,
+        role: record.role,
+        fixedSalary: record.fixedSalary,
+        month: record.month,
+        paymentDate: new Date(record.paymentDate),
+        paymentDay: record.paymentDay,
+        status: record.status,
+        paidDate: record.paidDate ? new Date(record.paidDate) : null,
+        paymentMethod: record.paymentMethod,
+        remarks: record.remarks || ''
+      }))
+
+      setSalaryData(transformedData)
+      
+      // Update statistics from backend
+      if (res.stats) {
+        setSalaryStats({
+          totalEmployees: res.stats.totalEmployees || 0,
+          paidEmployees: res.stats.paidEmployees || 0,
+          pendingEmployees: res.stats.pendingEmployees || 0,
+          totalAmount: res.stats.totalAmount || 0,
+          paidAmount: res.stats.paidAmount || 0,
+          pendingAmount: res.stats.pendingAmount || 0
+        })
+      }
+    } catch (error) {
+      console.error('Error loading salary data:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to load salary data' })
+      setSalaryData([])
+      setSalaryStats({
+        totalEmployees: 0,
+        paidEmployees: 0,
+        pendingEmployees: 0,
+        totalAmount: 0,
+        paidAmount: 0,
+        pendingAmount: 0
+      })
+    }
   }
 
-  const calculateSalaryStats = (data) => {
-    const totalEmployees = data.length
-    const paidEmployees = data.filter(record => record.status === 'paid').length
-    const pendingEmployees = data.filter(record => record.status === 'pending').length
-    const totalAmount = data.reduce((sum, record) => sum + record.netSalary, 0)
-    const paidAmount = data.filter(record => record.status === 'paid').reduce((sum, record) => sum + record.netSalary, 0)
-    const pendingAmount = data.filter(record => record.status === 'pending').reduce((sum, record) => sum + record.netSalary, 0)
+  // Load salary when month/department/status changes
+  useEffect(() => {
+    if (activeTab === 'salary') {
+      loadSalaryData(selectedSalaryMonth)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSalaryMonth, selectedSalaryDepartment, selectedPaymentStatus, activeTab])
 
-    setSalaryStats({
-      totalEmployees,
-      paidEmployees,
-      pendingEmployees,
-      totalAmount,
-      paidAmount,
-      pendingAmount
-    })
-  }
-
-  const getSalaryByMonth = () => {
-    return salaryData.filter(record => record.month === selectedSalaryMonth)
-  }
 
   const getFilteredSalaryData = () => {
-    let filtered = getSalaryByMonth()
-    
-    if (selectedSalaryDepartment !== 'all') {
-      filtered = filtered.filter(record => record.department === selectedSalaryDepartment)
-    }
+    let filtered = [...salaryData]
     
     if (selectedSalaryWeek !== 'all') {
-      filtered = filtered.filter(record => record.paymentWeek?.toString() === selectedSalaryWeek)
-    }
-    
-    if (selectedPaymentStatus !== 'all') {
-      filtered = filtered.filter(record => record.status === selectedPaymentStatus)
+      const weekNum = parseInt(selectedSalaryWeek)
+      filtered = filtered.filter(record => {
+        const paymentDate = new Date(record.paymentDate)
+        const day = paymentDate.getDate()
+        if (weekNum === 1) return day >= 1 && day <= 7
+        if (weekNum === 2) return day >= 8 && day <= 14
+        if (weekNum === 3) return day >= 15 && day <= 21
+        if (weekNum === 4) return day >= 22 && day <= 31
+        return true
+      })
     }
     
     // Sort by payment priority (upcoming payments first)
     return filtered.sort((a, b) => {
-      const priorityA = getPaymentPriority(a)
-      const priorityB = getPaymentPriority(b)
-      if (priorityA !== priorityB) return priorityA - priorityB
+      const dateA = new Date(a.paymentDate)
+      const dateB = new Date(b.paymentDate)
+      const currentDate = new Date()
+      const daysA = Math.ceil((dateA - currentDate) / (1000 * 60 * 60 * 24))
+      const daysB = Math.ceil((dateB - currentDate) / (1000 * 60 * 60 * 24))
       
-      // If same priority, sort by payment date
-      const dateA = new Date(a.paymentDate || a.createdAt)
-      const dateB = new Date(b.paymentDate || b.createdAt)
+      // Overdue first
+      if (daysA < 0 && daysB >= 0) return -1
+      if (daysB < 0 && daysA >= 0) return 1
+      
+      // Then by date
       return dateA - dateB
     })
   }
@@ -1781,65 +1619,41 @@ const Admin_hr_management = () => {
     setShowDeleteSalaryModal(true)
   }
 
-  const confirmDeleteSalary = () => {
-    if (salaryToDelete) {
-      setSalaryData(prev => prev.filter(item => item.id !== salaryToDelete.id))
+  const confirmDeleteSalary = async () => {
+    if (!salaryToDelete) return
+    
+    try {
+      await adminSalaryService.deleteSalaryRecord(salaryToDelete.id)
+      addToast({ type: 'success', message: 'Salary record deleted successfully!' })
       setShowDeleteSalaryModal(false)
       setSalaryToDelete(null)
-      alert('Salary record deleted successfully!')
+      // Reload salary data
+      await loadSalaryData(selectedSalaryMonth)
+    } catch (error) {
+      console.error('Error deleting salary:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to delete salary record' })
     }
   }
 
-  const handleEditSalary = (record) => {
-    setSelectedSalaryRecord(record)
-    setEditSalaryData({
-      basicSalary: record.basicSalary.toString()
-    })
-    setShowEditSalaryModal(true)
-  }
-
-  const handleSaveSalaryEdit = () => {
-    const updatedData = salaryData.map(record => {
-      if (record.id === selectedSalaryRecord.id) {
-        const basicSalary = parseFloat(editSalaryData.basicSalary) || 0
-        
-        return {
-          ...record,
-          basicSalary: basicSalary,
-          netSalary: basicSalary // Simplified - net salary = basic salary
-        }
-      }
-      return record
-    })
+  const confirmSalaryPayment = async (paymentData) => {
+    if (!selectedSalaryRecord) return
     
-    setSalaryData(updatedData)
-    calculateSalaryStats(updatedData)
-    setShowEditSalaryModal(false)
-    setSelectedSalaryRecord(null)
-    setEditSalaryData({ 
-      basicSalary: ''
-    })
-    alert('Salary updated successfully!')
-  }
-
-  const confirmSalaryPayment = (paymentData) => {
-    const updatedData = salaryData.map(record => {
-      if (record.id === selectedSalaryRecord.id) {
-        return {
-          ...record,
-          status: 'paid',
-          paidDate: paymentData.paidDate,
-          paymentMethod: paymentData.paymentMethod,
-          remarks: paymentData.remarks
-        }
-      }
-      return record
-    })
-    
-    setSalaryData(updatedData)
-    calculateSalaryStats(updatedData)
-    setShowSalaryModal(false)
-    setSelectedSalaryRecord(null)
+    try {
+      await adminSalaryService.updateSalaryRecord(selectedSalaryRecord.id, {
+        status: 'paid',
+        paymentMethod: paymentData.paymentMethod,
+        remarks: paymentData.remarks
+      })
+      
+      addToast({ type: 'success', message: 'Salary marked as paid successfully!' })
+      setShowSalaryModal(false)
+      setSelectedSalaryRecord(null)
+      // Reload salary data
+      await loadSalaryData(selectedSalaryMonth)
+    } catch (error) {
+      console.error('Error updating salary:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to update salary record' })
+    }
   }
 
   const getSalaryStatusColor = (status) => {
@@ -1921,54 +1735,53 @@ const Admin_hr_management = () => {
     })
   }
 
-  const handleSaveNewEmployeeSalary = () => {
+  const handleSaveNewEmployeeSalary = async () => {
     // Validate required fields
     if (!newEmployeeSalaryData.employeeId || !newEmployeeSalaryData.salary) {
-      alert('Please select an employee and enter salary amount')
+      addToast({ type: 'error', message: 'Please select an employee and enter salary amount' })
       return
     }
 
     // Find selected employee
-    const selectedEmployee = allUsers.find(user => user.id === parseInt(newEmployeeSalaryData.employeeId))
+    const selectedEmployee = allUsers.find(user => {
+      const userIdStr = user._id || user.id || user.employeeId
+      return userIdStr.toString() === newEmployeeSalaryData.employeeId.toString()
+    })
+    
     if (!selectedEmployee) {
-      alert('Selected employee not found')
+      addToast({ type: 'error', message: 'Selected employee not found' })
       return
     }
 
-    const salary = parseFloat(newEmployeeSalaryData.salary) || 0
-
-    // Create salary record
-    const newSalaryRecord = {
-      id: Date.now(),
-      employeeId: selectedEmployee.employeeId || selectedEmployee.id.toString(),
-      employeeName: selectedEmployee.name,
-      department: selectedEmployee.department || 'General',
-      basicSalary: salary,
-      allowances: 0,
-      deductions: 0,
-      netSalary: salary,
-      paymentMethod: 'bank_transfer',
-      bankAccount: '',
-      status: 'pending',
-      month: selectedSalaryMonth,
-      joiningDate: selectedEmployee.joiningDate || selectedEmployee.dateOfBirth || new Date().toISOString().split('T')[0],
-      paymentDate: getPaymentDate(selectedEmployee.joiningDate || selectedEmployee.dateOfBirth || new Date().toISOString().split('T')[0]),
-      paymentWeek: getWeekOfMonth(getPaymentDate(selectedEmployee.joiningDate || selectedEmployee.dateOfBirth || new Date().toISOString().split('T')[0])),
-      remarks: '',
-      createdAt: new Date().toISOString()
+    const fixedSalary = parseFloat(newEmployeeSalaryData.salary) || 0
+    if (fixedSalary <= 0) {
+      addToast({ type: 'error', message: 'Salary amount must be greater than 0' })
+      return
     }
 
-    // Add to existing salary data
-    setSalaryData(prev => [...prev, newSalaryRecord])
+    try {
+      // Determine user type and employee ID
+      const userType = selectedEmployee.role === 'project-manager' ? 'pm' : 
+                      selectedEmployee.team === 'sales' ? 'sales' : 'employee'
+      const employeeId = selectedEmployee._id || selectedEmployee.id || selectedEmployee.employeeId
 
-    // Close modal and reset form
-    setShowAddEmployeeSalaryModal(false)
-    setNewEmployeeSalaryData({
-      employeeId: '',
-      salary: ''
-    })
-
-    alert(`Salary set successfully for ${selectedEmployee.name}!`)
+      // Set employee fixed salary (this will auto-generate salary records)
+      await adminSalaryService.setEmployeeSalary(userType, employeeId, fixedSalary)
+      
+      addToast({ type: 'success', message: `Fixed salary set to ₹${fixedSalary.toLocaleString()} for ${selectedEmployee.name}` })
+      
+      setShowAddEmployeeSalaryModal(false)
+      setNewEmployeeSalaryData({
+        employeeId: '',
+        salary: ''
+      })
+      
+      // Reload salary data to show the new records
+      await loadSalaryData(selectedSalaryMonth)
+    } catch (error) {
+      console.error('Error setting employee salary:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to set employee salary' })
+    }
   }
 
   const handleNewEmployeeSalaryInputChange = (field, value) => {
@@ -1976,6 +1789,48 @@ const Admin_hr_management = () => {
       ...prev,
       [field]: value
     }))
+  }
+
+  // Get employee salary history (read-only)
+  const viewSalaryHistory = async (record) => {
+    try {
+      setLoadingHistory(true)
+      setSelectedHistoryEmployee({
+        name: record.employeeName,
+        department: record.department,
+        employeeId: record.employeeId,
+        role: record.role
+      })
+      
+      // Determine user type from record
+      const userType = record.role === 'project-manager' ? 'pm' : 
+                      record.department === 'sales' ? 'sales' : 'employee'
+      
+      const history = await adminSalaryService.getEmployeeSalaryHistory(userType, record.employeeId)
+      
+      // Transform data for display
+      const transformedHistory = (history.data || []).map(item => ({
+        id: item._id || item.id,
+        month: item.month,
+        amount: item.fixedSalary || 0,
+        status: item.status,
+        paymentDate: item.paymentDate ? new Date(item.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+        paidDate: item.paidDate ? new Date(item.paidDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+        paymentMethod: item.paymentMethod || null,
+        remarks: item.remarks || ''
+      })).sort((a, b) => {
+        // Sort by month (newest first)
+        return b.month.localeCompare(a.month)
+      })
+      
+      setSalaryHistory(transformedHistory)
+      setShowSalaryHistoryModal(true)
+    } catch (error) {
+      console.error('Error loading salary history:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to load salary history' })
+    } finally {
+      setLoadingHistory(false)
+    }
   }
 
 
@@ -2177,11 +2032,9 @@ const Admin_hr_management = () => {
                       className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="all">All Departments</option>
-                      <option value="Engineering">Engineering</option>
-                      <option value="Design">Design</option>
-                      <option value="Sales">Sales</option>
-                      <option value="Marketing">Marketing</option>
-                      <option value="Management">Management</option>
+                      {departmentFilterOptions.map((dept) => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -2274,200 +2127,36 @@ const Admin_hr_management = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
-                  className="space-y-6"
+                  className="space-y-4"
                 >
-          {/* Birthday Statistics Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {/* Total Birthdays */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-200 hover:scale-105"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-pink-100 rounded-lg">
-                  <Cake className="h-4 w-4 text-pink-600" />
-                </div>
-                <span className="text-xs text-gray-500 font-medium">Total</span>
-              </div>
-              <div className="space-y-1">
-                <p className="text-2xl font-bold text-gray-900">{statistics.totalBirthdays}</p>
-                <div className="flex items-center space-x-1">
-                  <span className="text-xs text-pink-600 font-semibold">Birthdays</span>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Today's Birthdays */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-200 hover:scale-105"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Cake className="h-4 w-4 text-purple-600" />
-                </div>
-                <span className="text-xs text-gray-500 font-medium">Today</span>
-              </div>
-              <div className="space-y-1">
-                <p className="text-2xl font-bold text-gray-900">{getTodaysBirthdays().length}</p>
-                <div className="flex items-center space-x-1">
-                  <span className="text-xs text-purple-600 font-semibold">Birthdays</span>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* This Week's Birthdays */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-200 hover:scale-105"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Cake className="h-4 w-4 text-blue-600" />
-                </div>
-                <span className="text-xs text-gray-500 font-medium">This Week</span>
-              </div>
-              <div className="space-y-1">
-                <p className="text-2xl font-bold text-gray-900">{getThisWeekBirthdays().length}</p>
-                <div className="flex items-center space-x-1">
-                  <span className="text-xs text-blue-600 font-semibold">Birthdays</span>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* This Month's Birthdays */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-200 hover:scale-105"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Cake className="h-4 w-4 text-green-600" />
-                </div>
-                <span className="text-xs text-gray-500 font-medium">This Month</span>
-              </div>
-              <div className="space-y-1">
-                <p className="text-2xl font-bold text-gray-900">{statistics.thisMonthBirthdays}</p>
-                <div className="flex items-center space-x-1">
-                  <span className="text-xs text-green-600 font-semibold">Birthdays</span>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Today's Birthdays Card */}
-          {getTodaysBirthdays().length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl border border-pink-200 p-6"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="p-3 bg-pink-100 rounded-full">
-                    <Cake className="h-6 w-6 text-pink-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">Today's Birthdays</h3>
-                    <p className="text-gray-600">Wish them a wonderful day!</p>
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <Button
-                    onClick={() => setShowBirthdayModal(true)}
-                    className="bg-pink-500 hover:bg-pink-600 text-white"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Birthday
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {getTodaysBirthdays().map((person) => (
-                  <div key={person.id} className="bg-white rounded-lg p-4 border border-pink-200 shadow-sm">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-lg">
-                        {person.avatar}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-bold text-gray-900">{person.name}</h4>
-                        <p className="text-sm text-gray-600">{person.role}</p>
-                        <p className="text-xs text-gray-500">{person.department}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl">🎂</div>
-                        <p className="text-xs text-gray-500">Age {person.age}</p>
-                      </div>
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-teal-600" />
+                      <span className="text-sm text-gray-700">Total Employees</span>
                     </div>
+                    <span className="text-lg font-bold text-gray-900">{employees.length}</span>
                   </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
 
-          {/* Birthday Management Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="bg-white rounded-xl shadow-sm border border-gray-200"
-          >
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">Birthday Management</h2>
-                  <p className="text-gray-600 mt-1">Track and manage employee birthdays</p>
-                </div>
-                <Button
-                  onClick={() => setShowBirthdayModal(true)}
-                  className="bg-pink-500 hover:bg-pink-600 text-white"
-                >
-                  <Cake className="h-4 w-4 mr-2" />
-                  Add Birthday
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {birthdays.map((birthday) => (
-                  <div key={birthday.id} className="bg-white rounded-lg border border-pink-200 p-4 hover:shadow-md transition-all duration-200">
-                    <div className="flex items-center space-x-3 mb-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-lg">
-                        {birthday.personName.split(' ').map(n => n[0]).join('')}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-bold text-gray-900">{birthday.personName}</h3>
-                        <p className="text-sm text-gray-600">{birthday.role}</p>
-                        <p className="text-xs text-gray-500">{birthday.department}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-pink-50 rounded-lg p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-pink-800">Birthday</p>
-                          <p className="text-lg font-bold text-pink-900">{formatDate(birthday.birthday)}</p>
+                  {getTodaysBirthdays().length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {getTodaysBirthdays().map((person) => (
+                        <div key={person.id} className="bg-white rounded-lg border border-pink-200 p-4 flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                            {person.avatar}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-semibold text-gray-900 text-sm">{person.name}</p>
+                            <p className="text-xs text-gray-600">Happy Birthday! 🎉</p>
+                          </div>
+                          <Cake className="h-4 w-4 text-pink-600" />
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold text-pink-800">Age</p>
-                          <p className="text-lg font-bold text-pink-900">{birthday.age}</p>
-                        </div>
-                      </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
+                  ) : (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center text-gray-600 text-sm">
+                      No birthdays today.
+                    </div>
+                  )}
                 </motion.div>
               )}
 
@@ -2557,10 +2246,10 @@ const Admin_hr_management = () => {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-blue-600 text-sm font-medium">Total Records</p>
+                          <p className="text-blue-600 text-sm font-medium">Total Employee Count</p>
                           <p className="text-2xl font-bold text-blue-900">{attendanceStats.totalDays}</p>
                         </div>
-                        <BarChart3 className="h-8 w-8 text-blue-600" />
+                        <Users className="h-8 w-8 text-blue-600" />
                       </div>
                     </CardContent>
                   </Card>
@@ -2569,7 +2258,7 @@ const Admin_hr_management = () => {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-green-600 text-sm font-medium">Present Days</p>
+                          <p className="text-green-600 text-sm font-medium">Total Attendance</p>
                           <p className="text-2xl font-bold text-green-900">{attendanceStats.presentDays}</p>
                         </div>
                         <CheckCircle2 className="h-8 w-8 text-green-600" />
@@ -2581,7 +2270,7 @@ const Admin_hr_management = () => {
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-red-600 text-sm font-medium">Absent Days</p>
+                          <p className="text-red-600 text-sm font-medium">Total Absents</p>
                           <p className="text-2xl font-bold text-red-900">{attendanceStats.absentDays}</p>
                         </div>
                         <XCircle className="h-8 w-8 text-red-600" />
@@ -2603,128 +2292,46 @@ const Admin_hr_management = () => {
                 </div>
               )}
 
-              {/* Employee Attendance Summary */}
+              {/* Employee Attendance Summary - Simple View */}
               {attendanceData.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <UserCheckIcon className="h-5 w-5" />
-                      Employee Attendance Summary - {selectedMonth}
+                      Attendance Records - {selectedMonth}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-3 px-4 font-semibold text-gray-700">Employee</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Total Days</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Present</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Absent</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Late Days</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Total Hours</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Rate</th>
+                          <tr className="border-b border-gray-200 bg-gray-50">
+                            <th className="text-left py-3 px-4 font-semibold text-gray-700">Name</th>
+                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Present Days</th>
+                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Absent Days</th>
                           </tr>
                         </thead>
                         <tbody>
                           {getEmployeeAttendanceSummary().map((employee, index) => (
-                            <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                            <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                               <td className="py-3 px-4">
                                 <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                                    {employee.employeeName.charAt(0)}
+                                    {employee.employeeName.charAt(0).toUpperCase()}
                                   </div>
                                   <span className="font-medium text-gray-900">{employee.employeeName}</span>
                                 </div>
                               </td>
-                              <td className="text-center py-3 px-4 text-gray-700">{employee.totalDays}</td>
                               <td className="text-center py-3 px-4">
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                  <CheckCircle2 className="h-3 w-3" />
+                                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800">
+                                  <CheckCircle2 className="h-4 w-4" />
                                   {employee.presentDays}
                                 </span>
                               </td>
                               <td className="text-center py-3 px-4">
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                  <XCircle className="h-3 w-3" />
+                                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-800">
+                                  <XCircle className="h-4 w-4" />
                                   {employee.absentDays}
-                                </span>
-                              </td>
-                              <td className="text-center py-3 px-4">
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                  <AlertTriangle className="h-3 w-3" />
-                                  {employee.lateDays}
-                                </span>
-                              </td>
-                              <td className="text-center py-3 px-4 text-gray-700">{employee.totalHours.toFixed(1)}h</td>
-                              <td className="text-center py-3 px-4">
-                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                  employee.attendanceRate >= 90 ? 'bg-green-100 text-green-800' :
-                                  employee.attendanceRate >= 80 ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-red-100 text-red-800'
-                                }`}>
-                                  {employee.attendanceRate}%
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Detailed Attendance Records */}
-              {attendanceData.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CalendarIcon className="h-5 w-5" />
-                      Detailed Attendance Records - {selectedMonth}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-3 px-4 font-semibold text-gray-700">Date</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-700">Employee</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Check In</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Check Out</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Hours</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {getAttendanceByMonth().map((record, index) => (
-                            <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="py-3 px-4 text-gray-700">
-                                {new Date(record.date).toLocaleDateString()}
-                              </td>
-                              <td className="py-3 px-4">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                                    {record.employeeName.charAt(0)}
-                                  </div>
-                                  <span className="font-medium text-gray-900">{record.employeeName}</span>
-                                </div>
-                              </td>
-                              <td className="text-center py-3 px-4 text-gray-700">
-                                {record.checkIn || '-'}
-                              </td>
-                              <td className="text-center py-3 px-4 text-gray-700">
-                                {record.checkOut || '-'}
-                              </td>
-                              <td className="text-center py-3 px-4 text-gray-700">
-                                {record.hoursWorked > 0 ? `${record.hoursWorked}h` : '-'}
-                              </td>
-                              <td className="text-center py-3 px-4">
-                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getAttendanceStatusColor(record.status)}`}>
-                                  {getStatusIcon(record.status)}
-                                  {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                                  {record.isLate && record.status === 'present' && ' (Late)'}
                                 </span>
                               </td>
                             </tr>
@@ -2910,6 +2517,9 @@ const Admin_hr_management = () => {
                     const isOverdue = daysUntilPayment < 0 && record.status !== 'paid'
                     const isDueSoon = daysUntilPayment <= 3 && daysUntilPayment >= 0 && record.status !== 'paid'
                     
+                    // Calculate payment week for display
+                    const paymentWeek = getWeekOfMonth(paymentDate)
+                    
                     return (
                       <Card key={index} className={`hover:shadow-lg transition-all duration-200 border-l-4 ${
                         isOverdue ? 'border-l-red-500 bg-red-50' : 
@@ -2934,9 +2544,9 @@ const Admin_hr_management = () => {
                                 {getSalaryStatusIcon(record.status)}
                                 {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
                               </span>
-                              {record.paymentWeek && (
+                              {paymentWeek && (
                                 <div className="text-xs text-gray-500 mt-1">
-                                  Week {record.paymentWeek}
+                                  Week {paymentWeek}
                                 </div>
                               )}
                             </div>
@@ -2970,7 +2580,7 @@ const Admin_hr_management = () => {
                           <div className="mb-3 p-3 bg-gray-50 rounded-lg">
                             <div className="flex justify-between items-center">
                               <span className="text-sm text-gray-600">Salary</span>
-                              <span className="text-lg font-bold text-green-600">{formatCurrency(record.basicSalary)}</span>
+                              <span className="text-lg font-bold text-green-600">{formatCurrency(record.fixedSalary || record.basicSalary || 0)}</span>
                             </div>
                           </div>
 
@@ -2991,23 +2601,26 @@ const Admin_hr_management = () => {
                               </Button>
                             )}
                             <Button
-                              onClick={() => handleEditSalary(record)}
+                              onClick={() => viewSalaryHistory(record)}
                               size="sm"
                               variant="outline"
                               className="flex-1 text-xs py-1 h-8"
-                              disabled={record.status === 'paid'}
+                              title="View salary history"
                             >
-                              <Edit3 className="h-3 w-3 mr-1" />
-                              Edit
+                              <Clock className="h-3 w-3 mr-1" />
+                              History
                             </Button>
-                            <Button
-                              onClick={() => handleDeleteSalary(record)}
-                              size="sm"
-                              variant="outline"
-                              className="text-xs py-1 h-8 px-2 text-red-600 border-red-200 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            {record.status === 'pending' && new Date(record.month + '-01') >= new Date(new Date().getFullYear(), new Date().getMonth(), 1) && (
+                              <Button
+                                onClick={() => handleDeleteSalary(record)}
+                                size="sm"
+                                variant="outline"
+                                className="text-xs py-1 h-8 px-2 text-red-600 border-red-200 hover:bg-red-50"
+                                title="Delete salary record"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
@@ -3942,10 +3555,20 @@ const Admin_hr_management = () => {
                   </div>
 
                   <div className="space-y-3">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">{selectedSalaryRecord.employeeName}</span>
-                        <span className="text-lg font-bold text-green-600">{formatCurrency(selectedSalaryRecord.basicSalary)}</span>
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-700">Employee:</span>
+                          <span className="text-sm font-bold text-gray-900">{selectedSalaryRecord.employeeName}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-700">Department:</span>
+                          <span className="text-sm text-gray-600">{selectedSalaryRecord.department || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-green-200">
+                          <span className="text-base font-semibold text-gray-900">Salary Amount:</span>
+                          <span className="text-xl font-bold text-green-600">{formatCurrency(selectedSalaryRecord.fixedSalary || selectedSalaryRecord.basicSalary || 0)}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -3960,16 +3583,27 @@ const Admin_hr_management = () => {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Method</label>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Payment Method</label>
                       <select
                         className="w-full h-8 px-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-green-500 focus:border-green-500"
                         id="paymentMethod"
                       >
-                        <option value="Bank Transfer">Bank Transfer</option>
-                        <option value="UPI">UPI</option>
-                        <option value="Cheque">Cheque</option>
-                        <option value="Cash">Cash</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="upi">UPI</option>
+                        <option value="cheque">Cheque</option>
+                        <option value="cash">Cash</option>
+                        <option value="other">Other</option>
                       </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Remarks (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="Add any remarks..."
+                        className="w-full h-8 px-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                        id="remarks"
+                      />
                     </div>
                   </div>
 
@@ -3984,7 +3618,12 @@ const Admin_hr_management = () => {
                       onClick={() => {
                         const paidDate = document.getElementById('paidDate').value
                         const paymentMethod = document.getElementById('paymentMethod').value
-                        const remarks = 'Salary paid'
+                        const remarks = document.getElementById('remarks').value || 'Salary paid'
+                        
+                        if (!paidDate || !paymentMethod) {
+                          addToast({ type: 'error', message: 'Please fill in all required fields' })
+                          return
+                        }
                         
                         confirmSalaryPayment({
                           paidDate,
@@ -4846,7 +4485,7 @@ const Admin_hr_management = () => {
                         </div>
                         <div>
                           <span className="text-gray-600">Salary:</span>
-                          <div className="font-semibold text-green-600">{formatCurrency(salaryToDelete.basicSalary)}</div>
+                          <div className="font-semibold text-green-600">{formatCurrency(salaryToDelete.fixedSalary || salaryToDelete.basicSalary || 0)}</div>
                         </div>
                         <div>
                           <span className="text-gray-600">Status:</span>
@@ -4892,6 +4531,163 @@ const Admin_hr_management = () => {
                         Delete Record
                       </Button>
                     </div>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Salary History Modal */}
+            {showSalaryHistoryModal && selectedHistoryEmployee && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={() => {
+                  setShowSalaryHistoryModal(false)
+                  setSalaryHistory([])
+                  setSelectedHistoryEmployee(null)
+                }}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold mb-1">Salary History</h3>
+                        <p className="text-blue-100 text-sm">
+                          {selectedHistoryEmployee.name} - {selectedHistoryEmployee.department}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                  setShowSalaryHistoryModal(false)
+                  setSalaryHistory([])
+                  setSelectedHistoryEmployee(null)
+                }}
+                        className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 overflow-y-auto p-6">
+                    {loadingHistory ? (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                          <p className="text-gray-600 text-sm">Loading salary history...</p>
+                        </div>
+                      </div>
+                    ) : salaryHistory.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12">
+                        <Clock className="h-12 w-12 text-gray-400 mb-4" />
+                        <h4 className="text-lg font-semibold text-gray-700 mb-2">No Salary History</h4>
+                        <p className="text-gray-500 text-sm">No salary records found for this employee</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b-2 border-gray-200 bg-gray-50">
+                              <th className="text-left py-3 px-4 font-semibold text-gray-700">Month</th>
+                              <th className="text-right py-3 px-4 font-semibold text-gray-700">Amount</th>
+                              <th className="text-center py-3 px-4 font-semibold text-gray-700">Status</th>
+                              <th className="text-center py-3 px-4 font-semibold text-gray-700">Payment Date</th>
+                              <th className="text-center py-3 px-4 font-semibold text-gray-700">Paid Date</th>
+                              <th className="text-center py-3 px-4 font-semibold text-gray-700">Method</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {salaryHistory.map((item, idx) => (
+                              <tr
+                                key={item.id || idx}
+                                className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                              >
+                                <td className="py-3 px-4">
+                                  <div className="font-medium text-gray-900">
+                                    {new Date(item.month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className="font-semibold text-green-600">
+                                    {formatCurrency(item.amount)}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 text-center">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSalaryStatusColor(item.status)}`}>
+                                    {getSalaryStatusIcon(item.status)}
+                                    {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 text-center text-gray-600 text-xs">
+                                  {item.paymentDate || '-'}
+                                </td>
+                                <td className="py-3 px-4 text-center text-gray-600 text-xs">
+                                  {item.paidDate || '-'}
+                                </td>
+                                <td className="py-3 px-4 text-center">
+                                  {item.paymentMethod ? (
+                                    <span className="text-xs text-gray-600 capitalize">
+                                      {item.paymentMethod.replace('_', ' ')}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer Summary */}
+                  {salaryHistory.length > 0 && (
+                    <div className="border-t border-gray-200 bg-gray-50 p-4">
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Total Records:</span>
+                          <span className="ml-2 font-semibold text-gray-900">{salaryHistory.length}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Paid Records:</span>
+                          <span className="ml-2 font-semibold text-green-600">
+                            {salaryHistory.filter(h => h.status === 'paid').length}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Total Amount:</span>
+                          <span className="ml-2 font-semibold text-blue-600">
+                            {formatCurrency(salaryHistory.reduce((sum, h) => sum + h.amount, 0))}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Close Button */}
+                  <div className="border-t border-gray-200 p-4 flex justify-end">
+                    <Button
+                      onClick={() => {
+                        setShowSalaryHistoryModal(false)
+                        setSalaryHistory([])
+                        setSelectedHistoryEmployee(null)
+                      }}
+                      variant="outline"
+                      className="px-6"
+                    >
+                      Close
+                    </Button>
                   </div>
                 </motion.div>
               </motion.div>
