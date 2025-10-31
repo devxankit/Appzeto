@@ -3,7 +3,9 @@ const {
   loginPM,
   getPMProfile,
   logoutPM,
-  createDemoPM
+  createDemoPM,
+  getWalletSummary,
+  getWalletTransactions
 } = require('../controllers/pmController');
 
 // Import team-related controllers
@@ -11,7 +13,8 @@ const {
   getPMTeamMembers,
   getPMClients,
   getPMEmployees,
-  getPMTeamStatistics
+  getPMTeamStatistics,
+  getPMTeamLeaderboard
 } = require('../controllers/pmTeamController');
 
 // Import PM project controllers
@@ -32,11 +35,16 @@ router.use(authorize('project-manager')); // All routes below this middleware ar
 router.get('/profile', getPMProfile);
 router.post('/logout', logoutPM);
 
+// PM wallet routes
+router.get('/wallet/summary', getWalletSummary);
+router.get('/wallet/transactions', getWalletTransactions);
+
 // PM team management routes
 router.get('/team/employees', getPMEmployees);
 router.get('/team/clients', getPMClients);
 router.get('/team/members', getPMTeamMembers);
 router.get('/team/statistics', getPMTeamStatistics);
+router.get('/team/leaderboard', getPMTeamLeaderboard);
 
 // PM project management routes
 router.use('/', pmProjectRoutes);

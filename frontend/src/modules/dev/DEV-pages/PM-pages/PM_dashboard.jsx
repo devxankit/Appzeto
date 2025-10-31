@@ -10,6 +10,7 @@ import {
   projectService, 
   taskService, 
   teamService, 
+  milestoneService,
   socketService, 
   tokenUtils 
 } from '../../DEV-services'
@@ -36,11 +37,13 @@ const PM_dashboard = () => {
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [dashboardData, setDashboardData] = useState({
-    projectStats: { total: 0, active: 0, completed: 0, onHold: 0, overdue: 0 },
+    projectStats: { total: 0, active: 0, completed: 0, onHold: 0, overdue: 0, newProjects: 0 },
     recentProjects: [],
     teamStats: { totalMembers: 0, activeTasks: 0, completedTasks: 0, activeMilestones: 0 },
     projectStatusData: [],
-    productivityMetrics: {}
+    productivityMetrics: {},
+    testingProjectsCount: 0,
+    testingMilestonesCount: 0
   })
   const [projectGrowthData, setProjectGrowthData] = useState([])
 
@@ -101,16 +104,17 @@ const PM_dashboard = () => {
       setLoading(true)
       
       // Load projects data first - this is the main source of truth
-      const [projectsResponse, teamStats, productivityMetrics, projectGrowth] = await Promise.all([
+      const [projectsResponse, teamStats, productivityMetrics, projectGrowth, testingProjectsResponse] = await Promise.all([
         projectService.getAllProjects({ limit: 100 }), // Get all projects for statistics
         teamService.getTeamStatistics(),
         analyticsService.getProductivityMetrics(),
-        analyticsService.getProjectGrowthAnalytics() // Add this
+        analyticsService.getProjectGrowthAnalytics(), // Add this
+        projectService.getAllProjects({ status: 'testing', limit: 100 }) // Get testing projects for count
       ])
 
 
-      // Get projects data
-      const allProjects = projectsResponse?.data || []
+      // Get projects data - handle both array response and object with data property
+      const allProjects = Array.isArray(projectsResponse) ? projectsResponse : (projectsResponse?.data || [])
       
       // Calculate statistics from projects data (frontend-based calculation)
       const projectStats = {
@@ -121,6 +125,8 @@ const PM_dashboard = () => {
         planning: allProjects.filter(p => p.status === 'planning').length,
         testing: allProjects.filter(p => p.status === 'testing').length,
         cancelled: allProjects.filter(p => p.status === 'cancelled').length,
+        // New projects: only untouched status (projects assigned to PM that haven't been started)
+        newProjects: allProjects.filter(p => p.status === 'untouched').length,
         overdue: allProjects.filter(p => {
           if (!p.dueDate) return false
           return new Date(p.dueDate) < new Date() && !['completed', 'cancelled'].includes(p.status)
@@ -155,13 +161,26 @@ const PM_dashboard = () => {
         { name: 'Overdue', value: projectStats.overdue, color: '#EF4444', count: `${projectStats.overdue} project${projectStats.overdue !== 1 ? 's' : ''}` }
       ]
 
-      setDashboardData({
-        projectStats,
-        recentProjects: processedRecentProjects,
-        teamStats: processedTeamStats,
-        projectStatusData,
-        productivityMetrics: productivityMetrics?.data || {}
-      })
+      // Get testing projects count - handle both array response and object with data property
+      const testingProjects = Array.isArray(testingProjectsResponse) ? testingProjectsResponse : (testingProjectsResponse?.data || []);
+      const testingProjectsCount = testingProjects.length;
+
+      // Get testing milestones count by fetching all projects and their milestones
+      let testingMilestonesCount = 0;
+      try {
+        const allProjectsForMilestones = Array.isArray(projectsResponse) ? projectsResponse : (projectsResponse?.data || []);
+        const milestonePromises = allProjectsForMilestones.map(project => 
+          milestoneService.getMilestonesByProject(project._id).catch(() => ({ data: [] }))
+        );
+        const milestoneResponses = await Promise.all(milestonePromises);
+        const allMilestones = milestoneResponses.flatMap(response => {
+          // Handle both array response and object with data property
+          return Array.isArray(response) ? response : (response?.data || []);
+        });
+        testingMilestonesCount = allMilestones.filter(m => m.status === 'testing').length;
+      } catch (error) {
+        console.error('Error loading testing milestones count:', error);
+      }
 
       // Process project growth data
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -171,14 +190,24 @@ const PM_dashboard = () => {
         color: `bg-teal-${Math.min(300 + (item.count * 50), 700)}`
       })) || [];
 
-
       setProjectGrowthData(processedGrowthData);
+
+      // Set dashboard data with all information including testing counts
+      setDashboardData({
+        projectStats,
+        recentProjects: processedRecentProjects,
+        teamStats: processedTeamStats,
+        projectStatusData,
+        productivityMetrics: productivityMetrics?.data || {},
+        testingProjectsCount,
+        testingMilestonesCount
+      });
     } catch (error) {
       console.error('Error loading dashboard data:', error)
       console.error('Project Growth API Error:', error)
       // Set fallback data on error
       setDashboardData({
-        projectStats: { total: 0, active: 0, completed: 0, onHold: 0, overdue: 0 },
+        projectStats: { total: 0, active: 0, completed: 0, onHold: 0, overdue: 0, newProjects: 0 },
         recentProjects: [],
         teamStats: { totalMembers: 0, activeTasks: 0, completedTasks: 0, activeMilestones: 0 },
         projectStatusData: [
@@ -187,7 +216,9 @@ const PM_dashboard = () => {
           { name: 'On Hold', value: 0, color: '#F59E0B', count: '0 projects' },
           { name: 'Overdue', value: 0, color: '#EF4444', count: '0 projects' }
         ],
-        productivityMetrics: {}
+        productivityMetrics: {},
+        testingProjectsCount: 0,
+        testingMilestonesCount: 0
       })
       setProjectGrowthData([])
     } finally {
@@ -301,7 +332,7 @@ const PM_dashboard = () => {
                   boxShadow: '0 4px 12px -2px rgba(20, 184, 166, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
               >
-                <span className="text-lg font-bold">8</span>
+                <span className="text-lg font-bold">{dashboardData.projectStats.newProjects}</span>
               </div>
             </div>
           </div>
@@ -409,7 +440,7 @@ const PM_dashboard = () => {
                   </div>
                 </div>
                  <div className="bg-purple-300 text-purple-800 px-4 py-2 rounded-xl shadow-sm">
-                   <p className="text-2xl font-bold">4</p>
+                   <p className="text-2xl font-bold">{dashboardData.testingProjectsCount}</p>
                  </div>
               </div>
             </div>
@@ -432,7 +463,7 @@ const PM_dashboard = () => {
                   </div>
                 </div>
                  <div className="bg-indigo-300 text-indigo-800 px-4 py-2 rounded-xl shadow-sm">
-                   <p className="text-2xl font-bold">6</p>
+                   <p className="text-2xl font-bold">{dashboardData.testingMilestonesCount}</p>
                  </div>
               </div>
             </div>

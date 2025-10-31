@@ -54,6 +54,12 @@ export const apiRequest = async (url, options = {}) => {
     return data;
   } catch (error) {
     console.error('API Request Error:', error);
+    
+    // Provide better error messages for connection issues
+    if (error instanceof TypeError && (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError'))) {
+      throw new Error('Cannot connect to server. Please ensure the backend server is running.');
+    }
+    
     throw error;
   }
 };

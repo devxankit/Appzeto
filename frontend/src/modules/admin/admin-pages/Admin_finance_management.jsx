@@ -53,6 +53,9 @@ const Admin_finance_management = () => {
   const [showAccountEditModal, setShowAccountEditModal] = useState(false)
   const [showTransactionModal, setShowTransactionModal] = useState(false)
   const [showBudgetModal, setShowBudgetModal] = useState(false)
+  const [showBudgetViewModal, setShowBudgetViewModal] = useState(false)
+  const [showBudgetEditModal, setShowBudgetEditModal] = useState(false)
+  const [showBudgetSpendModal, setShowBudgetSpendModal] = useState(false)
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [showExpenseModal, setShowExpenseModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
@@ -73,12 +76,14 @@ const Admin_finance_management = () => {
     type: 'incoming',
     category: '',
     amount: '',
-    client: '',
-    project: '',
     date: '',
-    method: 'Bank Transfer',
+    account: '',
     description: ''
   })
+
+  // Accounts state
+  const [accounts, setAccounts] = useState([])
+  const [accountsLoading, setAccountsLoading] = useState(false)
 
   const [budgetFormData, setBudgetFormData] = useState({
     name: '',
@@ -100,10 +105,14 @@ const Admin_finance_management = () => {
   const [expenseFormData, setExpenseFormData] = useState({
     category: '',
     amount: '',
-    employee: '',
-    vendor: '',
-    description: '',
-    date: ''
+    date: '',
+    description: ''
+  })
+
+  const [budgetSpendFormData, setBudgetSpendFormData] = useState({
+    amount: '',
+    date: '',
+    description: ''
   })
 
   // Mock data - Finance statistics
@@ -179,45 +188,11 @@ const Admin_finance_management = () => {
   const [transactionsTotal, setTransactionsTotal] = useState(0)
   const [transactionsPages, setTransactionsPages] = useState(1)
 
-  // Mock data - Budgets
-  const [budgets, setBudgets] = useState([
-    {
-      id: 1,
-      name: 'Q1 2024 Development',
-      category: 'Development',
-      allocated: 500000,
-      spent: 320000,
-      remaining: 180000,
-      startDate: '2024-01-01',
-      endDate: '2024-03-31',
-      status: 'active',
-      projects: ['E-commerce Platform', 'Mobile App', 'Dashboard Redesign']
-    },
-    {
-      id: 2,
-      name: 'Marketing Campaign',
-      category: 'Marketing',
-      allocated: 200000,
-      spent: 85000,
-      remaining: 115000,
-      startDate: '2024-01-01',
-      endDate: '2024-06-30',
-      status: 'active',
-      projects: ['Social Media Ads', 'Content Marketing', 'SEO']
-    },
-    {
-      id: 3,
-      name: 'Office Operations',
-      category: 'Operations',
-      allocated: 300000,
-      spent: 280000,
-      remaining: 20000,
-      startDate: '2024-01-01',
-      endDate: '2024-12-31',
-      status: 'active',
-      projects: ['Rent', 'Utilities', 'Equipment']
-    }
-  ])
+  // Budgets state - fetched from API
+  const [budgets, setBudgets] = useState([])
+  const [budgetsLoading, setBudgetsLoading] = useState(false)
+  const [budgetsTotal, setBudgetsTotal] = useState(0)
+  const [budgetsPages, setBudgetsPages] = useState(1)
 
   // Mock data - Invoices
   const [invoices, setInvoices] = useState([
@@ -256,105 +231,112 @@ const Admin_finance_management = () => {
     }
   ])
 
-  // Mock data - Expenses
-  const [expenses, setExpenses] = useState([
-    {
-      id: 1,
-      category: 'Salaries',
-      amount: 35000,
-      employee: 'John Doe',
-      description: 'Monthly salary payment',
-      date: '2024-01-01',
-      status: 'paid',
-      approvedBy: 'HR Manager'
-    },
-    {
-      id: 2,
-      category: 'Office Rent',
-      amount: 25000,
-      vendor: 'Prime Properties',
-      description: 'Monthly office rent',
-      date: '2024-01-01',
-      status: 'paid',
-      approvedBy: 'Finance Manager'
-    },
-    {
-      id: 3,
-      category: 'Software License',
-      amount: 5000,
-      vendor: 'Adobe Inc.',
-      description: 'Annual Creative Suite license',
-      date: '2024-01-10',
-      status: 'paid',
-      approvedBy: 'IT Manager'
-    },
-    {
-      id: 4,
-      category: 'Marketing',
-      amount: 15000,
-      vendor: 'Google Ads',
-      description: 'Monthly advertising budget',
-      date: '2024-01-15',
-      status: 'pending',
-      approvedBy: 'Marketing Manager'
-    }
-  ])
+  // Expenses state - fetched from API
+  const [expenses, setExpenses] = useState([])
+  const [expensesLoading, setExpensesLoading] = useState(false)
+  const [expensesTotal, setExpensesTotal] = useState(0)
+  const [expensesPages, setExpensesPages] = useState(1)
 
-  // Mock data - Bank Accounts (Payment Information for Clients)
-  const [accounts, setAccounts] = useState([
-    {
-      id: 1,
-      accountName: 'Business Primary Account',
-      bankName: 'State Bank of India',
-      accountNumber: '123456789012',
-      ifscCode: 'SBIN0001234',
-      branchName: 'Connaught Place',
-      accountType: 'current',
-      isActive: true,
-      description: 'Main business account for client payments',
-      createdAt: '2024-01-01',
-      lastUsed: '2024-01-25'
-    },
-    {
-      id: 2,
-      accountName: 'Project Payments Account',
-      bankName: 'HDFC Bank',
-      accountNumber: '987654321098',
-      ifscCode: 'HDFC0000987',
-      branchName: 'Gurgaon Sector 29',
-      accountType: 'current',
-      isActive: true,
-      description: 'Account for project milestone payments',
-      createdAt: '2024-01-01',
-      lastUsed: '2024-01-20'
-    },
-    {
-      id: 3,
-      accountName: 'Consulting Services Account',
-      bankName: 'ICICI Bank',
-      accountNumber: '456789123456',
-      ifscCode: 'ICIC0004567',
-      branchName: 'Delhi Central',
-      accountType: 'current',
-      isActive: true,
-      description: 'Account for consulting and service payments',
-      createdAt: '2024-01-01',
-      lastUsed: '2024-01-15'
-    },
-    {
-      id: 4,
-      accountName: 'Maintenance Account',
-      bankName: 'Axis Bank',
-      accountNumber: '789123456789',
-      ifscCode: 'AXIS0007891',
-      branchName: 'Noida Sector 18',
-      accountType: 'current',
-      isActive: false,
-      description: 'Account for maintenance contracts (inactive)',
-      createdAt: '2024-01-01',
-      lastUsed: '2024-01-10'
+  // Fetch accounts from API
+  const fetchAccounts = async () => {
+    try {
+      setAccountsLoading(true)
+      const response = await adminFinanceService.getAccounts({ isActive: 'true' })
+      if (response.success && response.data) {
+        setAccounts(response.data)
+      }
+    } catch (err) {
+      console.error('Error fetching accounts:', err)
+      toast.error('Failed to load accounts')
+    } finally {
+      setAccountsLoading(false)
     }
-  ])
+  }
+
+  // Fetch expenses from API
+  const fetchExpenses = async () => {
+    try {
+      setExpensesLoading(true)
+      setError(null)
+      
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage
+      }
+      
+      // Add filters
+      if (selectedFilter !== 'all') {
+        params.status = selectedFilter
+      }
+      if (searchTerm) {
+        params.search = searchTerm
+      }
+      
+      const response = await adminFinanceService.getExpenses(params)
+      
+      if (response.success && response.data) {
+        setExpenses(response.data)
+        setExpensesTotal(response.total || response.data.length)
+        setExpensesPages(response.pages || 1)
+      }
+    } catch (err) {
+      console.error('Error fetching expenses:', err)
+      setError(err.message || 'Failed to fetch expenses')
+      toast.error('Failed to load expenses')
+    } finally {
+      setExpensesLoading(false)
+      setLoading(false)
+    }
+  }
+
+  // Fetch budgets from API
+  const fetchBudgets = async () => {
+    try {
+      setBudgetsLoading(true)
+      setError(null)
+      
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage
+      }
+      
+      // Add filters
+      if (selectedFilter !== 'all') {
+        params.status = selectedFilter
+      }
+      if (searchTerm) {
+        params.search = searchTerm
+      }
+      
+      const response = await adminFinanceService.getBudgets(params)
+      
+      if (response.success && response.data) {
+        // Map backend fields to frontend fields
+        const mappedBudgets = response.data.map(budget => ({
+          ...budget,
+          id: budget._id || budget.id,
+          name: budget.budgetName || budget.name,
+          category: budget.budgetCategory || budget.category,
+          allocated: budget.allocatedAmount || budget.allocated,
+          spent: budget.spentAmount || budget.spent || 0,
+          remaining: budget.remainingAmount || budget.remaining,
+          startDate: budget.startDate ? new Date(budget.startDate).toISOString().split('T')[0] : budget.startDate,
+          endDate: budget.endDate ? new Date(budget.endDate).toISOString().split('T')[0] : budget.endDate,
+          projects: budget.budgetProjects || budget.projects || []
+        }))
+        setBudgets(mappedBudgets)
+        setBudgetsTotal(response.total || response.data.length)
+        setBudgetsPages(response.pages || 1)
+      }
+    } catch (err) {
+      console.error('Error fetching budgets:', err)
+      setError(err.message || 'Failed to fetch budgets')
+      toast.error('Failed to load budgets')
+    } finally {
+      setBudgetsLoading(false)
+      setLoading(false)
+    }
+  }
 
   // Fetch transactions from API
   const fetchTransactions = async () => {
@@ -397,7 +379,7 @@ const Admin_finance_management = () => {
 
   // Reset to page 1 when filters change
   useEffect(() => {
-    if (activeTab === 'transactions') {
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets') {
       setCurrentPage(1)
     }
   }, [transactionTypeFilter, selectedFilter, searchTerm, activeTab])
@@ -406,11 +388,22 @@ const Admin_finance_management = () => {
   useEffect(() => {
     if (activeTab === 'transactions') {
       fetchTransactions()
+      fetchAccounts() // Fetch accounts when transactions tab is active
+    } else if (activeTab === 'expenses') {
+      fetchExpenses()
+    } else if (activeTab === 'budgets') {
+      fetchBudgets()
     } else {
       setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, currentPage, transactionTypeFilter, selectedFilter, searchTerm])
+
+  // Fetch accounts when component mounts
+  useEffect(() => {
+    fetchAccounts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Helper functions
   const getStatusColor = (status) => {
@@ -461,25 +454,35 @@ const Admin_finance_management = () => {
           date: t.transactionDate || t.date || t.createdAt
         }))
       case 'budgets':
-        return budgets
+        return budgets.map(b => ({
+          ...b,
+          id: b._id || b.id
+        }))
       case 'invoices':
         return invoices
       case 'expenses':
-        return expenses
+        return expenses.map(e => ({
+          ...e,
+          id: e._id || e.id,
+          date: e.transactionDate || e.date || e.createdAt
+        }))
       case 'accounts':
-        return accounts
+        return accounts.map(a => ({
+          ...a,
+          id: a._id || a.id
+        }))
       default:
         return transactions
     }
   }
 
   // Filter data based on search and filter criteria
-  // Note: Transactions are filtered on the backend, so we skip client-side filtering for them
+  // Note: Transactions, expenses, and budgets are filtered on the backend, so we skip client-side filtering for them
   const filteredData = useMemo(() => {
     const data = getCurrentData()
     
-    // For transactions, backend handles filtering, so return data as-is
-    if (activeTab === 'transactions') {
+    // For transactions, expenses, and budgets, backend handles filtering, so return data as-is
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets') {
       return data
     }
     
@@ -491,11 +494,7 @@ const Admin_finance_management = () => {
       
       let matchesFilter = true
       if (selectedFilter !== 'all') {
-        if (activeTab === 'budgets') {
-          matchesFilter = item.status === selectedFilter
-        } else if (activeTab === 'invoices') {
-          matchesFilter = item.status === selectedFilter
-        } else if (activeTab === 'expenses') {
+        if (activeTab === 'invoices') {
           matchesFilter = item.status === selectedFilter
         } else if (activeTab === 'accounts') {
           matchesFilter = item.isActive === (selectedFilter === 'active')
@@ -504,12 +503,12 @@ const Admin_finance_management = () => {
       
       return matchesSearch && matchesFilter
     })
-  }, [activeTab, searchTerm, selectedFilter, transactionTypeFilter, transactions])
+  }, [activeTab, searchTerm, selectedFilter, transactionTypeFilter, transactions, expenses, budgets])
 
   // Pagination
   const paginatedData = useMemo(() => {
-    // For transactions, backend handles pagination, so return data as-is
-    if (activeTab === 'transactions') {
+    // For transactions, expenses, and budgets, backend handles pagination, so return data as-is
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets') {
       return filteredData
     }
     // For other tabs, apply client-side pagination
@@ -519,6 +518,10 @@ const Admin_finance_management = () => {
 
   const totalPages = activeTab === 'transactions' 
     ? transactionsPages 
+    : activeTab === 'expenses'
+    ? expensesPages
+    : activeTab === 'budgets'
+    ? budgetsPages
     : Math.ceil(filteredData.length / itemsPerPage)
 
   // Management functions
@@ -528,13 +531,50 @@ const Admin_finance_management = () => {
   }
 
   const handleEdit = (item) => {
-    setSelectedItem(item)
-    setShowEditModal(true)
+    if (activeTab === 'budgets') {
+      handleEditBudget(item)
+    } else {
+      setSelectedItem(item)
+      setShowEditModal(true)
+    }
   }
 
   const handleView = (item) => {
-    setSelectedItem(item)
-    setShowViewModal(true)
+    if (activeTab === 'budgets') {
+      handleViewBudget(item)
+    } else {
+      setSelectedItem(item)
+      setShowViewModal(true)
+    }
+  }
+
+  // Budget-specific handlers
+  const handleViewBudget = (budget) => {
+    setSelectedItem(budget)
+    setShowBudgetViewModal(true)
+  }
+
+  const handleEditBudget = (budget) => {
+    setSelectedItem(budget)
+    setBudgetFormData({
+      name: budget.name || budget.budgetName || '',
+      category: budget.category || budget.budgetCategory || '',
+      allocated: budget.allocated || budget.allocatedAmount || '',
+      startDate: budget.startDate ? (typeof budget.startDate === 'string' ? budget.startDate : new Date(budget.startDate).toISOString().split('T')[0]) : '',
+      endDate: budget.endDate ? (typeof budget.endDate === 'string' ? budget.endDate : new Date(budget.endDate).toISOString().split('T')[0]) : '',
+      description: budget.description || ''
+    })
+    setShowBudgetEditModal(true)
+  }
+
+  const handleSpendBudget = (budget) => {
+    setSelectedItem(budget)
+    setBudgetSpendFormData({
+      amount: '',
+      date: new Date().toISOString().split('T')[0],
+      description: ''
+    })
+    setShowBudgetSpendModal(true)
   }
 
   const handleDelete = (item) => {
@@ -570,6 +610,9 @@ const Admin_finance_management = () => {
     setShowAccountEditModal(false)
     setShowTransactionModal(false)
     setShowBudgetModal(false)
+    setShowBudgetViewModal(false)
+    setShowBudgetEditModal(false)
+    setShowBudgetSpendModal(false)
     setShowInvoiceModal(false)
     setShowExpenseModal(false)
     setSelectedItem(null)
@@ -588,10 +631,8 @@ const Admin_finance_management = () => {
       type: 'incoming',
       category: '',
       amount: '',
-      client: '',
-      project: '',
       date: '',
-      method: 'Bank Transfer',
+      account: '',
       description: ''
     })
     setBudgetFormData({
@@ -612,10 +653,8 @@ const Admin_finance_management = () => {
     setExpenseFormData({
       category: '',
       amount: '',
-      employee: '',
-      vendor: '',
-      description: '',
-      date: ''
+      date: '',
+      description: ''
     })
   }
 
@@ -633,22 +672,31 @@ const Admin_finance_management = () => {
     setShowAccountModal(true)
   }
 
-  const handleSaveAccount = () => {
+  const handleSaveAccount = async () => {
     if (!accountFormData.accountName || !accountFormData.bankName || !accountFormData.accountNumber) {
-      alert('Please fill in all required fields')
+      toast.error('Please fill in all required fields')
       return
     }
 
-    const newAccount = {
-      id: accounts.length + 1,
-      ...accountFormData,
-      createdAt: new Date().toISOString().split('T')[0],
-      lastUsed: new Date().toISOString().split('T')[0]
+    try {
+      setLoading(true)
+      const response = await adminFinanceService.createAccount(accountFormData)
+      
+      if (response && response.success) {
+        toast.success(response.message || 'Account created successfully')
+        setShowAccountModal(false)
+        closeModals()
+        // Refresh accounts list
+        await fetchAccounts()
+      } else {
+        toast.error(response?.message || 'Failed to create account')
+      }
+    } catch (err) {
+      console.error('Error creating account:', err)
+      toast.error(err.message || 'Failed to create account')
+    } finally {
+      setLoading(false)
     }
-
-    setAccounts([...accounts, newAccount])
-    setShowAccountModal(false)
-    closeModals()
   }
 
   const handleViewAccount = (account) => {
@@ -671,21 +719,32 @@ const Admin_finance_management = () => {
     setShowAccountEditModal(true)
   }
 
-  const handleUpdateAccount = () => {
+  const handleUpdateAccount = async () => {
     if (!accountFormData.accountName || !accountFormData.bankName || !accountFormData.accountNumber) {
-      alert('Please fill in all required fields')
+      toast.error('Please fill in all required fields')
       return
     }
 
-    const updatedAccounts = accounts.map(account => 
-      account.id === selectedItem.id 
-        ? { ...account, ...accountFormData, lastUsed: new Date().toISOString().split('T')[0] }
-        : account
-    )
-
-    setAccounts(updatedAccounts)
-    setShowAccountEditModal(false)
-    closeModals()
+    try {
+      setLoading(true)
+      const accountId = selectedItem._id || selectedItem.id
+      const response = await adminFinanceService.updateAccount(accountId, accountFormData)
+      
+      if (response && response.success) {
+        toast.success(response.message || 'Account updated successfully')
+        setShowAccountEditModal(false)
+        closeModals()
+        // Refresh accounts list
+        await fetchAccounts()
+      } else {
+        toast.error(response?.message || 'Failed to update account')
+      }
+    } catch (err) {
+      console.error('Error updating account:', err)
+      toast.error(err.message || 'Failed to update account')
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Handler functions for different tabs
@@ -694,10 +753,8 @@ const Admin_finance_management = () => {
       type: 'incoming',
       category: '',
       amount: '',
-      client: '',
-      project: '',
       date: new Date().toISOString().split('T')[0],
-      method: 'Bank Transfer',
+      account: '',
       description: ''
     })
     setShowTransactionModal(true)
@@ -730,10 +787,8 @@ const Admin_finance_management = () => {
     setExpenseFormData({
       category: '',
       amount: '',
-      employee: '',
-      vendor: '',
-      description: '',
-      date: new Date().toISOString().split('T')[0]
+      date: new Date().toISOString().split('T')[0],
+      description: ''
     })
     setShowExpenseModal(true)
   }
@@ -741,6 +796,12 @@ const Admin_finance_management = () => {
   const handleSaveTransaction = async () => {
     if (!transactionFormData.category || !transactionFormData.amount || !transactionFormData.date) {
       toast.error('Please fill in all required fields')
+      return
+    }
+
+    // For incoming transactions, account is required
+    if (transactionFormData.type === 'incoming' && !transactionFormData.account) {
+      toast.error('Please select an account for incoming transactions')
       return
     }
 
@@ -752,22 +813,12 @@ const Admin_finance_management = () => {
         category: transactionFormData.category,
         amount: parseFloat(transactionFormData.amount),
         date: transactionFormData.date,
-        method: transactionFormData.method || 'Bank Transfer',
         description: transactionFormData.description || ''
       }
 
-      // Add optional fields
-      if (transactionFormData.client) {
-        transactionData.client = transactionFormData.client
-      }
-      if (transactionFormData.project) {
-        transactionData.project = transactionFormData.project
-      }
-      if (transactionFormData.employee) {
-        transactionData.employee = transactionFormData.employee
-      }
-      if (transactionFormData.vendor) {
-        transactionData.vendor = transactionFormData.vendor
+      // Add account only for incoming transactions
+      if (transactionFormData.type === 'incoming' && transactionFormData.account) {
+        transactionData.account = transactionFormData.account
       }
 
       console.log('Creating transaction with data:', transactionData)
@@ -791,25 +842,136 @@ const Admin_finance_management = () => {
     }
   }
 
-  const handleSaveBudget = () => {
-    if (!budgetFormData.name || !budgetFormData.allocated) {
-      alert('Please fill in all required fields')
+  const handleSaveBudget = async () => {
+    if (!budgetFormData.name || !budgetFormData.category || !budgetFormData.allocated || !budgetFormData.startDate || !budgetFormData.endDate) {
+      toast.error('Please fill in all required fields')
       return
     }
 
-    const newBudget = {
-      id: budgets.length + 1,
-      ...budgetFormData,
-      allocated: parseFloat(budgetFormData.allocated),
-      spent: 0,
-      remaining: parseFloat(budgetFormData.allocated),
-      status: 'active',
-      projects: []
+    try {
+      setLoading(true)
+      
+      const budgetData = {
+        name: budgetFormData.name,
+        category: budgetFormData.category,
+        allocated: parseFloat(budgetFormData.allocated),
+        startDate: budgetFormData.startDate,
+        endDate: budgetFormData.endDate,
+        description: budgetFormData.description || ''
+      }
+
+      console.log('Creating budget with data:', budgetData)
+      const response = await adminFinanceService.createBudget(budgetData)
+      console.log('Budget creation response:', response)
+      
+      if (response && response.success) {
+        toast.success(response.message || 'Budget created successfully')
+        setShowBudgetModal(false)
+        closeModals()
+        // Refresh budgets list
+        await fetchBudgets()
+      } else {
+        toast.error(response?.message || 'Failed to create budget')
+      }
+    } catch (err) {
+      console.error('Error creating budget:', err)
+      toast.error(err.message || 'Failed to create budget')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateBudget = async () => {
+    if (!budgetFormData.name || !budgetFormData.category || !budgetFormData.allocated || !budgetFormData.startDate || !budgetFormData.endDate) {
+      toast.error('Please fill in all required fields')
+      return
     }
 
-    setBudgets([...budgets, newBudget])
-    setShowBudgetModal(false)
-    closeModals()
+    if (!selectedItem || !selectedItem._id && !selectedItem.id) {
+      toast.error('Budget not selected')
+      return
+    }
+
+    try {
+      setLoading(true)
+      
+      const budgetData = {
+        name: budgetFormData.name,
+        category: budgetFormData.category,
+        allocated: parseFloat(budgetFormData.allocated),
+        startDate: budgetFormData.startDate,
+        endDate: budgetFormData.endDate,
+        description: budgetFormData.description || '',
+        status: selectedItem.status || 'active'
+      }
+
+      const budgetId = selectedItem._id || selectedItem.id
+      const response = await adminFinanceService.updateBudget(budgetId, budgetData)
+      
+      if (response && response.success) {
+        toast.success(response.message || 'Budget updated successfully')
+        setShowBudgetEditModal(false)
+        closeModals()
+        // Refresh budgets list
+        await fetchBudgets()
+      } else {
+        toast.error(response?.message || 'Failed to update budget')
+      }
+    } catch (err) {
+      console.error('Error updating budget:', err)
+      toast.error(err.message || 'Failed to update budget')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSpendFromBudget = async () => {
+    if (!budgetSpendFormData.amount || !budgetSpendFormData.date) {
+      toast.error('Please fill in amount and date')
+      return
+    }
+
+    if (!selectedItem || !selectedItem._id && !selectedItem.id) {
+      toast.error('Budget not selected')
+      return
+    }
+
+    const spendAmount = parseFloat(budgetSpendFormData.amount)
+    if (spendAmount <= 0) {
+      toast.error('Amount must be greater than 0')
+      return
+    }
+
+    try {
+      setLoading(true)
+      
+      // Create an outgoing transaction with the budget's category
+      const budgetCategory = selectedItem.category || selectedItem.budgetCategory
+      const expenseData = {
+        category: budgetCategory,
+        amount: spendAmount,
+        date: budgetSpendFormData.date,
+        description: budgetSpendFormData.description || `Budget spend for ${selectedItem.name || selectedItem.budgetName}`
+      }
+
+      // Create the expense (which is an outgoing transaction)
+      const expenseResponse = await adminFinanceService.createExpense(expenseData)
+      
+      if (expenseResponse && expenseResponse.success) {
+        toast.success(`₹${spendAmount.toLocaleString()} spent from budget successfully`)
+        setShowBudgetSpendModal(false)
+        closeModals()
+        // Refresh budgets list to update spent amount
+        await fetchBudgets()
+      } else {
+        toast.error(expenseResponse?.message || 'Failed to record budget spend')
+      }
+    } catch (err) {
+      console.error('Error spending from budget:', err)
+      toast.error(err.message || 'Failed to record budget spend')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSaveInvoice = () => {
@@ -832,23 +994,41 @@ const Admin_finance_management = () => {
     closeModals()
   }
 
-  const handleSaveExpense = () => {
-    if (!expenseFormData.category || !expenseFormData.amount) {
-      alert('Please fill in all required fields')
+  const handleSaveExpense = async () => {
+    if (!expenseFormData.category || !expenseFormData.amount || !expenseFormData.date) {
+      toast.error('Please fill in all required fields')
       return
     }
 
-    const newExpense = {
-      id: expenses.length + 1,
-      ...expenseFormData,
-      amount: parseFloat(expenseFormData.amount),
-      status: 'pending',
-      approvedBy: 'Admin'
-    }
+    try {
+      setLoading(true)
+      
+      const expenseData = {
+        category: expenseFormData.category,
+        amount: parseFloat(expenseFormData.amount),
+        date: expenseFormData.date,
+        description: expenseFormData.description || ''
+      }
 
-    setExpenses([...expenses, newExpense])
-    setShowExpenseModal(false)
-    closeModals()
+      console.log('Creating expense with data:', expenseData)
+      const response = await adminFinanceService.createExpense(expenseData)
+      console.log('Expense creation response:', response)
+      
+      if (response && response.success) {
+        toast.success(response.message || 'Expense created successfully')
+        setShowExpenseModal(false)
+        closeModals()
+        // Refresh expenses list
+        await fetchExpenses()
+      } else {
+        toast.error(response?.message || 'Failed to create expense')
+      }
+    } catch (err) {
+      console.error('Error creating expense:', err)
+      toast.error(err.message || 'Failed to create expense')
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (loading) {
@@ -892,11 +1072,16 @@ const Admin_finance_management = () => {
                 onClick={() => {
                   if (activeTab === 'transactions') {
                     fetchTransactions()
+                  } else if (activeTab === 'expenses') {
+                    fetchExpenses()
+                  } else if (activeTab === 'budgets') {
+                    fetchBudgets()
                   }
                 }}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                disabled={loading || (activeTab === 'transactions' && transactionsLoading) || (activeTab === 'expenses' && expensesLoading) || (activeTab === 'budgets' && budgetsLoading)}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <FiRefreshCw className="text-sm" />
+                <FiRefreshCw className={`text-sm ${(loading || transactionsLoading || expensesLoading || budgetsLoading) ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </button>
             </div>
@@ -1372,15 +1557,18 @@ const Admin_finance_management = () => {
           </div>
 
           {/* Content Grid */}
-          {transactionsLoading && activeTab === 'transactions' ? (
+          {(transactionsLoading && activeTab === 'transactions') || (expensesLoading && activeTab === 'expenses') || (budgetsLoading && activeTab === 'budgets') ? (
             <div className="flex justify-center items-center py-12">
               <Loading size="medium" />
             </div>
-          ) : error && activeTab === 'transactions' ? (
+          ) : error && (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets') ? (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
               <p className="text-red-600">{error}</p>
               <button
-                onClick={fetchTransactions}
+                onClick={() => {
+                  if (activeTab === 'transactions') fetchTransactions()
+                  else if (activeTab === 'expenses') fetchExpenses()
+                }}
                 className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 Retry
@@ -1394,6 +1582,26 @@ const Admin_finance_management = () => {
                 className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Add First Transaction
+              </button>
+            </div>
+          ) : paginatedData.length === 0 && activeTab === 'expenses' ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+              <p className="text-gray-600">No expenses found</p>
+              <button
+                onClick={handleCreateExpense}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Add First Expense
+              </button>
+            </div>
+          ) : paginatedData.length === 0 && activeTab === 'budgets' ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+              <p className="text-gray-600">No budgets found</p>
+              <button
+                onClick={handleCreateBudget}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Add First Budget
               </button>
             </div>
           ) : (
@@ -1423,7 +1631,7 @@ const Admin_finance_management = () => {
                     </div>
                     <div className="flex items-center justify-between text-xs text-gray-500">
                       <span>
-                        {item.client?.name || item.employee?.name || item.vendor || 'N/A'}
+                        {item.account?.accountName || item.vendor || 'N/A'}
                       </span>
                       <span>{formatDate(item.transactionDate || item.date || item.createdAt)}</span>
                     </div>
@@ -1458,12 +1666,12 @@ const Admin_finance_management = () => {
                     <div>
                       <div className="flex justify-between text-xs text-gray-600 mb-1">
                         <span>Spent</span>
-                        <span>{formatCurrency(item.spent)} / {formatCurrency(item.allocated)}</span>
+                        <span>{formatCurrency(item.spent || 0)} / {formatCurrency(item.allocated)}</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
                           className="bg-blue-600 h-2 rounded-full"
-                          style={{ width: `${(item.spent / item.allocated) * 100}%` }}
+                          style={{ width: `${Math.min(100, ((item.spent || 0) / item.allocated) * 100)}%` }}
                         ></div>
                       </div>
                     </div>
@@ -1471,7 +1679,7 @@ const Admin_finance_management = () => {
                       <p>Remaining: {formatCurrency(item.remaining)}</p>
                       <p>{formatDate(item.startDate)} - {formatDate(item.endDate)}</p>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1">
                       <button
                         onClick={() => handleView(item)}
                         className="flex-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
@@ -1485,6 +1693,14 @@ const Admin_finance_management = () => {
                       >
                         <FiEdit className="inline mr-1" />
                         Edit
+                      </button>
+                      <button
+                        onClick={() => handleSpendBudget(item)}
+                        className="flex-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs hover:bg-red-200 transition-colors"
+                        title="Record expense from this budget"
+                      >
+                        <span className="inline mr-1">₹</span>
+                        Spend
                       </button>
                     </div>
                   </div>
@@ -1537,11 +1753,11 @@ const Admin_finance_management = () => {
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900 text-sm">{item.category}</h3>
-                      <p className="text-xs text-gray-600 mt-1">{item.description}</p>
+                      <p className="text-xs text-gray-600 mt-1">{item.description || 'No description'}</p>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      <p>{item.employee || item.vendor}</p>
-                      <p>{formatDate(item.date)}</p>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>{item.vendor || item.employee?.name || 'N/A'}</span>
+                      <span>{formatDate(item.transactionDate || item.date || item.createdAt)}</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <button
@@ -1657,6 +1873,10 @@ const Admin_finance_management = () => {
               <div className="text-sm text-gray-700">
                 {activeTab === 'transactions' ? (
                   <>Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, transactionsTotal)} of {transactionsTotal} results</>
+                ) : activeTab === 'expenses' ? (
+                  <>Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, expensesTotal)} of {expensesTotal} results</>
+                ) : activeTab === 'budgets' ? (
+                  <>Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, budgetsTotal)} of {budgetsTotal} results</>
                 ) : (
                   <>Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results</>
                 )}
@@ -2083,7 +2303,14 @@ const Admin_finance_management = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Transaction Type *</label>
                   <select
                     value={transactionFormData.type}
-                    onChange={(e) => setTransactionFormData({...transactionFormData, type: e.target.value})}
+                    onChange={(e) => {
+                      const newType = e.target.value
+                      setTransactionFormData({
+                        ...transactionFormData, 
+                        type: newType,
+                        account: newType === 'outgoing' ? '' : transactionFormData.account // Clear account if switching to outgoing
+                      })
+                    }}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   >
@@ -2098,7 +2325,7 @@ const Admin_finance_management = () => {
                     value={transactionFormData.category}
                     onChange={(e) => setTransactionFormData({...transactionFormData, category: e.target.value})}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter category"
+                    placeholder="Enter category (e.g., Client Payment, Salary, etc.)"
                     required
                   />
                 </div>
@@ -2109,6 +2336,8 @@ const Admin_finance_management = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Amount *</label>
                   <input
                     type="number"
+                    step="0.01"
+                    min="0"
                     value={transactionFormData.amount}
                     onChange={(e) => setTransactionFormData({...transactionFormData, amount: e.target.value})}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -2128,42 +2357,35 @@ const Admin_finance_management = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Account dropdown - only show for incoming transactions */}
+              {transactionFormData.type === 'incoming' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Client/Employee</label>
-                  <input
-                    type="text"
-                    value={transactionFormData.client}
-                    onChange={(e) => setTransactionFormData({...transactionFormData, client: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter client or employee name"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Account *</label>
+                  {accountsLoading ? (
+                    <div className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-gray-500">
+                      Loading accounts...
+                    </div>
+                  ) : accounts.length === 0 ? (
+                    <div className="w-full px-4 py-3 border border-red-300 rounded-xl bg-red-50 text-red-600 text-sm">
+                      No active accounts found. Please create an account first.
+                    </div>
+                  ) : (
+                    <select
+                      value={transactionFormData.account}
+                      onChange={(e) => setTransactionFormData({...transactionFormData, account: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    >
+                      <option value="">Select an account</option>
+                      {accounts.map((account) => (
+                        <option key={account._id || account.id} value={account._id || account.id}>
+                          {account.accountName} - {account.bankName} ({account.accountNumber})
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Project</label>
-                  <input
-                    type="text"
-                    value={transactionFormData.project}
-                    onChange={(e) => setTransactionFormData({...transactionFormData, project: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter project name"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
-                <select
-                  value={transactionFormData.method}
-                  onChange={(e) => setTransactionFormData({...transactionFormData, method: e.target.value})}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="UPI">UPI</option>
-                  <option value="Credit Card">Credit Card</option>
-                  <option value="Cash">Cash</option>
-                </select>
-              </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
@@ -2397,6 +2619,328 @@ const Admin_finance_management = () => {
         </div>
       )}
 
+      {/* Budget View Modal */}
+      {showBudgetViewModal && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Budget Details</h3>
+              <button
+                onClick={closeModals}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Budget Name</label>
+                <p className="text-lg bg-gray-50 p-3 rounded-lg">{selectedItem.name || selectedItem.budgetName}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <p className="text-lg bg-gray-50 p-3 rounded-lg">{selectedItem.category || selectedItem.budgetCategory}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                  <p className={`text-lg p-3 rounded-lg ${getStatusColor(selectedItem.status)}`}>
+                    {selectedItem.status || 'active'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Allocated</label>
+                  <p className="text-lg font-semibold bg-blue-50 p-3 rounded-lg text-blue-700">
+                    {formatCurrency(selectedItem.allocated || selectedItem.allocatedAmount)}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Spent</label>
+                  <p className="text-lg font-semibold bg-red-50 p-3 rounded-lg text-red-700">
+                    {formatCurrency(selectedItem.spent || selectedItem.spentAmount || 0)}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Remaining</label>
+                  <p className="text-lg font-semibold bg-green-50 p-3 rounded-lg text-green-700">
+                    {formatCurrency(selectedItem.remaining || selectedItem.remainingAmount)}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Progress</label>
+                <div className="w-full bg-gray-200 rounded-full h-4">
+                  <div
+                    className={`h-4 rounded-full ${
+                      ((selectedItem.spent || selectedItem.spentAmount || 0) / (selectedItem.allocated || selectedItem.allocatedAmount)) > 0.9
+                        ? 'bg-red-600'
+                        : ((selectedItem.spent || selectedItem.spentAmount || 0) / (selectedItem.allocated || selectedItem.allocatedAmount)) > 0.7
+                        ? 'bg-yellow-600'
+                        : 'bg-blue-600'
+                    }`}
+                    style={{
+                      width: `${Math.min(100, ((selectedItem.spent || selectedItem.spentAmount || 0) / (selectedItem.allocated || selectedItem.allocatedAmount)) * 100)}%`
+                    }}
+                  ></div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {((selectedItem.spent || selectedItem.spentAmount || 0) / (selectedItem.allocated || selectedItem.allocatedAmount) * 100).toFixed(1)}% used
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                  <p className="text-lg bg-gray-50 p-3 rounded-lg">
+                    {formatDate(selectedItem.startDate)}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                  <p className="text-lg bg-gray-50 p-3 rounded-lg">
+                    {formatDate(selectedItem.endDate)}
+                  </p>
+                </div>
+              </div>
+
+              {selectedItem.description && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedItem.description}</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={closeModals}
+                  className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBudgetViewModal(false)
+                    handleSpendBudget(selectedItem)
+                  }}
+                  className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center space-x-2"
+                >
+                  <span className="text-lg">₹</span>
+                  <span>Record Spend</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Budget Edit Modal */}
+      {showBudgetEditModal && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Edit Budget</h3>
+              <button
+                onClick={closeModals}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleUpdateBudget(); }} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Budget Name *</label>
+                  <input
+                    type="text"
+                    value={budgetFormData.name}
+                    onChange={(e) => setBudgetFormData({...budgetFormData, name: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter budget name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                  <input
+                    type="text"
+                    value={budgetFormData.category}
+                    onChange={(e) => setBudgetFormData({...budgetFormData, category: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter category"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Allocated Amount *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={budgetFormData.allocated}
+                  onChange={(e) => setBudgetFormData({...budgetFormData, allocated: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter allocated amount"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>
+                  <input
+                    type="date"
+                    value={budgetFormData.startDate}
+                    onChange={(e) => setBudgetFormData({...budgetFormData, startDate: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Date *</label>
+                  <input
+                    type="date"
+                    value={budgetFormData.endDate}
+                    onChange={(e) => setBudgetFormData({...budgetFormData, endDate: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={budgetFormData.description}
+                  onChange={(e) => setBudgetFormData({...budgetFormData, description: e.target.value})}
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter budget description"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={closeModals}
+                  className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                >
+                  <FiEdit className="h-4 w-4" />
+                  <span>Update Budget</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Budget Spend Modal */}
+      {showBudgetSpendModal && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">Record Budget Spend</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Budget: {selectedItem.name || selectedItem.budgetName}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Remaining: {formatCurrency(selectedItem.remaining || selectedItem.remainingAmount)}
+                </p>
+              </div>
+              <button
+                onClick={closeModals}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleSpendFromBudget(); }} className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-blue-800">
+                  <strong>Note:</strong> Recording a spend will create an outgoing transaction with category "{selectedItem.category || selectedItem.budgetCategory}" 
+                  and automatically update the budget's spent amount.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Amount *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={selectedItem.remaining || selectedItem.remainingAmount}
+                  value={budgetSpendFormData.amount}
+                  onChange={(e) => setBudgetSpendFormData({...budgetSpendFormData, amount: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter amount to spend"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Maximum: {formatCurrency(selectedItem.remaining || selectedItem.remainingAmount)}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date *</label>
+                <input
+                  type="date"
+                  value={budgetSpendFormData.date}
+                  onChange={(e) => setBudgetSpendFormData({...budgetSpendFormData, date: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={budgetSpendFormData.description}
+                  onChange={(e) => setBudgetSpendFormData({...budgetSpendFormData, description: e.target.value})}
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter description for this spend"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={closeModals}
+                  className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center space-x-2"
+                >
+                  <span className="text-lg">₹</span>
+                  <span>Record Spend</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Expense Creation Modal */}
       {showExpenseModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -2411,7 +2955,10 @@ const Admin_finance_management = () => {
               </button>
             </div>
 
-            <form onSubmit={(e) => { e.preventDefault(); handleSaveExpense(); }} className="space-y-4">
+            <form onSubmit={(e) => { 
+              e.preventDefault(); 
+              handleSaveExpense(); 
+            }} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
@@ -2420,7 +2967,7 @@ const Admin_finance_management = () => {
                     value={expenseFormData.category}
                     onChange={(e) => setExpenseFormData({...expenseFormData, category: e.target.value})}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter category"
+                    placeholder="Enter category (e.g., Salaries, Rent, Software, etc.)"
                     required
                   />
                 </div>
@@ -2428,6 +2975,8 @@ const Admin_finance_management = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Amount *</label>
                   <input
                     type="number"
+                    step="0.01"
+                    min="0"
                     value={expenseFormData.amount}
                     onChange={(e) => setExpenseFormData({...expenseFormData, amount: e.target.value})}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -2437,36 +2986,14 @@ const Admin_finance_management = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Employee</label>
-                  <input
-                    type="text"
-                    value={expenseFormData.employee}
-                    onChange={(e) => setExpenseFormData({...expenseFormData, employee: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter employee name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Vendor</label>
-                  <input
-                    type="text"
-                    value={expenseFormData.vendor}
-                    onChange={(e) => setExpenseFormData({...expenseFormData, vendor: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter vendor name"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date *</label>
                 <input
                   type="date"
                   value={expenseFormData.date}
                   onChange={(e) => setExpenseFormData({...expenseFormData, date: e.target.value})}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
                 />
               </div>
 

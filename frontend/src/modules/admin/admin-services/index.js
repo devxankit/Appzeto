@@ -19,6 +19,12 @@ export { default as adminSalesService } from './adminSalesService';
 // Dashboard Service
 export { default as adminDashboardService } from './adminDashboardService';
 
+// Allowance Management Service
+export { default as adminAllowanceService } from './adminAllowanceService';
+
+// Recurring Expense Management Service
+export { default as adminRecurringExpenseService } from './adminRecurringExpenseService';
+
 // Base API Service (for internal use)
 export { default as baseApiService } from './baseApiService';
 

@@ -3,105 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import PM_navbar from '../../DEV-components/PM_navbar';
 import { Target, Users, Calendar, MoreVertical, Loader2, Lock, CheckCircle, Edit3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { projectService, milestoneService } from '../../DEV-services';
 
 const PM_testing_milestones = () => {
   const navigate = useNavigate();
   const [milestones, setMilestones] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Mock milestones data with testing status
-  const mockTestingMilestones = [
-    {
-      _id: 'm-001',
-      title: 'User Authentication Module',
-      description: 'Complete user login, registration, and password reset functionality with security testing.',
-      progress: 85,
-      status: 'testing',
-      priority: 'high',
-      project: { _id: 'p-001', name: 'E-commerce Platform' },
-      assignedTeam: [
-        { _id: 'u-001', fullName: 'John Doe' },
-        { _id: 'u-002', fullName: 'Jane Smith' }
-      ],
-      dueDate: '2024-12-20',
-      sequence: 1
-    },
-    {
-      _id: 'm-002',
-      title: 'Payment Gateway Integration',
-      description: 'Integrate Stripe payment processing with comprehensive testing for all payment methods.',
-      progress: 92,
-      status: 'testing',
-      priority: 'urgent',
-      project: { _id: 'p-001', name: 'E-commerce Platform' },
-      assignedTeam: [
-        { _id: 'u-003', fullName: 'Mike Johnson' },
-        { _id: 'u-004', fullName: 'Sarah Wilson' }
-      ],
-      dueDate: '2024-12-18',
-      sequence: 2
-    },
-    {
-      _id: 'm-003',
-      title: 'Mobile App Security Testing',
-      description: 'Comprehensive security testing for biometric authentication and data encryption.',
-      progress: 78,
-      status: 'testing',
-      priority: 'high',
-      project: { _id: 'p-002', name: 'Mobile Banking App' },
-      assignedTeam: [
-        { _id: 'u-005', fullName: 'David Brown' },
-        { _id: 'u-006', fullName: 'Lisa Davis' }
-      ],
-      dueDate: '2024-12-22',
-      sequence: 1
-    },
-    {
-      _id: 'm-004',
-      title: 'Course Management System',
-      description: 'Testing course creation, enrollment, and progress tracking functionality.',
-      progress: 88,
-      status: 'testing',
-      priority: 'normal',
-      project: { _id: 'p-003', name: 'Learning Management System' },
-      assignedTeam: [
-        { _id: 'u-007', fullName: 'Tom Wilson' },
-        { _id: 'u-008', fullName: 'Emma Taylor' }
-      ],
-      dueDate: '2025-01-10',
-      sequence: 2
-    },
-    {
-      _id: 'm-005',
-      title: 'POS System Integration',
-      description: 'Testing point-of-sale integration with inventory management and reporting.',
-      progress: 75,
-      status: 'testing',
-      priority: 'normal',
-      project: { _id: 'p-004', name: 'Restaurant Management System' },
-      assignedTeam: [
-        { _id: 'u-001', fullName: 'John Doe' },
-        { _id: 'u-003', fullName: 'Mike Johnson' }
-      ],
-      dueDate: '2024-12-30',
-      sequence: 1
-    },
-    {
-      _id: 'm-006',
-      title: 'API Performance Testing',
-      description: 'Load testing and performance optimization for all backend APIs.',
-      progress: 82,
-      status: 'testing',
-      priority: 'high',
-      project: { _id: 'p-001', name: 'E-commerce Platform' },
-      assignedTeam: [
-        { _id: 'u-002', fullName: 'Jane Smith' },
-        { _id: 'u-005', fullName: 'David Brown' }
-      ],
-      dueDate: '2024-12-25',
-      sequence: 3
-    }
-  ];
 
   useEffect(() => {
     loadMilestones();
@@ -110,11 +17,47 @@ const PM_testing_milestones = () => {
   const loadMilestones = async () => {
     try {
       setIsLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setMilestones(mockTestingMilestones);
+      
+      // Get all projects first
+      const projectsResponse = await projectService.getAllProjects({ limit: 100 });
+      // Handle both array response and object with data property
+      const allProjects = Array.isArray(projectsResponse) ? projectsResponse : (projectsResponse?.data || []);
+      
+      // Get milestones for each project and filter for testing status
+      const milestonePromises = allProjects.map(project => 
+        milestoneService.getMilestonesByProject(project._id).catch(() => ({ data: [] }))
+      );
+      const milestoneResponses = await Promise.all(milestonePromises);
+      
+      // Flatten and filter milestones with testing status
+      const allMilestones = milestoneResponses.flatMap((response, index) => {
+        // Handle both array response and object with data property
+        const milestones = Array.isArray(response) ? response : (response?.data || []);
+        const project = allProjects[index];
+        
+        return milestones
+          .filter(m => m.status === 'testing')
+          .map(milestone => ({
+            _id: milestone._id,
+            title: milestone.title || milestone.name || 'Untitled Milestone',
+            description: milestone.description || '',
+            progress: milestone.progress || 0,
+            status: milestone.status,
+            priority: milestone.priority || 'normal',
+            project: {
+              _id: project._id,
+              name: project.name || 'Unknown Project'
+            },
+            assignedTeam: milestone.assignedTo || milestone.assignedTeam || [],
+            dueDate: milestone.dueDate || milestone.endDate,
+            sequence: milestone.sequence || milestone.order || 0
+          }));
+      });
+      
+      setMilestones(allMilestones);
     } catch (error) {
       console.error('Error loading testing milestones:', error);
+      setMilestones([]);
     } finally {
       setIsLoading(false);
     }
@@ -227,7 +170,9 @@ const PM_testing_milestones = () => {
                     </div>
                     <div className="flex items-center space-x-1">
                       <Users className="h-4 w-4" />
-                      <span>{milestone.assignedTeam?.length || 0} assigned</span>
+                      <span>
+                        {Array.isArray(milestone.assignedTeam) ? milestone.assignedTeam.length : (typeof milestone.assignedTeam === 'object' && milestone.assignedTeam !== null ? Object.keys(milestone.assignedTeam).length : 0)} assigned
+                      </span>
                     </div>
                   </div>
                 </motion.div>

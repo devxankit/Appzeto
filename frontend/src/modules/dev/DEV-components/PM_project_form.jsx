@@ -17,8 +17,11 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  // Determine if this is edit mode (page) or create mode (dialog)
-  const isEditMode = !!id;
+  // Determine if this is edit mode
+  // If isOpen is provided, it's dialog mode - always use dialog even if editing
+  // If id is in URL, it's page mode - use full page layout
+  const isDialogMode = isOpen !== undefined; // Dialog mode when isOpen prop is provided
+  const isEditMode = !!id || (projectData && projectData._id && !isDialogMode);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -46,38 +49,55 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
 
   // Load project data when in edit mode or when projectData is provided
   useEffect(() => {
-    if (isEditMode && id) {
+    if (isEditMode && id && !isDialogMode) {
+      // Only load from API if we're in page mode with URL id
       loadProjectData();
     } else if (projectData && isOpen) {
-      // Pre-fill form with projectData from PM_new_projects
+      // Pre-fill form with projectData (for editing from dialog mode)
       setFormData({
         name: projectData.name || '',
         description: projectData.description || '',
-        client: '', // Will be set after clients are loaded
+        client: projectData.client?._id || projectData.client || '', // Will be updated after clients are loaded if needed
         priority: projectData.priority || 'normal',
-        dueDate: '',
-        assignedTeam: [],
-        status: 'planning',
+        dueDate: projectData.dueDate ? (typeof projectData.dueDate === 'string' ? projectData.dueDate.split('T')[0] : new Date(projectData.dueDate).toISOString().split('T')[0]) : '',
+        assignedTeam: Array.isArray(projectData.assignedTeam) 
+          ? projectData.assignedTeam.map(member => member._id || member)
+          : [],
+        status: projectData.status || 'planning',
         attachments: projectData.attachments || [],
       });
     }
-  }, [isEditMode, id, projectData, isOpen]);
+  }, [isEditMode, id, projectData, isOpen, isDialogMode]);
 
-  // Set client after clients are loaded
+  // Set client after clients are loaded (if not already set)
   useEffect(() => {
-    if (projectData && clients.length > 0 && !formData.client) {
-      // Find client by matching client name
-      const matchingClient = clients.find(client => 
-        client.subtitle === projectData.client?.name || 
-        client.label === projectData.client?.name ||
-        client.label === projectData.client?.company
-      );
+    if (projectData && clients.length > 0) {
+      const currentClientId = formData.client;
+      const projectClientId = projectData.client?._id || projectData.client;
       
-      if (matchingClient) {
-        setFormData(prev => ({ ...prev, client: matchingClient.value }));
+      // Only update if client is not already set correctly
+      if (!currentClientId || currentClientId !== projectClientId) {
+        // Try to find by ID first
+        const clientById = clients.find(client => client.value === projectClientId);
+        
+        if (clientById) {
+          setFormData(prev => ({ ...prev, client: clientById.value }));
+        } else {
+          // Fallback: Find client by matching client name or company
+          const matchingClient = clients.find(client => 
+            client.subtitle === projectData.client?.name || 
+            client.subtitle === projectData.client?.companyName ||
+            client.label === projectData.client?.name ||
+            client.label === projectData.client?.company
+          );
+          
+          if (matchingClient) {
+            setFormData(prev => ({ ...prev, client: matchingClient.value }));
+          }
+        }
       }
     }
-  }, [clients, projectData, formData.client]);
+  }, [clients, projectData]);
 
   const loadUsersData = async () => {
     setIsLoading(true);
@@ -124,13 +144,23 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
       const response = await projectService.getProjectById(id);
       const project = response.data;
       
+      // Format dueDate for DatePicker (YYYY-MM-DD format)
+      let formattedDueDate = '';
+      if (project.dueDate) {
+        if (typeof project.dueDate === 'string') {
+          formattedDueDate = project.dueDate.split('T')[0];
+        } else {
+          formattedDueDate = new Date(project.dueDate).toISOString().split('T')[0];
+        }
+      }
+
       setFormData({
         name: project.name || '',
         description: project.description || '',
         client: project.client?._id || '',
         priority: project.priority || 'normal',
-        dueDate: project.dueDate || '',
-        assignedTeam: project.assignedTeam?.map(member => member._id) || [],
+        dueDate: formattedDueDate,
+        assignedTeam: project.assignedTeam?.map(member => member._id || member) || [],
         status: project.status || 'planning',
         attachments: project.attachments || [],
       });
@@ -209,9 +239,25 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
       setIsSubmitting(true);
       
       try {
-        if (isEditMode) {
-          // Update existing project
-          await projectService.updateProject(id, formData);
+        // Check if editing: URL id or projectData with _id
+        const isEditing = !!id || (projectData && projectData._id);
+        
+        if (isEditing) {
+          // Update existing project - use id from URL or from projectData
+          const projectId = id || projectData?._id;
+          if (!projectId) {
+            throw new Error('Project ID is required for editing');
+          }
+          await projectService.updateProject(projectId, formData);
+          
+          // If onSubmit is provided (dialog mode), call it to allow parent to handle success/refresh
+          // For URL-based edit mode, we'll navigate after success
+          if (onSubmit) {
+            await onSubmit(formData);
+          } else if (id) {
+            // URL-based edit mode - navigate back
+            navigate('/pm-projects');
+          }
         } else {
           // Create new project
           await onSubmit(formData);
@@ -488,8 +534,8 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
     </>
   );
 
-  // Show loading state for edit mode
-  if (isEditMode && isLoading) {
+  // Show loading state for edit mode (only for page mode, not dialog)
+  if (isEditMode && !isDialogMode && isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
         <PM_navbar />
@@ -505,8 +551,8 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
     );
   }
 
-  // Page layout for edit mode
-  if (isEditMode) {
+  // Page layout for edit mode (only when id is in URL, not dialog mode)
+  if (isEditMode && !isDialogMode) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
         <PM_navbar />
@@ -569,7 +615,12 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
     );
   }
 
-  // Dialog layout for create mode
+  // Dialog layout (for both create and edit when isOpen is provided)
+  // Only render dialog if isOpen is explicitly provided (not undefined)
+  if (isOpen === undefined) {
+    return null; // Don't render anything if isOpen is not provided
+  }
+  
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto p-0" onClose={handleClose}>

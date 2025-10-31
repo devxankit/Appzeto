@@ -3,10 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import PM_milestone_form from '../../DEV-components/PM_milestone_form'
 import PM_task_form from '../../DEV-components/PM_task_form'
+import PM_project_form from '../../DEV-components/PM_project_form'
 import { projectService, milestoneService, taskService } from '../../DEV-services'
 import socketService from '../../DEV-services/socketService'
 import { useToast } from '../../../../contexts/ToastContext'
-import { FolderKanban, Calendar, Users, CheckSquare, TrendingUp, Clock, Target, User, Plus, Loader2, FileText, Paperclip, Upload, Eye, Download, X } from 'lucide-react'
+import { FolderKanban, Calendar, Users, CheckSquare, TrendingUp, Clock, Target, User, Plus, Loader2, FileText, Paperclip, Upload, Eye, Download, X, Edit } from 'lucide-react'
 
 const PM_project_detail = () => {
   const { id } = useParams()
@@ -24,6 +25,7 @@ const PM_project_detail = () => {
   const [newAttachment, setNewAttachment] = useState(null)
   const [showRevisionDialog, setShowRevisionDialog] = useState(false)
   const [selectedRevision, setSelectedRevision] = useState(null)
+  const [isProjectFormOpen, setIsProjectFormOpen] = useState(false)
 
   useEffect(() => {
     if (id && id !== 'null' && id !== null) {
@@ -118,7 +120,17 @@ const PM_project_detail = () => {
       
     } catch (error) {
       console.error('Error loading project:', error)
-      toast.error('Failed to load project details')
+      
+      // Show error message (baseApiService already provides user-friendly messages)
+      const errorMessage = error.message || 'Failed to load project details'
+      toast.error(errorMessage)
+      
+      // Navigate back if project not found or unauthorized
+      if (error.message?.includes('404') || error.message?.includes('not found')) {
+        setTimeout(() => {
+          navigate('/pm-projects')
+        }, 2000)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -224,6 +236,29 @@ const PM_project_detail = () => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const handleEditProject = () => {
+    setIsProjectFormOpen(true)
+  }
+
+  const handleProjectFormSubmit = async (formData) => {
+    // The form handles the update internally when projectData is provided
+    // This callback is just for refreshing the page and showing success
+    try {
+      toast.success('Project updated successfully!')
+      setIsProjectFormOpen(false)
+      // Reload project data to show updated information
+      loadProjectData()
+    } catch (error) {
+      console.error('Error after project update:', error)
+      // Still reload even if toast fails
+      loadProjectData()
+    }
+  }
+
+  const handleProjectFormClose = () => {
+    setIsProjectFormOpen(false)
   }
 
   const getFileIcon = (type) => {
@@ -736,7 +771,14 @@ const PM_project_detail = () => {
                 <div className="flex-1 pr-4">
                   <div className="flex items-center space-x-3 mb-3">
                     <div className="p-2 bg-gradient-to-br from-primary/10 to-primary/20 rounded-xl"><FolderKanban className="h-6 w-6 text-primary" /></div>
-                    <h1 className="text-lg md:text-xl font-semibold text-gray-900 leading-tight line-clamp-2">{project.name}</h1>
+                    <h1 className="text-lg md:text-xl font-semibold text-gray-900 leading-tight line-clamp-2 flex-1">{project.name}</h1>
+                    <button 
+                      onClick={handleEditProject}
+                      className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200 flex-shrink-0"
+                      title="Edit Project"
+                    >
+                      <Edit className="h-5 w-5" />
+                    </button>
                   </div>
                 </div>
                 <div className="flex-shrink-0 text-right">
@@ -762,9 +804,16 @@ const PM_project_detail = () => {
           <div className="hidden md:block mb-8">
             <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 mb-6">
               <div className="flex items-start justify-between mb-6">
-                <div className="flex items-center space-x-4 mb-4">
+                <div className="flex items-center space-x-4 mb-4 flex-1">
                   <div className="p-3 bg-gradient-to-br from-primary/10 to-primary/20 rounded-2xl"><FolderKanban className="h-8 w-8 text-primary" /></div>
                   <h1 className="text-xl lg:text-2xl font-semibold text-gray-900 line-clamp-2">{project.name}</h1>
+                  <button 
+                    onClick={handleEditProject}
+                    className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200 flex-shrink-0"
+                    title="Edit Project"
+                  >
+                    <Edit className="h-6 w-6" />
+                  </button>
                 </div>
                 <div className="flex-shrink-0 text-right"><div className={`text-lg font-semibold ${getCountdownColor()}`}>{timeLeft}</div><div className="text-sm text-gray-500 mt-1">Due: {project.dueDate ? new Date(project.dueDate).toLocaleDateString() : 'No date'}</div></div>
               </div>
@@ -950,6 +999,14 @@ const PM_project_detail = () => {
           </div>
         </div>
       )}
+
+      {/* Project Form Dialog */}
+      <PM_project_form 
+        isOpen={isProjectFormOpen}
+        onClose={handleProjectFormClose}
+        onSubmit={handleProjectFormSubmit}
+        projectData={project}
+      />
     </div>
   )
 }

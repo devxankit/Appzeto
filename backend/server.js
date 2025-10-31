@@ -38,6 +38,9 @@ const clientPaymentRoutes = require('./routes/clientPaymentRoutes');
 // Import socket service
 const socketService = require('./services/socketService');
 
+// Import daily points scheduler
+const { startDailyScheduler } = require('./services/dailyPointsScheduler');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -375,6 +378,9 @@ const startServer = async () => {
 
     // Initialize Socket.io with enhanced logging
     socketService.initialize(server);
+
+    // Start daily points scheduler
+    startDailyScheduler();
 
     // Graceful shutdown handling
     process.on('SIGINT', () => {

@@ -17,6 +17,7 @@ const createProject = asyncHandler(async (req, res, next) => {
     description,
     client,
     priority,
+    status,
     dueDate,
     startDate,
     assignedTeam,
@@ -25,13 +26,17 @@ const createProject = asyncHandler(async (req, res, next) => {
     tags
   } = req.body;
 
+  // Validate status if provided
+  const validStatuses = ['pending-assignment', 'untouched', 'started', 'active', 'on-hold', 'testing', 'completed', 'cancelled'];
+  const projectStatus = status && validStatuses.includes(status) ? status : 'active'; // Default to 'active' if invalid or not provided
+
   // Create project
   const project = await Project.create({
     name,
     description,
     client,
     projectManager: req.user.id,
-    status: 'active', // PM-created projects are immediately active
+    status: projectStatus, // Use provided status or default to 'active'
     priority,
     dueDate,
     startDate,
@@ -208,6 +213,7 @@ const updateProject = asyncHandler(async (req, res, next) => {
     description,
     client,
     priority,
+    status,
     dueDate,
     startDate,
     assignedTeam,
@@ -216,21 +222,30 @@ const updateProject = asyncHandler(async (req, res, next) => {
     tags
   } = req.body;
 
+  // Build update object with only provided fields
+  const updateData = {};
+  if (name !== undefined) updateData.name = name;
+  if (description !== undefined) updateData.description = description;
+  if (client !== undefined) updateData.client = client;
+  if (priority !== undefined) updateData.priority = priority;
+  if (status !== undefined) {
+    // Validate status if provided
+    const validStatuses = ['pending-assignment', 'untouched', 'started', 'active', 'on-hold', 'testing', 'completed', 'cancelled'];
+    if (validStatuses.includes(status)) {
+      updateData.status = status;
+    }
+  }
+  if (dueDate !== undefined) updateData.dueDate = dueDate;
+  if (startDate !== undefined) updateData.startDate = startDate;
+  if (assignedTeam !== undefined) updateData.assignedTeam = assignedTeam;
+  if (budget !== undefined) updateData.budget = budget;
+  if (estimatedHours !== undefined) updateData.estimatedHours = estimatedHours;
+  if (tags !== undefined) updateData.tags = tags;
+
   // Update project
   project = await Project.findByIdAndUpdate(
     req.params.id,
-    {
-      name,
-      description,
-      client,
-      priority,
-      dueDate,
-      startDate,
-      assignedTeam,
-      budget,
-      estimatedHours,
-      tags
-    },
+    updateData,
     { new: true, runValidators: true }
   ).populate([
     { path: 'client', select: 'name companyName email' },

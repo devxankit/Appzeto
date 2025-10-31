@@ -21,6 +21,7 @@ export { urgentTaskService } from './urgentTaskService';
 export { paymentService } from './paymentService';
 export { analyticsService } from './analyticsService';
 export { teamService } from './teamService';
+export { pmWalletService } from './pmWalletService';
 export { default as socketService } from './socketService';
 
 // Employee Module Services

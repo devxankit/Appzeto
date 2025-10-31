@@ -13,7 +13,7 @@ const activitySchema = new mongoose.Schema({
   activityType: {
     type: String,
     required: [true, 'Activity type is required'],
-    enum: ['created', 'updated', 'assigned', 'completed', 'commented', 'status_changed', 'priority_changed', 'due_date_changed', 'team_member_added', 'team_member_removed', 'attachment_added', 'attachment_removed']
+    enum: ['created', 'updated', 'deleted', 'assigned', 'completed', 'commented', 'status_changed', 'priority_changed', 'due_date_changed', 'team_member_added', 'team_member_removed', 'attachment_added', 'attachment_removed', 'meeting_status_updated', 'project_started', 'project_activated', 'revision_status_updated', 'payment_created', 'payment_updated']
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,

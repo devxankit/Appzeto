@@ -122,6 +122,219 @@ export const adminFinanceService = {
     } catch (error) {
       throw error;
     }
+  },
+
+  // ========== ACCOUNT MANAGEMENT ==========
+
+  // Get all accounts
+  getAccounts: async (params = {}) => {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const url = queryString ? `/admin/finance/accounts?${queryString}` : '/admin/finance/accounts';
+      
+      const response = await apiRequest(url, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get single account
+  getAccount: async (accountId) => {
+    try {
+      const response = await apiRequest(`/admin/finance/accounts/${accountId}`, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Create account
+  createAccount: async (accountData) => {
+    try {
+      const response = await apiRequest('/admin/finance/accounts', {
+        method: 'POST',
+        body: JSON.stringify(accountData)
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Update account
+  updateAccount: async (accountId, accountData) => {
+    try {
+      const response = await apiRequest(`/admin/finance/accounts/${accountId}`, {
+        method: 'PUT',
+        body: JSON.stringify(accountData)
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Delete account
+  deleteAccount: async (accountId) => {
+    try {
+      const response = await apiRequest(`/admin/finance/accounts/${accountId}`, {
+        method: 'DELETE'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // ========== EXPENSE MANAGEMENT ==========
+
+  // Get all expenses
+  getExpenses: async (params = {}) => {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const url = queryString ? `/admin/finance/expenses?${queryString}` : '/admin/finance/expenses';
+      
+      const response = await apiRequest(url, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get single expense
+  getExpense: async (expenseId) => {
+    try {
+      const response = await apiRequest(`/admin/finance/expenses/${expenseId}`, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Create expense
+  createExpense: async (expenseData) => {
+    try {
+      const response = await apiRequest('/admin/finance/expenses', {
+        method: 'POST',
+        body: JSON.stringify(expenseData)
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Update expense
+  updateExpense: async (expenseId, expenseData) => {
+    try {
+      const response = await apiRequest(`/admin/finance/expenses/${expenseId}`, {
+        method: 'PUT',
+        body: JSON.stringify(expenseData)
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Delete expense
+  deleteExpense: async (expenseId) => {
+    try {
+      const response = await apiRequest(`/admin/finance/expenses/${expenseId}`, {
+        method: 'DELETE'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Approve expense
+  approveExpense: async (expenseId) => {
+    try {
+      const response = await apiRequest(`/admin/finance/expenses/${expenseId}/approve`, {
+        method: 'PUT'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // ========== BUDGET MANAGEMENT ==========
+
+  // Get all budgets
+  getBudgets: async (params = {}) => {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const url = queryString ? `/admin/finance/budgets?${queryString}` : '/admin/finance/budgets';
+      
+      const response = await apiRequest(url, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get single budget
+  getBudget: async (budgetId) => {
+    try {
+      const response = await apiRequest(`/admin/finance/budgets/${budgetId}`, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Create budget
+  createBudget: async (budgetData) => {
+    try {
+      const response = await apiRequest('/admin/finance/budgets', {
+        method: 'POST',
+        body: JSON.stringify(budgetData)
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Update budget
+  updateBudget: async (budgetId, budgetData) => {
+    try {
+      const response = await apiRequest(`/admin/finance/budgets/${budgetId}`, {
+        method: 'PUT',
+        body: JSON.stringify(budgetData)
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Delete budget
+  deleteBudget: async (budgetId) => {
+    try {
+      const response = await apiRequest(`/admin/finance/budgets/${budgetId}`, {
+        method: 'DELETE'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 

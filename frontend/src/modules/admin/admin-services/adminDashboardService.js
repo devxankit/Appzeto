@@ -33,6 +33,28 @@ class AdminDashboardService {
       throw error;
     }
   }
+
+  // Get admin leaderboard data
+  async getLeaderboard(params = {}) {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      // Add query parameters
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+
+      const url = `/admin/analytics/leaderboard${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      
+      const response = await apiRequest(url, { method: 'GET' });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching leaderboard data:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

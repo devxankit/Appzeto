@@ -114,6 +114,13 @@ const taskSchema = new mongoose.Schema({
     type: String,
     enum: ['on-time', 'overdue', 'pending'],
     default: 'pending'
+  },
+  lastPointsDeductionDate: {
+    type: Date
+  },
+  pointsDeducted: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true
@@ -204,20 +211,95 @@ taskSchema.methods.updateStatus = function(newStatus) {
   return this.save();
 };
 
+// Helper method to calculate days overdue
+taskSchema.methods.calculateDaysOverdue = function() {
+  if (!this.dueDate) return 0;
+  const now = new Date();
+  const dueDate = new Date(this.dueDate);
+  
+  // Reset time to midnight for accurate day calculation
+  const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+  
+  if (nowDate <= dueDateOnly) return 0;
+  
+  const diffTime = nowDate - dueDateOnly;
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+  return diffDays;
+};
+
 // Method to calculate and set points for task completion
 taskSchema.methods.calculatePoints = function() {
   if (this.status !== 'completed' || !this.completedDate || !this.dueDate) {
     return { points: 0, reason: 'not_completed' };
   }
   
-  const isOnTime = this.completedDate <= this.dueDate;
-  const points = isOnTime ? 1 : -1;
-  const reason = isOnTime ? 'task_completed_on_time' : 'task_overdue';
+  const completedDate = new Date(this.completedDate);
+  const dueDate = new Date(this.dueDate);
+  
+  // Reset time to midnight for accurate day calculation
+  const completedDateOnly = new Date(completedDate.getFullYear(), completedDate.getMonth(), completedDate.getDate());
+  const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+  
+  const isOnTime = completedDateOnly <= dueDateOnly;
+  
+  let points = 0;
+  let reason = '';
+  
+  if (isOnTime) {
+    // Completed on time: +1 point
+    points = 1;
+    reason = 'task_completed_on_time';
+  } else {
+    // Completed overdue: Calculate days overdue and deduct accordingly
+    const diffTime = completedDateOnly - dueDateOnly;
+    const daysOverdue = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    // Deduct 1 point per day overdue (already deducted daily, so net is -daysOverdue)
+    // But we still need to apply the final calculation based on total days overdue
+    points = -daysOverdue;
+    reason = `task_completed_overdue_${daysOverdue}_days`;
+  }
   
   this.pointsAwarded = points;
   this.completionStatus = isOnTime ? 'on-time' : 'overdue';
   
-  return { points, reason };
+  return { points, reason, daysOverdue: isOnTime ? 0 : Math.floor((completedDateOnly - dueDateOnly) / (1000 * 60 * 60 * 24)) };
+};
+
+// Method to deduct daily points for overdue tasks
+taskSchema.methods.deductDailyPoints = async function() {
+  if (this.status === 'completed') return { deducted: 0, message: 'task_already_completed' };
+  if (!this.dueDate) return { deducted: 0, message: 'no_due_date' };
+  
+  const daysOverdue = this.calculateDaysOverdue();
+  if (daysOverdue <= 0) return { deducted: 0, message: 'task_not_overdue' };
+  
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  // Check if we already deducted points today
+  if (this.lastPointsDeductionDate) {
+    const lastDeduction = new Date(this.lastPointsDeductionDate);
+    const lastDeductionDate = new Date(lastDeduction.getFullYear(), lastDeduction.getMonth(), lastDeduction.getDate());
+    
+    if (lastDeductionDate.getTime() === today.getTime()) {
+      return { deducted: 0, message: 'points_already_deducted_today' };
+    }
+  }
+  
+  // Deduct 1 point per day overdue
+  const pointsToDeduct = 1;
+  this.lastPointsDeductionDate = now;
+  this.pointsDeducted = (this.pointsDeducted || 0) + pointsToDeduct;
+  
+  await this.save();
+  
+  return { 
+    deducted: pointsToDeduct, 
+    message: `deducted_${pointsToDeduct}_point_for_${daysOverdue}_days_overdue`,
+    daysOverdue 
+  };
 };
 
 // Pre-save middleware to update milestone progress when task status changes

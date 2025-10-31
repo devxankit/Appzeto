@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   FiUsers, 
@@ -14,84 +14,136 @@ import {
   FiAlertTriangle, 
   FiBarChart, 
   FiCalendar,
-  FiStar
+  FiStar,
+  FiLoader
 } from 'react-icons/fi'
 import PM_navbar from '../../DEV-components/PM_navbar'
+import { teamService } from '../../DEV-services/teamService'
 
 const PM_leaderboard = () => {
   const [activeTab, setActiveTab] = useState('overview')
   const [filterOpen, setFilterOpen] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState('month')
   const [searchQuery, setSearchQuery] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [employees, setEmployees] = useState([])
+  const [teamStats, setTeamStats] = useState({
+    totalEmployees: 0,
+    avgCompletionRate: 0,
+    totalTasksCompleted: 0,
+    totalOverdue: 0,
+    topPerformer: null,
+    avgProjectProgress: 0,
+    totalProjects: 0
+  })
 
-  // Mock team data for PM context
-  const teamStats = {
-    totalEmployees: 8,
-    avgCompletionRate: 89,
-    totalTasksCompleted: 324,
-    totalOverdue: 18,
-    topPerformer: "Sarah Chen",
-    avgProjectProgress: 78,
-    totalProjects: 12
+  // Helper to format last active time
+  const formatLastActive = (date) => {
+    if (!date) return 'Recently'
+    try {
+      const now = new Date()
+      const lastActive = new Date(date)
+      const diffMs = now - lastActive
+      const diffMins = Math.floor(diffMs / 60000)
+      const diffHours = Math.floor(diffMs / 3600000)
+      const diffDays = Math.floor(diffMs / 86400000)
+
+      if (diffMins < 60) return `${diffMins} mins ago`
+      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
+      if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
+      return lastActive.toLocaleDateString()
+    } catch (error) {
+      return 'Recently'
+    }
   }
 
-  // Mock employee data for PM team
-  const employees = [
-    { 
-      id: 1, name: "Sarah Chen", avatar: "SC", score: 9500, rank: 1,
-      completed: 52, overdue: 0, missed: 0, onTime: 52, rate: 98, 
-      trend: "up", trendValue: "+12%", department: "Development",
-      avgTime: "1.8 days", lastActive: "2 hours ago", projects: 8, role: "Senior Developer"
-    },
-    { 
-      id: 2, name: "Michael Brown", avatar: "MB", score: 9100, rank: 2,
-      completed: 48, overdue: 1, missed: 0, onTime: 47, rate: 96,
-      trend: "up", trendValue: "+8%", department: "Development",
-      avgTime: "2.1 days", lastActive: "1 hour ago", projects: 7, role: "Developer"
-    },
-    { 
-      id: 3, name: "Alex Johnson", avatar: "AJ", score: 8750, rank: 3,
-      completed: 45, overdue: 2, missed: 1, onTime: 42, rate: 93,
-      trend: "stable", trendValue: "0%", department: "Design",
-      avgTime: "2.3 days", lastActive: "30 mins ago", projects: 6, role: "UI/UX Designer"
-    },
-    { 
-      id: 4, name: "Emily Davis", avatar: "ED", score: 8400, rank: 4,
-      completed: 43, overdue: 3, missed: 1, onTime: 39, rate: 91,
-      trend: "down", trendValue: "-3%", department: "Marketing",
-      avgTime: "2.5 days", lastActive: "5 hours ago", projects: 5, role: "Marketing Specialist"
-    },
-    { 
-      id: 5, name: "James Wilson", avatar: "JW", score: 8200, rank: 5,
-      completed: 41, overdue: 2, missed: 2, onTime: 37, rate: 89,
-      trend: "up", trendValue: "+5%", department: "Development",
-      avgTime: "2.7 days", lastActive: "1 hour ago", projects: 6, role: "Frontend Developer"
-    },
-    { 
-      id: 6, name: "Lisa Anderson", avatar: "LA", score: 7900, rank: 6,
-      completed: 38, overdue: 4, missed: 1, onTime: 33, rate: 87,
-      trend: "stable", trendValue: "+1%", department: "Design",
-      avgTime: "2.9 days", lastActive: "3 hours ago", projects: 4, role: "Graphic Designer"
-    },
-    { 
-      id: 7, name: "David Martinez", avatar: "DM", score: 7650, rank: 7,
-      completed: 36, overdue: 3, missed: 2, onTime: 31, rate: 84,
-      trend: "down", trendValue: "-5%", department: "Marketing",
-      avgTime: "3.1 days", lastActive: "6 hours ago", projects: 3, role: "Content Writer"
-    },
-    { 
-      id: 8, name: "Sophie Taylor", avatar: "ST", score: 7400, rank: 8,
-      completed: 34, overdue: 5, missed: 2, onTime: 27, rate: 82,
-      trend: "up", trendValue: "+3%", department: "Development",
-      avgTime: "3.2 days", lastActive: "4 hours ago", projects: 4, role: "Backend Developer"
-    },
-  ]
+  // Load leaderboard data
+  const loadLeaderboardData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await teamService.getTeamLeaderboard({
+        period: selectedPeriod
+      })
+
+      // Transform API response to match component format
+      const transformedEmployees = (response.leaderboard || []).map((emp) => ({
+        id: emp._id,
+        name: emp.name,
+        avatar: emp.avatar || emp.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+        score: emp.score || 0,
+        rank: emp.rank || 0,
+        completed: emp.completed || 0,
+        overdue: emp.overdue || 0,
+        missed: emp.missed || 0,
+        onTime: emp.onTime || 0,
+        rate: emp.rate || 0,
+        trend: emp.trend || 'stable',
+        trendValue: emp.trendValue || '0%',
+        department: emp.department || 'Development',
+        avgTime: emp.avgTime || '2.0 days',
+        lastActive: formatLastActive(emp.lastActive),
+        projects: emp.projects || 0,
+        role: emp.role || 'Developer'
+      }))
+
+      setEmployees(transformedEmployees)
+      
+      // Set team statistics
+      if (response.teamStats) {
+        setTeamStats({
+          totalEmployees: response.teamStats.totalEmployees || 0,
+          avgCompletionRate: response.teamStats.avgCompletionRate || 0,
+          totalTasksCompleted: response.teamStats.totalTasksCompleted || 0,
+          totalOverdue: response.teamStats.totalOverdue || 0,
+          topPerformer: response.teamStats.topPerformer || null,
+          avgProjectProgress: response.teamStats.avgProjectProgress || 0,
+          totalProjects: response.teamStats.totalProjects || 0
+        })
+      }
+    } catch (error) {
+      console.error('Error loading leaderboard data:', error)
+      setError('Failed to load leaderboard data. Please try again.')
+      setEmployees([])
+      setTeamStats({
+        totalEmployees: 0,
+        avgCompletionRate: 0,
+        totalTasksCompleted: 0,
+        totalOverdue: 0,
+        topPerformer: null,
+        avgProjectProgress: 0,
+        totalProjects: 0
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadLeaderboardData()
+  }, [selectedPeriod])
 
   const filteredEmployees = employees.filter(emp => 
     emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     emp.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
     emp.role.toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  // Calculate performance distribution from real data
+  const performanceDistribution = React.useMemo(() => {
+    const excellent = employees.filter(e => e.rate >= 95).length
+    const good = employees.filter(e => e.rate >= 85 && e.rate < 95).length
+    const needsSupport = employees.filter(e => e.rate < 85).length
+    const total = employees.length
+
+    return {
+      excellent: { count: excellent, percentage: total > 0 ? (excellent / total) * 100 : 0 },
+      good: { count: good, percentage: total > 0 ? (good / total) * 100 : 0 },
+      needsSupport: { count: needsSupport, percentage: total > 0 ? (needsSupport / total) * 100 : 0 }
+    }
+  }, [employees])
 
   const StatCard = ({ icon: Icon, label, value, subtext, color, bgColor }) => (
     <motion.div 
@@ -245,6 +297,20 @@ const PM_leaderboard = () => {
     )
   }
 
+  if (loading && employees.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 pb-20">
+        <PM_navbar />
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <FiLoader className="w-8 h-8 text-teal-600 animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Loading leaderboard data...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 pb-20">
       <PM_navbar />
@@ -365,8 +431,8 @@ const PM_leaderboard = () => {
                 <StatCard
                   icon={FiAward}
                   label="Top Performer"
-                  value="Sarah"
-                  subtext={teamStats.topPerformer}
+                  value={teamStats.topPerformer ? teamStats.topPerformer.split(' ')[0] : 'N/A'}
+                  subtext={teamStats.topPerformer || 'No data'}
                   color="text-purple-600"
                   bgColor="bg-purple-50"
                 />
@@ -415,28 +481,28 @@ const PM_leaderboard = () => {
                 <div>
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-gray-600">Excellent (95-100%)</span>
-                    <span className="font-semibold text-green-600">2 members</span>
+                    <span className="font-semibold text-green-600">{performanceDistribution.excellent.count} members</span>
                   </div>
                   <div className="bg-gray-200 rounded-full h-2">
-                    <div className="bg-green-500 h-full rounded-full" style={{ width: '25%' }} />
+                    <div className="bg-green-500 h-full rounded-full" style={{ width: `${performanceDistribution.excellent.percentage}%` }} />
                   </div>
                 </div>
                 <div>
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-gray-600">Good (85-94%)</span>
-                    <span className="font-semibold text-teal-600">4 members</span>
+                    <span className="font-semibold text-teal-600">{performanceDistribution.good.count} members</span>
                   </div>
                   <div className="bg-gray-200 rounded-full h-2">
-                    <div className="bg-teal-500 h-full rounded-full" style={{ width: '50%' }} />
+                    <div className="bg-teal-500 h-full rounded-full" style={{ width: `${performanceDistribution.good.percentage}%` }} />
                   </div>
                 </div>
                 <div>
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-gray-600">Needs Support (&lt;85%)</span>
-                    <span className="font-semibold text-orange-600">2 members</span>
+                    <span className="font-semibold text-orange-600">{performanceDistribution.needsSupport.count} members</span>
                   </div>
                   <div className="bg-gray-200 rounded-full h-2">
-                    <div className="bg-orange-500 h-full rounded-full" style={{ width: '25%' }} />
+                    <div className="bg-orange-500 h-full rounded-full" style={{ width: `${performanceDistribution.needsSupport.percentage}%` }} />
                   </div>
                 </div>
         </div>
@@ -461,12 +527,28 @@ const PM_leaderboard = () => {
 
             {/* Employee Cards */}
             <div>
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  <FiAlertTriangle className="inline w-4 h-4 mr-2" />
+                  {error}
+                </div>
+              )}
               <p className="text-sm text-gray-600 mb-3">
                 Showing {filteredEmployees.length} of {employees.length} team members
               </p>
-              {filteredEmployees.map((employee) => (
-                <EmployeeCard key={employee.id} employee={employee} />
-              ))}
+              {filteredEmployees.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-lg shadow-sm border border-gray-200">
+                  <FiUsers className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No team members found</h3>
+                  <p className="text-gray-500">
+                    {searchQuery ? 'Try adjusting your search terms' : 'No team members assigned to your projects'}
+                  </p>
+                </div>
+              ) : (
+                filteredEmployees.map((employee) => (
+                  <EmployeeCard key={employee.id} employee={employee} />
+                ))
+              )}
             </div>
           </div>
         )}

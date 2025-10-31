@@ -1,73 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PM_navbar from '../../DEV-components/PM_navbar';
-import { FolderKanban, Users, Calendar, MoreVertical, Loader2 } from 'lucide-react';
+import PM_project_form from '../../DEV-components/PM_project_form';
+import { FolderKanban, Users, Calendar, MoreVertical, Loader2, Edit } from 'lucide-react';
+import { projectService } from '../../DEV-services';
+import { useToast } from '../../../../contexts/ToastContext';
 
 const PM_testing_projects = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Mock projects data with testing status
-  const mockTestingProjects = [
-    {
-      _id: 'p-001',
-      name: 'E-commerce Platform',
-      description: 'Online shopping platform with payment integration and inventory management.',
-      progress: 85,
-      status: 'testing',
-      priority: 'high',
-      customer: { _id: 'c-001', company: 'Tech Solutions Inc.' },
-      assignedTeam: [
-        { _id: 'u-001', fullName: 'John Doe' },
-        { _id: 'u-002', fullName: 'Jane Smith' },
-        { _id: 'u-003', fullName: 'Mike Johnson' }
-      ],
-      dueDate: '2024-12-20',
-    },
-    {
-      _id: 'p-002',
-      name: 'Mobile Banking App',
-      description: 'Secure mobile banking application with biometric authentication.',
-      progress: 92,
-      status: 'testing',
-      priority: 'urgent',
-      customer: { _id: 'c-002', company: 'Digital Finance Corp' },
-      assignedTeam: [
-        { _id: 'u-004', fullName: 'Sarah Wilson' },
-        { _id: 'u-005', fullName: 'David Brown' }
-      ],
-      dueDate: '2024-12-18',
-    },
-    {
-      _id: 'p-003',
-      name: 'Learning Management System',
-      description: 'Educational platform for online courses and student management.',
-      progress: 78,
-      status: 'testing',
-      priority: 'normal',
-      customer: { _id: 'c-003', company: 'EduTech Solutions' },
-      assignedTeam: [
-        { _id: 'u-006', fullName: 'Lisa Davis' },
-        { _id: 'u-007', fullName: 'Tom Wilson' }
-      ],
-      dueDate: '2025-01-10',
-    },
-    {
-      _id: 'p-004',
-      name: 'Restaurant Management System',
-      description: 'Complete restaurant management with POS, inventory, and staff management.',
-      progress: 88,
-      status: 'testing',
-      priority: 'normal',
-      customer: { _id: 'c-004', company: 'Food Chain Corp' },
-      assignedTeam: [
-        { _id: 'u-008', fullName: 'Emma Taylor' },
-        { _id: 'u-001', fullName: 'John Doe' }
-      ],
-      dueDate: '2024-12-30',
-    }
-  ];
+  const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
 
   useEffect(() => {
     loadProjects();
@@ -76,11 +21,31 @@ const PM_testing_projects = () => {
   const loadProjects = async () => {
     try {
       setIsLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setProjects(mockTestingProjects);
+      // Fetch projects with testing status
+      const response = await projectService.getAllProjects({ status: 'testing', limit: 100 });
+      // Handle both array response and object with data property
+      const testingProjects = Array.isArray(response) ? response : (response?.data || []);
+      
+      // Transform the data to match the component structure
+      const formattedProjects = testingProjects.map(project => ({
+        _id: project._id,
+        name: project.name,
+        description: project.description || '',
+        progress: project.progress || 0,
+        status: project.status,
+        priority: project.priority || 'normal',
+        customer: project.client ? {
+          _id: project.client._id || project.client,
+          company: project.client.companyName || project.client.name || 'Unknown'
+        } : null,
+        assignedTeam: project.assignedTeam || [],
+        dueDate: project.dueDate
+      }));
+      
+      setProjects(formattedProjects);
     } catch (error) {
       console.error('Error loading testing projects:', error);
+      setProjects([]);
     } finally {
       setIsLoading(false);
     }
@@ -130,6 +95,35 @@ const PM_testing_projects = () => {
     }
   };
 
+  const handleEditProject = (projectId, e) => {
+    e?.stopPropagation(); // Prevent navigation when clicking edit
+    const project = projects.find(p => p._id === projectId);
+    if (project) {
+      setEditingProject(project);
+      setIsProjectFormOpen(true);
+    }
+  };
+
+  const handleProjectFormSubmit = async (formData) => {
+    // The form handles the update internally when projectData is provided
+    // This callback is just for refreshing the list and showing success
+    try {
+      toast.success('Project updated successfully!');
+      setIsProjectFormOpen(false);
+      setEditingProject(null);
+      loadProjects(); // Refresh the list
+    } catch (error) {
+      console.error('Error after project update:', error);
+      // Still refresh the list even if toast fails
+      loadProjects();
+    }
+  };
+
+  const handleProjectFormClose = () => {
+    setIsProjectFormOpen(false);
+    setEditingProject(null);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
       <PM_navbar />
@@ -154,7 +148,7 @@ const PM_testing_projects = () => {
                   className="group bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-300 cursor-pointer transform hover:-translate-y-0.5 active:scale-[0.98]"
                 >
                 {/* Header Section */}
-                <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start justify-between mb-3">
                   <div className="flex items-start space-x-3 flex-1">
                     <div className="p-2 bg-gradient-to-br from-primary/10 to-primary/20 rounded-xl group-hover:from-primary/20 group-hover:to-primary/30 transition-all duration-300">
                       <FolderKanban className="h-5 w-5 text-primary" />
@@ -165,13 +159,11 @@ const PM_testing_projects = () => {
                           {project.name}
                         </h3>
                         <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Handle menu click
-                          }}
-                          className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-all duration-200 ml-1"
+                          onClick={(e) => handleEditProject(project._id, e)}
+                          className="p-1 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200 ml-1"
+                          title="Edit Project"
                         >
-                          <MoreVertical className="h-4 w-4" />
+                          <Edit className="h-4 w-4" />
                         </button>
                       </div>
                       <div className="flex items-center space-x-1.5 mb-2">
@@ -210,7 +202,9 @@ const PM_testing_projects = () => {
                   <div className="flex items-center space-x-3">
                     <div className="flex items-center space-x-1 text-gray-500">
                       <Users className="h-3.5 w-3.5" />
-                      <span className="text-xs font-medium">{project.assignedTeam?.length || 0}</span>
+                      <span className="text-xs font-medium">
+                        {Array.isArray(project.assignedTeam) ? project.assignedTeam.length : (typeof project.assignedTeam === 'object' && project.assignedTeam !== null ? Object.keys(project.assignedTeam).length : 0)}
+                      </span>
                     </div>
                     <div className="flex items-center space-x-1 text-gray-500">
                       <Calendar className="h-3.5 w-3.5" />
@@ -262,6 +256,14 @@ const PM_testing_projects = () => {
           )}
         </div>
       </main>
+
+      {/* Project Form Dialog */}
+      <PM_project_form 
+        isOpen={isProjectFormOpen}
+        onClose={handleProjectFormClose}
+        onSubmit={handleProjectFormSubmit}
+        projectData={editingProject}
+      />
     </div>
   );
 };

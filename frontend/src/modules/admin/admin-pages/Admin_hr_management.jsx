@@ -67,6 +67,8 @@ import adminAttendanceService from '../admin-services/adminAttendanceService'
 import { useToast } from '../../../contexts/ToastContext'
 import { adminUserService } from '../admin-services'
 import adminSalaryService from '../admin-services/adminSalaryService'
+import adminAllowanceService from '../admin-services/adminAllowanceService'
+import adminRecurringExpenseService from '../admin-services/adminRecurringExpenseService'
 
 const Admin_hr_management = () => {
   const { addToast } = useToast()
@@ -158,6 +160,8 @@ const Admin_hr_management = () => {
   // Allowances states
   const [allowances, setAllowances] = useState([])
   const [showAllowanceModal, setShowAllowanceModal] = useState(false)
+  const [showEditAllowanceModal, setShowEditAllowanceModal] = useState(false)
+  const [selectedAllowance, setSelectedAllowance] = useState(null)
   const [allowanceData, setAllowanceData] = useState({
     employeeId: '',
     itemType: '',
@@ -455,51 +459,39 @@ const Admin_hr_management = () => {
     }
   }
 
-  // Allowances functions
-  const generateAllowancesData = () => {
-    const mockAllowances = [
-      {
-        id: 1,
-        employeeId: 1,
-        employeeName: 'John Doe',
-        itemType: 'laptop',
-        itemName: 'MacBook Pro 16"',
-        serialNumber: 'MBP2024001',
-        issueDate: '2024-01-15',
-        returnDate: null,
-        status: 'active',
-        value: 150000,
-        remarks: 'Development work laptop'
-      },
-      {
-        id: 2,
-        employeeId: 2,
-        employeeName: 'Jane Smith',
-        itemType: 'monitor',
-        itemName: 'Dell UltraSharp 27"',
-        serialNumber: 'DELL2024002',
-        issueDate: '2024-01-10',
-        returnDate: null,
-        status: 'active',
-        value: 25000,
-        remarks: 'External monitor for better productivity'
-      },
-      {
-        id: 3,
-        employeeId: 3,
-        employeeName: 'Mike Johnson',
-        itemType: 'headphones',
-        itemName: 'Sony WH-1000XM4',
-        serialNumber: 'SONY2024003',
-        issueDate: '2024-01-05',
-        returnDate: '2024-01-20',
-        status: 'returned',
-        value: 15000,
-        remarks: 'Noise-cancelling headphones - returned'
-      }
-    ]
-    setAllowances(mockAllowances)
+  // Allowances functions - now using real API
+  // Load allowances data when allowances tab is active
+  const loadAllowances = async () => {
+    try {
+      const res = await adminAllowanceService.getAllAllowances()
+      const allowancesData = (res.data || []).map((allowance, idx) => ({
+        id: allowance._id || idx + 1,
+        employeeId: allowance.employeeId?._id || allowance.employeeId,
+        employeeName: allowance.employeeName,
+        itemType: allowance.itemType,
+        itemName: allowance.itemName,
+        serialNumber: allowance.serialNumber || '',
+        issueDate: allowance.issueDate ? new Date(allowance.issueDate).toISOString().split('T')[0] : '',
+        returnDate: allowance.returnDate ? new Date(allowance.returnDate).toISOString().split('T')[0] : null,
+        status: allowance.status,
+        value: allowance.value,
+        remarks: allowance.remarks || ''
+      }))
+      setAllowances(allowancesData)
+    } catch (error) {
+      console.error('Error loading allowances:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to load allowances' })
+      setAllowances([])
+    }
   }
+
+  // Load allowances when tab is active
+  useEffect(() => {
+    if (activeTab === 'allowances') {
+      loadAllowances()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
 
   const handleCreateAllowance = () => {
     setAllowanceData({
@@ -516,27 +508,153 @@ const Admin_hr_management = () => {
     setShowAllowanceModal(true)
   }
 
-  const handleSaveAllowance = () => {
-    const selectedEmployee = allUsers.find(user => user.id.toString() === allowanceData.employeeId)
-    const newAllowance = {
-      id: allowances.length + 1,
-      ...allowanceData,
-      employeeName: selectedEmployee ? selectedEmployee.name : 'Unknown',
-      value: parseFloat(allowanceData.value)
+  const handleSaveAllowance = async () => {
+    // Validation
+    if (!allowanceData.employeeId || !allowanceData.itemType || !allowanceData.itemName || !allowanceData.issueDate || !allowanceData.value) {
+      addToast({ type: 'error', message: 'Please fill in all required fields' })
+      return
     }
-    setAllowances([...allowances, newAllowance])
-    setShowAllowanceModal(false)
-    setAllowanceData({
-      employeeId: '',
-      itemType: '',
-      itemName: '',
-      serialNumber: '',
-      issueDate: '',
-      returnDate: '',
-      status: 'active',
-      value: '',
-      remarks: ''
+
+    const selectedEmployee = allUsers.find(user => {
+      const userIdStr = user._id || user.id || user.employeeId
+      return userIdStr.toString() === allowanceData.employeeId.toString()
     })
+
+    if (!selectedEmployee) {
+      addToast({ type: 'error', message: 'Selected employee not found' })
+      return
+    }
+
+    const value = parseFloat(allowanceData.value)
+    if (isNaN(value) || value < 0) {
+      addToast({ type: 'error', message: 'Please enter a valid value' })
+      return
+    }
+
+    try {
+      // Determine user type
+      const userType = selectedEmployee.role === 'project-manager' ? 'pm' : 
+                      selectedEmployee.team === 'sales' ? 'sales' : 'employee'
+      const employeeId = selectedEmployee._id || selectedEmployee.id || selectedEmployee.employeeId
+
+      const allowancePayload = {
+        employeeId: employeeId.toString(),
+        userType,
+        itemType: allowanceData.itemType,
+        itemName: allowanceData.itemName,
+        serialNumber: allowanceData.serialNumber || '',
+        issueDate: allowanceData.issueDate,
+        returnDate: allowanceData.returnDate || null,
+        status: allowanceData.status || 'active',
+        value: value,
+        remarks: allowanceData.remarks || ''
+      }
+
+      await adminAllowanceService.createAllowance(allowancePayload)
+      addToast({ type: 'success', message: 'Allowance created successfully' })
+      
+      setShowAllowanceModal(false)
+      setAllowanceData({
+        employeeId: '',
+        itemType: '',
+        itemName: '',
+        serialNumber: '',
+        issueDate: '',
+        returnDate: '',
+        status: 'active',
+        value: '',
+        remarks: ''
+      })
+      
+      // Reload allowances
+      await loadAllowances()
+    } catch (error) {
+      console.error('Error creating allowance:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to create allowance' })
+    }
+  }
+
+  const handleEditAllowance = (allowance) => {
+    setSelectedAllowance(allowance)
+    setAllowanceData({
+      employeeId: allowance.employeeId,
+      itemType: allowance.itemType,
+      itemName: allowance.itemName,
+      serialNumber: allowance.serialNumber || '',
+      issueDate: allowance.issueDate,
+      returnDate: allowance.returnDate || '',
+      status: allowance.status,
+      value: allowance.value.toString(),
+      remarks: allowance.remarks || ''
+    })
+    setShowEditAllowanceModal(true)
+  }
+
+  const handleUpdateAllowance = async () => {
+    if (!selectedAllowance) return
+
+    // Validation
+    if (!allowanceData.itemType || !allowanceData.itemName || !allowanceData.issueDate || !allowanceData.value) {
+      addToast({ type: 'error', message: 'Please fill in all required fields' })
+      return
+    }
+
+    const value = parseFloat(allowanceData.value)
+    if (isNaN(value) || value < 0) {
+      addToast({ type: 'error', message: 'Please enter a valid value' })
+      return
+    }
+
+    try {
+      const updates = {
+        itemType: allowanceData.itemType,
+        itemName: allowanceData.itemName,
+        serialNumber: allowanceData.serialNumber || '',
+        issueDate: allowanceData.issueDate,
+        returnDate: allowanceData.returnDate || null,
+        status: allowanceData.status,
+        value: value,
+        remarks: allowanceData.remarks || ''
+      }
+
+      await adminAllowanceService.updateAllowance(selectedAllowance.id, updates)
+      addToast({ type: 'success', message: 'Allowance updated successfully' })
+      
+      setShowEditAllowanceModal(false)
+      setSelectedAllowance(null)
+      setAllowanceData({
+        employeeId: '',
+        itemType: '',
+        itemName: '',
+        serialNumber: '',
+        issueDate: '',
+        returnDate: '',
+        status: 'active',
+        value: '',
+        remarks: ''
+      })
+      
+      // Reload allowances
+      await loadAllowances()
+    } catch (error) {
+      console.error('Error updating allowance:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to update allowance' })
+    }
+  }
+
+  const handleDeleteAllowance = async (allowance) => {
+    if (!window.confirm(`Are you sure you want to delete the allowance "${allowance.itemName}" for ${allowance.employeeName}?`)) {
+      return
+    }
+
+    try {
+      await adminAllowanceService.deleteAllowance(allowance.id)
+      addToast({ type: 'success', message: 'Allowance deleted successfully' })
+      await loadAllowances()
+    } catch (error) {
+      console.error('Error deleting allowance:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to delete allowance' })
+    }
   }
 
   const getItemIcon = (itemType) => {
@@ -560,103 +678,61 @@ const Admin_hr_management = () => {
     }
   }
 
-  // Recurring Expenses functions
-  const generateRecurringExpensesData = () => {
-    const mockExpenses = [
-      {
-        id: 1,
-        name: 'Office Rent',
-        category: 'rent',
-        amount: 50000,
-        frequency: 'monthly',
-        startDate: '2024-01-01',
-        endDate: '2024-12-31',
-        status: 'active',
-        description: 'Monthly office rent for main building',
-        vendor: 'Property Management Co.',
-        paymentMethod: 'bank_transfer',
-        lastPaid: '2024-01-15',
-        nextDue: '2024-02-01'
-      },
-      {
-        id: 2,
-        name: 'Electricity Bill',
-        category: 'utilities',
-        amount: 15000,
-        frequency: 'monthly',
-        startDate: '2024-01-01',
-        endDate: null,
-        status: 'active',
-        description: 'Monthly electricity consumption',
-        vendor: 'State Electricity Board',
-        paymentMethod: 'auto_debit',
-        lastPaid: '2024-01-20',
-        nextDue: '2024-02-20'
-      },
-      {
-        id: 3,
-        name: 'Internet & Phone',
-        category: 'utilities',
-        amount: 8000,
-        frequency: 'monthly',
-        startDate: '2024-01-01',
-        endDate: null,
-        status: 'active',
-        description: 'High-speed internet and office phone lines',
-        vendor: 'Telecom Provider',
-        paymentMethod: 'credit_card',
-        lastPaid: '2024-01-10',
-        nextDue: '2024-02-10'
-      },
-      {
-        id: 4,
-        name: 'Office Cleaning',
-        category: 'maintenance',
-        amount: 12000,
-        frequency: 'monthly',
-        startDate: '2024-01-01',
-        endDate: null,
-        status: 'active',
-        description: 'Professional cleaning services',
-        vendor: 'CleanPro Services',
-        paymentMethod: 'bank_transfer',
-        lastPaid: '2024-01-25',
-        nextDue: '2024-02-25'
-      },
-      {
-        id: 5,
-        name: 'Software Licenses',
-        category: 'software',
-        amount: 25000,
-        frequency: 'yearly',
-        startDate: '2024-01-01',
-        endDate: '2024-12-31',
-        status: 'active',
-        description: 'Annual software subscriptions and licenses',
-        vendor: 'Software Solutions Inc.',
-        paymentMethod: 'bank_transfer',
-        lastPaid: '2024-01-05',
-        nextDue: '2025-01-05'
-      },
-      {
-        id: 6,
-        name: 'Insurance Premium',
-        category: 'insurance',
-        amount: 30000,
-        frequency: 'yearly',
-        startDate: '2024-01-01',
-        endDate: '2024-12-31',
-        status: 'active',
-        description: 'Office and equipment insurance',
-        vendor: 'Insurance Corp',
-        paymentMethod: 'bank_transfer',
-        lastPaid: '2024-01-01',
-        nextDue: '2025-01-01'
+  // Recurring Expenses functions - now using real API
+  // Load recurring expenses data
+  const loadRecurringExpenses = async () => {
+    try {
+      const res = await adminRecurringExpenseService.getAllRecurringExpenses({
+        status: expenseFilters.selectedStatus !== 'all' ? expenseFilters.selectedStatus : undefined,
+        category: expenseFilters.selectedCategory !== 'all' ? expenseFilters.selectedCategory : undefined,
+        frequency: expenseFilters.selectedFrequency !== 'all' ? expenseFilters.selectedFrequency : undefined
+      })
+      
+      const expensesData = (res.data || []).map((expense, idx) => ({
+        id: expense._id || idx + 1,
+        name: expense.name,
+        category: expense.category,
+        amount: expense.amount,
+        frequency: expense.frequency,
+        startDate: expense.startDate ? new Date(expense.startDate).toISOString().split('T')[0] : '',
+        endDate: expense.endDate ? new Date(expense.endDate).toISOString().split('T')[0] : null,
+        status: expense.status,
+        description: expense.description || '',
+        vendor: expense.vendor || '',
+        paymentMethod: expense.paymentMethod || 'bank_transfer',
+        lastPaidDate: expense.lastPaidDate ? new Date(expense.lastPaidDate).toISOString().split('T')[0] : null,
+        nextDueDate: expense.nextDueDate ? new Date(expense.nextDueDate).toISOString().split('T')[0] : null,
+        dayOfMonth: expense.dayOfMonth || 1
+      }))
+      
+      setRecurringExpenses(expensesData)
+      
+      // Update stats from backend if available
+      if (res.stats) {
+        setExpenseStats({
+          totalExpenses: res.stats.totalExpenses || 0,
+          activeExpenses: res.stats.activeExpenses || 0,
+          monthlyTotal: res.stats.monthlyTotal || 0,
+          yearlyTotal: res.stats.yearlyTotal || 0,
+          categories: res.stats.categories || {}
+        })
+      } else {
+        calculateExpenseStats(expensesData)
       }
-    ]
-    setRecurringExpenses(mockExpenses)
-    calculateExpenseStats(mockExpenses)
+    } catch (error) {
+      console.error('Error loading recurring expenses:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to load recurring expenses' })
+      setRecurringExpenses([])
+    }
   }
+
+  // Load recurring expenses when tab is active
+  useEffect(() => {
+    if (activeTab === 'expenses') {
+      loadRecurringExpenses()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, expenseFilters.selectedStatus, expenseFilters.selectedCategory, expenseFilters.selectedFrequency])
 
   const calculateExpenseStats = (expenses) => {
     const totalExpenses = expenses.length
@@ -730,75 +806,112 @@ const Admin_hr_management = () => {
     setShowEditExpenseModal(true)
   }
 
-  const handleSaveExpense = () => {
-    if (!expenseData.name || !expenseData.amount || !expenseData.category) {
-      alert('Please fill in all required fields')
+  const handleSaveExpense = async () => {
+    // Validation
+    if (!expenseData.name || !expenseData.amount || !expenseData.category || !expenseData.startDate) {
+      addToast({ type: 'error', message: 'Please fill in all required fields' })
       return
     }
 
-    const newExpense = {
-      id: recurringExpenses.length + 1,
-      ...expenseData,
-      amount: parseFloat(expenseData.amount),
-      lastPaid: null,
-      nextDue: calculateNextDueDate(expenseData.startDate, expenseData.frequency)
-    }
-
-    const updatedExpenses = [...recurringExpenses, newExpense]
-    setRecurringExpenses(updatedExpenses)
-    calculateExpenseStats(updatedExpenses)
-    setShowExpenseModal(false)
-    resetExpenseData()
-  }
-
-  const handleUpdateExpense = () => {
-    if (!expenseData.name || !expenseData.amount || !expenseData.category) {
-      alert('Please fill in all required fields')
+    const amount = parseFloat(expenseData.amount)
+    if (isNaN(amount) || amount < 0) {
+      addToast({ type: 'error', message: 'Please enter a valid amount' })
       return
     }
 
-    const updatedExpenses = recurringExpenses.map(expense => 
-      expense.id === selectedExpense.id 
-        ? { 
-            ...expense, 
-            ...expenseData, 
-            amount: parseFloat(expenseData.amount),
-            nextDue: calculateNextDueDate(expenseData.startDate, expenseData.frequency)
-          }
-        : expense
-    )
+    try {
+      const expensePayload = {
+        name: expenseData.name,
+        category: expenseData.category,
+        amount: amount,
+        frequency: expenseData.frequency || 'monthly',
+        startDate: expenseData.startDate,
+        endDate: expenseData.endDate || null,
+        status: expenseData.status || 'active',
+        description: expenseData.description || '',
+        vendor: expenseData.vendor || '',
+        paymentMethod: expenseData.paymentMethod || 'bank_transfer',
+        dayOfMonth: new Date(expenseData.startDate).getDate()
+      }
 
-    setRecurringExpenses(updatedExpenses)
-    calculateExpenseStats(updatedExpenses)
-    setShowEditExpenseModal(false)
-    setSelectedExpense(null)
-    resetExpenseData()
-  }
-
-  const handleDeleteExpense = (expense) => {
-    if (window.confirm(`Are you sure you want to delete "${expense.name}"?`)) {
-      const updatedExpenses = recurringExpenses.filter(exp => exp.id !== expense.id)
-      setRecurringExpenses(updatedExpenses)
-      calculateExpenseStats(updatedExpenses)
+      const res = await adminRecurringExpenseService.createRecurringExpense(expensePayload)
+      addToast({ 
+        type: 'success', 
+        message: `Recurring expense created successfully. ${res.entriesGenerated?.created || 0} entries generated.` 
+      })
+      
+      setShowExpenseModal(false)
+      resetExpenseData()
+      
+      // Reload expenses
+      await loadRecurringExpenses()
+    } catch (error) {
+      console.error('Error creating recurring expense:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to create recurring expense' })
     }
   }
 
-  const calculateNextDueDate = (startDate, frequency) => {
-    const start = new Date(startDate)
-    const now = new Date()
-    
-    if (frequency === 'monthly') {
-      const nextDue = new Date(now.getFullYear(), now.getMonth() + 1, start.getDate())
-      return nextDue.toISOString().split('T')[0]
-    } else if (frequency === 'yearly') {
-      const nextDue = new Date(now.getFullYear() + 1, start.getMonth(), start.getDate())
-      return nextDue.toISOString().split('T')[0]
-    } else if (frequency === 'quarterly') {
-      const nextDue = new Date(now.getFullYear(), now.getMonth() + 3, start.getDate())
-      return nextDue.toISOString().split('T')[0]
+  const handleUpdateExpense = async () => {
+    if (!selectedExpense) return
+
+    // Validation
+    if (!expenseData.name || !expenseData.amount || !expenseData.category || !expenseData.startDate) {
+      addToast({ type: 'error', message: 'Please fill in all required fields' })
+      return
     }
-    return startDate
+
+    const amount = parseFloat(expenseData.amount)
+    if (isNaN(amount) || amount < 0) {
+      addToast({ type: 'error', message: 'Please enter a valid amount' })
+      return
+    }
+
+    try {
+      const updates = {
+        name: expenseData.name,
+        category: expenseData.category,
+        amount: amount,
+        frequency: expenseData.frequency,
+        startDate: expenseData.startDate,
+        endDate: expenseData.endDate || null,
+        status: expenseData.status,
+        description: expenseData.description || '',
+        vendor: expenseData.vendor || '',
+        paymentMethod: expenseData.paymentMethod || 'bank_transfer',
+        dayOfMonth: new Date(expenseData.startDate).getDate()
+      }
+
+      await adminRecurringExpenseService.updateRecurringExpense(selectedExpense.id, updates)
+      addToast({ type: 'success', message: 'Recurring expense updated successfully' })
+      
+      setShowEditExpenseModal(false)
+      setSelectedExpense(null)
+      resetExpenseData()
+      
+      // Reload expenses
+      await loadRecurringExpenses()
+    } catch (error) {
+      console.error('Error updating recurring expense:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to update recurring expense' })
+    }
   }
+
+  const handleDeleteExpense = async (expense) => {
+    if (!window.confirm(`Are you sure you want to delete "${expense.name}"? This will also delete all associated expense entries.`)) {
+      return
+    }
+
+    try {
+      await adminRecurringExpenseService.deleteRecurringExpense(expense.id)
+      addToast({ type: 'success', message: 'Recurring expense deleted successfully' })
+      await loadRecurringExpenses()
+    } catch (error) {
+      console.error('Error deleting recurring expense:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to delete recurring expense' })
+    }
+  }
+
+  // Note: calculateNextDueDate removed - nextDueDate is now calculated by backend automatically
 
   const resetExpenseData = () => {
     setExpenseData({
@@ -1299,11 +1412,13 @@ const Admin_hr_management = () => {
     setShowSalaryHistoryModal(false)
     setShowRequestModal(false)
     setShowAllowanceModal(false)
+    setShowEditAllowanceModal(false)
     setShowExpenseModal(false)
     setShowEditExpenseModal(false)
     setSelectedUser(null)
     setSelectedSalaryRecord(null)
     setSelectedExpense(null)
+    setSelectedAllowance(null)
     setEditSalaryData({ 
       basicSalary: ''
     })
@@ -1358,8 +1473,8 @@ const Admin_hr_management = () => {
   useEffect(() => {
     // generateSalaryData() - Removed: salary data now loads dynamically when salary tab is active
     generateRequestsData()
-    generateAllowancesData()
-    generateRecurringExpensesData()
+    // generateAllowancesData() - Removed: allowances data now loads dynamically when allowances tab is active
+    // generateRecurringExpensesData() - Removed: recurring expenses data now loads dynamically when expenses tab is active
   }, [])
 
   // Attendance functions
@@ -2882,10 +2997,50 @@ const Admin_hr_management = () => {
                           <p className="text-xs text-gray-600 line-clamp-2">{allowance.remarks}</p>
                         </div>
                       )}
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 mt-3">
+                        <Button
+                          onClick={() => handleEditAllowance(allowance)}
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 text-xs py-1 h-8"
+                        >
+                          <Edit3 className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          onClick={() => handleDeleteAllowance(allowance)}
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 text-xs py-1 h-8 text-red-600 border-red-200 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
+
+              {/* Empty State */}
+              {allowances.length === 0 && (
+                <Card className="border-2 border-dashed border-gray-300">
+                  <CardContent className="p-12 text-center">
+                    <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Allowances Found</h3>
+                    <p className="text-gray-500 mb-6">Start by adding your first employee allowance or asset.</p>
+                    <Button
+                      onClick={handleCreateAllowance}
+                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add First Allowance
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
                 </motion.div>
               )}
 
@@ -3040,7 +3195,7 @@ const Admin_hr_management = () => {
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-gray-500">Next Due</span>
-                              <span className="text-xs font-medium text-gray-900">{formatDate(expense.nextDue)}</span>
+                              <span className="text-xs font-medium text-gray-900">{expense.nextDueDate ? formatDate(expense.nextDueDate) : 'N/A'}</span>
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-gray-500">Payment</span>
@@ -3876,9 +4031,14 @@ const Admin_hr_management = () => {
                         className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                       >
                         <option value="">Select employee</option>
-                        {allUsers.map(user => (
-                          <option key={user.id} value={user.id}>{user.name}</option>
-                        ))}
+                        {allUsers.map(user => {
+                          const userIdStr = (user._id || user.id || user.employeeId)?.toString()
+                          return (
+                            <option key={userIdStr} value={userIdStr}>
+                              {user.name} - {user.department || 'General'} ({user.role === 'project-manager' ? 'PM' : user.team === 'sales' ? 'Sales' : 'Employee'})
+                            </option>
+                          )
+                        })}
                       </select>
                     </div>
 
@@ -3993,6 +4153,155 @@ const Admin_hr_management = () => {
                       className="px-4 py-1.5 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
                     >
                       Add Allowance
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Edit Allowance Modal */}
+            {showEditAllowanceModal && selectedAllowance && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={() => setShowEditAllowanceModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white rounded-xl p-4 max-w-sm w-full"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-900">Edit Allowance</h3>
+                    <button
+                      onClick={() => setShowEditAllowanceModal(false)}
+                      className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                      <p className="text-xs font-semibold text-gray-700">Employee</p>
+                      <p className="text-sm font-medium text-gray-900">{selectedAllowance.employeeName}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Item Type</label>
+                        <select
+                          value={allowanceData.itemType}
+                          onChange={(e) => setAllowanceData({...allowanceData, itemType: e.target.value})}
+                          className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        >
+                          <option value="">Select type</option>
+                          <option value="laptop">Laptop</option>
+                          <option value="monitor">Monitor</option>
+                          <option value="smartphone">Smartphone</option>
+                          <option value="headphones">Headphones</option>
+                          <option value="wifi">WiFi Device</option>
+                          <option value="car">Car</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Status</label>
+                        <select
+                          value={allowanceData.status}
+                          onChange={(e) => setAllowanceData({...allowanceData, status: e.target.value})}
+                          className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        >
+                          <option value="active">Active</option>
+                          <option value="returned">Returned</option>
+                          <option value="lost">Lost</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Item Name</label>
+                      <input
+                        type="text"
+                        value={allowanceData.itemName}
+                        onChange={(e) => setAllowanceData({...allowanceData, itemName: e.target.value})}
+                        className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        placeholder="e.g., MacBook Pro 16"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Serial Number</label>
+                      <input
+                        type="text"
+                        value={allowanceData.serialNumber}
+                        onChange={(e) => setAllowanceData({...allowanceData, serialNumber: e.target.value})}
+                        className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        placeholder="Enter serial number"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Issue Date</label>
+                        <input
+                          type="date"
+                          value={allowanceData.issueDate}
+                          onChange={(e) => setAllowanceData({...allowanceData, issueDate: e.target.value})}
+                          className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Return Date</label>
+                        <input
+                          type="date"
+                          value={allowanceData.returnDate}
+                          onChange={(e) => setAllowanceData({...allowanceData, returnDate: e.target.value})}
+                          className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Value (₹)</label>
+                      <input
+                        type="number"
+                        value={allowanceData.value}
+                        onChange={(e) => setAllowanceData({...allowanceData, value: e.target.value})}
+                        className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        placeholder="Enter item value"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Remarks</label>
+                      <textarea
+                        value={allowanceData.remarks}
+                        onChange={(e) => setAllowanceData({...allowanceData, remarks: e.target.value})}
+                        className="w-full h-12 px-2 py-1 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
+                        placeholder="Additional notes"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-2 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => setShowEditAllowanceModal(false)}
+                      className="px-3 py-1.5 text-xs text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleUpdateAllowance}
+                      className="px-4 py-1.5 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
+                    >
+                      Update Allowance
                     </button>
                   </div>
                 </motion.div>

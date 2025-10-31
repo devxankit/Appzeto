@@ -1,5 +1,8 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const PM = require('../models/PM');
+const Salary = require('../models/Salary');
+const PMReward = require('../models/PMReward');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -230,9 +233,191 @@ const createDemoPM = async (req, res) => {
   }
 };
 
+// Helper to safely cast id
+const safeObjectId = (value) => {
+  try { return new mongoose.Types.ObjectId(value); } catch { return value; }
+};
+
+// @desc    Get PM wallet summary
+// @route   GET /api/pm/wallet/summary
+// @access  Private (PM only)
+const getWalletSummary = async (req, res) => {
+  try {
+    const pmId = safeObjectId(req.pm.id);
+
+    // Load PM for fixed salary
+    const pm = await PM.findById(pmId).select('fixedSalary name');
+    const fixedSalary = Number(pm?.fixedSalary || 0);
+
+    // Get current month dates
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    // Get salary for current month
+    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentMonthSalary = await Salary.findOne({
+      employeeId: pmId,
+      employeeModel: 'PM',
+      month: currentMonthStr
+    });
+
+    const salaryStatus = currentMonthSalary?.status === 'paid' ? 'paid' : 'unpaid';
+
+    // Get rewards for current month (paid status)
+    const monthlyRewards = await PMReward.aggregate([
+      {
+        $match: {
+          pmId: pmId,
+          status: 'paid',
+          paidAt: { $gte: monthStart, $lte: monthEnd }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+    const monthlyRewardsAmount = monthlyRewards.length > 0 ? monthlyRewards[0].total : 0;
+
+    // Get all-time rewards total
+    const allTimeRewards = await PMReward.aggregate([
+      {
+        $match: {
+          pmId: pmId,
+          status: 'paid'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+    const allTimeRewardsAmount = allTimeRewards.length > 0 ? allTimeRewards[0].total : 0;
+
+    // Get all-time salary total
+    const allTimeSalary = await Salary.aggregate([
+      {
+        $match: {
+          employeeId: pmId,
+          employeeModel: 'PM',
+          status: 'paid'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$fixedSalary' }
+        }
+      }
+    ]);
+    const allTimeSalaryAmount = allTimeSalary.length > 0 ? allTimeSalary[0].total : 0;
+
+    const totalEarnings = allTimeSalaryAmount + allTimeRewardsAmount;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        monthlySalary: fixedSalary,
+        monthlyRewards: monthlyRewardsAmount,
+        totalEarnings: totalEarnings,
+        salaryStatus: salaryStatus
+      }
+    });
+  } catch (error) {
+    console.error('Get wallet summary error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch wallet summary' });
+  }
+};
+
+// @desc    Get PM wallet transactions
+// @route   GET /api/pm/wallet/transactions
+// @access  Private (PM only)
+const getWalletTransactions = async (req, res) => {
+  try {
+    const pmId = safeObjectId(req.pm.id);
+    const { limit = 50 } = req.query;
+
+    // Get all salaries (paid)
+    const salaries = await Salary.find({
+      employeeId: pmId,
+      employeeModel: 'PM',
+      status: 'paid'
+    })
+      .select('fixedSalary month paidDate status')
+      .sort({ paidDate: -1 })
+      .limit(parseInt(limit));
+
+    // Get all rewards (paid)
+    const rewards = await PMReward.find({
+      pmId: pmId,
+      status: 'paid'
+    })
+      .select('amount reason description category dateAwarded paidAt')
+      .sort({ paidAt: -1 })
+      .limit(parseInt(limit));
+
+    // Combine and format transactions
+    const transactions = [];
+
+    // Add salary transactions
+    salaries.forEach(salary => {
+      const paidDate = salary.paidDate || new Date();
+      transactions.push({
+        id: `salary-${salary.month}`,
+        amount: salary.fixedSalary,
+        type: 'salary',
+        date: paidDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        category: 'Fixed Salary',
+        description: `Monthly Salary - ${new Date(salary.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
+        status: 'Paid'
+      });
+    });
+
+    // Add reward transactions
+    rewards.forEach(reward => {
+      const paidDate = reward.paidAt || reward.dateAwarded || new Date();
+      transactions.push({
+        id: `reward-${reward._id}`,
+        amount: reward.amount,
+        type: 'reward',
+        date: paidDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        category: reward.category || 'Performance Reward',
+        description: reward.description || reward.reason,
+        status: 'Paid'
+      });
+    });
+
+    // Sort by date descending
+    transactions.sort((a, b) => {
+      const dateA = new Date(a.date.split('/').reverse().join('-'));
+      const dateB = new Date(b.date.split('/').reverse().join('-'));
+      return dateB - dateA;
+    });
+
+    // Limit results
+    const limitedTransactions = transactions.slice(0, parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      data: limitedTransactions,
+      count: limitedTransactions.length
+    });
+  } catch (error) {
+    console.error('Get wallet transactions error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch wallet transactions' });
+  }
+};
+
 module.exports = {
   loginPM,
   getPMProfile,
   logoutPM,
-  createDemoPM
+  createDemoPM,
+  getWalletSummary,
+  getWalletTransactions
 };

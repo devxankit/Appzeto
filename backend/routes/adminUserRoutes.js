@@ -20,6 +20,24 @@ const {
   getEmployeeSalaryHistory,
   deleteSalaryRecord
 } = require('../controllers/adminSalaryController');
+const {
+  createAllowance,
+  getAllAllowances,
+  getAllowanceById,
+  updateAllowance,
+  deleteAllowance,
+  getAllowanceStatistics
+} = require('../controllers/adminAllowanceController');
+const {
+  createRecurringExpense,
+  getAllRecurringExpenses,
+  getRecurringExpenseById,
+  updateRecurringExpense,
+  deleteRecurringExpense,
+  generateExpenseEntries,
+  getExpenseEntries,
+  markEntryAsPaid
+} = require('../controllers/adminRecurringExpenseController');
 
 // Apply authentication and authorization to all routes
 router.use(protect);
@@ -46,6 +64,24 @@ router.get('/salary/:id', getSalaryRecord);
 router.put('/salary/:id', updateSalaryRecord);
 router.delete('/salary/:id', deleteSalaryRecord);
 router.get('/salary', getSalaryRecords);
+
+// Allowances Management (Admin/HR) - Must come before generic routes
+router.get('/allowances/statistics', getAllowanceStatistics);
+router.post('/allowances', createAllowance);
+router.get('/allowances/:id', getAllowanceById);
+router.put('/allowances/:id', updateAllowance);
+router.delete('/allowances/:id', deleteAllowance);
+router.get('/allowances', getAllAllowances);
+
+// Recurring Expenses Management (Admin/HR) - Must come before generic routes
+router.get('/recurring-expenses/entries', getExpenseEntries);
+router.post('/recurring-expenses/:id/generate-entries', generateExpenseEntries);
+router.put('/recurring-expenses/entries/:id/pay', markEntryAsPaid);
+router.post('/recurring-expenses', createRecurringExpense);
+router.get('/recurring-expenses/:id', getRecurringExpenseById);
+router.put('/recurring-expenses/:id', updateRecurringExpense);
+router.delete('/recurring-expenses/:id', deleteRecurringExpense);
+router.get('/recurring-expenses', getAllRecurringExpenses);
 
 // Generic user routes (must come after all specific routes)
 // @route   GET /api/admin/users

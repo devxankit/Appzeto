@@ -360,5 +360,27 @@ export const teamService = {
     } catch (error) {
       throw error;
     }
+  },
+
+  // Get PM team leaderboard
+  getTeamLeaderboard: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      // Add query parameters
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+
+      const url = `/pm/team/leaderboard${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      
+      const response = await apiRequest(url);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching team leaderboard:', error);
+      throw error;
+    }
   }
 };

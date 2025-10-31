@@ -1,5 +1,5 @@
 // Professional PM Wallet Dashboard component with enhanced UI
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { 
   FiCreditCard,
@@ -13,30 +13,60 @@ import {
   FiUser
 } from 'react-icons/fi'
 import PM_navbar from '../../DEV-components/PM_navbar'
+import { pmWalletService } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
 
 const PM_wallet = () => {
-  
-  // Mock data - PM's wallet with fixed salary and reward earnings
-  const walletData = {
-    monthlySalary: 35000,
-    monthlyRewards: 15000,
-    totalEarnings: 285000,
-    salaryStatus: 'paid', // 'paid' or 'unpaid'
-    transactions: [
-      { id: 1, amount: 35000, type: "salary", date: "01/12/2023", category: "Fixed Salary", description: "Monthly Salary - December 2023", status: "Paid" },
-      { id: 2, amount: 8000, type: "reward", date: "28/11/2023", category: "Performance Reward", description: "Project Completion Bonus", status: "Paid" },
-      { id: 3, amount: 5000, type: "reward", date: "25/11/2023", category: "Team Management", description: "Team Performance Bonus", status: "Paid" },
-      { id: 4, amount: 2000, type: "reward", date: "20/11/2023", category: "Client Satisfaction", description: "Client Feedback Reward", status: "Paid" },
-      { id: 5, amount: 35000, type: "salary", date: "01/11/2023", category: "Fixed Salary", description: "Monthly Salary - November 2023", status: "Paid" },
-      { id: 6, amount: 6000, type: "reward", date: "28/10/2023", category: "Performance Reward", description: "Milestone Achievement Bonus", status: "Paid" },
-      { id: 7, amount: 3000, type: "reward", date: "15/10/2023", category: "Team Management", description: "Team Collaboration Award", status: "Paid" },
-      { id: 8, amount: 35000, type: "salary", date: "01/10/2023", category: "Fixed Salary", description: "Monthly Salary - October 2023", status: "Paid" },
-      { id: 9, amount: 4000, type: "reward", date: "30/09/2023", category: "Performance Reward", description: "Quarterly Performance Bonus", status: "Paid" },
-      { id: 10, amount: 2500, type: "reward", date: "25/09/2023", category: "Client Satisfaction", description: "Client Retention Reward", status: "Paid" },
-      { id: 11, amount: 35000, type: "salary", date: "01/09/2023", category: "Fixed Salary", description: "Monthly Salary - September 2023", status: "Paid" },
-      { id: 12, amount: 7000, type: "reward", date: "28/08/2023", category: "Performance Reward", description: "Project Delivery Excellence", status: "Paid" }
-    ]
-  }
+  const { toast } = useToast();
+  const [walletData, setWalletData] = useState({
+    monthlySalary: 0,
+    monthlyRewards: 0,
+    totalEarnings: 0,
+    salaryStatus: 'unpaid',
+    transactions: []
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load wallet data
+  useEffect(() => {
+    loadWalletData();
+  }, []);
+
+  const loadWalletData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Fetch wallet summary and transactions in parallel
+      const [summaryResponse, transactionsResponse] = await Promise.all([
+        pmWalletService.getWalletSummary(),
+        pmWalletService.getWalletTransactions(50)
+      ]);
+
+      if (summaryResponse.success && transactionsResponse.success) {
+        setWalletData({
+          monthlySalary: summaryResponse.data.monthlySalary || 0,
+          monthlyRewards: summaryResponse.data.monthlyRewards || 0,
+          totalEarnings: summaryResponse.data.totalEarnings || 0,
+          salaryStatus: summaryResponse.data.salaryStatus || 'unpaid',
+          transactions: transactionsResponse.data || []
+        });
+      }
+    } catch (error) {
+      console.error('Error loading wallet data:', error);
+      toast.error('Failed to load wallet data. Please try again later.');
+      
+      // Set fallback data
+      setWalletData({
+        monthlySalary: 0,
+        monthlyRewards: 0,
+        totalEarnings: 0,
+        salaryStatus: 'unpaid',
+        transactions: []
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const formatCurrency = (amount) => {
     return `₹${amount.toLocaleString()}`
@@ -66,6 +96,22 @@ const PM_wallet = () => {
 
   const getStatusIcon = (status) => {
     return status === 'Paid' ? FiCheckCircle : FiClock
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
+        <PM_navbar />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20 lg:pt-20 lg:pb-4">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading wallet data...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -225,7 +271,13 @@ const PM_wallet = () => {
 
           {/* Transaction List */}
           <div className="space-y-3">
-            {walletData.transactions.map((transaction, index) => {
+            {walletData.transactions.length === 0 ? (
+              <div className="bg-white rounded-lg p-6 border border-gray-200 text-center">
+                <FiActivity className="text-gray-400 text-3xl mx-auto mb-2" />
+                <p className="text-gray-600">No transactions found</p>
+              </div>
+            ) : (
+              walletData.transactions.map((transaction, index) => {
               const IconComponent = getTransactionIcon(transaction.category)
               const StatusIcon = getStatusIcon(transaction.status)
               
@@ -262,7 +314,7 @@ const PM_wallet = () => {
                   </div>
                 </motion.div>
               )
-            })}
+            }))}
           </div>
 
         </div>
@@ -369,7 +421,13 @@ const PM_wallet = () => {
                 
                 <div className="overflow-hidden">
                   <div className="space-y-3">
-                    {walletData.transactions.slice(0, 8).map((transaction, index) => {
+                    {walletData.transactions.length === 0 ? (
+                      <div className="bg-white rounded-lg p-6 border border-gray-200 text-center">
+                        <FiActivity className="text-gray-400 text-3xl mx-auto mb-2" />
+                        <p className="text-gray-600">No transactions found</p>
+                      </div>
+                    ) : (
+                      walletData.transactions.slice(0, 8).map((transaction, index) => {
                       const IconComponent = getTransactionIcon(transaction.category)
                       const StatusIcon = getStatusIcon(transaction.status)
                       
@@ -406,7 +464,7 @@ const PM_wallet = () => {
                           </div>
                         </motion.div>
                       )
-                    })}
+                    }))}
                   </div>
                 </div>
               </motion.div>

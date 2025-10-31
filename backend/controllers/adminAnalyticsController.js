@@ -540,7 +540,364 @@ const getSystemAnalytics = asyncHandler(async (req, res, next) => {
   });
 });
 
+// Helper function to calculate trend
+const calculateTrend = (pointsHistory, period) => {
+  if (!pointsHistory || pointsHistory.length === 0) return 'stable';
+  
+  // Get recent points based on period
+  const now = new Date();
+  const periodStart = new Date(now);
+  
+  switch (period) {
+    case 'week':
+      periodStart.setDate(periodStart.getDate() - 7);
+      break;
+    case 'month':
+      periodStart.setMonth(periodStart.getMonth() - 1);
+      break;
+    case 'quarter':
+      periodStart.setMonth(periodStart.getMonth() - 3);
+      break;
+    case 'year':
+      periodStart.setFullYear(periodStart.getFullYear() - 1);
+      break;
+    default:
+      periodStart.setMonth(periodStart.getMonth() - 1);
+  }
+  
+  const recentPoints = pointsHistory
+    .filter(h => new Date(h.date) >= periodStart)
+    .map(h => h.points);
+    
+  if (recentPoints.length < 2) return 'stable';
+  
+  const first = recentPoints[0];
+  const last = recentPoints[recentPoints.length - 1];
+  
+  if (last > first) return 'up';
+  if (last < first) return 'down';
+  return 'stable';
+};
+
+// Helper function to calculate trend value
+const calculateTrendValue = (pointsHistory, period) => {
+  if (!pointsHistory || pointsHistory.length === 0) return '0%';
+  
+  const now = new Date();
+  const periodStart = new Date(now);
+  
+  switch (period) {
+    case 'week':
+      periodStart.setDate(periodStart.getDate() - 7);
+      break;
+    case 'month':
+      periodStart.setMonth(periodStart.getMonth() - 1);
+      break;
+    case 'quarter':
+      periodStart.setMonth(periodStart.getMonth() - 3);
+      break;
+    case 'year':
+      periodStart.setFullYear(periodStart.getFullYear() - 1);
+      break;
+    default:
+      periodStart.setMonth(periodStart.getMonth() - 1);
+  }
+  
+  const recentPoints = pointsHistory
+    .filter(h => new Date(h.date) >= periodStart)
+    .map(h => h.points);
+    
+  if (recentPoints.length < 2) return '0%';
+  
+  const first = recentPoints[0];
+  const last = recentPoints[recentPoints.length - 1];
+  
+  if (first === 0) return last > 0 ? '+100%' : '0%';
+  const change = ((last - first) / first) * 100;
+  return change > 0 ? `+${change.toFixed(0)}%` : `${change.toFixed(0)}%`;
+};
+
+// Helper function to get date range
+const getDateRange = (period) => {
+  const now = new Date();
+  const start = new Date(now);
+  
+  switch (period) {
+    case 'week':
+      start.setDate(start.getDate() - 7);
+      break;
+    case 'month':
+      start.setMonth(start.getMonth() - 1);
+      break;
+    case 'quarter':
+      start.setMonth(start.getMonth() - 3);
+      break;
+    case 'year':
+      start.setFullYear(start.getFullYear() - 1);
+      break;
+    default:
+      start.setMonth(start.getMonth() - 1);
+  }
+  
+  return { start, end: now };
+};
+
+// @desc    Get admin leaderboard (all modules)
+// @route   GET /api/admin/analytics/leaderboard
+// @access  Admin only
+const getAdminLeaderboard = asyncHandler(async (req, res, next) => {
+  const { period = 'month' } = req.query;
+  const dateRange = getDateRange(period);
+  
+  // Get all employees (dev module only - no PMs)
+  const employees = await Employee.find({ 
+    role: 'employee',
+    isActive: true,
+    team: 'developer'
+  })
+    .select('name email points statistics department position pointsHistory')
+    .sort({ points: -1 });
+  
+  // Transform employees for leaderboard
+  const devLeaderboard = employees.map((emp, index) => {
+    const stats = emp.statistics || {};
+    return {
+      _id: emp._id,
+      name: emp.name,
+      email: emp.email,
+      avatar: emp.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+      score: emp.points || 0,
+      rank: index + 1,
+      completed: stats.tasksCompleted || 0,
+      overdue: stats.tasksOverdue || 0,
+      missed: stats.tasksMissed || 0,
+      onTime: stats.tasksOnTime || 0,
+      rate: Math.round(stats.completionRate || 0),
+      trend: calculateTrend(emp.pointsHistory, period),
+      trendValue: calculateTrendValue(emp.pointsHistory, period),
+      department: emp.department || 'Development',
+      avgTime: stats.averageCompletionTime 
+        ? `${stats.averageCompletionTime.toFixed(1)} days` 
+        : '2.0 days',
+      lastActive: emp.updatedAt,
+      projects: 0,
+      role: emp.position || 'Developer',
+      module: 'dev',
+      earnings: emp.salary || 0,
+      achievements: []
+    };
+  });
+  
+  // Get all PMs for separate PM performance section
+  const pms = await PM.find({ isActive: true })
+    .select('name email projectsManaged fixedSalary')
+    .populate('projectsManaged', 'status progress dueDate createdAt');
+  
+  // Transform PMs for separate PM performance leaderboard
+  const pmLeaderboard = await Promise.all(pms.map(async (pm) => {
+    const projects = pm.projectsManaged || [];
+    const activeProjects = projects.filter(p => 
+      ['untouched', 'started', 'active', 'on-hold', 'testing'].includes(p.status)
+    );
+    const completedProjects = projects.filter(p => p.status === 'completed');
+    const totalProjects = projects.length;
+    const projectCompletionRate = totalProjects > 0 
+      ? Math.round((completedProjects.length / totalProjects) * 100) 
+      : 0;
+    
+    // Calculate overdue projects (not completed/cancelled and past due date)
+    const now = new Date();
+    const overdueProjects = projects.filter(p => {
+      if (!p.dueDate || p.status === 'completed' || p.status === 'cancelled') return false;
+      return new Date(p.dueDate) < now;
+    }).length;
+    
+    // Calculate performance score based on:
+    // - Project completion rate (70% weight)
+    // - No overdue projects bonus (30% weight)
+    let performanceScore = projectCompletionRate;
+    if (totalProjects > 0 && overdueProjects === 0) {
+      performanceScore += 30; // Bonus for no overdue projects
+    } else {
+      performanceScore -= (overdueProjects * 10); // Penalty per overdue project
+    }
+    performanceScore = Math.max(0, Math.min(100, performanceScore)); // Clamp between 0-100
+    
+    // Get total tasks in PM's projects
+    const projectIds = projects.map(p => p._id);
+    const totalTasks = await Task.countDocuments({ project: { $in: projectIds } });
+    const completedTasks = await Task.countDocuments({ 
+      project: { $in: projectIds },
+      status: 'completed'
+    });
+    
+    return {
+      _id: pm._id,
+      name: pm.name,
+      email: pm.email,
+      avatar: pm.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+      performanceScore: Math.round(performanceScore),
+      rank: 0, // Will be set after sorting
+      totalProjects: totalProjects,
+      completedProjects: completedProjects.length,
+      activeProjects: activeProjects.length,
+      overdueProjects: overdueProjects,
+      projectCompletionRate: projectCompletionRate,
+      totalTasks: totalTasks,
+      completedTasks: completedTasks,
+      lastActive: pm.updatedAt || pm.createdAt,
+      role: 'Project Manager',
+      module: 'pm',
+      earnings: pm.fixedSalary || 0,
+      achievements: overdueProjects === 0 && projectCompletionRate >= 90 ? ['Project Champion', 'On-Time Master'] : 
+                   overdueProjects === 0 ? ['On-Time Master'] :
+                   projectCompletionRate >= 90 ? ['Project Champion'] : []
+    };
+  }));
+  
+  // Sort PMs by performance score (highest first)
+  pmLeaderboard.sort((a, b) => {
+    // Primary: Performance score
+    if (b.performanceScore !== a.performanceScore) {
+      return b.performanceScore - a.performanceScore;
+    }
+    // Secondary: Project completion rate
+    if (b.projectCompletionRate !== a.projectCompletionRate) {
+      return b.projectCompletionRate - a.projectCompletionRate;
+    }
+    // Tertiary: Fewer overdue projects
+    return a.overdueProjects - b.overdueProjects;
+  });
+  
+  // Assign ranks to PMs
+  pmLeaderboard.forEach((pm, index) => {
+    pm.rank = index + 1;
+  });
+  
+  // Get sales team with conversion metrics
+  const salesTeam = await Sales.find({ isActive: true })
+    .select('name email salesTarget currentSales currentIncentive');
+  
+  const salesLeaderboard = await Promise.all(
+    salesTeam.map(async (member) => {
+      const leadStats = await Lead.aggregate([
+        { $match: { assignedTo: member._id } },
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+            totalValue: { $sum: '$value' }
+          }
+        }
+      ]);
+      
+      const totalLeads = leadStats.reduce((sum, stat) => sum + stat.count, 0);
+      const convertedLeads = leadStats.find(stat => stat._id === 'converted')?.count || 0;
+      const totalRevenue = leadStats.find(stat => stat._id === 'converted')?.totalValue || 0;
+      const conversionRate = totalLeads > 0 
+        ? Math.round((convertedLeads / totalLeads) * 100) 
+        : 0;
+      
+      // Get deals count from converted leads
+      const deals = await Lead.countDocuments({ 
+        assignedTo: member._id, 
+        status: 'converted' 
+      });
+      
+      return {
+        _id: member._id,
+        name: member.name,
+        email: member.email,
+        avatar: member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+        score: conversionRate * 100 + convertedLeads, // Score for ranking (will be overridden by conversion rate sorting)
+        rank: 0, // Will be set after sorting
+        completed: convertedLeads,
+        overdue: 0,
+        missed: 0,
+        onTime: convertedLeads,
+        rate: conversionRate,
+        trend: 'stable',
+        trendValue: '0%',
+        department: 'Sales',
+        avgTime: '1.5 days',
+        lastActive: member.updatedAt || member.createdAt,
+        projects: deals,
+        role: 'Sales Executive',
+        module: 'sales',
+        earnings: member.currentSales || 0,
+        achievements: conversionRate >= 60 ? ['Sales Champion', 'Client Magnet'] : 
+                      conversionRate >= 50 ? ['Sales Champion'] : [],
+        salesMetrics: {
+          leads: totalLeads,
+          conversions: convertedLeads,
+          revenue: totalRevenue,
+          deals: deals
+        },
+        conversionRate: conversionRate
+      };
+    })
+  );
+  
+  // Sort sales by conversion rate (highest first), then by conversions
+  salesLeaderboard.sort((a, b) => {
+    if (Math.abs(a.conversionRate - b.conversionRate) < 0.001) {
+      return b.salesMetrics.conversions - a.salesMetrics.conversions;
+    }
+    return b.conversionRate - a.conversionRate;
+  });
+  
+  // Assign ranks to sales team
+  salesLeaderboard.forEach((member, index) => {
+    member.rank = index + 1;
+  });
+  
+  // Calculate overall statistics (excluding PMs from dev stats)
+  const allMembers = [...devLeaderboard, ...salesLeaderboard];
+  const overallStats = {
+    totalMembers: allMembers.length,
+    avgScore: allMembers.length > 0 
+      ? Math.round(allMembers.reduce((sum, m) => sum + m.score, 0) / allMembers.length)
+      : 0,
+    totalCompleted: allMembers.reduce((sum, m) => sum + m.completed, 0),
+    totalProjects: allMembers.reduce((sum, m) => sum + m.projects, 0),
+    avgCompletionRate: allMembers.length > 0
+      ? Math.round(allMembers.reduce((sum, m) => sum + m.rate, 0) / allMembers.length)
+      : 0,
+    topPerformer: allMembers.length > 0 
+      ? allMembers.reduce((top, m) => m.score > top.score ? m : top, allMembers[0])
+      : null,
+    totalRevenue: allMembers.reduce((sum, m) => sum + (m.earnings || 0), 0)
+  };
+  
+  // Calculate PM statistics separately
+  const pmStats = {
+    totalPMs: pmLeaderboard.length,
+    avgPerformanceScore: pmLeaderboard.length > 0
+      ? Math.round(pmLeaderboard.reduce((sum, pm) => sum + pm.performanceScore, 0) / pmLeaderboard.length)
+      : 0,
+    avgProjectCompletionRate: pmLeaderboard.length > 0
+      ? Math.round(pmLeaderboard.reduce((sum, pm) => sum + pm.projectCompletionRate, 0) / pmLeaderboard.length)
+      : 0,
+    totalProjects: pmLeaderboard.reduce((sum, pm) => sum + pm.totalProjects, 0),
+    totalCompletedProjects: pmLeaderboard.reduce((sum, pm) => sum + pm.completedProjects, 0),
+    totalOverdueProjects: pmLeaderboard.reduce((sum, pm) => sum + pm.overdueProjects, 0),
+    topPM: pmLeaderboard.length > 0 ? pmLeaderboard[0] : null
+  };
+  
+  res.json({
+    success: true,
+    data: {
+      dev: devLeaderboard,
+      sales: salesLeaderboard,
+      pm: pmLeaderboard,
+      overallStats,
+      pmStats
+    }
+  });
+});
+
 module.exports = {
   getAdminDashboardStats,
-  getSystemAnalytics
+  getSystemAnalytics,
+  getAdminLeaderboard
 };

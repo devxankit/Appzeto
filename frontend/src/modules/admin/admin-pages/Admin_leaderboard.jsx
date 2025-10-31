@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
+import adminDashboardService from '../admin-services/adminDashboardService'
 import { 
   FiUsers, 
   FiTrendingUp, 
@@ -32,127 +33,166 @@ import {
 const Admin_leaderboard = () => {
   // State management
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [selectedModule, setSelectedModule] = useState('dev')
   const [selectedPeriod, setSelectedPeriod] = useState('month')
   const [searchQuery, setSearchQuery] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [allLeaderboardData, setAllLeaderboardData] = useState({
+    dev: [],
+    sales: [],
+    pm: []
+  })
+  const [overallStats, setOverallStats] = useState({
+    totalMembers: 0,
+    avgScore: 0,
+    totalCompleted: 0,
+    totalProjects: 0,
+    avgCompletionRate: 0,
+    topPerformer: null,
+    totalRevenue: 0
+  })
+  const [pmStats, setPmStats] = useState({
+    totalPMs: 0,
+    avgPerformanceScore: 0,
+    avgProjectCompletionRate: 0,
+    totalProjects: 0,
+    totalCompletedProjects: 0,
+    totalOverdueProjects: 0,
+    topPM: null
+  })
 
-  // Mock comprehensive leaderboard data across all modules
-  const allLeaderboardData = {
-    // Development Team (Employees + PMs)
-    dev: [
-      { 
-        id: 1, name: "Sarah Chen", avatar: "SC", score: 9500, rank: 1,
-        completed: 52, overdue: 0, missed: 0, onTime: 52, rate: 98, 
-        trend: "up", trendValue: "+12%", department: "Development",
-        avgTime: "1.8 days", lastActive: "2 hours ago", projects: 8, 
-        role: "Senior Developer", module: "dev", earnings: 45000,
-        achievements: ["Task Master", "On-Time Hero", "Quality Champion"]
-      },
-      { 
-        id: 2, name: "Michael Brown", avatar: "MB", score: 9100, rank: 2,
-        completed: 48, overdue: 1, missed: 0, onTime: 47, rate: 96,
-        trend: "up", trendValue: "+8%", department: "Development",
-        avgTime: "2.1 days", lastActive: "1 hour ago", projects: 7, 
-        role: "Developer", module: "dev", earnings: 42000,
-        achievements: ["Task Master", "On-Time Hero"]
-      },
-      { 
-        id: 3, name: "Alex Johnson", avatar: "AJ", score: 8750, rank: 3,
-        completed: 45, overdue: 2, missed: 1, onTime: 42, rate: 93,
-        trend: "stable", trendValue: "0%", department: "Design",
-        avgTime: "2.3 days", lastActive: "30 mins ago", projects: 6, 
-        role: "UI/UX Designer", module: "dev", earnings: 40000,
-        achievements: ["Task Master"]
-      },
-      { 
-        id: 4, name: "David Wilson", avatar: "DW", score: 8500, rank: 4,
-        completed: 43, overdue: 1, missed: 0, onTime: 42, rate: 95,
-        trend: "up", trendValue: "+5%", department: "Development",
-        avgTime: "2.0 days", lastActive: "2 hours ago", projects: 8, 
-        role: "Project Manager", module: "dev", earnings: 50000,
-        achievements: ["Task Master", "Team Leader", "Project Champion"]
-      },
-      { 
-        id: 5, name: "Emily Davis", avatar: "ED", score: 8400, rank: 5,
-        completed: 43, overdue: 3, missed: 1, onTime: 39, rate: 91,
-        trend: "down", trendValue: "-3%", department: "Marketing",
-        avgTime: "2.5 days", lastActive: "5 hours ago", projects: 5, 
-        role: "Marketing Specialist", module: "dev", earnings: 38000,
-        achievements: ["Task Master"]
-      }
-    ],
-    // Sales Team
-    sales: [
-      { 
-        id: 6, name: "Maria Garcia", avatar: "MG", score: 9200, rank: 1,
-        completed: 35, overdue: 0, missed: 0, onTime: 35, rate: 100, 
-        trend: "up", trendValue: "+15%", department: "Sales",
-        avgTime: "1.5 days", lastActive: "1 hour ago", projects: 12, 
-        role: "Senior Sales Executive", module: "sales", earnings: 65000,
-        achievements: ["Sales Champion", "Client Magnet", "Revenue Generator"],
-        salesMetrics: { leads: 45, conversions: 28, revenue: 250000, deals: 12 }
-      },
-      { 
-        id: 7, name: "Robert Kim", avatar: "RK", score: 8800, rank: 2,
-        completed: 32, overdue: 1, missed: 0, onTime: 31, rate: 97,
-        trend: "up", trendValue: "+10%", department: "Sales",
-        avgTime: "1.8 days", lastActive: "2 hours ago", projects: 10, 
-        role: "Sales Executive", module: "sales", earnings: 58000,
-        achievements: ["Sales Champion", "Client Magnet"],
-        salesMetrics: { leads: 38, conversions: 22, revenue: 180000, deals: 10 }
-      },
-      { 
-        id: 8, name: "Jennifer Lee", avatar: "JL", score: 8200, rank: 3,
-        completed: 28, overdue: 2, missed: 1, onTime: 25, rate: 89,
-        trend: "stable", trendValue: "+2%", department: "Sales",
-        avgTime: "2.2 days", lastActive: "3 hours ago", projects: 8, 
-        role: "Sales Representative", module: "sales", earnings: 52000,
-        achievements: ["Sales Champion"],
-        salesMetrics: { leads: 32, conversions: 18, revenue: 150000, deals: 8 }
-      },
-      { 
-        id: 9, name: "Alex Chen", avatar: "AC", score: 7800, rank: 4,
-        completed: 25, overdue: 3, missed: 1, onTime: 21, rate: 84,
-        trend: "down", trendValue: "-5%", department: "Sales",
-        avgTime: "2.5 days", lastActive: "4 hours ago", projects: 6, 
-        role: "Sales Representative", module: "sales", earnings: 48000,
-        achievements: [],
-        salesMetrics: { leads: 28, conversions: 15, revenue: 120000, deals: 6 }
-      }
-    ]
+  // Helper to format last active time
+  const formatLastActive = (date) => {
+    if (!date) return 'Recently'
+    try {
+      const now = new Date()
+      const lastActive = new Date(date)
+      const diffMs = now - lastActive
+      const diffMins = Math.floor(diffMs / 60000)
+      const diffHours = Math.floor(diffMs / 3600000)
+      const diffDays = Math.floor(diffMs / 86400000)
+
+      if (diffMins < 60) return `${diffMins} mins ago`
+      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
+      if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
+      return lastActive.toLocaleDateString()
+    } catch (error) {
+      return 'Recently'
+    }
   }
 
-  // Calculate overall statistics
-  const overallStats = useMemo(() => {
-    const allMembers = Object.values(allLeaderboardData).flat()
+  // Transform API data to match component format
+  const transformMemberData = (member) => {
     return {
-      totalMembers: allMembers.length,
-      avgScore: Math.round(allMembers.reduce((sum, member) => sum + member.score, 0) / allMembers.length),
-      totalCompleted: allMembers.reduce((sum, member) => sum + member.completed, 0),
-      totalProjects: allMembers.reduce((sum, member) => sum + member.projects, 0),
-      avgCompletionRate: Math.round(allMembers.reduce((sum, member) => sum + member.rate, 0) / allMembers.length),
-      topPerformer: allMembers.reduce((top, member) => member.score > top.score ? member : top, allMembers[0]),
-      totalRevenue: allMembers.reduce((sum, member) => sum + (member.earnings || 0), 0)
+      id: member._id,
+      name: member.name,
+      avatar: member.avatar || member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+      score: member.score || member.performanceScore || 0,
+      rank: member.rank || 0,
+      completed: member.completed || member.completedProjects || member.completedTasks || 0,
+      overdue: member.overdue || member.overdueProjects || 0,
+      missed: member.missed || 0,
+      onTime: member.onTime || 0,
+      rate: member.rate || member.projectCompletionRate || 0,
+      trend: member.trend || 'stable',
+      trendValue: member.trendValue || '0%',
+      department: member.department || 'Project Management',
+      avgTime: member.avgTime || '2.0 days',
+      lastActive: member.lastActive ? formatLastActive(member.lastActive) : 'Recently',
+      projects: member.projects || member.totalProjects || 0,
+      role: member.role || 'Developer',
+      module: member.module || 'dev',
+      earnings: member.earnings || 0,
+      achievements: member.achievements || [],
+      salesMetrics: member.salesMetrics || null,
+      conversionRate: member.conversionRate || (member.salesMetrics && member.salesMetrics.leads > 0 
+        ? Math.round((member.salesMetrics.conversions / member.salesMetrics.leads) * 100) 
+        : 0),
+      // PM-specific fields
+      performanceScore: member.performanceScore,
+      totalProjects: member.totalProjects,
+      completedProjects: member.completedProjects,
+      activeProjects: member.activeProjects,
+      overdueProjects: member.overdueProjects,
+      projectCompletionRate: member.projectCompletionRate,
+      totalTasks: member.totalTasks,
+      completedTasks: member.completedTasks
     }
-  }, [])
+  }
 
-  // Simulate data loading
+  // Load data from API
   const loadData = async () => {
-    setLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setLoading(false)
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await adminDashboardService.getLeaderboard({
+        period: selectedPeriod
+      })
+
+      // Transform dev data (employees only, no PMs)
+      const devData = (response.dev || []).map(transformMemberData)
+      
+      // Transform sales data
+      const salesData = (response.sales || []).map(transformMemberData)
+      
+      // Transform PM data
+      const pmData = (response.pm || []).map(transformMemberData)
+      
+      setAllLeaderboardData({
+        dev: devData,
+        sales: salesData,
+        pm: pmData
+      })
+
+      // Set overall stats from API response
+      if (response.overallStats) {
+        setOverallStats({
+          totalMembers: response.overallStats.totalMembers || 0,
+          avgScore: response.overallStats.avgScore || 0,
+          totalCompleted: response.overallStats.totalCompleted || 0,
+          totalProjects: response.overallStats.totalProjects || 0,
+          avgCompletionRate: response.overallStats.avgCompletionRate || 0,
+          topPerformer: response.overallStats.topPerformer 
+            ? transformMemberData(response.overallStats.topPerformer)
+            : null,
+          totalRevenue: response.overallStats.totalRevenue || 0
+        })
+      }
+
+      // Set PM stats from API response
+      if (response.pmStats) {
+        setPmStats({
+          totalPMs: response.pmStats.totalPMs || 0,
+          avgPerformanceScore: response.pmStats.avgPerformanceScore || 0,
+          avgProjectCompletionRate: response.pmStats.avgProjectCompletionRate || 0,
+          totalProjects: response.pmStats.totalProjects || 0,
+          totalCompletedProjects: response.pmStats.totalCompletedProjects || 0,
+          totalOverdueProjects: response.pmStats.totalOverdueProjects || 0,
+          topPM: response.pmStats.topPM 
+            ? transformMemberData(response.pmStats.topPM)
+            : null
+        })
+      }
+    } catch (error) {
+      console.error('Error loading leaderboard data:', error)
+      setError('Failed to load leaderboard data. Please try again.')
+      // Set default empty data on error
+      setAllLeaderboardData({ dev: [], sales: [], pm: [] })
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [selectedPeriod])
 
   // Filter data based on selected module
   const filteredData = useMemo(() => {
-    let data = allLeaderboardData[selectedModule] || []
+    let data = [...(allLeaderboardData[selectedModule] || [])]
 
     // Apply search filter
     if (searchQuery) {
@@ -163,18 +203,61 @@ const Admin_leaderboard = () => {
       )
     }
 
-    // Sort by score and assign ranks
-    return data.sort((a, b) => b.score - a.score).map((member, index) => ({
-      ...member,
-      rank: index + 1
-    }))
-  }, [selectedModule, searchQuery])
+    // Sort based on module type
+    if (selectedModule === 'sales') {
+      // Sort sales team by conversion rate (conversions/leads)
+      return data.sort((a, b) => {
+        const aConversionRate = a.conversionRate || (a.salesMetrics?.leads > 0 
+          ? (a.salesMetrics.conversions / a.salesMetrics.leads) 
+          : 0)
+        const bConversionRate = b.conversionRate || (b.salesMetrics?.leads > 0 
+          ? (b.salesMetrics.conversions / b.salesMetrics.leads) 
+          : 0)
+        
+        // If conversion rates are equal, sort by number of conversions
+        if (Math.abs(aConversionRate - bConversionRate) < 0.001) {
+          return (b.salesMetrics?.conversions || 0) - (a.salesMetrics?.conversions || 0)
+        }
+        return bConversionRate - aConversionRate
+      }).map((member, index) => ({
+        ...member,
+        rank: index + 1,
+        conversionRate: member.conversionRate || (member.salesMetrics?.leads > 0 
+          ? Math.round((member.salesMetrics.conversions / member.salesMetrics.leads) * 100) 
+          : 0)
+      }))
+    } else if (selectedModule === 'pm') {
+      // Sort PMs by performance score
+      return data.sort((a, b) => {
+        // Primary: Performance score
+        if (b.performanceScore !== a.performanceScore) {
+          return b.performanceScore - a.performanceScore
+        }
+        // Secondary: Project completion rate
+        if (b.projectCompletionRate !== a.projectCompletionRate) {
+          return b.projectCompletionRate - a.projectCompletionRate
+        }
+        // Tertiary: Fewer overdue projects
+        return (a.overdueProjects || 0) - (b.overdueProjects || 0)
+      }).map((member, index) => ({
+        ...member,
+        rank: index + 1
+      }))
+    } else {
+      // Sort dev module by score (points)
+      return data.sort((a, b) => b.score - a.score).map((member, index) => ({
+        ...member,
+        rank: index + 1
+      }))
+    }
+  }, [selectedModule, searchQuery, allLeaderboardData])
 
   // Helper functions
   const getModuleColor = (module) => {
     switch (module) {
       case 'dev': return 'bg-blue-100 text-blue-800'
       case 'sales': return 'bg-teal-100 text-teal-800'
+      case 'pm': return 'bg-purple-100 text-purple-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -183,6 +266,7 @@ const Admin_leaderboard = () => {
     switch (module) {
       case 'dev': return FiCode
       case 'sales': return FiShoppingCart
+      case 'pm': return FiShield
       default: return FiUser
     }
   }
@@ -271,22 +355,66 @@ const Admin_leaderboard = () => {
             <div className="flex items-center gap-4 shrink-0">
               {/* Performance Metrics */}
               <div className="text-right">
-                <div className="flex items-center gap-1">
-                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                    member.rate >= 95 ? 'bg-green-100 text-green-700' :
-                    member.rate >= 85 ? 'bg-teal-100 text-teal-700' :
-                    'bg-orange-100 text-orange-700'
-                  }`}>
-                    {member.rate}%
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500">{member.completed} tasks</p>
+                {member.module === 'sales' && member.salesMetrics ? (
+                  <>
+                    <div className="flex items-center gap-1">
+                      <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                        member.conversionRate >= 60 ? 'bg-green-100 text-green-700' :
+                        member.conversionRate >= 50 ? 'bg-teal-100 text-teal-700' :
+                        'bg-orange-100 text-orange-700'
+                      }`}>
+                        {member.conversionRate || Math.round((member.salesMetrics.conversions / member.salesMetrics.leads) * 100)}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">{member.salesMetrics.conversions} conversions</p>
+                  </>
+                ) : member.module === 'pm' ? (
+                  <>
+                    <div className="flex items-center gap-1">
+                      <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                        member.projectCompletionRate >= 90 ? 'bg-green-100 text-green-700' :
+                        member.projectCompletionRate >= 75 ? 'bg-teal-100 text-teal-700' :
+                        'bg-orange-100 text-orange-700'
+                      }`}>
+                        {member.projectCompletionRate}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">{member.completedProjects} completed</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-1">
+                      <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                        member.rate >= 95 ? 'bg-green-100 text-green-700' :
+                        member.rate >= 85 ? 'bg-teal-100 text-teal-700' :
+                        'bg-orange-100 text-orange-700'
+                      }`}>
+                        {member.rate}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">{member.completed} tasks</p>
+                  </>
+                )}
               </div>
 
-              {/* Score */}
+              {/* Score or Conversions */}
               <div className="text-right">
-                <div className="text-lg font-bold text-gray-900">{member.score}</div>
-                <p className="text-xs text-gray-500">points</p>
+                {member.module === 'sales' && member.salesMetrics ? (
+                  <>
+                    <div className="text-lg font-bold text-gray-900">{member.salesMetrics.conversions}</div>
+                    <p className="text-xs text-gray-500">conversions</p>
+                  </>
+                ) : member.module === 'pm' ? (
+                  <>
+                    <div className="text-lg font-bold text-gray-900">{member.performanceScore}</div>
+                    <p className="text-xs text-gray-500">performance</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-lg font-bold text-gray-900">{member.score}</div>
+                    <p className="text-xs text-gray-500">points</p>
+                  </>
+                )}
               </div>
 
               {/* Expand Icon */}
@@ -305,38 +433,111 @@ const Admin_leaderboard = () => {
               transition={{ duration: 0.3 }}
               className="px-4 pb-4 border-t border-gray-100 pt-4"
             >
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="bg-green-50 rounded-lg p-3 border border-green-100">
-                  <div className="flex items-center gap-2 mb-1">
-                    <FiCheckCircle className="w-3 h-3 text-green-600" />
-                    <span className="text-xs text-gray-600">Completed</span>
+              {member.module === 'pm' ? (
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-green-50 rounded-lg p-3 border border-green-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FiCheckCircle className="w-3 h-3 text-green-600" />
+                      <span className="text-xs text-gray-600">Completed Projects</span>
+                    </div>
+                    <p className="text-lg font-bold text-green-600">{member.completedProjects || 0}</p>
                   </div>
-                  <p className="text-lg font-bold text-green-600">{member.completed}</p>
-                </div>
-                <div className="bg-teal-50 rounded-lg p-3 border border-teal-100">
-                  <div className="flex items-center gap-2 mb-1">
-                    <FiTarget className="w-3 h-3 text-teal-600" />
-                    <span className="text-xs text-gray-600">On Time</span>
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FiBarChart className="w-3 h-3 text-blue-600" />
+                      <span className="text-xs text-gray-600">Total Projects</span>
+                    </div>
+                    <p className="text-lg font-bold text-blue-600">{member.totalProjects || 0}</p>
                   </div>
-                  <p className="text-lg font-bold text-teal-600">{member.onTime}</p>
-                </div>
-                <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
-                  <div className="flex items-center gap-2 mb-1">
-                    <FiClock className="w-3 h-3 text-orange-600" />
-                    <span className="text-xs text-gray-600">Overdue</span>
+                  <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FiClock className="w-3 h-3 text-orange-600" />
+                      <span className="text-xs text-gray-600">Overdue Projects</span>
+                    </div>
+                    <p className="text-lg font-bold text-orange-600">{member.overdueProjects || 0}</p>
                   </div>
-                  <p className="text-lg font-bold text-orange-600">{member.overdue}</p>
-                </div>
-                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
-                  <div className="flex items-center gap-2 mb-1">
-                    <FiBarChart className="w-3 h-3 text-blue-600" />
-                    <span className="text-xs text-gray-600">Projects</span>
+                  <div className="bg-teal-50 rounded-lg p-3 border border-teal-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FiTarget className="w-3 h-3 text-teal-600" />
+                      <span className="text-xs text-gray-600">Active Projects</span>
+                    </div>
+                    <p className="text-lg font-bold text-teal-600">{member.activeProjects || 0}</p>
                   </div>
-                  <p className="text-lg font-bold text-blue-600">{member.projects}</p>
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-green-50 rounded-lg p-3 border border-green-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FiCheckCircle className="w-3 h-3 text-green-600" />
+                      <span className="text-xs text-gray-600">Completed</span>
+                    </div>
+                    <p className="text-lg font-bold text-green-600">{member.completed}</p>
+                  </div>
+                  <div className="bg-teal-50 rounded-lg p-3 border border-teal-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FiTarget className="w-3 h-3 text-teal-600" />
+                      <span className="text-xs text-gray-600">On Time</span>
+                    </div>
+                    <p className="text-lg font-bold text-teal-600">{member.onTime}</p>
+                  </div>
+                  <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FiClock className="w-3 h-3 text-orange-600" />
+                      <span className="text-xs text-gray-600">Overdue</span>
+                    </div>
+                    <p className="text-lg font-bold text-orange-600">{member.overdue}</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FiBarChart className="w-3 h-3 text-blue-600" />
+                      <span className="text-xs text-gray-600">Projects</span>
+                    </div>
+                    <p className="text-lg font-bold text-blue-600">{member.projects}</p>
+                  </div>
+                </div>
+              )}
 
               {/* Module-specific metrics */}
+              {member.module === 'pm' && (
+                <div className="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-100">
+                  <h4 className="text-sm font-semibold text-purple-800 mb-2">Project Manager Metrics</h4>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Total Projects:</span>
+                      <span className="font-semibold text-purple-700">{member.totalProjects || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Completed:</span>
+                      <span className="font-semibold text-purple-700">{member.completedProjects || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Active:</span>
+                      <span className="font-semibold text-purple-700">{member.activeProjects || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Overdue:</span>
+                      <span className="font-semibold text-red-600">{member.overdueProjects || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Completion Rate:</span>
+                      <span className="font-semibold text-purple-700">{member.projectCompletionRate || 0}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Total Tasks:</span>
+                      <span className="font-semibold text-purple-700">{member.totalTasks || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Completed Tasks:</span>
+                      <span className="font-semibold text-purple-700">{member.completedTasks || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Performance Score:</span>
+                      <span className="font-semibold text-purple-700">{member.performanceScore || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {member.module === 'sales' && member.salesMetrics && (
                 <div className="mb-4 p-3 bg-teal-50 rounded-lg border border-teal-100">
                   <h4 className="text-sm font-semibold text-teal-800 mb-2">Sales Metrics</h4>
@@ -348,6 +549,12 @@ const Admin_leaderboard = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-600">Conversions:</span>
                       <span className="font-semibold text-teal-700">{member.salesMetrics.conversions}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Conversion Rate:</span>
+                      <span className="font-semibold text-teal-700">
+                        {member.conversionRate || Math.round((member.salesMetrics.conversions / member.salesMetrics.leads) * 100)}%
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Revenue:</span>
@@ -379,13 +586,32 @@ const Admin_leaderboard = () => {
               {/* Performance Progress */}
               <div className="pt-3 border-t border-gray-100">
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Performance</span>
-                  <span className="font-semibold text-gray-800">{member.rate}%</span>
+                  <span className="text-gray-600">
+                    {member.module === 'sales' && member.salesMetrics ? 'Conversion Rate' : 
+                     member.module === 'pm' ? 'Performance Score' : 'Performance'}
+                  </span>
+                  <span className="font-semibold text-gray-800">
+                    {member.module === 'sales' && member.salesMetrics 
+                      ? `${member.conversionRate || Math.round((member.salesMetrics.conversions / member.salesMetrics.leads) * 100)}%` 
+                      : member.module === 'pm'
+                      ? `${member.performanceScore || 0}%`
+                      : `${member.rate}%`}
+                  </span>
                 </div>
                 <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
                   <div
-                    className="bg-gradient-to-r from-teal-500 to-emerald-500 h-full rounded-full transition-all duration-1000"
-                    style={{ width: `${member.rate}%` }}
+                    className={`h-full rounded-full transition-all duration-1000 ${
+                      member.module === 'pm' 
+                        ? 'bg-gradient-to-r from-purple-500 to-purple-600'
+                        : 'bg-gradient-to-r from-teal-500 to-emerald-500'
+                    }`}
+                    style={{ 
+                      width: `${member.module === 'sales' && member.salesMetrics 
+                        ? (member.conversionRate || Math.round((member.salesMetrics.conversions / member.salesMetrics.leads) * 100)) 
+                        : member.module === 'pm'
+                        ? (member.performanceScore || 0)
+                        : member.rate}%` 
+                    }}
                   />
                 </div>
               </div>
@@ -435,12 +661,19 @@ const Admin_leaderboard = () => {
               </div>
               <button
                 onClick={loadData}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                disabled={loading}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <FiRefreshCw className="text-sm" />
+                <FiRefreshCw className={`text-sm ${loading ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </button>
             </div>
+            {error && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                <FiAlertTriangle className="inline w-4 h-4 mr-2" />
+                {error}
+              </div>
+            )}
           </div>
 
           {/* Overall Statistics */}
@@ -480,7 +713,7 @@ const Admin_leaderboard = () => {
           </div>
 
           {/* Module Statistics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -510,6 +743,21 @@ const Admin_leaderboard = () => {
                 <FiShoppingCart className="text-teal-600 text-xl" />
               </div>
             </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Project Managers</p>
+                  <p className="text-2xl font-bold text-purple-600">{allLeaderboardData.pm.length}</p>
+                </div>
+                <FiShield className="text-purple-600 text-xl" />
+              </div>
+            </motion.div>
           </div>
 
           {/* Module Filter Tabs */}
@@ -518,16 +766,22 @@ const Admin_leaderboard = () => {
               <nav className="-mb-px flex space-x-8">
                 {[
                   { id: 'dev', label: 'Development', icon: FiCode },
-                  { id: 'sales', label: 'Sales Team', icon: FiShoppingCart }
+                  { id: 'sales', label: 'Sales Team', icon: FiShoppingCart },
+                  { id: 'pm', label: 'Project Managers', icon: FiShield }
                 ].map((tab) => {
                   const Icon = tab.icon
+                  const moduleColors = {
+                    dev: 'border-blue-500 text-blue-600',
+                    sales: 'border-teal-500 text-teal-600',
+                    pm: 'border-purple-500 text-purple-600'
+                  }
                   return (
                     <button
                       key={tab.id}
                       onClick={() => setSelectedModule(tab.id)}
                       className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${
                         selectedModule === tab.id
-                          ? 'border-blue-500 text-blue-600'
+                          ? moduleColors[tab.id] || 'border-blue-500 text-blue-600'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -612,14 +866,50 @@ const Admin_leaderboard = () => {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Score:</span>
-                          <span className="font-semibold text-gray-900">{member.score}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Completion:</span>
-                          <span className="font-semibold text-green-600">{member.rate}%</span>
-                        </div>
+                        {member.module === 'sales' && member.salesMetrics ? (
+                          <>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Conversions:</span>
+                              <span className="font-semibold text-gray-900">{member.salesMetrics.conversions}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Conversion Rate:</span>
+                              <span className="font-semibold text-green-600">
+                                {member.conversionRate || Math.round((member.salesMetrics.conversions / member.salesMetrics.leads) * 100)}%
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Leads:</span>
+                              <span className="font-semibold text-teal-600">{member.salesMetrics.leads}</span>
+                            </div>
+                          </>
+                        ) : member.module === 'pm' ? (
+                          <>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Performance:</span>
+                              <span className="font-semibold text-gray-900">{member.performanceScore || 0}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Completion Rate:</span>
+                              <span className="font-semibold text-green-600">{member.projectCompletionRate || 0}%</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Projects:</span>
+                              <span className="font-semibold text-purple-600">{member.totalProjects || 0}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Score:</span>
+                              <span className="font-semibold text-gray-900">{member.score}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">Completion:</span>
+                              <span className="font-semibold text-green-600">{member.rate}%</span>
+                            </div>
+                          </>
+                        )}
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-600">Module:</span>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getModuleColor(member.module)}`}>
@@ -664,39 +954,83 @@ const Admin_leaderboard = () => {
           </div>
 
           {/* Performance Insights */}
-          <div className="bg-gradient-to-r from-blue-50 to-teal-50 rounded-xl p-6 border border-blue-200">
-            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-              <FiActivity className="w-5 h-5 text-blue-600 mr-2" />
-              Performance Insights
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-semibold text-gray-800 mb-2">Top Performer</h4>
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                    <FiStar className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">{overallStats.topPerformer.name}</p>
-                    <p className="text-sm text-gray-600">{overallStats.topPerformer.score} points</p>
+          {selectedModule === 'pm' ? (
+            <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                <FiShield className="w-5 h-5 text-purple-600 mr-2" />
+                PM Performance Insights
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-2">Top PM</h4>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      <FiStar className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{pmStats.topPM?.name || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">{pmStats.topPM?.performanceScore || 0} performance score</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-800 mb-2">Team Average</h4>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Completion Rate:</span>
-                    <span className="font-semibold text-gray-900">{overallStats.avgCompletionRate}%</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Average Score:</span>
-                    <span className="font-semibold text-gray-900">{overallStats.avgScore}</span>
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-2">Team Average</h4>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Avg Performance Score:</span>
+                      <span className="font-semibold text-gray-900">{pmStats.avgPerformanceScore}%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Avg Completion Rate:</span>
+                      <span className="font-semibold text-gray-900">{pmStats.avgProjectCompletionRate}%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Total Overdue Projects:</span>
+                      <span className="font-semibold text-red-600">{pmStats.totalOverdueProjects}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-gradient-to-r from-blue-50 to-teal-50 rounded-xl p-6 border border-blue-200">
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                <FiActivity className="w-5 h-5 text-blue-600 mr-2" />
+                Performance Insights
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-2">Top Performer</h4>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      <FiStar className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{overallStats.topPerformer?.name || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">
+                        {selectedModule === 'sales' 
+                          ? `${overallStats.topPerformer?.salesMetrics?.conversions || 0} conversions`
+                          : `${overallStats.topPerformer?.score || 0} points`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-2">Team Average</h4>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Completion Rate:</span>
+                      <span className="font-semibold text-gray-900">{overallStats.avgCompletionRate}%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Average Score:</span>
+                      <span className="font-semibold text-gray-900">{overallStats.avgScore}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

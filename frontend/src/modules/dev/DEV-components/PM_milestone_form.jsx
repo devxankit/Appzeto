@@ -12,7 +12,10 @@ import { projectService, milestoneService } from '../DEV-services'
 import { uploadToCloudinary, validateFile } from '../../../services/cloudinaryService'
 import { useToast } from '../../../contexts/ToastContext'
 
-const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
+const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId, milestoneData }) => {
+  // Determine if this is edit mode
+  const isEditMode = milestoneData && milestoneData._id;
+  
   // Initialize with consistent values to prevent controlled input warnings
   const getInitialFormData = () => ({
     title: '', 
@@ -28,13 +31,31 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
 
   const [formData, setFormData] = useState(getInitialFormData())
 
-  // Reset form when dialog opens/closes
+  // Reset form when dialog opens/closes or load data for editing
   useEffect(() => {
     if (isOpen) {
-      setFormData(getInitialFormData())
+      if (milestoneData && milestoneData._id) {
+        // Pre-fill form with milestoneData for editing
+        setFormData({
+          title: milestoneData.title || '',
+          description: milestoneData.description || '',
+          dueDate: milestoneData.dueDate ? (typeof milestoneData.dueDate === 'string' ? milestoneData.dueDate.split('T')[0] : new Date(milestoneData.dueDate).toISOString().split('T')[0]) : '',
+          assignees: Array.isArray(milestoneData.assignedTo) 
+            ? milestoneData.assignedTo.map(member => member._id || member)
+            : (Array.isArray(milestoneData.assignees) ? milestoneData.assignees.map(m => m._id || m) : []),
+          status: milestoneData.status || 'pending',
+          project: projectId || milestoneData.project?._id || milestoneData.project || '',
+          priority: milestoneData.priority || 'normal',
+          sequence: milestoneData.sequence || milestoneData.order || 1,
+          attachments: milestoneData.attachments || []
+        })
+      } else {
+        // Reset form for new milestone
+        setFormData(getInitialFormData())
+      }
       setErrors({})
     }
-  }, [isOpen, projectId])
+  }, [isOpen, projectId, milestoneData])
   const [errors, setErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -129,8 +150,13 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
   }
 
   const removeAttachment = (id) => {
-    setFormData(prev => ({ ...prev, attachments: prev.attachments.filter(att => att.id !== id) }))
-  }
+    setFormData(prev => ({ 
+      ...prev, 
+      attachments: prev.attachments.filter(att => 
+        (att.id || att._id || att.public_id) !== id
+      )
+    }));
+  };
 
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes'
@@ -153,41 +179,67 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
     setIsSubmitting(true)
     
     try {
-      // Create milestone first
-      const milestoneData = {
+      const milestonePayload = {
         title: formData.title,
         description: formData.description,
         dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : undefined,
         assignedTo: formData.assignees,
         status: formData.status,
         priority: formData.priority,
-        project: projectId
+        sequence: formData.sequence,
+        project: projectId || formData.project
       }
       
-      const milestone = await milestoneService.createMilestone(milestoneData)
+      let milestone
       
-      toast.success('Milestone created successfully!')
-      
-      // Upload attachments to backend
-      if (formData.attachments.length > 0) {
-        toast.info(`Uploading ${formData.attachments.length} attachment(s)...`)
+      if (isEditMode && milestoneData?._id) {
+        // Update existing milestone
+        milestone = await milestoneService.updateMilestone(milestoneData._id, milestonePayload)
+        toast.success('Milestone updated successfully!')
         
-        for (const attachment of formData.attachments) {
-          try {
-            await milestoneService.uploadMilestoneAttachment(milestone._id, attachment.file)
-            toast.success(`Attachment ${attachment.name} uploaded successfully`)
-          } catch (error) {
-            console.error('Attachment upload error:', error)
-            toast.error(`Failed to upload ${attachment.name}`)
+        // Upload new attachments to backend if any (only files that haven't been uploaded yet)
+        if (formData.attachments.length > 0) {
+          const newAttachments = formData.attachments.filter(att => att.file)
+          if (newAttachments.length > 0) {
+            toast.info(`Uploading ${newAttachments.length} attachment(s)...`)
+            
+            for (const attachment of newAttachments) {
+              try {
+                await milestoneService.uploadMilestoneAttachment(milestoneData._id, attachment.file)
+                toast.success(`Attachment ${attachment.name} uploaded successfully`)
+              } catch (error) {
+                console.error('Attachment upload error:', error)
+                toast.error(`Failed to upload ${attachment.name}`)
+              }
+            }
+          }
+        }
+      } else {
+        // Create new milestone
+        milestone = await milestoneService.createMilestone(milestonePayload)
+        toast.success('Milestone created successfully!')
+        
+        // Upload attachments to backend
+        if (formData.attachments.length > 0) {
+          toast.info(`Uploading ${formData.attachments.length} attachment(s)...`)
+          
+          for (const attachment of formData.attachments) {
+            try {
+              await milestoneService.uploadMilestoneAttachment(milestone._id, attachment.file)
+              toast.success(`Attachment ${attachment.name} uploaded successfully`)
+            } catch (error) {
+              console.error('Attachment upload error:', error)
+              toast.error(`Failed to upload ${attachment.name}`)
+            }
           }
         }
       }
       
-      onSubmit && onSubmit(milestone)
+      onSubmit && onSubmit(milestone || formData)
       handleClose()
     } catch (error) {
-      console.error('Milestone creation error:', error)
-      toast.error('Failed to create milestone')
+      console.error(`Milestone ${isEditMode ? 'update' : 'creation'} error:`, error)
+      toast.error(error.response?.data?.message || `Failed to ${isEditMode ? 'update' : 'create'} milestone`)
     } finally {
       setIsSubmitting(false)
     }
@@ -208,8 +260,14 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
       <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto p-0" onClose={handleClose}>
         <div className="bg-gradient-to-r from-primary to-primary-dark p-6 text-white">
           <DialogHeader className="space-y-2">
-            <DialogTitle className="text-2xl font-bold">Create New Milestone</DialogTitle>
-            <DialogDescription className="text-primary-foreground/80">Fill in the milestone details below. Fields marked with * are required.</DialogDescription>
+            <DialogTitle className="text-2xl font-bold">
+              {isEditMode ? 'Edit Milestone' : 'Create New Milestone'}
+            </DialogTitle>
+            <DialogDescription className="text-primary-foreground/80">
+              {isEditMode 
+                ? 'Update the milestone details below. Fields marked with * are required.'
+                : 'Fill in the milestone details below. Fields marked with * are required.'}
+            </DialogDescription>
           </DialogHeader>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -266,8 +324,8 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
             </div>
             {formData.attachments.length > 0 && (
               <div className="space-y-2">
-                {formData.attachments.map((att) => (
-                  <div key={att.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                {formData.attachments.map((att, index) => (
+                  <div key={att.id || att._id || att.public_id || `attachment-${index}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <div className="p-1 bg-primary/10 rounded">
                         <FileText className="h-4 w-4 text-primary" />
@@ -289,7 +347,7 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
                     </div>
                     <button 
                       type="button" 
-                      onClick={() => removeAttachment(att.id)} 
+                      onClick={() => removeAttachment(att.id || att._id || att.public_id)} 
                       className="p-1 text-gray-400 hover:text-red-600 transition-colors duration-200"
                     >
                       <X className="h-4 w-4" />
@@ -318,7 +376,16 @@ const PM_milestone_form = ({ isOpen, onClose, onSubmit, projectId }) => {
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} className="flex flex-col sm:flex-row gap-3 pt-4">
             <Button type="button" variant="outline" onClick={handleClose} className="w-full sm:w-auto h-12 rounded-xl border-2 hover:bg-gray-50 transition-all duration-200" disabled={isSubmitting}>Cancel</Button>
-            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto h-12 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">{isSubmitting ? (<div className="flex items-center space-x-2"><Loader2 className="h-4 w-4 animate-spin" /><span>Creating...</span></div>) : ('Create Milestone')}</Button>
+            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto h-12 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+              {isSubmitting ? (
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{isEditMode ? 'Updating...' : 'Creating...'}</span>
+                </div>
+              ) : (
+                isEditMode ? 'Update Milestone' : 'Create Milestone'
+              )}
+            </Button>
           </motion.div>
         </form>
       </DialogContent>

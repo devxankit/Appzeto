@@ -120,21 +120,41 @@ const updateEmployeeTaskStatus = asyncHandler(async (req, res, next) => {
   
   if (status === 'completed' && previousStatus !== 'completed') {
     const pointsResult = task.calculatePoints();
-    pointsAwarded = pointsResult.points;
-    pointsReason = pointsResult.reason;
     
-    // Update employee points
-    const employee = await Employee.findById(employeeId);
-    if (employee) {
-      if (pointsAwarded > 0) {
+    // When completing a task:
+    // - If on time: +1 point
+    // - If overdue: Points already deducted daily (-1 per day), so we need to account for that
+    //   The calculatePoints method returns -daysOverdue, but daily deductions already happened
+    //   So we only award/deduct based on whether it's on-time or overdue completion
+    
+    const isOnTime = task.completedDate <= task.dueDate;
+    
+    if (isOnTime) {
+      // Completed on time: +1 point
+      pointsAwarded = 1;
+      pointsReason = 'task_completed_on_time';
+      
+      // Update employee points
+      const employee = await Employee.findById(employeeId);
+      if (employee) {
         await employee.addPoints(task._id, pointsAwarded, pointsReason);
-      } else if (pointsAwarded < 0) {
-        await employee.deductPoints(task._id, Math.abs(pointsAwarded), pointsReason);
+        await employee.updateStatistics();
       }
+    } else {
+      // Completed overdue: Daily deductions already happened
+      // Just update statistics, no additional point change on completion
+      pointsAwarded = 0;
+      pointsReason = `task_completed_overdue_${pointsResult.daysOverdue}_days`;
       
       // Update employee statistics
-      await employee.updateStatistics();
+      const employee = await Employee.findById(employeeId);
+      if (employee) {
+        await employee.updateStatistics();
+      }
     }
+    
+    // Store the points calculation result in task
+    task.pointsAwarded = pointsResult.points;
   }
 
   await task.save();

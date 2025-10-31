@@ -6,7 +6,23 @@ const {
   getTransaction,
   updateTransaction,
   deleteTransaction,
-  getTransactionStats
+  getTransactionStats,
+  getAccounts,
+  getAccount,
+  createAccount,
+  updateAccount,
+  deleteAccount,
+  getExpenses,
+  getExpense,
+  createExpense,
+  updateExpense,
+  deleteExpense,
+  approveExpense,
+  getBudgets,
+  getBudget,
+  createBudget,
+  updateBudget,
+  deleteBudget
 } = require('../controllers/adminFinanceController');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -26,6 +42,40 @@ router.route('/transactions/:id')
   .get(getTransaction)
   .put(updateTransaction)
   .delete(deleteTransaction);
+
+// Account routes
+router.route('/accounts')
+  .get(getAccounts)
+  .post(createAccount);
+
+router.route('/accounts/:id')
+  .get(getAccount)
+  .put(updateAccount)
+  .delete(deleteAccount);
+
+// Expense routes
+router.route('/expenses')
+  .get(getExpenses)
+  .post(createExpense);
+
+// Put approve route before generic :id route to ensure proper matching
+router.route('/expenses/:id/approve')
+  .put(approveExpense);
+
+router.route('/expenses/:id')
+  .get(getExpense)
+  .put(updateExpense)
+  .delete(deleteExpense);
+
+// Budget routes
+router.route('/budgets')
+  .get(getBudgets)
+  .post(createBudget);
+
+router.route('/budgets/:id')
+  .get(getBudget)
+  .put(updateBudget)
+  .delete(deleteBudget);
 
 module.exports = router;
 

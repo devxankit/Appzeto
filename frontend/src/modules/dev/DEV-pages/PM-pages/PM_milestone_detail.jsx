@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
-import { Target, Calendar, User, CheckSquare, Paperclip, Upload, X, MessageSquare, Eye, Download, Loader2, ArrowLeft } from 'lucide-react'
+import PM_milestone_form from '../../DEV-components/PM_milestone_form'
+import { Target, Calendar, User, CheckSquare, Paperclip, Upload, X, MessageSquare, Eye, Download, Loader2, ArrowLeft, Edit } from 'lucide-react'
 import { milestoneService, projectService } from '../../DEV-services'
 import { uploadToCloudinary, validateFile } from '../../../../services/cloudinaryService'
 import { useToast } from '../../../../contexts/ToastContext'
@@ -20,6 +21,7 @@ const PM_milestone_detail = () => {
   const [newAttachment, setNewAttachment] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [isCommentLoading, setIsCommentLoading] = useState(false)
+  const [isMilestoneFormOpen, setIsMilestoneFormOpen] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -102,6 +104,31 @@ const PM_milestone_detail = () => {
   }
 
   const getFileIcon = (type) => '📎'
+
+  const handleEditMilestone = () => {
+    setIsMilestoneFormOpen(true)
+  }
+
+  const handleMilestoneFormSubmit = async (formData) => {
+    // The form handles the update internally when milestoneData is provided
+    // This callback is just for refreshing the page and showing success
+    try {
+      toast.success('Milestone updated successfully!')
+      setIsMilestoneFormOpen(false)
+      // Reload milestone data to show updated information
+      const milestoneData = await milestoneService.getMilestoneById(id)
+      setMilestone(milestoneData)
+    } catch (error) {
+      console.error('Error after milestone update:', error)
+      // Still reload even if toast fails
+      const milestoneData = await milestoneService.getMilestoneById(id)
+      setMilestone(milestoneData)
+    }
+  }
+
+  const handleMilestoneFormClose = () => {
+    setIsMilestoneFormOpen(false)
+  }
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return
@@ -193,7 +220,19 @@ const PM_milestone_detail = () => {
           <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-gray-100 mb-6">
             <div className="flex items-start justify-between mb-6">
               <div className="flex-1">
-                <div className="flex items-center space-x-3 mb-4"><div className={`p-2 rounded-lg ${getStatusColor(milestone.status)}`}><Target className="h-5 w-5" /></div><h1 className="text-2xl md:text-3xl font-bold text-gray-900">{milestone.title}</h1></div>
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className={`p-2 rounded-lg ${getStatusColor(milestone.status)}`}>
+                    <Target className="h-5 w-5" />
+                  </div>
+                  <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex-1">{milestone.title}</h1>
+                  <button 
+                    onClick={handleEditMilestone}
+                    className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200 flex-shrink-0"
+                    title="Edit Milestone"
+                  >
+                    <Edit className="h-5 w-5" />
+                  </button>
+                </div>
                 <div className="flex items-center space-x-2 mb-4"><span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(milestone.status)}`}>{milestone.status}</span><span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(milestone.priority)}`}>{milestone.priority}</span></div>
               </div>
               <div className="text-right"><div className="text-lg font-semibold text-blue-600">{timeLeft}</div><div className="text-sm text-gray-500 mt-1">Due: {new Date(milestone.dueDate).toLocaleDateString()}</div></div>
@@ -411,6 +450,15 @@ const PM_milestone_detail = () => {
           </div>
         </div>
       </main>
+
+      {/* Milestone Form Dialog */}
+      <PM_milestone_form 
+        isOpen={isMilestoneFormOpen}
+        onClose={handleMilestoneFormClose}
+        onSubmit={handleMilestoneFormSubmit}
+        projectId={projectId || milestone?.project?._id || milestone?.project}
+        milestoneData={milestone}
+      />
     </div>
   )
 }

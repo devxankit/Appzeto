@@ -118,8 +118,8 @@ const employeeSchema = new mongoose.Schema({
   // Points system fields
   points: {
     type: Number,
-    default: 0,
-    min: 0
+    default: 0
+    // Allow negative points for overdue tasks
   },
   pointsHistory: [{
     taskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
@@ -215,13 +215,13 @@ employeeSchema.methods.addPoints = function(taskId, points, reason) {
 };
 
 employeeSchema.methods.deductPoints = function(taskId, points, reason) {
-  const pointsToDeduct = Math.min(points, this.points); // Don't go below 0
-  this.points -= pointsToDeduct;
-  this.statistics.totalPointsDeducted += pointsToDeduct;
+  // Allow points to go negative for overdue task deductions
+  this.points -= points;
+  this.statistics.totalPointsDeducted = (this.statistics.totalPointsDeducted || 0) + points;
   
   this.pointsHistory.push({
     taskId: taskId,
-    points: -pointsToDeduct,
+    points: -points,
     reason: reason,
     timestamp: new Date()
   });
@@ -229,18 +229,55 @@ employeeSchema.methods.deductPoints = function(taskId, points, reason) {
   return this.save();
 };
 
-employeeSchema.methods.updateStatistics = function() {
-  const completedTasks = this.pointsHistory.filter(h => 
-    h.reason === 'task_completed_on_time' || h.reason === 'task_overdue'
+employeeSchema.methods.updateStatistics = async function() {
+  // This method needs to query actual tasks to get accurate statistics
+  const Task = this.constructor.db.model('Task');
+  
+  // Get all tasks assigned to this employee
+  const allTasks = await Task.find({ assignedTo: this._id });
+  const completedTasks = allTasks.filter(t => t.status === 'completed');
+  const onTimeTasks = completedTasks.filter(t => 
+    t.completedDate && t.dueDate && new Date(t.completedDate) <= new Date(t.dueDate)
+  );
+  const overdueTasks = completedTasks.filter(t => 
+    t.completedDate && t.dueDate && new Date(t.completedDate) > new Date(t.dueDate)
   );
   
+  // Calculate average completion time
+  let totalCompletionTime = 0;
+  let completionTimeCount = 0;
+  
+  completedTasks.forEach(task => {
+    if (task.completedDate && task.startDate) {
+      const diffTime = new Date(task.completedDate) - new Date(task.startDate);
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      totalCompletionTime += diffDays;
+      completionTimeCount++;
+    }
+  });
+  
+  // Update statistics
   this.statistics.tasksCompleted = completedTasks.length;
-  this.statistics.tasksOnTime = this.pointsHistory.filter(h => 
-    h.reason === 'task_completed_on_time'
-  ).length;
-  this.statistics.tasksOverdue = this.pointsHistory.filter(h => 
-    h.reason === 'task_overdue'
-  ).length;
+  this.statistics.tasksOnTime = onTimeTasks.length;
+  this.statistics.tasksOverdue = overdueTasks.length;
+  this.statistics.averageCompletionTime = completionTimeCount > 0 
+    ? totalCompletionTime / completionTimeCount 
+    : 0;
+  
+  // Calculate completion rate
+  const totalTasks = allTasks.length;
+  this.statistics.completionRate = totalTasks > 0 
+    ? Math.round((completedTasks.length / totalTasks) * 100) 
+    : 0;
+  
+  // Calculate total points earned/deducted from history
+  const positivePoints = this.pointsHistory.filter(h => h.points > 0)
+    .reduce((sum, h) => sum + h.points, 0);
+  const negativePoints = Math.abs(this.pointsHistory.filter(h => h.points < 0)
+    .reduce((sum, h) => sum + h.points, 0));
+  
+  this.statistics.totalPointsEarned = positivePoints;
+  this.statistics.totalPointsDeducted = negativePoints;
   
   return this.save();
 };

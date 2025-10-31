@@ -196,21 +196,31 @@ const updateMilestone = asyncHandler(async (req, res, next) => {
     description,
     sequence,
     dueDate,
+    status,
     priority,
     assignedTo
   } = req.body;
 
+  // Build update object with only provided fields
+  const updateData = {};
+  if (title !== undefined) updateData.title = title;
+  if (description !== undefined) updateData.description = description;
+  if (sequence !== undefined) updateData.sequence = sequence;
+  if (dueDate !== undefined) updateData.dueDate = dueDate;
+  if (priority !== undefined) updateData.priority = priority;
+  if (assignedTo !== undefined) updateData.assignedTo = assignedTo;
+  if (status !== undefined) {
+    // Validate status if provided
+    const validStatuses = ['pending', 'in-progress', 'testing', 'completed', 'cancelled'];
+    if (validStatuses.includes(status)) {
+      updateData.status = status;
+    }
+  }
+
   // Update milestone
   milestone = await Milestone.findByIdAndUpdate(
     req.params.id,
-    {
-      title,
-      description,
-      sequence,
-      dueDate,
-      priority,
-      assignedTo
-    },
+    updateData,
     { new: true, runValidators: true }
   ).populate([
     { path: 'project', select: 'name status' },

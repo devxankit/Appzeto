@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { 
   FiHome, 
@@ -12,17 +12,33 @@ import {
 } from 'react-icons/fi'
 import logo from '../../../assets/images/logo.png'
 import PM_sideBar from './PM_sideBar'
+import { pmWalletService } from '../DEV-services'
 
 function PM_navbar() {
   const location = useLocation()
   
-  // Mock PM earnings data - total rewards and salary
-  const [totalRewards] = useState(15000)
-  const [monthlySalary] = useState(35000)
-  const [totalEarnings] = useState(50000) // monthly salary + rewards
+  // PM wallet data - fetched from API
+  const [totalRewards, setTotalRewards] = useState(0)
   
   // Mock notification count
   const [notificationCount] = useState(5)
+
+  // Fetch wallet data on component mount
+  useEffect(() => {
+    const loadWalletData = async () => {
+      try {
+        const response = await pmWalletService.getWalletSummary();
+        if (response.success && response.data) {
+          setTotalRewards(response.data.monthlyRewards || 0);
+        }
+      } catch (error) {
+        console.error('Error loading wallet data in navbar:', error);
+        // Keep default values (0) on error
+      }
+    };
+
+    loadWalletData();
+  }, []);
   
   // Sidebar state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -82,13 +98,13 @@ function PM_navbar() {
               <FiBell className="text-lg" />
             </Link>
             
-            {/* Total Earnings Box */}
+            {/* Monthly Rewards Box */}
             <Link
               to="/pm-wallet"
               className="flex items-center space-x-1 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-3 py-1.5 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
             >
               <FiCreditCard className="text-teal-600 text-sm" />
-              <span className="text-sm font-semibold text-teal-700">₹{totalEarnings.toLocaleString()}</span>
+              <span className="text-sm font-semibold text-teal-700">₹{totalRewards.toLocaleString()}</span>
             </Link>
             
             {/* Hamburger Menu Icon */}
@@ -163,13 +179,13 @@ function PM_navbar() {
                 <FiBell className="text-xl" />
               </Link>
               
-              {/* Desktop Total Earnings */}
+              {/* Desktop Monthly Rewards */}
               <Link
                 to="/pm-wallet"
                 className="flex items-center space-x-2 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-4 py-2 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-601/20 transition-all duration-200"
               >
                 <FiCreditCard className="text-teal-600 text-lg" />
-                <span className="text-sm font-semibold text-teal-700">₹{totalEarnings.toLocaleString()}</span>
+                <span className="text-sm font-semibold text-teal-700">₹{totalRewards.toLocaleString()}</span>
               </Link>
               
               <div className="flex items-center space-x-8">

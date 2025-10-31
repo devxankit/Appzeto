@@ -204,7 +204,7 @@ const PM_new_projects = () => {
 
   const handleCardClick = (project) => {
     if (project.status === 'started') {
-      handleViewDetails(project.id)
+      handleViewDetails(project._id || project.id)
     }
   }
 
@@ -212,8 +212,36 @@ const PM_new_projects = () => {
     console.log('Project form submitted:', formData)
     
     if (editingProject) {
-      // This is project activation (started → active)
-      await handleActivateProject(editingProject._id || editingProject.id, formData)
+      // Check if project needs to be started first
+      if (editingProject.status === 'untouched') {
+        try {
+          // First start the project
+          const startResponse = await projectService.startProject(editingProject._id || editingProject.id)
+          if (!startResponse.success) {
+            throw new Error('Failed to start project')
+          }
+          
+          // Update local state
+          setNewProjects(prev => 
+            prev.map(project => 
+              (project._id || project.id) === (editingProject._id || editingProject.id)
+                ? { ...project, status: 'started' }
+                : project
+            )
+          )
+          
+          console.log('Project started successfully:', startResponse.message)
+          
+          // Then activate it
+          await handleActivateProject(editingProject._id || editingProject.id, formData)
+        } catch (error) {
+          console.error('Error starting project:', error)
+          setError('Failed to start project')
+        }
+      } else if (editingProject.status === 'started') {
+        // This is project activation (started → active)
+        await handleActivateProject(editingProject._id || editingProject.id, formData)
+      }
     } else {
       // This is a new project creation
       console.log('Creating new project:', formData)
@@ -377,7 +405,7 @@ const PM_new_projects = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  handleViewDetails(project.id)
+                  handleViewDetails(project._id || project.id)
                 }}
                 className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline px-2 py-1 rounded-md hover:bg-blue-50 transition-colors duration-200"
                 title="View Project Details"
@@ -390,7 +418,7 @@ const PM_new_projects = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleStartMeeting(project.id)
+                    handleStartMeeting(project._id || project.id)
                   }}
                   className="inline-flex items-center gap-1 text-xs font-medium text-orange-600 border border-orange-600 hover:bg-orange-50 px-2 py-1 rounded-md transition-colors duration-200"
                   title="Start Meeting"
@@ -402,7 +430,7 @@ const PM_new_projects = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleEditProject(project.id)
+                    handleEditProject(project._id || project.id)
                   }}
                   className="inline-flex items-center gap-1 text-sm font-medium text-teal-600 hover:underline px-2 py-1 rounded-md hover:bg-teal-50 transition-colors duration-200"
                   title="Edit Project"
@@ -508,7 +536,7 @@ const PM_new_projects = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  handleViewDetails(project.id)
+                  handleViewDetails(project._id || project.id)
                 }}
                 className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:underline px-3 py-2 rounded-md hover:bg-blue-50 transition-colors duration-200"
                 title="View Project Details"
@@ -521,7 +549,7 @@ const PM_new_projects = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleStartMeeting(project.id)
+                    handleStartMeeting(project._id || project.id)
                   }}
                   className="inline-flex items-center gap-2 text-sm font-medium text-orange-600 border border-orange-600 hover:bg-orange-50 px-3 py-2 rounded-md transition-colors duration-200"
                   title="Start Meeting"
@@ -532,7 +560,7 @@ const PM_new_projects = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleEditProject(project.id)
+                    handleEditProject(project._id || project.id)
                   }}
                   className="inline-flex items-center gap-2 text-base font-medium text-teal-600 hover:underline px-3 py-2 rounded-md hover:bg-teal-50 transition-colors duration-200"
                   title="Edit Project"
@@ -678,7 +706,7 @@ const PM_new_projects = () => {
              <AnimatePresence>
                {filteredProjects.map((project, index) => (
                  <MobileProjectCard 
-                   key={project.id}
+                   key={project._id || project.id || index}
                    project={project}
                    initial={{ opacity: 0, y: 20 }}
                    animate={{ opacity: 1, y: 0 }}
@@ -830,7 +858,7 @@ const PM_new_projects = () => {
                  <AnimatePresence>
                    {filteredProjects.map((project, index) => (
                      <DesktopProjectCard 
-                       key={project.id}
+                       key={project._id || project.id || index}
                        project={project}
                        initial={{ opacity: 0, y: 20 }}
                        animate={{ opacity: 1, y: 0 }}
