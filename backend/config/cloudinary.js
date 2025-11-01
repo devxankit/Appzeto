@@ -22,27 +22,40 @@ const testCloudinaryConnection = async () => {
 };
 
 // Upload file to Cloudinary
-const uploadToCloudinary = async (file, folder = 'appzeto') => {
+const uploadToCloudinary = async (file, folder = 'appzeto', options = {}) => {
   try {
+    const uploadOptions = {
+      folder: folder,
+      resource_type: 'auto',
+      quality: 'auto',
+      fetch_format: 'auto',
+      ...options // Merge provided options
+    };
+    
     let result;
     
     if (file.buffer) {
-      // Memory storage - upload from buffer using data URI format
-      const dataUri = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-      result = await cloudinary.uploader.upload(dataUri, {
-        folder: folder,
-        resource_type: 'auto',
-        quality: 'auto',
-        fetch_format: 'auto'
+      // Memory storage - upload from buffer using stream (more efficient for large files)
+      result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          uploadOptions,
+          (error, uploadResult) => {
+            if (error) {
+              console.error('Cloudinary upload_stream error:', error);
+              reject(error);
+            } else {
+              resolve(uploadResult);
+            }
+          }
+        );
+        
+        // Write buffer to stream
+        uploadStream.write(file.buffer);
+        uploadStream.end();
       });
     } else if (file.path) {
       // Disk storage - upload from path
-      result = await cloudinary.uploader.upload(file.path, {
-        folder: folder,
-        resource_type: 'auto',
-        quality: 'auto',
-        fetch_format: 'auto'
-      });
+      result = await cloudinary.uploader.upload(file.path, uploadOptions);
     } else {
       throw new Error('File must have either buffer or path property');
     }
@@ -56,7 +69,9 @@ const uploadToCloudinary = async (file, folder = 'appzeto') => {
         format: result.format,
         bytes: result.bytes,
         width: result.width,
-        height: result.height
+        height: result.height,
+        duration: result.duration || null, // For videos
+        resource_type: result.resource_type || 'auto'
       }
     };
   } catch (error) {
@@ -69,9 +84,13 @@ const uploadToCloudinary = async (file, folder = 'appzeto') => {
 };
 
 // Delete file from Cloudinary
-const deleteFromCloudinary = async (publicId) => {
+const deleteFromCloudinary = async (publicId, options = {}) => {
   try {
-    const result = await cloudinary.uploader.destroy(publicId);
+    const destroyOptions = {
+      resource_type: options.resource_type || 'auto', // auto will detect image/video
+      ...options
+    };
+    const result = await cloudinary.uploader.destroy(publicId, destroyOptions);
     return {
       success: result.result === 'ok',
       data: result

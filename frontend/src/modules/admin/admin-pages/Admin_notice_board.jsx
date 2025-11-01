@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
@@ -27,14 +27,18 @@ import {
   FiTrendingUp,
   FiBell,
   FiSettings,
+  FiZoomIn,
   FiRefreshCw
 } from 'react-icons/fi'
 import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Combobox } from '../../../components/ui/combobox'
 import Loading from '../../../components/ui/loading'
+import { adminNoticeService } from '../admin-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const Admin_notice_board = () => {
+  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [selectedTab, setSelectedTab] = useState('text')
   const [searchTerm, setSearchTerm] = useState('')
@@ -42,161 +46,171 @@ const Admin_notice_board = () => {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showImageModal, setShowImageModal] = useState(false)
+  const [selectedImageUrl, setSelectedImageUrl] = useState(null)
   const [selectedNotice, setSelectedNotice] = useState(null)
   const [noticesData, setNoticesData] = useState([])
+  const [statistics, setStatistics] = useState({
+    total: 0,
+    published: 0,
+    draft: 0,
+    pinned: 0
+  })
+  
+  // Refs to prevent duplicate API calls
+  const isFetchingRef = useRef(false)
+  const searchTimeoutRef = useRef(null)
+  const isInitialMountRef = useRef(true)
   const [formData, setFormData] = useState({
     title: '',
     content: '',
     type: 'text',
     priority: 'medium',
     targetAudience: 'all',
+    status: 'published',
     imageUrl: '',
     videoUrl: '',
     imageFile: null,
     videoFile: null,
     attachments: [],
-    scheduledDate: '',
-    scheduledTime: '',
-    isScheduled: false,
     isPinned: false
   })
 
-  // Mock notices data - in real app, this would come from API
-  const initialNoticesData = [
-    {
-      id: 1,
-      type: 'text',
-      title: 'Monthly Sales Target Update',
-      content: 'Great job team! We have achieved 85% of our monthly target. Let\'s push for the remaining 15% in the final week. Focus on closing pending deals and following up with hot leads.',
-      author: 'Admin',
-      date: '2024-01-15',
-      time: '10:30 AM',
-      priority: 'high',
-      views: 45,
-      targetAudience: 'sales',
-      isPinned: true,
-      status: 'published',
-      createdAt: '2024-01-15T10:30:00Z'
-    },
-    {
-      id: 2,
-      type: 'image',
-      title: 'New Product Launch Guidelines',
-      content: 'Please review the attached guidelines for our upcoming product launch campaign.',
-      imageUrl: 'https://images.unsplash.com/photo-1551434678-e076c223a692?w=400&h=300&fit=crop',
-      author: 'Admin',
-      date: '2024-01-14',
-      time: '2:15 PM',
-      priority: 'medium',
-      views: 32,
-      targetAudience: 'all',
-      isPinned: false,
-      status: 'published',
-      createdAt: '2024-01-14T14:15:00Z'
-    },
-    {
-      id: 3,
-      type: 'video',
-      title: 'Sales Training Session Recording',
-      content: 'Watch the latest sales training session to improve your closing techniques.',
-      videoUrl: 'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4',
-      author: 'Admin',
-      date: '2024-01-13',
-      time: '9:00 AM',
-      priority: 'high',
-      views: 67,
-      targetAudience: 'sales',
-      isPinned: false,
-      status: 'published',
-      createdAt: '2024-01-13T09:00:00Z'
-    },
-    {
-      id: 4,
-      type: 'text',
-      title: 'Holiday Schedule Announcement',
-      content: 'Please note that the office will be closed on January 26th for Republic Day. All pending work should be completed by January 25th.',
-      author: 'Admin',
-      date: '2024-01-12',
-      time: '4:45 PM',
-      priority: 'medium',
-      views: 28,
-      targetAudience: 'all',
-      isPinned: true,
-      status: 'published',
-      createdAt: '2024-01-12T16:45:00Z'
-    },
-    {
-      id: 5,
-      type: 'image',
-      title: 'Team Building Event Photos',
-      content: 'Check out the amazing photos from our recent team building event!',
-      imageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=300&fit=crop',
-      author: 'Admin',
-      date: '2024-01-11',
-      time: '11:20 AM',
-      priority: 'low',
-      views: 19,
-      targetAudience: 'all',
-      isPinned: false,
-      status: 'published',
-      createdAt: '2024-01-11T11:20:00Z'
-    },
-    {
-      id: 6,
-      type: 'video',
-      title: 'Customer Success Stories',
-      content: 'Learn from our top performers and their success strategies.',
-      videoUrl: 'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_2mb.mp4',
-      author: 'Admin',
-      date: '2024-01-10',
-      time: '3:30 PM',
-      priority: 'medium',
-      views: 41,
-      targetAudience: 'all',
-      isPinned: false,
-      status: 'published',
-      createdAt: '2024-01-10T15:30:00Z'
-    },
-    {
-      id: 7,
-      type: 'text',
-      title: 'System Maintenance Notice',
-      content: 'Our CRM system will undergo maintenance on Sunday, January 21st from 2:00 AM to 6:00 AM. Please save your work before this time.',
-      author: 'Admin',
-      date: '2024-01-09',
-      time: '1:15 PM',
-      priority: 'high',
-      views: 38,
-      targetAudience: 'all',
-      isPinned: false,
-      status: 'published',
-      createdAt: '2024-01-09T13:15:00Z'
-    },
-    {
-      id: 8,
-      type: 'image',
-      title: 'Office Renovation Progress',
-      content: 'Here are the latest updates on our office renovation project.',
-      imageUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=300&fit=crop',
-      author: 'Admin',
-      date: '2024-01-08',
-      time: '5:00 PM',
-      priority: 'low',
-      views: 15,
-      targetAudience: 'all',
-      isPinned: false,
-      status: 'draft',
-      createdAt: '2024-01-08T17:00:00Z'
+  // Fetch statistics (memoized to prevent unnecessary calls)
+  const fetchStatistics = useCallback(async () => {
+    try {
+      const response = await adminNoticeService.getNoticeStatistics()
+      if (response.success && response.data) {
+        setStatistics({
+          total: response.data.total || 0,
+          published: response.data.published || 0,
+          draft: response.data.draft || 0,
+          pinned: response.data.pinned || 0
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching statistics:', error)
     }
-  ]
+  }, []) // No dependencies - statistics are global
 
-  useEffect(() => {
-    // Simulate loading data
-    setTimeout(() => {
-      setNoticesData(initialNoticesData)
+  // Fetch notices from API (using refs to access latest values)
+  const fetchNotices = useCallback(async (showLoading = true, customTab = null, customSearch = null) => {
+    // Prevent duplicate calls
+    if (isFetchingRef.current) {
+      return
+    }
+
+    try {
+      isFetchingRef.current = true
+      if (showLoading) {
+        setLoading(true)
+      }
+      
+      const params = {}
+      const tab = customTab !== null ? customTab : selectedTab
+      const search = customSearch !== null ? customSearch : searchTerm
+      
+      // Apply filters based on selected tab
+      if (tab === 'pinned') {
+        params.isPinned = true
+      } else if (tab === 'draft') {
+        params.status = 'draft'
+      } else {
+        params.type = tab
+      }
+
+      if (search) {
+        params.search = search
+      }
+
+      const response = await adminNoticeService.getAllNotices(params)
+      
+      if (response.success && response.data) {
+        // Transform data to match component expectations
+        const transformedData = response.data.map(notice => ({
+          id: notice._id,
+          ...notice,
+          date: notice.formattedDate || notice.createdAt?.split('T')[0] || new Date(notice.createdAt).toISOString().split('T')[0],
+          time: notice.formattedTime || new Date(notice.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          author: notice.authorName || (notice.author?.name || 'Admin'),
+          imageUrl: notice.imageUrl || notice.imageData?.secure_url || '',
+          videoUrl: notice.videoUrl || notice.videoData?.secure_url || ''
+        }))
+        
+        setNoticesData(transformedData)
+      } else {
+        setNoticesData([])
+      }
+    } catch (error) {
+      console.error('Error fetching notices:', error)
+      toast.error(error.message || 'Failed to fetch notices')
+      setNoticesData([])
+    } finally {
       setLoading(false)
-    }, 1000)
-  }, [])
+      isFetchingRef.current = false
+    }
+  }, [selectedTab, searchTerm, toast])
+
+  // Store latest values in refs for stable callbacks
+  const selectedTabRef = useRef(selectedTab)
+  const searchTermRef = useRef(searchTerm)
+  
+  useEffect(() => {
+    selectedTabRef.current = selectedTab
+  }, [selectedTab])
+  
+  useEffect(() => {
+    searchTermRef.current = searchTerm
+  }, [searchTerm])
+
+  // Initial load - fetch both notices and statistics (only once on mount)
+  useEffect(() => {
+    fetchNotices(true)
+    fetchStatistics()
+    isInitialMountRef.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only on mount
+
+  // Refetch when tab changes (skip initial mount)
+  useEffect(() => {
+    if (isInitialMountRef.current) return
+    fetchNotices(true)
+    fetchStatistics()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTab]) // Only when tab actually changes
+
+  // Debounced search - refetch when search term changes (skip initial mount)
+  useEffect(() => {
+    // Skip on initial mount
+    if (isInitialMountRef.current) {
+      return
+    }
+
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    // Don't refetch if search is cleared
+    if (searchTerm === '') {
+      // Refetch current tab when search is cleared
+      fetchNotices(false, selectedTabRef.current, '')
+      return
+    }
+
+    // Set new timeout for debounced search
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchNotices(false, selectedTabRef.current, searchTermRef.current) // Use refs for latest values
+    }, 500) // 500ms debounce
+
+    // Cleanup
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm]) // Only searchTerm
 
   const tabs = [
     { id: 'text', label: 'Text', icon: FiFileText },
@@ -228,22 +242,31 @@ const Admin_notice_board = () => {
     { value: 'video', label: 'Video Notice' }
   ]
 
-  const filteredNotices = noticesData.filter(notice => {
-    const matchesSearch = notice.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         notice.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         notice.author.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    let matchesTab = true
-    if (selectedTab === 'pinned') {
-      matchesTab = notice.isPinned
-    } else if (selectedTab === 'draft') {
-      matchesTab = notice.status === 'draft'
-    } else {
-      matchesTab = notice.type === selectedTab
-    }
-    
-    return matchesSearch && matchesTab
-  })
+  const statusOptions = [
+    { value: 'published', label: 'Published' },
+    { value: 'draft', label: 'Draft' }
+  ]
+
+  // Memoize filtered notices to prevent unnecessary re-renders
+  const filteredNotices = useMemo(() => {
+    return noticesData.filter(notice => {
+      const matchesSearch = !searchTerm || 
+                           notice.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           notice.content?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           notice.author?.toLowerCase().includes(searchTerm.toLowerCase())
+      
+      let matchesTab = true
+      if (selectedTab === 'pinned') {
+        matchesTab = notice.isPinned === true
+      } else if (selectedTab === 'draft') {
+        matchesTab = notice.status === 'draft'
+      } else if (selectedTab !== 'all') {
+        matchesTab = notice.type === selectedTab
+      }
+      
+      return matchesSearch && matchesTab
+    })
+  }, [noticesData, searchTerm, selectedTab])
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -306,9 +329,7 @@ const Admin_notice_board = () => {
       imageFile: null,
       videoFile: null,
       attachments: [],
-      scheduledDate: '',
-      scheduledTime: '',
-      isScheduled: false,
+      status: 'published',
       isPinned: false
     })
     setShowCreateModal(true)
@@ -319,13 +340,15 @@ const Admin_notice_board = () => {
     if (file) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert('Please select a valid image file')
+        toast.error('Please select a valid image file (JPG, PNG, GIF, etc.)')
+        event.target.value = '' // Reset input
         return
       }
       
       // Validate file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image size should be less than 5MB')
+        toast.error('Image size must be less than 5MB')
+        event.target.value = '' // Reset input
         return
       }
 
@@ -336,6 +359,9 @@ const Admin_notice_board = () => {
         imageFile: file,
         imageUrl: previewUrl
       })
+      toast.success('Image selected successfully')
+    } else {
+      toast.error('No file selected')
     }
   }
 
@@ -344,13 +370,15 @@ const Admin_notice_board = () => {
     if (file) {
       // Validate file type
       if (!file.type.startsWith('video/')) {
-        alert('Please select a valid video file')
+        toast.error('Please select a valid video file (MP4, MOV, AVI, etc.)')
+        event.target.value = '' // Reset input
         return
       }
       
       // Validate file size (50MB limit)
       if (file.size > 50 * 1024 * 1024) {
-        alert('Video size should be less than 50MB')
+        toast.error('Video size must be less than 50MB')
+        event.target.value = '' // Reset input
         return
       }
 
@@ -361,6 +389,9 @@ const Admin_notice_board = () => {
         videoFile: file,
         videoUrl: previewUrl
       })
+      toast.success('Video selected successfully')
+    } else {
+      toast.error('No file selected')
     }
   }
 
@@ -394,12 +425,12 @@ const Admin_notice_board = () => {
       type: notice.type,
       priority: notice.priority,
       targetAudience: notice.targetAudience,
-      imageUrl: notice.imageUrl || '',
-      videoUrl: notice.videoUrl || '',
+      imageUrl: notice.imageUrl || notice.imageData?.secure_url || '',
+      videoUrl: notice.videoUrl || notice.videoData?.secure_url || '',
+      imageFile: null, // Reset file input - user can upload new file if needed
+      videoFile: null, // Reset file input - user can upload new file if needed
       attachments: notice.attachments || [],
-      scheduledDate: notice.scheduledDate || '',
-      scheduledTime: notice.scheduledTime || '',
-      isScheduled: notice.isScheduled || false,
+      status: notice.status || 'published',
       isPinned: notice.isPinned || false
     })
     setShowEditModal(true)
@@ -410,64 +441,233 @@ const Admin_notice_board = () => {
     setShowDeleteModal(true)
   }
 
-  const handleSaveNotice = () => {
-    if (!formData.title || !formData.content) {
-      alert('Please fill in all required fields')
+  const handleSaveNotice = async () => {
+    // Validate required fields
+    if (!formData.title || !formData.title.trim()) {
+      toast.error('Please enter a title')
+      return
+    }
+    
+    if (!formData.content || !formData.content.trim()) {
+      toast.error('Please enter notice content')
       return
     }
 
-    const newNotice = {
-      id: noticesData.length + 1,
-      ...formData,
-      author: 'Admin',
-      date: new Date().toISOString().split('T')[0],
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      views: 0,
-      status: formData.isScheduled ? 'scheduled' : 'published',
-      createdAt: new Date().toISOString()
+    // Validate file requirements based on type
+    if (formData.type === 'image' && !formData.imageFile && !formData.imageUrl) {
+      toast.error('Please upload an image for image notices')
+      return
     }
-
-    setNoticesData([newNotice, ...noticesData])
-    setShowCreateModal(false)
-    resetFormData()
-  }
-
-  const handleUpdateNotice = () => {
-    if (!formData.title || !formData.content) {
-      alert('Please fill in all required fields')
+    
+    if (formData.type === 'video' && !formData.videoFile && !formData.videoUrl) {
+      toast.error('Please upload a video for video notices')
       return
     }
 
-    const updatedNotices = noticesData.map(notice => 
-      notice.id === selectedNotice.id 
-        ? { 
-            ...notice, 
-            ...formData,
-            status: formData.isScheduled ? 'scheduled' : 'published'
+
+    try {
+      setLoading(true)
+      const response = await adminNoticeService.createNotice(formData)
+      
+      if (response.success) {
+        toast.success('Notice created successfully')
+        setShowCreateModal(false)
+        resetFormData()
+        // Optimistically add to list only if it matches current filter
+        const newNotice = response.data
+        if (newNotice) {
+          const transformedNotice = {
+            id: newNotice._id,
+            ...newNotice,
+            date: newNotice.formattedDate || newNotice.createdAt?.split('T')[0] || new Date(newNotice.createdAt).toISOString().split('T')[0],
+            time: newNotice.formattedTime || new Date(newNotice.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+            author: newNotice.authorName || (newNotice.author?.name || 'Admin'),
+            imageUrl: newNotice.imageUrl || newNotice.imageData?.secure_url || '',
+            videoUrl: newNotice.videoUrl || newNotice.videoData?.secure_url || ''
           }
-        : notice
-    )
-
-    setNoticesData(updatedNotices)
-    setShowEditModal(false)
-    setSelectedNotice(null)
-    resetFormData()
+          
+          // Check if notice matches current tab filter
+          const matchesFilter = 
+            (selectedTab === 'pinned' && transformedNotice.isPinned) ||
+            (selectedTab === 'draft' && transformedNotice.status === 'draft') ||
+            (selectedTab === transformedNotice.type) ||
+            (selectedTab === 'all')
+          
+          // Add to the beginning of the list only if it matches current filter
+          if (matchesFilter) {
+            // Use functional update to ensure we're working with latest state
+            setNoticesData(prev => {
+              // Check if notice already exists to prevent duplicates
+              if (prev.some(n => n.id === transformedNotice.id)) {
+                return prev
+              }
+              return [transformedNotice, ...prev]
+            })
+          }
+        }
+        // Update statistics only (no need to refetch all notices)
+        await fetchStatistics()
+      } else {
+        toast.error('Failed to create notice')
+      }
+    } catch (error) {
+      console.error('Error creating notice:', error)
+      toast.error(error.message || 'Failed to create notice')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleConfirmDelete = () => {
-    const updatedNotices = noticesData.filter(notice => notice.id !== selectedNotice.id)
-    setNoticesData(updatedNotices)
-    setShowDeleteModal(false)
-    setSelectedNotice(null)
+  const handleUpdateNotice = async () => {
+    // Validate required fields
+    if (!formData.title || !formData.title.trim()) {
+      toast.error('Please enter a title')
+      return
+    }
+    
+    if (!formData.content || !formData.content.trim()) {
+      toast.error('Please enter notice content')
+      return
+    }
+
+    if (!selectedNotice || !selectedNotice.id) {
+      toast.error('No notice selected for update')
+      return
+    }
+
+    // Validate file requirements if type changed and no existing media
+    const hasExistingImage = selectedNotice.imageUrl || selectedNotice.imageData?.secure_url
+    const hasExistingVideo = selectedNotice.videoUrl || selectedNotice.videoData?.secure_url
+    
+    if (formData.type === 'image' && !formData.imageFile && !formData.imageUrl && !hasExistingImage) {
+      toast.error('Please upload an image or keep existing image')
+      return
+    }
+    
+    if (formData.type === 'video' && !formData.videoFile && !formData.videoUrl && !hasExistingVideo) {
+      toast.error('Please upload a video or keep existing video')
+      return
+    }
+
+
+    try {
+      setLoading(true)
+      const response = await adminNoticeService.updateNotice(selectedNotice.id, formData)
+      
+      if (response.success) {
+        toast.success('Notice updated successfully')
+        setShowEditModal(false)
+        
+        // Optimistically update local state
+        const updatedNotice = response.data
+        if (updatedNotice) {
+          const transformedNotice = {
+            id: updatedNotice._id,
+            ...updatedNotice,
+            date: updatedNotice.formattedDate || updatedNotice.createdAt?.split('T')[0] || new Date(updatedNotice.createdAt).toISOString().split('T')[0],
+            time: updatedNotice.formattedTime || new Date(updatedNotice.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+            author: updatedNotice.authorName || (updatedNotice.author?.name || 'Admin'),
+            imageUrl: updatedNotice.imageUrl || updatedNotice.imageData?.secure_url || '',
+            videoUrl: updatedNotice.videoUrl || updatedNotice.videoData?.secure_url || ''
+          }
+          
+          // Check if updated notice matches current tab filter
+          const matchesFilter = 
+            (selectedTab === 'pinned' && transformedNotice.isPinned) ||
+            (selectedTab === 'draft' && transformedNotice.status === 'draft') ||
+            (selectedTab === transformedNotice.type) ||
+            (selectedTab === 'all')
+          
+          setNoticesData(prev => {
+            const existsInList = prev.some(n => n.id === selectedNotice.id)
+            if (matchesFilter) {
+              // Update if exists, add if it matches filter but wasn't in list
+              if (existsInList) {
+                return prev.map(n => n.id === selectedNotice.id ? transformedNotice : n)
+              } else {
+                // Add to beginning if it now matches filter
+                return [transformedNotice, ...prev]
+              }
+            } else {
+              // Remove if it no longer matches filter
+              return prev.filter(n => n.id !== selectedNotice.id)
+            }
+          })
+        }
+        
+        setSelectedNotice(null)
+        resetFormData()
+        // Update statistics only
+        await fetchStatistics()
+      } else {
+        toast.error('Failed to update notice')
+      }
+    } catch (error) {
+      console.error('Error updating notice:', error)
+      toast.error(error.message || 'Failed to update notice')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const togglePinNotice = (notice) => {
-    const updatedNotices = noticesData.map(n => 
-      n.id === notice.id 
-        ? { ...n, isPinned: !n.isPinned }
-        : n
-    )
-    setNoticesData(updatedNotices)
+  const handleConfirmDelete = async () => {
+    if (!selectedNotice || !selectedNotice.id) {
+      toast.error('No notice selected for deletion')
+      return
+    }
+
+    try {
+      setLoading(true)
+      const response = await adminNoticeService.deleteNotice(selectedNotice.id)
+      
+      if (response.success) {
+        toast.success('Notice deleted successfully')
+        setShowDeleteModal(false)
+        
+        // Optimistically remove from list
+        setNoticesData(prev => prev.filter(n => n.id !== selectedNotice.id))
+        
+        setSelectedNotice(null)
+        // Update statistics only
+        await fetchStatistics()
+      } else {
+        toast.error('Failed to delete notice')
+      }
+    } catch (error) {
+      console.error('Error deleting notice:', error)
+      toast.error(error.message || 'Failed to delete notice')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const togglePinNotice = async (notice) => {
+    if (!notice || !notice.id) return
+
+    try {
+      const response = await adminNoticeService.togglePinNotice(notice.id)
+      
+      if (response.success) {
+        toast.success(
+          response.data.isPinned ? 'Notice pinned successfully' : 'Notice unpinned successfully'
+        )
+        // Optimistically update local state instead of full refetch (use functional update)
+        setNoticesData(prevNotices => 
+          prevNotices.map(n => 
+            n.id === notice.id 
+              ? { ...n, isPinned: response.data.isPinned }
+              : n
+          )
+        )
+        // Only update statistics (don't await to avoid blocking UI)
+        fetchStatistics()
+      } else {
+        toast.error('Failed to toggle pin notice')
+      }
+    } catch (error) {
+      console.error('Error toggling pin notice:', error)
+      toast.error(error.message || 'Failed to toggle pin notice')
+    }
   }
 
   const resetFormData = () => {
@@ -490,9 +690,7 @@ const Admin_notice_board = () => {
       imageFile: null,
       videoFile: null,
       attachments: [],
-      scheduledDate: '',
-      scheduledTime: '',
-      isScheduled: false,
+      status: 'published',
       isPinned: false
     })
   }
@@ -505,16 +703,79 @@ const Admin_notice_board = () => {
     resetFormData()
   }
 
-  // Notice Card Components
-  const NoticeCard = ({ notice }) => {
+  // Download image function
+  const handleDownloadImage = async (imageUrl) => {
+    try {
+      // Fetch the image as a blob with CORS handling
+      const response = await fetch(imageUrl, {
+        mode: 'cors',
+        credentials: 'omit'
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch image')
+      }
+      
+      const blob = await response.blob()
+      
+      // Create a blob URL
+      const blobUrl = window.URL.createObjectURL(blob)
+      
+      // Create a temporary anchor element
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.style.display = 'none'
+      
+      // Extract filename from URL or use default
+      const urlParts = imageUrl.split('/')
+      const fileName = urlParts[urlParts.length - 1].split('?')[0] || 'notice-image.jpg'
+      
+      // Ensure proper file extension
+      const finalFileName = fileName.includes('.') ? fileName : `${fileName}.jpg`
+      link.download = finalFileName
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link)
+      link.click()
+      
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(blobUrl)
+      }, 100)
+      
+      toast.success('Image downloaded successfully')
+    } catch (error) {
+      console.error('Error downloading image:', error)
+      // Fallback: try direct download link
+      try {
+        const link = document.createElement('a')
+        link.href = imageUrl
+        const urlParts = imageUrl.split('/')
+        const fileName = urlParts[urlParts.length - 1].split('?')[0] || 'notice-image.jpg'
+        link.download = fileName.includes('.') ? fileName : `${fileName}.jpg`
+        link.target = '_blank'
+        link.style.display = 'none'
+        document.body.appendChild(link)
+        link.click()
+        setTimeout(() => {
+          document.body.removeChild(link)
+        }, 100)
+        toast.success('Image download initiated')
+      } catch (fallbackError) {
+        console.error('Fallback download failed:', fallbackError)
+        toast.error('Failed to download image. Please try right-clicking the image and selecting "Save image as".')
+      }
+    }
+  }
+
+  // Notice Card Components - Memoized to prevent unnecessary re-renders
+  const NoticeCard = memo(({ notice, index = 0 }) => {
     const TypeIcon = getTypeIcon(notice.type)
     
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileHover={{ y: -2 }}
-        className={`bg-gradient-to-br ${getTypeColor(notice.type)} rounded-xl p-4 border shadow-sm hover:shadow-md transition-all duration-300 relative`}
+      <div
+        className={`bg-gradient-to-br ${getTypeColor(notice.type)} rounded-xl p-4 border shadow-sm hover:shadow-md transition-shadow duration-200 relative`}
       >
         {/* Pin Indicator */}
         {notice.isPinned && (
@@ -561,28 +822,33 @@ const Admin_notice_board = () => {
         <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">{notice.title}</h3>
         
         {notice.type === 'image' && notice.imageUrl && (
-          <div className="mb-3">
+          <div className="mb-3 cursor-pointer group relative" onClick={() => {
+            setSelectedImageUrl(notice.imageUrl)
+            setShowImageModal(true)
+          }}>
             <img 
               src={notice.imageUrl} 
               alt={notice.title}
-              className="w-full h-32 object-cover rounded-lg shadow-sm"
+              className="w-full h-32 object-cover rounded-lg shadow-sm group-hover:shadow-md transition-shadow duration-200"
             />
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 rounded-lg transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <FiZoomIn className="text-white text-2xl drop-shadow-lg" />
+              </div>
+            </div>
           </div>
         )}
 
         {notice.type === 'video' && notice.videoUrl && (
-          <div className="relative mb-3">
-            <div className="w-full h-32 bg-gray-200 rounded-lg flex items-center justify-center">
-              <div className="flex items-center space-x-2 text-gray-500">
-                <FiPlay className="text-2xl" />
-                <span className="text-sm font-medium">Click to play video</span>
-              </div>
-            </div>
-            <button className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 rounded-lg hover:bg-opacity-30 transition-all duration-200">
-              <div className="w-12 h-12 bg-white bg-opacity-90 rounded-full flex items-center justify-center">
-                <FiPlay className="text-pink-500 text-xl ml-1" />
-              </div>
-            </button>
+          <div className="mb-3">
+            <video 
+              src={notice.videoUrl} 
+              controls
+              className="w-full h-32 object-cover rounded-lg shadow-sm"
+              preload="metadata"
+            >
+              Your browser does not support the video tag.
+            </video>
           </div>
         )}
 
@@ -625,9 +891,28 @@ const Admin_notice_board = () => {
             </button>
           </div>
         </div>
-      </motion.div>
+      </div>
     )
-  }
+  }, (prevProps, nextProps) => {
+    // Custom comparison to prevent unnecessary re-renders while allowing animations
+    // Only skip re-render if notice data is exactly the same AND index hasn't changed
+    // (index changes might indicate list reordering which needs animation)
+    if (prevProps.index !== nextProps.index) {
+      return false // Allow re-render if index changed (for layout animations)
+    }
+    
+    // Check if notice data actually changed
+    return (
+      prevProps.notice.id === nextProps.notice.id &&
+      prevProps.notice.title === nextProps.notice.title &&
+      prevProps.notice.content === nextProps.notice.content &&
+      prevProps.notice.isPinned === nextProps.notice.isPinned &&
+      prevProps.notice.status === nextProps.notice.status &&
+      prevProps.notice.imageUrl === nextProps.notice.imageUrl &&
+      prevProps.notice.videoUrl === nextProps.notice.videoUrl &&
+      prevProps.notice.views === nextProps.notice.views
+    )
+  })
 
   if (loading) {
     return (
@@ -666,7 +951,7 @@ const Admin_notice_board = () => {
               </div>
               <div className="flex items-center space-x-4">
                 <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl">
-                  <span className="text-sm font-semibold">Total: {noticesData.length}</span>
+                  <span className="text-sm font-semibold">Total: {statistics.total}</span>
                 </div>
                 <div className="bg-white text-gray-600 px-6 py-3 rounded-xl border border-gray-200">
                   <span className="text-sm font-semibold">Showing: {filteredNotices.length}</span>
@@ -742,7 +1027,7 @@ const Admin_notice_board = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-blue-600 text-sm font-medium">Total Notices</p>
-                    <p className="text-2xl font-bold text-blue-900">{noticesData.length}</p>
+                    <p className="text-2xl font-bold text-blue-900">{statistics.total}</p>
                   </div>
                   <FiFileText className="h-8 w-8 text-blue-600" />
                 </div>
@@ -754,7 +1039,7 @@ const Admin_notice_board = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-green-600 text-sm font-medium">Published</p>
-                    <p className="text-2xl font-bold text-green-900">{noticesData.filter(n => n.status === 'published').length}</p>
+                    <p className="text-2xl font-bold text-green-900">{statistics.published}</p>
                   </div>
                   <FiCheckCircle className="h-8 w-8 text-green-600" />
                 </div>
@@ -766,7 +1051,7 @@ const Admin_notice_board = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-orange-600 text-sm font-medium">Pinned</p>
-                    <p className="text-2xl font-bold text-orange-900">{noticesData.filter(n => n.isPinned).length}</p>
+                    <p className="text-2xl font-bold text-orange-900">{statistics.pinned}</p>
                   </div>
                   <FiTarget className="h-8 w-8 text-orange-600" />
                 </div>
@@ -778,7 +1063,7 @@ const Admin_notice_board = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-purple-600 text-sm font-medium">Drafts</p>
-                    <p className="text-2xl font-bold text-purple-900">{noticesData.filter(n => n.status === 'draft').length}</p>
+                    <p className="text-2xl font-bold text-purple-900">{statistics.draft}</p>
                   </div>
                   <FiEdit3 className="h-8 w-8 text-purple-600" />
                 </div>
@@ -787,26 +1072,15 @@ const Admin_notice_board = () => {
           </motion.div>
 
           {/* Notices Grid */}
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.6 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-          >
-            <AnimatePresence>
-              {filteredNotices.map((notice, index) => (
-                <motion.div
-                  key={notice.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                >
-                  <NoticeCard notice={notice} />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </motion.div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredNotices.map((notice, index) => (
+              <NoticeCard 
+                key={notice.id} 
+                notice={notice} 
+                index={index}
+              />
+            ))}
+          </div>
 
           {/* Empty State */}
           {filteredNotices.length === 0 && (
@@ -884,15 +1158,27 @@ const Admin_notice_board = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Target Audience</label>
-                  <Combobox
-                    options={targetAudienceOptions}
-                    value={formData.targetAudience}
-                    onChange={(value) => setFormData({...formData, targetAudience: value})}
-                    placeholder="Select audience"
-                    className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Target Audience</label>
+                    <Combobox
+                      options={targetAudienceOptions}
+                      value={formData.targetAudience}
+                      onChange={(value) => setFormData({...formData, targetAudience: value})}
+                      placeholder="Select audience"
+                      className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <Combobox
+                      options={statusOptions}
+                      value={formData.status}
+                      onChange={(value) => setFormData({...formData, status: value})}
+                      placeholder="Select status"
+                      className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -1017,39 +1303,7 @@ const Admin_notice_board = () => {
                     />
                     <span className="text-sm text-gray-700">Pin this notice</span>
                   </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.isScheduled}
-                      onChange={(e) => setFormData({...formData, isScheduled: e.target.checked})}
-                      className="mr-2"
-                    />
-                    <span className="text-sm text-gray-700">Schedule for later</span>
-                  </label>
                 </div>
-
-                {formData.isScheduled && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Schedule Date</label>
-                      <input
-                        type="date"
-                        value={formData.scheduledDate}
-                        onChange={(e) => setFormData({...formData, scheduledDate: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Schedule Time</label>
-                      <input
-                        type="time"
-                        value={formData.scheduledTime}
-                        onChange={(e) => setFormData({...formData, scheduledTime: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-                )}
 
                 <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
                   <button
@@ -1121,15 +1375,27 @@ const Admin_notice_board = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Target Audience</label>
-                  <Combobox
-                    options={targetAudienceOptions}
-                    value={formData.targetAudience}
-                    onChange={(value) => setFormData({...formData, targetAudience: value})}
-                    placeholder="Select audience"
-                    className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Target Audience</label>
+                    <Combobox
+                      options={targetAudienceOptions}
+                      value={formData.targetAudience}
+                      onChange={(value) => setFormData({...formData, targetAudience: value})}
+                      placeholder="Select audience"
+                      className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <Combobox
+                      options={statusOptions}
+                      value={formData.status}
+                      onChange={(value) => setFormData({...formData, status: value})}
+                      placeholder="Select status"
+                      className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -1254,39 +1520,7 @@ const Admin_notice_board = () => {
                     />
                     <span className="text-sm text-gray-700">Pin this notice</span>
                   </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.isScheduled}
-                      onChange={(e) => setFormData({...formData, isScheduled: e.target.checked})}
-                      className="mr-2"
-                    />
-                    <span className="text-sm text-gray-700">Schedule for later</span>
-                  </label>
                 </div>
-
-                {formData.isScheduled && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Schedule Date</label>
-                      <input
-                        type="date"
-                        value={formData.scheduledDate}
-                        onChange={(e) => setFormData({...formData, scheduledDate: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Schedule Time</label>
-                      <input
-                        type="time"
-                        value={formData.scheduledTime}
-                        onChange={(e) => setFormData({...formData, scheduledTime: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-                )}
 
                 <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
                   <button
@@ -1361,6 +1595,65 @@ const Admin_notice_board = () => {
                   <span>Delete Notice</span>
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Image View Modal */}
+      <AnimatePresence>
+        {showImageModal && selectedImageUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowImageModal(false)
+              setSelectedImageUrl(null)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="relative max-w-7xl w-full h-full flex items-center justify-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => {
+                  setShowImageModal(false)
+                  setSelectedImageUrl(null)
+                }}
+                className="absolute top-4 right-4 bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-3 rounded-full transition-all duration-200 z-10 backdrop-blur-sm"
+                aria-label="Close image view"
+              >
+                <FiX className="h-6 w-6" />
+              </button>
+
+              {/* Full Size Image */}
+              <div className="max-w-full max-h-full w-full h-full flex items-center justify-center">
+                <img
+                  src={selectedImageUrl}
+                  alt="Full size notice image"
+                  className="max-w-full max-h-full w-auto h-auto object-contain rounded-lg shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+
+              {/* Download Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDownloadImage(selectedImageUrl)
+                }}
+                className="absolute bottom-4 right-4 bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-3 rounded-full transition-all duration-200 backdrop-blur-sm flex items-center space-x-2"
+                aria-label="Download image"
+              >
+                <FiDownload className="h-5 w-5" />
+              </button>
             </motion.div>
           </motion.div>
         )}

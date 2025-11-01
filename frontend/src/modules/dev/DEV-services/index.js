@@ -27,6 +27,10 @@ export { default as socketService } from './socketService';
 // Employee Module Services
 export { default as employeeService } from './employeeService';
 
+// Client Module Services
+export { clientProjectService } from './clientProjectService';
+export { clientAnalyticsService } from './clientAnalyticsService';
+
 // Re-export commonly used functions from PM auth service
 export {
   loginPM,

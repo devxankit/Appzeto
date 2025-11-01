@@ -109,7 +109,7 @@ const Combobox = ({
               {filteredOptions.length > 0 ? (
                 filteredOptions.map((option, index) => (
                   <motion.button
-                    key={option.value}
+                    key={option?.value || `option-${index}`}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.05 }}

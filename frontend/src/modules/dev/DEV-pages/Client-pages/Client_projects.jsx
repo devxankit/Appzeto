@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import Client_navbar from '../../DEV-components/Client_navbar'
-import { projectService, socketService } from '../../DEV-services'
+import { clientProjectService, socketService } from '../../DEV-services'
 import { 
   FiFolder, 
   FiCheckSquare, 
@@ -38,7 +38,12 @@ const Client_projects = () => {
 
   const setupWebSocket = () => {
     const token = localStorage.getItem('clientToken')
-    if (token) {
+    if (!token) {
+      console.warn('Client token not found, WebSocket connection skipped')
+      return
+    }
+    
+    try {
       socketService.connect(token)
       
       // Listen for real-time updates
@@ -49,6 +54,8 @@ const Client_projects = () => {
       socketService.on('project_created', () => {
         loadProjects()
       })
+    } catch (error) {
+      console.warn('Failed to setup WebSocket connection:', error)
     }
   }
 
@@ -57,25 +64,22 @@ const Client_projects = () => {
       setLoading(true)
       setError(null)
       
-      const clientId = localStorage.getItem('clientId')
-      if (!clientId) {
-        throw new Error('Client ID not found')
-      }
-      
-      const response = await projectService.getProjectsByClient(clientId, {
-        limit: 100,
-        sortBy: 'dueDate',
-        sortOrder: 'asc'
+      // Client ID is not needed - backend automatically uses authenticated client from token
+      const response = await clientProjectService.getProjectsByClient(null, {
+        limit: 100
       })
       
-      setProjects(response.data || [])
+      // Service returns the data array directly
+      const projects = Array.isArray(response) ? response : (response.data || [])
+      
+      setProjects(projects)
       
       // Calculate statistics
       const stats = {
-        total: response.data?.length || 0,
-        active: response.data?.filter(p => p.status === 'active').length || 0,
-        completed: response.data?.filter(p => p.status === 'completed').length || 0,
-        overdue: response.data?.filter(p => p.status === 'overdue').length || 0
+        total: projects.length || 0,
+        active: projects.filter(p => p.status === 'active').length || 0,
+        completed: projects.filter(p => p.status === 'completed').length || 0,
+        overdue: projects.filter(p => p.status === 'overdue').length || 0
       }
       setStatistics(stats)
     } catch (err) {
@@ -173,7 +177,7 @@ const Client_projects = () => {
                 </div>
                 <span className="text-xs md:text-sm text-gray-500">Total</span>
               </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{projectsData.statistics.total}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{statistics.total}</p>
               <p className="text-xs md:text-sm text-gray-600">Projects</p>
             </div>
 
@@ -184,7 +188,7 @@ const Client_projects = () => {
                 </div>
                 <span className="text-xs md:text-sm text-gray-500">Active</span>
               </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{projectsData.statistics.active}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{statistics.active}</p>
               <p className="text-xs md:text-sm text-gray-600">In Progress</p>
             </div>
 
@@ -195,7 +199,7 @@ const Client_projects = () => {
                 </div>
                 <span className="text-xs md:text-sm text-gray-500">Completed</span>
               </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{projectsData.statistics.completed}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{statistics.completed}</p>
               <p className="text-xs md:text-sm text-gray-600">Finished</p>
             </div>
 
@@ -206,7 +210,7 @@ const Client_projects = () => {
                 </div>
                 <span className="text-xs md:text-sm text-gray-500">Overdue</span>
               </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{projectsData.statistics.overdue}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{statistics.overdue}</p>
               <p className="text-xs md:text-sm text-gray-600">Delayed</p>
             </div>
           </div>
@@ -245,8 +249,8 @@ const Client_projects = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {filteredProjects.map((project) => (
                   <Link 
-                    key={project.id} 
-                    to={`/client-project-detail/${project.id}`}
+                    key={project.id || project._id || `project-${project.name}`} 
+                    to={`/client-project-detail/${project.id || project._id}`}
                     className="group bg-white rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-md hover:shadow-xl border border-gray-100 hover:border-teal-200 transition-all duration-300 cursor-pointer transform hover:-translate-y-1"
                   >
                     {/* Mobile Layout */}

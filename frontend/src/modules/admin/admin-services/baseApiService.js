@@ -16,12 +16,20 @@ const removeAuthToken = () => {
 };
 
 // Helper function to get auth headers
-const getAuthHeaders = () => {
+const getAuthHeaders = (isFormData = false) => {
   const token = getAuthToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` })
-  };
+  const headers = {};
+  
+  // Only set Content-Type if NOT FormData (browser will set it with boundary for FormData)
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
 };
 
 // Helper to safely parse JSON response
@@ -63,11 +71,16 @@ const safeJsonParse = async (response) => {
 export const apiRequest = async (url, options = {}) => {
   try {
     const primaryUrl = getApiUrl(url);
+    
+    // Check if body is FormData
+    const isFormData = options.body instanceof FormData;
+    
     const response = await fetch(primaryUrl, {
       ...options,
       headers: {
-        ...getAuthHeaders(),
-        ...options.headers
+        ...getAuthHeaders(isFormData),
+        // Don't override headers if FormData - let browser set Content-Type with boundary
+        ...(isFormData ? {} : options.headers)
       },
       credentials: 'include' // Include cookies for CORS
     });
@@ -84,11 +97,13 @@ export const apiRequest = async (url, options = {}) => {
     try {
       if (error && (error.name === 'TypeError' || String(error).includes('Failed to fetch') || String(error).includes('ERR_CONNECTION_REFUSED'))) {
         const sameOriginUrl = `/api${url.startsWith('/') ? url : `/${url}`}`;
+        const isFormData = options.body instanceof FormData;
         const fallbackResponse = await fetch(sameOriginUrl, {
           ...options,
           headers: {
-            ...getAuthHeaders(),
-            ...options.headers
+            ...getAuthHeaders(isFormData),
+            // Don't override headers if FormData
+            ...(isFormData ? {} : options.headers)
           },
           credentials: 'include'
         });

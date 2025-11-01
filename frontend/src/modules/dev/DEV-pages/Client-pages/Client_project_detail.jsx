@@ -1394,11 +1394,12 @@ const Client_project_detail = () => {
                     
                     {/* Subtle border glow effect */}
                     <motion.div
-                      className="absolute inset-0 rounded-xl border-2 border-transparent"
+                      className="absolute inset-0 rounded-xl border-2"
+                      initial={{ borderColor: "rgba(0, 0, 0, 0)" }}
                       animate={{
                         borderColor: activeTab === tab.key 
                           ? "rgba(255, 255, 255, 0.3)" 
-                          : "transparent"
+                          : "rgba(0, 0, 0, 0)"
                       }}
                       transition={{ duration: 0.3 }}
                     />

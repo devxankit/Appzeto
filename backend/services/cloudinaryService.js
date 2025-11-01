@@ -9,13 +9,23 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 50 * 1024 * 1024, // 50MB limit (for videos)
   },
   fileFilter: (req, file, cb) => {
-    // Check file type
-    const allowedTypes = /jpeg|jpg|png|pdf|doc|docx|xlsx|xls|csv/;
-    const extname = allowedTypes.test(file.originalname.toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype) || 
+    // Check file type - allow images, videos, documents, and spreadsheets
+    const allowedImageTypes = /jpeg|jpg|png|gif|webp/;
+    const allowedVideoTypes = /mp4|mov|avi|wmv|flv|webm|mkv/;
+    const allowedDocTypes = /pdf|doc|docx|xlsx|xls|csv/;
+    
+    const extname = allowedImageTypes.test(file.originalname.toLowerCase()) ||
+                    allowedVideoTypes.test(file.originalname.toLowerCase()) ||
+                    allowedDocTypes.test(file.originalname.toLowerCase());
+    
+    const mimetype = file.mimetype.startsWith('image/') ||
+                     file.mimetype.startsWith('video/') ||
+                     /application\/pdf/.test(file.mimetype) ||
+                     /application\/msword/.test(file.mimetype) ||
+                     /application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/.test(file.mimetype) ||
                      /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/.test(file.mimetype) ||
                      /application\/vnd\.ms-excel/.test(file.mimetype) ||
                      /text\/csv/.test(file.mimetype);
@@ -23,7 +33,7 @@ const upload = multer({
     if (mimetype || extname) {
       return cb(null, true);
     } else {
-      cb(new Error('Only images (JPEG, JPG, PNG), documents (PDF, DOC, DOCX), and spreadsheets (XLSX, XLS, CSV) are allowed'));
+      cb(new Error('Only images (JPEG, JPG, PNG, GIF, WEBP), videos (MP4, MOV, AVI, WMV, FLV, WEBM, MKV), documents (PDF, DOC, DOCX), and spreadsheets (XLSX, XLS, CSV) are allowed'));
     }
   }
 });

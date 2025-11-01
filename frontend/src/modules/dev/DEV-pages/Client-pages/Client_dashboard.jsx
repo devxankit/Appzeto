@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import Client_navbar from '../../DEV-components/Client_navbar'
-import { projectService, analyticsService, socketService } from '../../DEV-services'
+import { clientProjectService, clientAnalyticsService, socketService } from '../../DEV-services'
 import { 
   FiFolder, 
   FiFileText, 
@@ -75,7 +75,12 @@ const Client_dashboard = () => {
 
   const setupWebSocket = () => {
     const token = localStorage.getItem('clientToken')
-    if (token) {
+    if (!token) {
+      console.warn('Client token not found, WebSocket connection skipped')
+      return
+    }
+    
+    try {
       socketService.connect(token)
       
       // Listen for real-time updates
@@ -86,6 +91,8 @@ const Client_dashboard = () => {
       socketService.on('task_updated', () => {
         loadDashboardData()
       })
+    } catch (error) {
+      console.warn('Failed to setup WebSocket connection:', error)
     }
   }
 
@@ -94,17 +101,38 @@ const Client_dashboard = () => {
       setLoading(true)
       setError(null)
       
-      // Get client ID from token or user data
-      const clientId = localStorage.getItem('clientId') || 'current-client'
-      
+      // Client ID is not needed - backend automatically uses authenticated client from token
       // Load client project statistics and recent projects
       const [clientStatsResponse, projectsResponse] = await Promise.all([
-        analyticsService.getClientProjectStats(clientId),
-        projectService.getProjectsByClient(clientId, { limit: 5 })
+        clientAnalyticsService.getClientProjectStats(),
+        clientProjectService.getProjectsByClient(null, { limit: 5 })
       ])
       
-      const clientStats = clientStatsResponse.data
-      const recentProjects = projectsResponse.data
+      // Handle response structure from backend
+      // Statistics endpoint returns: { success: true, data: { totalProjects, activeProjects, ... } }
+      // Projects endpoint returns: { success: true, data: [...], count, total }
+      const clientStats = clientStatsResponse.data || clientStatsResponse
+      const recentProjects = Array.isArray(projectsResponse.data) 
+        ? projectsResponse.data 
+        : (Array.isArray(projectsResponse) ? projectsResponse : [])
+      
+      // Transform the statistics to match expected format
+      // Backend returns: { totalProjects, activeProjects, completedProjects, avgProgress, ... }
+      // We need: { projects: { total, active, completed }, tasks: {...}, ... }
+      const transformedStats = {
+        projects: {
+          total: clientStats.totalProjects || 0,
+          active: clientStats.activeProjects || 0,
+          completed: clientStats.completedProjects || 0,
+          avgProgress: clientStats.avgProgress || 0
+        },
+        tasks: {
+          total: 0, // Not provided by statistics endpoint
+          completed: 0,
+          awaitingClientInput: 0,
+          inProgress: 0
+        }
+      }
       
       // Transform the data to match the expected format
       const transformedProjects = recentProjects.map(project => ({
@@ -131,9 +159,9 @@ const Client_dashboard = () => {
         ...prevData,
         statistics: {
           projects: {
-            total: clientStats.projects?.total || 0,
-            active: clientStats.projects?.active || 0,
-            completed: clientStats.projects?.completed || 0,
+            total: transformedStats.projects.total,
+            active: transformedStats.projects.active,
+            completed: transformedStats.projects.completed,
             awaitingApproval: 0
           },
           requests: {
@@ -143,12 +171,12 @@ const Client_dashboard = () => {
             urgent: 0
           },
           tasks: {
-            total: clientStats.tasks?.total || 0,
-            completed: clientStats.tasks?.completed || 0,
-            awaitingClientInput: 0,
-            inProgress: clientStats.tasks?.inProgress || 0
+            total: transformedStats.tasks.total,
+            completed: transformedStats.tasks.completed,
+            awaitingClientInput: transformedStats.tasks.awaitingClientInput,
+            inProgress: transformedStats.tasks.inProgress
           },
-          overallProgress: clientStats.projects?.avgProgress || 0
+          overallProgress: transformedStats.projects.avgProgress
         },
         recentProjects: transformedProjects,
         recentRequests: [], // This would need to be implemented
@@ -523,47 +551,26 @@ const Client_dashboard = () => {
               </div>
               
               <div className="space-y-4 md:space-y-6">
-                {/* Project 1 Progress */}
-                <div>
-                  <div className="flex justify-between text-sm md:text-base mb-2 md:mb-3">
-                    <span className="text-gray-600">{dashboardData.recentProjects[0].name}</span>
-                    <span className="text-gray-900 font-medium">{dashboardData.recentProjects[0].milestones.progress}%</span>
+                {dashboardData.recentProjects.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 text-sm">No projects available</p>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 md:h-3">
-                    <div 
-                      className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 md:h-3 rounded-full transition-all duration-500" 
-                      style={{width: `${dashboardData.recentProjects[0].milestones.progress}%`}}
-                    ></div>
-                  </div>
-                </div>
-                
-                {/* Project 2 Progress */}
-                <div>
-                  <div className="flex justify-between text-sm md:text-base mb-2 md:mb-3">
-                    <span className="text-gray-600">{dashboardData.recentProjects[1].name}</span>
-                    <span className="text-gray-900 font-medium">{dashboardData.recentProjects[1].milestones.progress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 md:h-3">
-                    <div 
-                      className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 md:h-3 rounded-full transition-all duration-500" 
-                      style={{width: `${dashboardData.recentProjects[1].milestones.progress}%`}}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* Project 3 Progress */}
-                <div>
-                  <div className="flex justify-between text-sm md:text-base mb-2 md:mb-3">
-                    <span className="text-gray-600">{dashboardData.recentProjects[2].name}</span>
-                    <span className="text-gray-900 font-medium">{dashboardData.recentProjects[2].milestones.progress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 md:h-3">
-                    <div 
-                      className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 md:h-3 rounded-full transition-all duration-500" 
-                      style={{width: `${dashboardData.recentProjects[2].milestones.progress}%`}}
-                    ></div>
-                  </div>
-                </div>
+                ) : (
+                  dashboardData.recentProjects.slice(0, 3).map((project, index) => (
+                    <div key={project.id || index}>
+                      <div className="flex justify-between text-sm md:text-base mb-2 md:mb-3">
+                        <span className="text-gray-600">{project.name || 'Unnamed Project'}</span>
+                        <span className="text-gray-900 font-medium">{project.milestones?.progress || project.progress || 0}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2 md:h-3">
+                        <div 
+                          className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 md:h-3 rounded-full transition-all duration-500" 
+                          style={{width: `${project.milestones?.progress || project.progress || 0}%`}}
+                        ></div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
