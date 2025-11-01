@@ -22,13 +22,18 @@ const {
   getBudget,
   createBudget,
   updateBudget,
-  deleteBudget
+  deleteBudget,
+  getFinanceStatistics
 } = require('../controllers/adminFinanceController');
 const { protect, authorize } = require('../middlewares/auth');
 
 // Apply authentication and admin authorization to all routes
 router.use(protect);
 router.use(authorize('admin'));
+
+// Finance statistics route
+router.route('/statistics')
+  .get(getFinanceStatistics);
 
 // Transaction routes
 router.route('/transactions')

@@ -115,70 +115,71 @@ const Admin_finance_management = () => {
     description: ''
   })
 
-  // Mock data - Finance statistics
-  const [statistics] = useState({
-    totalRevenue: 2850000,
-    totalExpenses: 1250000,
-    netProfit: 1600000,
-    pendingPayments: 450000,
-    activeProjects: 24,
-    totalClients: 156,
-    todayEarnings: 45000,
-    rewardMoney: 125000,
-    employeeSalary: 180000,
-    otherExpenses: 35000,
-    profitLoss: 85000
+  // Finance statistics state - fetched from API
+  const [statistics, setStatistics] = useState({
+    totalRevenue: 0,
+    totalExpenses: 0,
+    netProfit: 0,
+    pendingPayments: 0,
+    activeProjects: 0,
+    totalClients: 0,
+    todayEarnings: 0,
+    rewardMoney: 0,
+    employeeSalary: 0,
+    otherExpenses: 0,
+    profitLoss: 0,
+    revenueChange: '0',
+    expensesChange: '0',
+    profitChange: '0'
   })
+  const [statisticsLoading, setStatisticsLoading] = useState(false)
 
-  // Time-based statistics that change with filters
-  const getTimeBasedStats = () => {
-    const baseStats = {
-      todayEarnings: 45000,
-      rewardMoney: 125000,
-      employeeSalary: 180000,
-      otherExpenses: 35000,
-      profitLoss: 85000
+  // Fetch finance statistics from API
+  const fetchFinanceStatistics = async () => {
+    try {
+      setStatisticsLoading(true)
+      const response = await adminFinanceService.getFinanceStatistics(timeFilter)
+      
+      if (response && response.success && response.data) {
+        setStatistics({
+          totalRevenue: response.data.totalRevenue || 0,
+          totalExpenses: response.data.totalExpenses || 0,
+          netProfit: response.data.netProfit || 0,
+          pendingPayments: response.data.pendingPayments || 0,
+          activeProjects: response.data.activeProjects || 0,
+          totalClients: response.data.totalClients || 0,
+          todayEarnings: response.data.todayEarnings || 0,
+          rewardMoney: response.data.rewardMoney || 0,
+          employeeSalary: response.data.employeeSalary || 0,
+          otherExpenses: response.data.otherExpenses || 0,
+          profitLoss: response.data.profitLoss || 0,
+          revenueChange: response.data.revenueChange || '0',
+          expensesChange: response.data.expensesChange || '0',
+          profitChange: response.data.profitChange || '0'
+        })
+      }
+    } catch (err) {
+      console.error('Error fetching finance statistics:', err)
+      toast.error('Failed to load finance statistics')
+    } finally {
+      setStatisticsLoading(false)
     }
+  }
 
-    switch (timeFilter) {
-      case 'today':
-        return {
-          ...baseStats,
-          todayEarnings: 45000,
-          rewardMoney: 5000,
-          employeeSalary: 0,
-          otherExpenses: 2000,
-          profitLoss: 43000
-        }
-      case 'week':
-        return {
-          ...baseStats,
-          todayEarnings: 180000,
-          rewardMoney: 25000,
-          employeeSalary: 45000,
-          otherExpenses: 8000,
-          profitLoss: 102000
-        }
-      case 'month':
-        return {
-          ...baseStats,
-          todayEarnings: 750000,
-          rewardMoney: 125000,
-          employeeSalary: 180000,
-          otherExpenses: 35000,
-          profitLoss: 410000
-        }
-      case 'year':
-        return {
-          ...baseStats,
-          todayEarnings: 2850000,
-          rewardMoney: 450000,
-          employeeSalary: 2160000,
-          otherExpenses: 420000,
-          profitLoss: -180000
-        }
-      default:
-        return baseStats
+  // Fetch statistics when component mounts or time filter changes
+  useEffect(() => {
+    fetchFinanceStatistics()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeFilter])
+
+  // Time-based statistics (now using real API data)
+  const getTimeBasedStats = () => {
+    return {
+      todayEarnings: statistics.todayEarnings,
+      rewardMoney: statistics.rewardMoney,
+      employeeSalary: statistics.employeeSalary,
+      otherExpenses: statistics.otherExpenses,
+      profitLoss: statistics.profitLoss
     }
   }
 
@@ -1070,6 +1071,7 @@ const Admin_finance_management = () => {
               </div>
               <button
                 onClick={() => {
+                  fetchFinanceStatistics() // Always refresh statistics
                   if (activeTab === 'transactions') {
                     fetchTransactions()
                   } else if (activeTab === 'expenses') {
@@ -1078,16 +1080,21 @@ const Admin_finance_management = () => {
                     fetchBudgets()
                   }
                 }}
-                disabled={loading || (activeTab === 'transactions' && transactionsLoading) || (activeTab === 'expenses' && expensesLoading) || (activeTab === 'budgets' && budgetsLoading)}
+                disabled={loading || statisticsLoading || (activeTab === 'transactions' && transactionsLoading) || (activeTab === 'expenses' && expensesLoading) || (activeTab === 'budgets' && budgetsLoading)}
                 className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <FiRefreshCw className={`text-sm ${(loading || transactionsLoading || expensesLoading || budgetsLoading) ? 'animate-spin' : ''}`} />
+                <FiRefreshCw className={`text-sm ${(loading || statisticsLoading || transactionsLoading || expensesLoading || budgetsLoading) ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </button>
             </div>
           </div>
 
           {/* Statistics Cards - Row 1 */}
+          {statisticsLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loading size="medium" />
+            </div>
+          ) : (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1103,8 +1110,12 @@ const Admin_finance_management = () => {
                     <FiTrendingUp className="h-4 w-4 text-green-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-green-700">+12.5%</p>
-                    <p className="text-xs text-green-600">this month</p>
+                    <p className={`text-xs font-medium ${parseFloat(statistics.revenueChange) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {parseFloat(statistics.revenueChange) >= 0 ? '+' : ''}{statistics.revenueChange}%
+                    </p>
+                    <p className="text-xs text-green-600">
+                      {timeFilter === 'month' ? 'this month' : timeFilter === 'today' ? 'today' : timeFilter === 'week' ? 'this week' : timeFilter === 'year' ? 'this year' : 'all time'}
+                    </p>
                   </div>
                 </div>
                 <div>
@@ -1123,8 +1134,12 @@ const Admin_finance_management = () => {
                     <FiTrendingDown className="h-4 w-4 text-red-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-red-700">+8.2%</p>
-                    <p className="text-xs text-red-600">this month</p>
+                    <p className={`text-xs font-medium ${parseFloat(statistics.expensesChange) >= 0 ? 'text-red-700' : 'text-green-700'}`}>
+                      {parseFloat(statistics.expensesChange) >= 0 ? '+' : ''}{statistics.expensesChange}%
+                    </p>
+                    <p className="text-xs text-red-600">
+                      {timeFilter === 'month' ? 'this month' : timeFilter === 'today' ? 'today' : timeFilter === 'week' ? 'this week' : timeFilter === 'year' ? 'this year' : 'all time'}
+                    </p>
                   </div>
                 </div>
                 <div>
@@ -1143,8 +1158,12 @@ const Admin_finance_management = () => {
                     <FiBarChart className="h-4 w-4 text-blue-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-blue-700">+15.3%</p>
-                    <p className="text-xs text-blue-600">this month</p>
+                    <p className={`text-xs font-medium ${parseFloat(statistics.profitChange) >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
+                      {parseFloat(statistics.profitChange) >= 0 ? '+' : ''}{statistics.profitChange}%
+                    </p>
+                    <p className="text-xs text-blue-600">
+                      {timeFilter === 'month' ? 'this month' : timeFilter === 'today' ? 'today' : timeFilter === 'week' ? 'this week' : timeFilter === 'year' ? 'this year' : 'all time'}
+                    </p>
                   </div>
                 </div>
                 <div>
@@ -1214,8 +1233,10 @@ const Admin_finance_management = () => {
               </div>
             </div>
           </motion.div>
+          )}
 
           {/* Statistics Cards - Row 2 */}
+          {statisticsLoading ? null : (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1228,7 +1249,7 @@ const Admin_finance_management = () => {
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-3">
                   <div className="p-2 rounded-lg bg-emerald-500/10">
-                    <FiDollarSign className="h-4 w-4 text-emerald-600" />
+                    <span className="text-lg text-emerald-600">₹</span>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-medium text-emerald-700">Today</p>
@@ -1392,6 +1413,7 @@ const Admin_finance_management = () => {
               </div>
             </div>
           </motion.div>
+          )}
 
           {/* Navigation Tabs */}
           <div className="mb-6">

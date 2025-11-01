@@ -3,6 +3,7 @@ const Account = require('../models/Account');
 const Client = require('../models/Client');
 const Project = require('../models/Project');
 const Employee = require('../models/Employee');
+const Payment = require('../models/Payment');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 
@@ -428,6 +429,249 @@ const getTransactionStats = asyncHandler(async (req, res, next) => {
       totalTransactions,
       pendingTransactions,
       completedTransactions
+    }
+  });
+});
+
+// @desc    Get comprehensive finance statistics
+// @route   GET /api/admin/finance/statistics
+// @access  Admin only
+const getFinanceStatistics = asyncHandler(async (req, res, next) => {
+  const { timeFilter = 'all' } = req.query;
+
+  const now = new Date();
+  let dateFilter = {};
+  let todayStart, todayEnd;
+  let currentMonthStart, lastMonthStart, lastMonthEnd;
+
+  // Calculate date ranges (create new Date objects to avoid mutating)
+  todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+  currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+  switch (timeFilter) {
+    case 'today':
+      dateFilter = {
+        $gte: todayStart,
+        $lte: todayEnd
+      };
+      break;
+    case 'week':
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      dateFilter = { $gte: weekAgo };
+      break;
+    case 'month':
+      dateFilter = { $gte: currentMonthStart };
+      break;
+    case 'year':
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      dateFilter = { $gte: yearStart };
+      break;
+  }
+
+  // Build transaction filter
+  const transactionFilter = timeFilter !== 'all' 
+    ? { transactionDate: dateFilter, recordType: 'transaction', status: 'completed' }
+    : { recordType: 'transaction', status: 'completed' };
+
+  // Get transaction statistics
+  const transactionStats = await AdminFinance.aggregate([
+    { $match: transactionFilter },
+    {
+      $group: {
+        _id: '$transactionType',
+        totalAmount: { $sum: '$amount' },
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  const incoming = transactionStats.find(s => s._id === 'incoming') || { totalAmount: 0, count: 0 };
+  const outgoing = transactionStats.find(s => s._id === 'outgoing') || { totalAmount: 0, count: 0 };
+
+  // Get today's earnings (incoming transactions today)
+  const todayEarnings = await AdminFinance.aggregate([
+    {
+      $match: {
+        recordType: 'transaction',
+        transactionType: 'incoming',
+        status: 'completed',
+        transactionDate: { $gte: todayStart, $lte: todayEnd }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalAmount: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const todayEarningsAmount = todayEarnings[0]?.totalAmount || 0;
+
+  // Get pending payments (from invoices and payments)
+  const pendingPayments = await AdminFinance.aggregate([
+    {
+      $match: {
+        recordType: 'invoice',
+        status: { $in: ['pending', 'overdue'] }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalAmount: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const pendingPaymentsAmount = pendingPayments[0]?.totalAmount || 0;
+
+  // Get employee salary (outgoing transactions with salary-related categories)
+  const employeeSalary = await AdminFinance.aggregate([
+    {
+      $match: {
+        recordType: 'transaction',
+        transactionType: 'outgoing',
+        status: 'completed',
+        category: { $regex: /salary|payroll|employee|wage/i },
+        ...(timeFilter !== 'all' ? { transactionDate: dateFilter } : {})
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalAmount: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const employeeSalaryAmount = employeeSalary[0]?.totalAmount || 0;
+
+  // Get other expenses (outgoing transactions excluding salary)
+  const otherExpenses = await AdminFinance.aggregate([
+    {
+      $match: {
+        recordType: 'transaction',
+        transactionType: 'outgoing',
+        status: 'completed',
+        category: { $not: { $regex: /salary|payroll|employee|wage/i } },
+        ...(timeFilter !== 'all' ? { transactionDate: dateFilter } : {})
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalAmount: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const otherExpensesAmount = otherExpenses[0]?.totalAmount || 0;
+
+  // Get reward money (from incentives or transactions with reward category)
+  const rewardMoney = await AdminFinance.aggregate([
+    {
+      $match: {
+        recordType: 'transaction',
+        transactionType: 'outgoing',
+        status: 'completed',
+        category: { $regex: /reward|bonus|incentive/i },
+        ...(timeFilter !== 'all' ? { transactionDate: dateFilter } : {})
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalAmount: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const rewardMoneyAmount = rewardMoney[0]?.totalAmount || 0;
+
+  // Get active projects
+  const activeProjects = await Project.countDocuments({ 
+    status: { $in: ['active', 'started', 'in-progress'] }
+  });
+
+  // Get total clients
+  const totalClients = await Client.countDocuments({ isActive: true });
+
+  // Calculate profit/loss for the period
+  const profitLoss = incoming.totalAmount - outgoing.totalAmount;
+
+  // Calculate percentage changes (comparing with last period)
+  let revenueChange = 0;
+  let expensesChange = 0;
+  let profitChange = 0;
+
+  if (timeFilter === 'month') {
+    // Compare with last month
+    const lastMonthIncoming = await AdminFinance.aggregate([
+      {
+        $match: {
+          recordType: 'transaction',
+          transactionType: 'incoming',
+          status: 'completed',
+          transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    const lastMonthOutgoing = await AdminFinance.aggregate([
+      {
+        $match: {
+          recordType: 'transaction',
+          transactionType: 'outgoing',
+          status: 'completed',
+          transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    const lastMonthRevenue = lastMonthIncoming[0]?.totalAmount || 0;
+    const lastMonthExpenses = lastMonthOutgoing[0]?.totalAmount || 0;
+    const lastMonthProfit = lastMonthRevenue - lastMonthExpenses;
+
+    if (lastMonthRevenue > 0) {
+      revenueChange = ((incoming.totalAmount - lastMonthRevenue) / lastMonthRevenue) * 100;
+    }
+    if (lastMonthExpenses > 0) {
+      expensesChange = ((outgoing.totalAmount - lastMonthExpenses) / lastMonthExpenses) * 100;
+    }
+    if (lastMonthProfit !== 0) {
+      profitChange = ((profitLoss - lastMonthProfit) / Math.abs(lastMonthProfit)) * 100;
+    }
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      totalRevenue: incoming.totalAmount,
+      totalExpenses: outgoing.totalAmount,
+      netProfit: profitLoss,
+      pendingPayments: pendingPaymentsAmount,
+      activeProjects,
+      totalClients,
+      todayEarnings: todayEarningsAmount,
+      rewardMoney: rewardMoneyAmount,
+      employeeSalary: employeeSalaryAmount,
+      otherExpenses: otherExpensesAmount,
+      profitLoss,
+      revenueChange: revenueChange.toFixed(1),
+      expensesChange: expensesChange.toFixed(1),
+      profitChange: profitChange.toFixed(1)
     }
   });
 });
@@ -1188,5 +1432,6 @@ module.exports = {
   getBudget,
   createBudget,
   updateBudget,
-  deleteBudget
+  deleteBudget,
+  getFinanceStatistics
 };

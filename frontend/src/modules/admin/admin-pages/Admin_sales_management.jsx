@@ -28,7 +28,8 @@ import {
   FiActivity,
   FiUpload,
   FiFile,
-  FiX
+  FiX,
+  FiDollarSign
 } from 'react-icons/fi'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
@@ -96,6 +97,7 @@ const Admin_sales_management = () => {
   const [modalType, setModalType] = useState('')
   const [selectedLeadCategory, setSelectedLeadCategory] = useState('')
   const [selectedLeadCategoryData, setSelectedLeadCategoryData] = useState([])
+  const [loadingMemberDetails, setLoadingMemberDetails] = useState(false)
   
   // Form states
   const [leadNumber, setLeadNumber] = useState('')
@@ -584,10 +586,86 @@ const Admin_sales_management = () => {
     setShowEditModal(true)
   }
 
-  const handleView = (item, type) => {
+  // Transform backend leadBreakdown array to frontend object format
+  const transformLeadBreakdown = (leadBreakdownArray) => {
+    if (!leadBreakdownArray || !Array.isArray(leadBreakdownArray)) {
+      return {}
+    }
+    
+    // Create reverse mapping from backend status to frontend key
+    const backendToFrontendMap = {
+      'new': 'new',
+      'connected': 'contacted',
+      'not_picked': 'notPicked',
+      'followup': 'todayFollowUp',
+      'quotation_sent': 'quotationSent',
+      'dq_sent': 'dqSent',
+      'app_client': 'appClient',
+      'web': 'web',
+      'converted': 'converted',
+      'lost': 'lost',
+      'not_interested': 'notInterested',
+      'hot': 'hotLead',
+      'demo_requested': 'demoSent',
+      // 'app' and 'taxi' might need special handling - using app_client for app
+      'app': 'appClient'
+    }
+    
+    const breakdownObj = {}
+    
+    leadBreakdownArray.forEach(item => {
+      if (item._id) {
+        const backendStatus = item._id
+        const frontendKey = backendToFrontendMap[backendStatus] || backendStatus
+        
+        // If multiple items map to same frontend key (like app_client and app), sum them
+        if (breakdownObj[frontendKey]) {
+          breakdownObj[frontendKey] += (item.count || 0)
+        } else {
+          breakdownObj[frontendKey] = item.count || 0
+        }
+      }
+    })
+    
+    return breakdownObj
+  }
+
+  const handleView = async (item, type) => {
     setModalType(type)
     setSelectedItem(item)
     setShowViewModal(true)
+    
+    // If viewing a sales team member, fetch detailed data including leadBreakdown
+    if (type === 'sales-team' && (item._id || item.id)) {
+      try {
+        setLoadingMemberDetails(true)
+        const memberId = item._id || item.id
+        const response = await adminSalesService.getSalesTeamMember(memberId)
+        
+        if (response && response.success && response.data) {
+          console.log('Member details fetched:', response.data)
+          console.log('Lead breakdown (raw):', response.data.leadBreakdown)
+          
+          // Transform leadBreakdown from array to object format
+          const transformedLeadBreakdown = transformLeadBreakdown(response.data.leadBreakdown)
+          
+          console.log('Lead breakdown (transformed):', transformedLeadBreakdown)
+          
+          // Merge the detailed data with the existing item data
+          setSelectedItem({
+            ...item,
+            ...response.data,
+            leadBreakdown: transformedLeadBreakdown
+          })
+        }
+      } catch (error) {
+        console.error('Error fetching member details:', error)
+        toast.error('Failed to load member details')
+        // Continue with existing item data if fetch fails
+      } finally {
+        setLoadingMemberDetails(false)
+      }
+    }
   }
 
   const handleDelete = (item, type) => {
@@ -751,15 +829,83 @@ const Admin_sales_management = () => {
     setSelectedLeadCategoryData([])
   }
 
-  // Handle lead category click
-  const handleLeadCategoryClick = (category, member) => {
-    const categoryCount = member.leadBreakdown[category]
-    if (categoryCount > 0) {
-      // Generate mock lead data for the selected category
-      const mockLeads = generateMockLeadsForCategory(category, categoryCount, member.name)
-      setSelectedLeadCategory(category)
-      setSelectedLeadCategoryData(mockLeads)
+  // Status mapping - frontend key to backend value
+  const statusMap = {
+    'new': 'new',
+    'contacted': 'connected',
+    'notPicked': 'not_picked',
+    'todayFollowUp': 'followup',
+    'quotationSent': 'quotation_sent',
+    'dqSent': 'dq_sent',
+    'appClient': 'app_client',
+    'web': 'web',
+    'converted': 'converted',
+    'lost': 'lost',
+    'notInterested': 'not_interested',
+    'hotLead': 'hot',
+    'demoSent': 'demo_requested',
+    'app': 'app_client', // app likely means app_client
+    'taxi': 'web' // taxi might be categorized as web or could be separate
+  }
+
+  // Map frontend status keys to backend status values
+  const mapStatusKeyToBackendStatus = (statusKey) => {
+    return statusMap[statusKey] || statusKey
+  }
+
+  // Handle lead category click - fetch real leads from API
+  const handleLeadCategoryClick = async (categoryKey, member) => {
+    try {
+      console.log('Lead category clicked:', categoryKey, member, selectedItem)
+      
+      // Use selectedItem if available, otherwise use member parameter
+      const targetMember = selectedItem || member
+      if (!targetMember) {
+        toast.error('Member information not available')
+        return
+      }
+      
+      const memberId = targetMember._id || targetMember.id
+      if (!memberId) {
+        toast.error('Member ID not found')
+        return
+      }
+      
+      // Map frontend status key to backend status
+      const backendStatus = mapStatusKeyToBackendStatus(categoryKey)
+      
+      // Set loading state
+      setLoadingLeads(true)
       setShowLeadListModal(true)
+      setSelectedLeadCategory(categoryKey)
+      
+      // Fetch leads filtered by status and assignedTo
+      const params = {
+        status: backendStatus,
+        assignedTo: memberId,
+        page: 1,
+        limit: 100 // Get up to 100 leads for this status
+      }
+      
+      console.log('Fetching leads with params:', params)
+      const response = await adminSalesService.getAllLeads(params)
+      console.log('Leads response:', response)
+      
+      if (response && response.success && response.data) {
+        setSelectedLeadCategoryData(response.data || [])
+        if ((response.data || []).length === 0) {
+          toast.info(`No leads found for ${categoryKey} status`)
+        }
+      } else {
+        toast.error('Failed to load leads')
+        setSelectedLeadCategoryData([])
+      }
+    } catch (error) {
+      console.error('Error fetching leads by status:', error)
+      toast.error(error.message || 'Failed to load leads')
+      setSelectedLeadCategoryData([])
+    } finally {
+      setLoadingLeads(false)
     }
   }
 
@@ -2804,7 +2950,15 @@ const Admin_sales_management = () => {
                     <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
                       <FiUsers className="h-5 w-5 mr-2 text-blue-600" />
                       Lead Status Breakdown
+                      {loadingMemberDetails && (
+                        <span className="ml-2 text-sm text-gray-500">(Loading...)</span>
+                      )}
                     </h5>
+                    {loadingMemberDetails ? (
+                      <div className="flex justify-center items-center py-8">
+                        <Loading size="small" />
+                      </div>
+                    ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                       {[
                         { key: 'new', label: 'New Leads', color: 'bg-green-50 text-green-700 border-green-200', icon: '🆕' },
@@ -2823,29 +2977,45 @@ const Admin_sales_management = () => {
                         { key: 'app', label: 'App', color: 'bg-sky-50 text-sky-700 border-sky-200', icon: '📲' },
                         { key: 'taxi', label: 'Taxi', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: '🚕' }
                       ].map((category, index) => {
-                        const leadBreakdown = selectedItem?.leadBreakdown || {
-                          new: selectedItem?.performance?.totalLeads || 0,
-                          converted: selectedItem?.performance?.convertedLeads || 0,
-                          hotLead: 0,
-                          lost: 0,
-                          notInterested: 0,
-                          web: 0,
-                          app: 0,
-                          taxi: 0,
-                          todayFollowUp: 0,
-                          quotationSent: 0,
-                          dqSent: 0,
-                          appClient: 0,
-                          demoSent: 0
+                        // Ensure leadBreakdown is in object format
+                        let leadBreakdown = selectedItem?.leadBreakdown
+                        
+                        // If leadBreakdown is an array, transform it
+                        if (Array.isArray(leadBreakdown)) {
+                          leadBreakdown = transformLeadBreakdown(leadBreakdown)
                         }
+                        
+                        // Fallback to empty object if no leadBreakdown
+                        if (!leadBreakdown || typeof leadBreakdown !== 'object') {
+                          leadBreakdown = {
+                            new: 0,
+                            contacted: 0,
+                            notPicked: 0,
+                            todayFollowUp: 0,
+                            quotationSent: 0,
+                            dqSent: 0,
+                            appClient: 0,
+                            web: 0,
+                            converted: 0,
+                            lost: 0,
+                            notInterested: 0,
+                            hotLead: 0,
+                            demoSent: 0,
+                            app: 0,
+                            taxi: 0
+                          }
+                        }
+                        
                         const count = leadBreakdown[category.key] || 0
                         return (
                           <button
                             key={category.key || `category-${index}`}
-                            onClick={() => handleLeadCategoryClick(category.key, selectedItem)}
-                            disabled={count === 0}
-                            className={`${category.color} rounded-lg p-3 border-2 hover:shadow-md transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${
-                              count > 0 ? 'hover:scale-105 cursor-pointer' : ''
+                            onClick={() => {
+                              console.log('Button clicked for category:', category.key, 'selectedItem:', selectedItem)
+                              handleLeadCategoryClick(category.key, selectedItem)
+                            }}
+                            className={`${category.color} rounded-lg p-3 border-2 hover:shadow-md transition-all duration-200 text-left ${
+                              count > 0 ? 'hover:scale-105 cursor-pointer' : 'cursor-pointer opacity-75'
                             }`}
                           >
                             <div className="flex items-center justify-between mb-1">
@@ -2857,6 +3027,7 @@ const Admin_sales_management = () => {
                         )
                       })}
                     </div>
+                    )}
                   </div>
 
                   {/* Member Information */}
@@ -3405,10 +3576,29 @@ const Admin_sales_management = () => {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-2xl font-bold text-gray-900">
-                    {selectedLeadCategoryData[0]?.category || 'Lead Category'} - {selectedItem.name}
+                    {(() => {
+                      const statusLabels = {
+                        new: 'New Leads',
+                        contacted: 'Contacted',
+                        notPicked: 'Not Picked',
+                        todayFollowUp: 'Today Follow Up',
+                        quotationSent: 'Quotation Sent',
+                        dqSent: 'D&Q Sent',
+                        appClient: 'App Client',
+                        web: 'Web',
+                        converted: 'Converted',
+                        lost: 'Lost',
+                        notInterested: 'Not Interested',
+                        hotLead: 'Hot Lead',
+                        demoSent: 'Demo Sent',
+                        app: 'App',
+                        taxi: 'Taxi'
+                      }
+                      return statusLabels[selectedLeadCategory] || 'Lead Category'
+                    })()} - {selectedItem?.name || 'Unknown'}
                   </h3>
                   <p className="text-gray-600 text-sm mt-1">
-                    {selectedLeadCategoryData.length} leads found in this category
+                    {loadingLeads ? 'Loading leads...' : `${selectedLeadCategoryData.length} leads found`}
                   </p>
                 </div>
                 <button
@@ -3420,69 +3610,77 @@ const Admin_sales_management = () => {
               </div>
 
               {/* Lead List */}
-              <div className="space-y-3">
-                {selectedLeadCategoryData.map((lead, index) => (
-                  <div key={lead.id} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                          <span className="text-sm font-bold text-primary">{index + 1}</span>
-                        </div>
-                        <div>
-                          <div className="text-lg font-semibold text-gray-900 font-mono">
-                            {lead.phone}
-                          </div>
-                          <div className="flex items-center space-x-4 text-sm text-gray-500">
-                            <span>Name: {lead.name}</span>
-                            <span>Company: {lead.company}</span>
-                            <span>Added: {formatDate(lead.lastContact)}</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-full ${getStatusColor(lead.status)}`}>
-                          {lead.status}
-                        </span>
-                        <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-full ${getPriorityColor(lead.priority)}`}>
-                          {lead.priority}
-                        </span>
-                        <button 
-                          onClick={() => handleDelete(lead, 'lead')}
-                          className="text-gray-400 hover:text-red-600 p-2 rounded hover:bg-red-50 transition-all duration-200"
-                          title="Delete Lead"
-                        >
-                          <FiTrash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Lead Details */}
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-600 font-medium">Email:</span>
-                          <span className="ml-2 text-gray-900">{lead.email}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600 font-medium">Value:</span>
-                          <span className="ml-2 text-gray-900">{formatCurrency(lead.value)}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600 font-medium">Next Follow-up:</span>
-                          <span className="ml-2 text-gray-900">{formatDate(lead.nextFollowUp)}</span>
-                        </div>
-                      </div>
-                      {lead.notes && (
-                        <div className="mt-2">
-                          <span className="text-gray-600 font-medium text-sm">Notes:</span>
-                          <span className="ml-2 text-gray-900 text-sm">{lead.notes}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              {loadingLeads ? (
+                <div className="flex justify-center items-center py-12">
+                  <Loading size="medium" />
+                </div>
+              ) : selectedLeadCategoryData.length === 0 ? (
+                <div className="text-center py-12">
+                  <FiAlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 font-medium">No leads found for this status</p>
+                </div>
+              ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">#</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Phone</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Company</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Value</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Email</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Priority</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {selectedLeadCategoryData.map((lead, index) => (
+                      <tr key={lead._id || lead.id || `lead-${index}`} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 text-sm text-gray-500 font-medium">
+                          {index + 1}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                          {lead.name || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-mono">
+                          {formatPhoneNumber(lead.phone) || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {lead.company || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-green-700">
+                          {formatCurrency(lead.value || 0)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {lead.email || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-full ${getStatusColor(lead.status || 'new')}`}>
+                            {lead.status || 'new'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-full ${getPriorityColor(lead.priority || 'medium')}`}>
+                            {lead.priority || 'medium'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button 
+                            onClick={() => handleDelete(lead, 'lead')}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition-all duration-200"
+                            title="Delete Lead"
+                          >
+                            <FiTrash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200 mt-6">

@@ -335,6 +335,20 @@ export const adminFinanceService = {
     } catch (error) {
       throw error;
     }
+  },
+
+  // ========== FINANCE STATISTICS ==========
+
+  // Get comprehensive finance statistics
+  getFinanceStatistics: async (timeFilter = 'all') => {
+    try {
+      const response = await apiRequest(`/admin/finance/statistics?timeFilter=${timeFilter}`, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 
