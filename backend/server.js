@@ -58,7 +58,8 @@ app.use(cors({
     'http://localhost:5179', // Vite alternative port
     'http://localhost:5180', // Vite alternative port
     'http://localhost:5181', // Vite alternative port
-    'http://localhost:3000'  // React default port
+    'http://localhost:3000',  // React default port
+    'https://supercrm.appzeto.com'  // React alternative port
   ],
   credentials: true
 })); // Enable CORS with credentials
