@@ -6,7 +6,7 @@ const leadProfileSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Lead',
     required: true,
-    unique: true
+    unique: true // unique: true creates an index automatically
   },
   
   // Basic information (collected after first contact)
@@ -97,7 +97,7 @@ const leadProfileSchema = new mongoose.Schema({
 });
 
 // Indexes for better performance
-leadProfileSchema.index({ lead: 1 });
+// Note: lead index is created automatically by unique: true, so we don't need explicit index
 leadProfileSchema.index({ createdBy: 1 });
 leadProfileSchema.index({ createdAt: -1 });
 

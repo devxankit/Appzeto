@@ -1,7 +1,16 @@
 const mongoose = require('mongoose');
+const path = require('path');
+
+// Ensure dotenv is loaded
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const connectDB = async () => {
   try {
+    // Validate MongoDB URI before attempting connection
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI is not defined. Please check your .env file or environment variables.');
+    }
+
     const conn = await mongoose.connect(process.env.MONGODB_URI);
 
     // Beautiful database connection display

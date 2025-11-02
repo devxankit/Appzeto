@@ -4,7 +4,7 @@ const leadCategorySchema = new mongoose.Schema({
   name: {
     type: String,
     required: [true, 'Category name is required'],
-    unique: true,
+    unique: true, // unique: true creates an index automatically
     trim: true,
     maxlength: [50, 'Category name cannot exceed 50 characters']
   },
@@ -33,7 +33,7 @@ const leadCategorySchema = new mongoose.Schema({
 });
 
 // Index for better performance
-leadCategorySchema.index({ name: 1 });
+// Note: name index is created automatically by unique: true, so we don't need explicit index
 
 // Virtual for lead count
 leadCategorySchema.virtual('leadCount', {

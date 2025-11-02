@@ -5,7 +5,6 @@ const attendanceSchema = new mongoose.Schema({
   month: { 
     type: String, 
     required: true,
-    unique: true, // Ensure one record per month
     match: /^\d{4}-\d{2}$/ // Validate format YYYY-MM
   },
 

@@ -124,7 +124,7 @@ const adminFinanceSchema = new mongoose.Schema({
   invoiceNumber: {
     type: String,
     trim: true,
-    unique: true,
+    unique: true, // unique: true creates an index automatically
     sparse: true,
     required: function() { return this.recordType === 'invoice'; }
   },
@@ -182,7 +182,7 @@ adminFinanceSchema.index({ recordType: 1, createdAt: -1 });
 adminFinanceSchema.index({ transactionType: 1, transactionDate: -1 });
 adminFinanceSchema.index({ client: 1, recordType: 1 });
 adminFinanceSchema.index({ project: 1, recordType: 1 });
-adminFinanceSchema.index({ invoiceNumber: 1 });
+// Note: invoiceNumber index is created automatically by unique: true, so we don't need explicit index
 adminFinanceSchema.index({ account: 1 });
 
 // Virtual for calculating remaining amount for budgets

@@ -3,7 +3,20 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
-require('dotenv').config();
+const path = require('path');
+
+// Load environment variables with explicit path resolution
+// This ensures it works in both development and production (PM2)
+const envPath = path.resolve(__dirname, '.env');
+require('dotenv').config({ path: envPath });
+
+// Validate critical environment variables on startup
+if (!process.env.MONGODB_URI) {
+  console.error('❌ ERROR: MONGODB_URI environment variable is not set!');
+  console.error('   Please ensure your .env file exists and contains MONGODB_URI');
+  console.error('   Or set MONGODB_URI as an environment variable in your PM2 config');
+  process.exit(1);
+}
 
 // Import database connection
 const connectDB = require('./config/db');

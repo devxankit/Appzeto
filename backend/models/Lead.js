@@ -4,7 +4,7 @@ const leadSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: [true, 'Phone number is required'],
-    unique: true,
+    unique: true, // unique: true creates an index automatically, no need for explicit index
     trim: true,
     match: [/^[0-9]{10}$/, 'Please enter a valid 10-digit phone number']
   },
@@ -133,7 +133,7 @@ const leadSchema = new mongoose.Schema({
 });
 
 // Indexes for better performance
-leadSchema.index({ phone: 1 });
+// Note: phone index is created automatically by unique: true, so we don't need explicit index
 leadSchema.index({ assignedTo: 1 });
 leadSchema.index({ category: 1 });
 leadSchema.index({ status: 1 });
