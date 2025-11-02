@@ -73,7 +73,9 @@ app.use(cors({
     'http://localhost:5180', // Vite alternative port
     'http://localhost:5181', // Vite alternative port
     'http://localhost:3000',  // React default port
-    'https://supercrm.appzeto.com'  // React alternative port
+    'https://supercrm.appzeto.com',  // Production frontend
+    'https://www.supercrm.appzeto.com',  // Production frontend with www
+    'https://api.supercrm.appzeto.com'  // API domain (for cross-origin requests)
   ],
   credentials: true
 })); // Enable CORS with credentials
@@ -128,22 +130,40 @@ app.get('/status', (req, res) => {
   });
 });
 
-// API routes
-app.use('/api/admin', adminRoutes);
+// API routes with /api prefix
+// Note: More specific routes should come before less specific ones
 app.use('/api/admin/users', adminUserRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/pm', pmRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use('/api/client', clientRoutes);
 
-// PM Module API routes (PM-only)
+// API routes without /api prefix (for reverse proxy compatibility)
+// This allows frontend to call /admin/login instead of /api/admin/login
+// Note: More specific routes must come before less specific ones
+app.use('/admin/users', adminUserRoutes);
+app.use('/admin', adminRoutes);
+app.use('/pm', pmRoutes);
+app.use('/sales', salesRoutes);
+app.use('/employee', employeeRoutes);
+app.use('/client', clientRoutes);
+
+// PM Module API routes (PM-only) with /api prefix
 app.use('/api/projects', projectRoutes);
 app.use('/api/milestones', milestoneRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
-// Role-specific API routes
+// PM Module API routes without /api prefix (for reverse proxy compatibility)
+app.use('/projects', projectRoutes);
+app.use('/milestones', milestoneRoutes);
+app.use('/tasks', taskRoutes);
+app.use('/payments', paymentRoutes);
+app.use('/analytics', analyticsRoutes);
+
+// Role-specific API routes with /api prefix
 // Admin routes
 app.use('/api/admin/projects', adminProjectRoutes);
 app.use('/api/admin/analytics', adminAnalyticsRoutes);
@@ -160,6 +180,24 @@ app.use('/api/employee/milestones', employeeMilestoneRoutes);
 // Client routes
 app.use('/api/client/projects', clientProjectRoutes);
 app.use('/api/client/payments', clientPaymentRoutes);
+
+// Role-specific API routes without /api prefix (for reverse proxy compatibility)
+// Admin routes
+app.use('/admin/projects', adminProjectRoutes);
+app.use('/admin/analytics', adminAnalyticsRoutes);
+app.use('/admin/sales', adminSalesRoutes);
+app.use('/admin/finance', adminFinanceRoutes);
+app.use('/admin/notices', adminNoticeRoutes);
+
+// Employee routes
+app.use('/employee/projects', employeeProjectRoutes);
+app.use('/employee/tasks', employeeTaskRoutes);
+app.use('/employee/analytics', employeeAnalyticsRoutes);
+app.use('/employee/milestones', employeeMilestoneRoutes);
+
+// Client routes
+app.use('/client/projects', clientProjectRoutes);
+app.use('/client/payments', clientPaymentRoutes);
 
 // API routes documentation
 app.get('/api', (req, res) => {
