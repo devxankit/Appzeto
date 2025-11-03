@@ -73,8 +73,10 @@ import Employee_project_detail from './modules/dev/DEV-pages/Employee-pages/Empl
 import Employee_milestone_details from './modules/dev/DEV-pages/Employee-pages/Employee_milestone_details'
 import Employee_request from './modules/dev/DEV-pages/Employee-pages/Employee_request'
 import PM_notifications from './modules/dev/DEV-pages/PM-pages/PM_notifications'
+import PM_notice_board from './modules/dev/DEV-pages/PM-pages/PM_notice_board'
 import Employee_notification from './modules/dev/DEV-pages/Employee-pages/Employee_notification'
 import Employee_wallet from './modules/dev/DEV-pages/Employee-pages/Employee_wallet'
+import Employee_notice_board from './modules/dev/DEV-pages/Employee-pages/Employee_notice_board'
 
 //Client pages start here //
 import Client_dashboard from './modules/dev/DEV-pages/Client-pages/Client_dashboard'
@@ -301,6 +303,11 @@ function App() {
               <PM_notifications />
             </PMProtectedRoute>
           } />
+          <Route path="/pm-notice-board" element={
+            <PMProtectedRoute>
+              <PM_notice_board />
+            </PMProtectedRoute>
+          } />
           <Route path="/pm-leaderboard" element={
             <PMProtectedRoute>
               <PM_leaderboard />
@@ -356,6 +363,11 @@ function App() {
           <Route path="/employee-notifications" element={
             <EmployeeProtectedRoute>
               <Employee_notification />
+            </EmployeeProtectedRoute>
+          } />
+          <Route path="/employee-notice-board" element={
+            <EmployeeProtectedRoute>
+              <Employee_notice_board />
             </EmployeeProtectedRoute>
           } />
           <Route path="/employee-tasks" element={

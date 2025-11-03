@@ -23,6 +23,7 @@ const {
   transferLead,
   addNoteToLead
 } = require('../controllers/salesController');
+const { getPublishedNoticesForSales, incrementNoticeViews } = require('../controllers/noticeController');
 const { protect } = require('../middlewares/auth');
 const upload = require('../middlewares/upload');
 
@@ -116,5 +117,9 @@ router.get('/clients/:clientId/transactions', require('../controllers/salesContr
 
 // Wallet
 router.get('/wallet/summary', getWalletSummary);
+
+// Notices
+router.get('/notices', getPublishedNoticesForSales);
+router.post('/notices/:id/view', incrementNoticeViews);
 
 module.exports = router;

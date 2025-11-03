@@ -9,7 +9,8 @@ import {
   FiUser,
   FiLogOut,
   FiX,
-  FiCreditCard
+  FiCreditCard,
+  FiFileText
 } from 'react-icons/fi'
 import { colors, gradients } from '../../../lib/colors'
 
@@ -31,6 +32,7 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
     { path: '/employee-dashboard', label: 'Home', icon: FiHome },
     { path: '/employee-projects', label: 'Projects', icon: FiFolder },
     { path: '/employee-tasks', label: 'Tasks', icon: FiCheckSquare },
+    { path: '/employee-notice-board', label: 'Notice Board', icon: FiFileText },
     { path: '/employee-leaderboard', label: 'Leaderboard', icon: FiTrendingUp },
     { path: '/employee-profile', label: 'Profile', icon: FiUser }
   ]

@@ -579,6 +579,252 @@ const incrementNoticeViews = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get published notices for sales employees
+// @route   GET /api/sales/notices
+// @access  Protected (Sales employees only)
+const getPublishedNoticesForSales = asyncHandler(async (req, res, next) => {
+  const { type, priority, isPinned, search } = req.query;
+
+  // Build query - only published notices targeted to 'sales' or 'all'
+  const query = {
+    status: 'published',
+    $or: [
+      { targetAudience: 'sales' },
+      { targetAudience: 'all' }
+    ]
+  };
+
+  // Add type filter
+  if (type && ['text', 'image', 'video'].includes(type)) {
+    query.type = type;
+  }
+
+  // Add priority filter
+  if (priority && ['low', 'medium', 'high', 'urgent'].includes(priority)) {
+    query.priority = priority;
+  }
+
+  // Add pinned filter
+  if (isPinned !== undefined) {
+    query.isPinned = isPinned === 'true' || isPinned === true;
+  }
+
+  // Search functionality - combine with $and to work with existing $or
+  if (search) {
+    query.$and = [
+      {
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { content: { $regex: search, $options: 'i' } },
+          { authorName: { $regex: search, $options: 'i' } }
+        ]
+      }
+    ];
+    // Rebuild query to properly combine $or and $and
+    const audienceFilter = query.$or;
+    delete query.$or;
+    query.$and = [
+      ...query.$and,
+      { $or: audienceFilter }
+    ];
+  }
+
+  // Execute query with sorting (pinned first, then by date)
+  const notices = await Notice.find(query)
+    .populate('author', 'name email')
+    .sort({ isPinned: -1, createdAt: -1 });
+
+  // Format dates for frontend
+  const formattedNotices = notices.map(notice => {
+    const noticeObj = notice.toObject();
+    const createdAt = new Date(notice.createdAt);
+    
+    return {
+      ...noticeObj,
+      id: noticeObj._id,
+      date: createdAt.toISOString().split('T')[0],
+      time: createdAt.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: true 
+      }),
+      author: noticeObj.authorName || (noticeObj.author?.name || 'Admin'),
+      imageUrl: noticeObj.imageUrl || noticeObj.imageData?.secure_url || '',
+      videoUrl: noticeObj.videoUrl || noticeObj.videoData?.secure_url || ''
+    };
+  });
+
+  res.status(200).json({
+    success: true,
+    count: formattedNotices.length,
+    data: formattedNotices
+  });
+});
+
+// @desc    Get published notices for project managers
+// @route   GET /api/pm/notices
+// @access  Protected (Project managers only)
+const getPublishedNoticesForPM = asyncHandler(async (req, res, next) => {
+  const { type, priority, isPinned, search } = req.query;
+
+  // Build query - only published notices targeted to 'project-managers' or 'all'
+  const query = {
+    status: 'published',
+    $or: [
+      { targetAudience: 'project-managers' },
+      { targetAudience: 'all' }
+    ]
+  };
+
+  // Add type filter
+  if (type && ['text', 'image', 'video'].includes(type)) {
+    query.type = type;
+  }
+
+  // Add priority filter
+  if (priority && ['low', 'medium', 'high', 'urgent'].includes(priority)) {
+    query.priority = priority;
+  }
+
+  // Add pinned filter
+  if (isPinned !== undefined) {
+    query.isPinned = isPinned === 'true' || isPinned === true;
+  }
+
+  // Search functionality - combine with $and to work with existing $or
+  if (search) {
+    query.$and = [
+      {
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { content: { $regex: search, $options: 'i' } },
+          { authorName: { $regex: search, $options: 'i' } }
+        ]
+      }
+    ];
+    // Rebuild query to properly combine $or and $and
+    const audienceFilter = query.$or;
+    delete query.$or;
+    query.$and = [
+      ...query.$and,
+      { $or: audienceFilter }
+    ];
+  }
+
+  // Execute query with sorting (pinned first, then by date)
+  const notices = await Notice.find(query)
+    .populate('author', 'name email')
+    .sort({ isPinned: -1, createdAt: -1 });
+
+  // Format dates for frontend
+  const formattedNotices = notices.map(notice => {
+    const noticeObj = notice.toObject();
+    const createdAt = new Date(notice.createdAt);
+    
+    return {
+      ...noticeObj,
+      id: noticeObj._id,
+      date: createdAt.toISOString().split('T')[0],
+      time: createdAt.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: true 
+      }),
+      author: noticeObj.authorName || (noticeObj.author?.name || 'Admin'),
+      imageUrl: noticeObj.imageUrl || noticeObj.imageData?.secure_url || '',
+      videoUrl: noticeObj.videoUrl || noticeObj.videoData?.secure_url || ''
+    };
+  });
+
+  res.status(200).json({
+    success: true,
+    count: formattedNotices.length,
+    data: formattedNotices
+  });
+});
+
+// @desc    Get published notices for employees
+// @route   GET /api/employee/notices
+// @access  Protected (Employees only)
+const getPublishedNoticesForEmployee = asyncHandler(async (req, res, next) => {
+  const { type, priority, isPinned, search } = req.query;
+
+  // Build query - only published notices targeted to 'development' or 'all'
+  const query = {
+    status: 'published',
+    $or: [
+      { targetAudience: 'development' },
+      { targetAudience: 'all' }
+    ]
+  };
+
+  // Add type filter
+  if (type && ['text', 'image', 'video'].includes(type)) {
+    query.type = type;
+  }
+
+  // Add priority filter
+  if (priority && ['low', 'medium', 'high', 'urgent'].includes(priority)) {
+    query.priority = priority;
+  }
+
+  // Add pinned filter
+  if (isPinned !== undefined) {
+    query.isPinned = isPinned === 'true' || isPinned === true;
+  }
+
+  // Search functionality - combine with $and to work with existing $or
+  if (search) {
+    query.$and = [
+      {
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { content: { $regex: search, $options: 'i' } },
+          { authorName: { $regex: search, $options: 'i' } }
+        ]
+      }
+    ];
+    // Rebuild query to properly combine $or and $and
+    const audienceFilter = query.$or;
+    delete query.$or;
+    query.$and = [
+      ...query.$and,
+      { $or: audienceFilter }
+    ];
+  }
+
+  // Execute query with sorting (pinned first, then by date)
+  const notices = await Notice.find(query)
+    .populate('author', 'name email')
+    .sort({ isPinned: -1, createdAt: -1 });
+
+  // Format dates for frontend
+  const formattedNotices = notices.map(notice => {
+    const noticeObj = notice.toObject();
+    const createdAt = new Date(notice.createdAt);
+    
+    return {
+      ...noticeObj,
+      id: noticeObj._id,
+      date: createdAt.toISOString().split('T')[0],
+      time: createdAt.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: true 
+      }),
+      author: noticeObj.authorName || (noticeObj.author?.name || 'Admin'),
+      imageUrl: noticeObj.imageUrl || noticeObj.imageData?.secure_url || '',
+      videoUrl: noticeObj.videoUrl || noticeObj.videoData?.secure_url || ''
+    };
+  });
+
+  res.status(200).json({
+    success: true,
+    count: formattedNotices.length,
+    data: formattedNotices
+  });
+});
+
 module.exports = {
   createNotice,
   getAllNotices,
@@ -587,6 +833,9 @@ module.exports = {
   deleteNotice,
   togglePinNotice,
   getNoticeStatistics,
-  incrementNoticeViews
+  incrementNoticeViews,
+  getPublishedNoticesForSales,
+  getPublishedNoticesForPM,
+  getPublishedNoticesForEmployee
 };
 

@@ -17,12 +17,12 @@ import {
   FiZoomIn,
   FiX
 } from 'react-icons/fi'
-import SL_navbar from '../SL-components/SL_navbar'
-import { salesNoticeService } from '../SL-services'
-import { useToast } from '../../../contexts/ToastContext'
-import Loading from '../../../components/ui/loading'
+import Employee_navbar from '../../DEV-components/Employee_navbar'
+import { employeeNoticeService } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
+import Loading from '../../../../components/ui/loading'
 
-const SL_notice_board = () => {
+const Employee_notice_board = () => {
   const navigate = useNavigate()
   const { toast } = useToast()
   const [selectedFilter, setSelectedFilter] = useState('all')
@@ -62,7 +62,7 @@ const SL_notice_board = () => {
         params.search = search
       }
 
-      const response = await salesNoticeService.getNotices(params)
+      const response = await employeeNoticeService.getNotices(params)
       
       if (response.success && response.data) {
         // Data is already formatted by backend
@@ -126,7 +126,7 @@ const SL_notice_board = () => {
   // Handle notice view increment
   const handleNoticeView = async (noticeId) => {
     try {
-      await salesNoticeService.incrementNoticeViews(noticeId)
+      await employeeNoticeService.incrementNoticeViews(noticeId)
       // Optimistically update views in local state
       setNoticesData(prev => 
         prev.map(n => 
@@ -446,7 +446,7 @@ const SL_notice_board = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <SL_navbar />
+        <Employee_navbar />
         <main className="max-w-7xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
           <div className="flex items-center justify-center h-96">
             <Loading size="large" />
@@ -458,7 +458,7 @@ const SL_notice_board = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <SL_navbar />
+      <Employee_navbar />
       
       <main className="max-w-7xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
         
@@ -505,29 +505,29 @@ const SL_notice_board = () => {
             className="mb-4"
           >
             <div className="relative">
-                    <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600" />
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Search notices..."
-                      className="w-full pl-8 pr-24 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                    />
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
-                      {refreshing && (
-                        <FiRefreshCw className="text-teal-600 animate-spin" />
-                      )}
-                      <button
-                        onClick={() => setShowFilters(!showFilters)}
-                        className={`p-2 rounded-lg transition-all duration-200 ${
-                          showFilters 
-                            ? 'bg-teal-500 text-white shadow-md' 
-                            : 'text-gray-500 hover:text-teal-600 hover:bg-teal-50 border border-teal-200'
-                        }`}
-                      >
-                        <FiFilter className="text-base" />
-                      </button>
-                    </div>
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search notices..."
+                className="w-full pl-8 pr-24 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+              />
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
+                {refreshing && (
+                  <FiRefreshCw className="text-teal-600 animate-spin" />
+                )}
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`p-2 rounded-lg transition-all duration-200 ${
+                    showFilters 
+                      ? 'bg-teal-500 text-white shadow-md' 
+                      : 'text-gray-500 hover:text-teal-600 hover:bg-teal-50 border border-teal-200'
+                  }`}
+                >
+                  <FiFilter className="text-base" />
+                </button>
+              </div>
             </div>
           </motion.div>
 
@@ -783,8 +783,9 @@ const SL_notice_board = () => {
                 <div className="space-y-3">
                   {noticesData.slice(0, 3).map((notice) => {
                     const TypeIcon = getTypeIcon(notice.type)
+                    const noticeId = notice.id || notice._id
                     return (
-                      <div key={notice.id} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                      <div key={noticeId} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200">
                         <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
                           <TypeIcon className="text-teal-600 text-sm" />
                         </div>
@@ -886,4 +887,5 @@ const SL_notice_board = () => {
   )
 }
 
-export default SL_notice_board
+export default Employee_notice_board
+

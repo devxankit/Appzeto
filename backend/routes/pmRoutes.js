@@ -7,6 +7,7 @@ const {
   getWalletSummary,
   getWalletTransactions
 } = require('../controllers/pmController');
+const { getPublishedNoticesForPM, incrementNoticeViews } = require('../controllers/noticeController');
 
 // Import team-related controllers
 const {
@@ -48,5 +49,9 @@ router.get('/team/leaderboard', getPMTeamLeaderboard);
 
 // PM project management routes
 router.use('/', pmProjectRoutes);
+
+// Notices
+router.get('/notices', getPublishedNoticesForPM);
+router.post('/notices/:id/view', incrementNoticeViews);
 
 module.exports = router;

@@ -22,10 +22,12 @@ export { paymentService } from './paymentService';
 export { analyticsService } from './analyticsService';
 export { teamService } from './teamService';
 export { pmWalletService } from './pmWalletService';
+export { default as pmNoticeService } from './pmNoticeService';
 export { default as socketService } from './socketService';
 
 // Employee Module Services
 export { default as employeeService } from './employeeService';
+export { default as employeeNoticeService } from './employeeNoticeService';
 
 // Client Module Services
 export { clientProjectService } from './clientProjectService';
