@@ -69,9 +69,7 @@ const { startDailyScheduler } = require('./services/dailyPointsScheduler');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-// CRITICAL: CORS must be configured FIRST, before any other middleware
-// This ensures CORS headers are set on all responses, including OPTIONS preflight requests
+// Define allowed origins
 const allowedOrigins = [
   process.env.CORS_ORIGIN || 'http://localhost:3000',
   'http://localhost:5173', // Vite default port
@@ -89,29 +87,28 @@ const allowedOrigins = [
   'https://api.supercrm.appzeto.com'  // API domain (for cross-origin requests)
 ];
 
-// Log all OPTIONS requests for debugging
-app.use((req, res, next) => {
-  if (req.method === 'OPTIONS') {
-    console.log('🔍 OPTIONS request received:', req.path);
-    console.log('   Origin:', req.headers.origin);
-    console.log('   Access-Control-Request-Method:', req.headers['access-control-request-method']);
-    console.log('   Access-Control-Request-Headers:', req.headers['access-control-request-headers']);
-  }
-  next();
-});
-
-// Configure CORS middleware - MUST be first middleware
-// This handles both preflight OPTIONS requests and actual requests
-// Using simpler configuration that works reliably with PM2
+// ROOT CAUSE FIX: CORS middleware MUST be the ABSOLUTE FIRST middleware
+// No other middleware can run before this, or CORS headers won't be set properly
+// This is critical for PM2 where module loading order matters
 app.use(cors({
-  origin: allowedOrigins, // Use array directly - more reliable than function callback
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  preflightContinue: false, // Let CORS middleware handle preflight, don't pass to next middleware
-  optionsSuccessStatus: 204 // Return 204 for successful OPTIONS requests
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+
+// Log OPTIONS requests AFTER CORS (so CORS headers are already set)
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    console.log('🔍 OPTIONS request received:', req.path);
+    console.log('   Origin:', req.headers.origin);
+    console.log('   Response headers:', res.getHeaders());
+  }
+  next();
+});
 
 // Log CORS configuration on startup
 console.log('🔒 CORS Configuration:');
@@ -133,6 +130,21 @@ app.use(morgan('combined')); // Logging
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.use(cookieParser()); // Parse cookies
+
+// Explicit OPTIONS handler BEFORE routes - ensures OPTIONS are handled even if route doesn't support it
+// This is a safety net in case CORS middleware doesn't catch it for some reason
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '86400');
+    console.log('✅ OPTIONS handled explicitly for:', req.path, 'Origin:', origin);
+  }
+  res.sendStatus(204);
+});
 
 // Basic route
 app.get('/', (req, res) => {
@@ -421,18 +433,30 @@ app.get('/api', (req, res) => {
   });
 });
 
-// 404 handler
+// 404 handler - ensure CORS headers are set
 app.use('*', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
   res.status(404).json({
     error: 'Route not found',
     message: `Cannot ${req.method} ${req.originalUrl}`
   });
 });
 
-// Error handling middleware
+// Error handling middleware - ensure CORS headers are set on errors
 app.use((err, req, res, next) => {
   console.error('Error occurred:', err);
   console.error('Error stack:', err.stack);
+  
+  // Set CORS headers on error responses
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
   
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal server error';
