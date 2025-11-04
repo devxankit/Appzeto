@@ -8,13 +8,23 @@ const path = require('path');
 // Load environment variables with explicit path resolution
 // This ensures it works in both development and production (PM2)
 const envPath = path.resolve(__dirname, '.env');
-require('dotenv').config({ path: envPath });
+const envResult = require('dotenv').config({ path: envPath });
+
+// Log .env file loading status
+if (envResult.error) {
+  console.warn('⚠️  WARNING: Could not load .env file:', envResult.error.message);
+  console.warn('   Environment variables will be read from system environment or PM2 config');
+} else {
+  console.log('✅ Loaded .env file from:', envPath);
+  console.log('   Environment variables loaded:', Object.keys(envResult.parsed || {}).length, 'variables');
+}
 
 // Validate critical environment variables on startup
 if (!process.env.MONGODB_URI) {
   console.error('❌ ERROR: MONGODB_URI environment variable is not set!');
   console.error('   Please ensure your .env file exists and contains MONGODB_URI');
   console.error('   Or set MONGODB_URI as an environment variable in your PM2 config');
+  console.error('   .env file path:', envPath);
   process.exit(1);
 }
 
@@ -60,26 +70,44 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(helmet()); // Security headers
+// Configure CORS first, before other middleware
+const allowedOrigins = [
+  process.env.CORS_ORIGIN || 'http://localhost:3000',
+  'http://localhost:5173', // Vite default port
+  'http://localhost:5174', // Vite alternative port
+  'http://localhost:5175', // Vite alternative port
+  'http://localhost:5176', // Vite alternative port
+  'http://localhost:5177', // Vite alternative port
+  'http://localhost:5178', // Vite alternative port
+  'http://localhost:5179', // Vite alternative port
+  'http://localhost:5180', // Vite alternative port
+  'http://localhost:5181', // Vite alternative port
+  'http://localhost:3000',  // React default port
+  'https://supercrm.appzeto.com',  // Production frontend
+  'https://www.supercrm.appzeto.com',  // Production frontend with www
+  'https://api.supercrm.appzeto.com'  // API domain (for cross-origin requests)
+];
+
 app.use(cors({
-  origin: [
-    process.env.CORS_ORIGIN || 'http://localhost:3000',
-    'http://localhost:5173', // Vite default port
-    'http://localhost:5174', // Vite alternative port
-    'http://localhost:5175', // Vite alternative port
-    'http://localhost:5176', // Vite alternative port
-    'http://localhost:5177', // Vite alternative port
-    'http://localhost:5178', // Vite alternative port
-    'http://localhost:5179', // Vite alternative port
-    'http://localhost:5180', // Vite alternative port
-    'http://localhost:5181', // Vite alternative port
-    'http://localhost:3000',  // React default port
-    'https://supercrm.appzeto.com',  // Production frontend
-    'https://www.supercrm.appzeto.com',  // Production frontend with www
-    'https://api.supercrm.appzeto.com'  // API domain (for cross-origin requests)
-  ],
-  credentials: true
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 })); // Enable CORS with credentials
+
+// Log CORS configuration on startup
+console.log('🔒 CORS Configuration:');
+console.log('   Allowed origins:', allowedOrigins.length, 'origins configured');
+console.log('   CORS_ORIGIN from .env:', process.env.CORS_ORIGIN || 'not set (using defaults)');
+
+// Configure Helmet to work with CORS
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false // Allow embedding if needed
+})); // Security headers
 app.use(morgan('combined')); // Logging
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
