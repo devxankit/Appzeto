@@ -70,7 +70,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-// Configure CORS first, before other middleware
+// CRITICAL: CORS must be configured FIRST, before any other middleware
+// This ensures CORS headers are set on all responses, including OPTIONS preflight requests
 const allowedOrigins = [
   process.env.CORS_ORIGIN || 'http://localhost:3000',
   'http://localhost:5173', // Vite default port
@@ -88,52 +89,46 @@ const allowedOrigins = [
   'https://api.supercrm.appzeto.com'  // API domain (for cross-origin requests)
 ];
 
-// Handle OPTIONS requests explicitly (CORS preflight)
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Max-Age', '86400'); // 24 hours
+// Log all OPTIONS requests for debugging
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    console.log('🔍 OPTIONS request received:', req.path);
+    console.log('   Origin:', req.headers.origin);
+    console.log('   Access-Control-Request-Method:', req.headers['access-control-request-method']);
+    console.log('   Access-Control-Request-Headers:', req.headers['access-control-request-headers']);
   }
-  res.sendStatus(204);
+  next();
 });
 
+// Configure CORS middleware - MUST be first middleware
+// This handles both preflight OPTIONS requests and actual requests
+// Using simpler configuration that works reliably with PM2
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, curl)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      // Log blocked origins for debugging
-      console.log('⚠️  CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: allowedOrigins, // Use array directly - more reliable than function callback
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-})); // Enable CORS with credentials
+  preflightContinue: false, // Let CORS middleware handle preflight, don't pass to next middleware
+  optionsSuccessStatus: 204 // Return 204 for successful OPTIONS requests
+}));
 
 // Log CORS configuration on startup
 console.log('🔒 CORS Configuration:');
 console.log('   Allowed origins:', allowedOrigins.length, 'origins configured');
 console.log('   CORS_ORIGIN from .env:', process.env.CORS_ORIGIN || 'not set (using defaults)');
+if (process.env.NODE_ENV === 'development') {
+  console.log('   Allowed origins list:', allowedOrigins);
+}
 
-// Configure Helmet to work with CORS - MUST be after CORS middleware
+// Configure Helmet AFTER CORS - Helmet must not interfere with CORS headers
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   crossOriginEmbedderPolicy: false, // Allow embedding if needed
   contentSecurityPolicy: false // Disable CSP to avoid conflicts with CORS
-})); // Security headers
+}));
 
+// Other middleware
 app.use(morgan('combined')); // Logging
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
