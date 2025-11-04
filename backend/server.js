@@ -87,9 +87,56 @@ const allowedOrigins = [
   'https://api.supercrm.appzeto.com'  // API domain (for cross-origin requests)
 ];
 
-// ROOT CAUSE FIX: CORS middleware MUST be the ABSOLUTE FIRST middleware
-// No other middleware can run before this, or CORS headers won't be set properly
-// This is critical for PM2 where module loading order matters
+// ROOT CAUSE FIX: Custom CORS middleware that runs BEFORE everything else
+// This ensures CORS headers are ALWAYS set, even if the cors package fails under PM2
+// MUST be the ABSOLUTE FIRST middleware - nothing can run before this
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Always log ALL requests for debugging (especially OPTIONS)
+  console.log(`📥 ${req.method} ${req.path} | Origin: ${origin || 'none'}`);
+  
+  // Handle OPTIONS preflight requests FIRST - respond immediately
+  if (req.method === 'OPTIONS') {
+    console.log('🔍 OPTIONS preflight detected');
+    console.log('   Path:', req.path);
+    console.log('   Origin:', origin || 'none');
+    console.log('   Access-Control-Request-Method:', req.headers['access-control-request-method']);
+    console.log('   Access-Control-Request-Headers:', req.headers['access-control-request-headers']);
+    
+    // Check if origin is allowed
+    if (origin && allowedOrigins.includes(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+      res.header('Access-Control-Max-Age', '86400');
+      console.log('✅ OPTIONS response sent with CORS headers');
+      return res.sendStatus(204);
+    } else if (!origin) {
+      // No origin (same-origin request) - allow it
+      console.log('✅ OPTIONS allowed (no origin - same origin)');
+      return res.sendStatus(204);
+    } else {
+      // Origin not in allowed list
+      console.log('❌ OPTIONS blocked - origin not allowed:', origin);
+      console.log('   Allowed origins:', allowedOrigins);
+      res.sendStatus(403);
+      return;
+    }
+  }
+  
+  // For non-OPTIONS requests, set CORS headers if origin is allowed
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
+  }
+  
+  next();
+});
+
+// Also use cors package as additional layer (but custom middleware above handles OPTIONS first)
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
@@ -99,16 +146,6 @@ app.use(cors({
   preflightContinue: false,
   optionsSuccessStatus: 204
 }));
-
-// Log OPTIONS requests AFTER CORS (so CORS headers are already set)
-app.use((req, res, next) => {
-  if (req.method === 'OPTIONS') {
-    console.log('🔍 OPTIONS request received:', req.path);
-    console.log('   Origin:', req.headers.origin);
-    console.log('   Response headers:', res.getHeaders());
-  }
-  next();
-});
 
 // Log CORS configuration on startup
 console.log('🔒 CORS Configuration:');
@@ -131,20 +168,7 @@ app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.use(cookieParser()); // Parse cookies
 
-// Explicit OPTIONS handler BEFORE routes - ensures OPTIONS are handled even if route doesn't support it
-// This is a safety net in case CORS middleware doesn't catch it for some reason
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Max-Age', '86400');
-    console.log('✅ OPTIONS handled explicitly for:', req.path, 'Origin:', origin);
-  }
-  res.sendStatus(204);
-});
+// Note: OPTIONS are handled by custom CORS middleware above, so no need for explicit handler here
 
 // Basic route
 app.get('/', (req, res) => {
