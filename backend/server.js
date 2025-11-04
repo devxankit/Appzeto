@@ -48,6 +48,7 @@ const employeeAnalyticsRoutes = require('./routes/employeeAnalyticsRoutes');
 const employeeMilestoneRoutes = require('./routes/employeeMilestoneRoutes');
 const clientProjectRoutes = require('./routes/clientProjectRoutes');
 const clientPaymentRoutes = require('./routes/clientPaymentRoutes');
+const requestRoutes = require('./routes/requestRoutes');
 
 // Import socket service
 const socketService = require('./services/socketService');
@@ -149,12 +150,18 @@ app.use('/sales', salesRoutes);
 app.use('/employee', employeeRoutes);
 app.use('/client', clientRoutes);
 
+// Universal API routes with /api prefix (available to all authenticated users)
+app.use('/api/requests', requestRoutes);
+
 // PM Module API routes (PM-only) with /api prefix
 app.use('/api/projects', projectRoutes);
 app.use('/api/milestones', milestoneRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/analytics', analyticsRoutes);
+
+// Universal API routes without /api prefix (for reverse proxy compatibility)
+app.use('/requests', requestRoutes);
 
 // PM Module API routes without /api prefix (for reverse proxy compatibility)
 app.use('/projects', projectRoutes);

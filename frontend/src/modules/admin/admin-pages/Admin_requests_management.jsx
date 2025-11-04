@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
+import adminRequestService from '../admin-services/adminRequestService'
 import { 
   FiFileText,
   FiCheckSquare,
@@ -29,236 +30,171 @@ import {
   FiArrowUp,
   FiHome,
   FiCode,
-  FiShoppingCart
+  FiShoppingCart,
+  FiPlus
 } from 'react-icons/fi'
 
 const Admin_requests_management = () => {
   // State management
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
+  const [requestDirection, setRequestDirection] = useState('incoming') // 'incoming', 'outgoing', 'all'
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(20)
   
+  // Data states
+  const [statistics, setStatistics] = useState({
+    totalRequests: 0,
+    pendingRequests: 0,
+    approvedRequests: 0,
+    rejectedRequests: 0,
+    urgentRequests: 0,
+    clientRequests: 0,
+    employeeRequests: 0,
+    pmRequests: 0,
+    salesRequests: 0,
+    adminRequests: 0
+  })
+  const [allRequests, setAllRequests] = useState([])
+  const [recipients, setRecipients] = useState({})
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    pages: 0
+  })
+  
   // Modal states
   const [showViewModal, setShowViewModal] = useState(false)
   const [showResponseModal, setShowResponseModal] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [responseText, setResponseText] = useState('')
   const [responseType, setResponseType] = useState('approve')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Create request form state
+  const [newRequest, setNewRequest] = useState({
+    title: '',
+    description: '',
+    type: 'approval',
+    priority: 'normal',
+    recipientType: 'client', // 'client', 'employee', 'pm', 'sales'
+    recipientId: '',
+    project: '',
+    category: '',
+    amount: ''
+  })
 
-  // Mock data - Request statistics
-  const statistics = {
-    totalRequests: 156,
-    pendingRequests: 42,
-    approvedRequests: 89,
-    rejectedRequests: 25,
-    urgentRequests: 18,
-    clientRequests: 45,
-    employeeRequests: 38,
-    pmRequests: 35,
-    salesRequests: 38
+  // Load data from API
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      
+      // Load statistics
+      const statsResponse = await adminRequestService.getStatistics({ direction: 'all' })
+      if (statsResponse.success) {
+        setStatistics(statsResponse.data)
+      }
+      
+      // Load requests
+      await loadRequests()
+      
+      // Load recipients for create modal
+      await loadRecipients()
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // Mock data - All requests from different modules
-  const allRequests = [
-    // Client Requests
-    {
-      id: 1,
-      module: 'client',
-      type: 'approval',
-      title: 'Design Approval Required',
-      description: 'Please review and approve the new homepage design mockups for the e-commerce website.',
-      status: 'pending',
-      priority: 'high',
-      submittedDate: '2024-01-20',
-      submittedBy: 'John Smith (Client)',
-      submittedByType: 'client',
-      projectName: 'E-commerce Website',
-      category: 'Design Review',
-      response: null
-    },
-    {
-      id: 2,
-      module: 'client',
-      type: 'feedback',
-      title: 'Content Review Needed',
-      description: 'Please provide feedback on the product descriptions and marketing copy.',
-      status: 'responded',
-      priority: 'normal',
-      submittedDate: '2024-01-18',
-      submittedBy: 'Sarah Johnson (Client)',
-      submittedByType: 'client',
-      projectName: 'E-commerce Website',
-      category: 'Content Review',
-      response: {
-        type: 'approve',
-        message: 'Content looks good. Please proceed with the implementation.',
-        respondedDate: '2024-01-19',
-        respondedBy: 'Admin'
+  // Load requests with current filters
+  const loadRequests = async () => {
+    try {
+      const params = {
+        direction: requestDirection,
+        page: currentPage,
+        limit: itemsPerPage
       }
-    },
-    // Employee Requests
-    {
-      id: 3,
-      module: 'employee',
-      type: 'approval',
-      title: 'Request for Additional Development Time',
-      description: 'The current timeline for the payment integration is too tight. I need 3 additional days to ensure proper testing and security implementation.',
-      status: 'pending',
-      priority: 'high',
-      submittedDate: '2024-01-20',
-      submittedBy: 'John Doe (Employee)',
-      submittedByType: 'employee',
-      projectName: 'E-commerce Website',
-      category: 'Timeline Extension',
-      response: null
-    },
-    {
-      id: 4,
-      module: 'employee',
-      type: 'approval',
-      title: 'Need Access to Production Database',
-      description: 'I need temporary access to the production database to debug the user authentication issue that\'s affecting multiple clients.',
-      status: 'responded',
-      priority: 'urgent',
-      submittedDate: '2024-01-18',
-      submittedBy: 'Mike Johnson (Employee)',
-      submittedByType: 'employee',
-      projectName: 'Mobile App Development',
-      category: 'Access Request',
-      response: {
-        type: 'approve',
-        message: 'Access granted. Please use the temporary credentials provided in the secure channel.',
-        respondedDate: '2024-01-19',
-        respondedBy: 'Admin'
+      
+      if (activeTab !== 'all') params.module = activeTab
+      if (selectedFilter !== 'all') params.status = selectedFilter
+      if (searchTerm) params.search = searchTerm
+      
+      const response = await adminRequestService.getRequests(params)
+      if (response.success) {
+        // Transform API data to match component expectations
+        const transformedRequests = response.data.map(req => ({
+          id: req._id || req.id,
+          module: req.module,
+          type: req.type,
+          title: req.title,
+          description: req.description,
+          status: req.status,
+          priority: req.priority,
+          submittedDate: req.createdAt,
+          submittedBy: req.requestedBy?.name || 'Unknown',
+          submittedByType: req.requestedByModel?.toLowerCase() || req.module,
+          projectName: req.project?.name || 'N/A',
+          category: req.category || '',
+          amount: req.amount,
+          response: req.response ? {
+            type: req.response.type,
+            message: req.response.message,
+            respondedDate: req.response.respondedDate,
+            respondedBy: req.response.respondedBy?.name || 'Admin'
+          } : null,
+          // Store full request object for API calls
+          _full: req
+        }))
+        setAllRequests(transformedRequests)
+        
+        // Update pagination info
+        if (response.pagination) {
+          setPagination(response.pagination)
+        }
       }
-    },
-    // PM Requests
-    {
-      id: 5,
-      module: 'pm',
-      type: 'approval',
-      title: 'Budget Approval for New Features',
-      description: 'We need additional budget approval for implementing the advanced analytics features that the client requested.',
-      status: 'pending',
-      priority: 'high',
-      submittedDate: '2024-01-15',
-      submittedBy: 'Lisa Brown (PM)',
-      submittedByType: 'pm',
-      projectName: 'Analytics Dashboard',
-      category: 'Budget Approval',
-      response: null
-    },
-    {
-      id: 6,
-      module: 'pm',
-      type: 'confirmation',
-      title: 'Resource Allocation Request',
-      description: 'We need additional server resources for the upcoming project. Please approve the resource allocation request.',
-      status: 'responded',
-      priority: 'normal',
-      submittedDate: '2024-01-12',
-      submittedBy: 'David Wilson (PM)',
-      submittedByType: 'pm',
-      projectName: 'Infrastructure Upgrade',
-      category: 'Resource Management',
-      response: {
-        type: 'approve',
-        message: 'Resources approved. New servers will be provisioned by end of week.',
-        respondedDate: '2024-01-13',
-        respondedBy: 'Admin'
-      }
-    },
-    // Sales Requests
-    {
-      id: 7,
-      module: 'sales',
-      type: 'payment-recovery',
-      title: 'Payment Recovery Request',
-      description: 'Request to recover pending payment from Teris project. Client has not responded to multiple follow-ups.',
-      status: 'pending',
-      priority: 'urgent',
-      submittedDate: '2024-01-20',
-      submittedBy: 'Alex Chen (Sales)',
-      submittedByType: 'sales',
-      projectName: 'E-commerce Website',
-      category: 'Payment Recovery',
-      amount: 30000,
-      response: null
-    },
-    {
-      id: 8,
-      module: 'sales',
-      type: 'withdrawal',
-      title: 'Withdrawal Request',
-      description: 'Request to withdraw earnings to bank account. All client payments have been recovered.',
-      status: 'approved',
-      priority: 'normal',
-      submittedDate: '2024-01-19',
-      submittedBy: 'Maria Garcia (Sales)',
-      submittedByType: 'sales',
-      projectName: 'Personal Withdrawal',
-      category: 'Earnings Withdrawal',
-      amount: 15000,
-      response: {
-        type: 'approve',
-        message: 'Withdrawal approved. Amount will be transferred within 2-3 business days.',
-        respondedDate: '2024-01-20',
-        respondedBy: 'Admin'
-      }
-    },
-    {
-      id: 9,
-      module: 'sales',
-      type: 'hold-work',
-      title: 'Hold Work Request',
-      description: 'Request to temporarily hold work on Ankit Ahirwar project due to payment issues.',
-      status: 'pending',
-      priority: 'high',
-      submittedDate: '2024-01-18',
-      submittedBy: 'Robert Kim (Sales)',
-      submittedByType: 'sales',
-      projectName: 'Mobile App Development',
-      category: 'Work Management',
-      response: null
-    },
-    {
-      id: 10,
-      module: 'sales',
-      type: 'increase-cost',
-      title: 'Increase Cost Request',
-      description: 'Request to increase project cost due to additional requirements from client.',
-      status: 'rejected',
-      priority: 'normal',
-      submittedDate: '2024-01-16',
-      submittedBy: 'Jennifer Lee (Sales)',
-      submittedByType: 'sales',
-      projectName: 'E-commerce Platform',
-      category: 'Cost Management',
-      amount: 25000,
-      response: {
-        type: 'reject',
-        message: 'Cost increase not approved. Please renegotiate with client or find alternative solutions.',
-        respondedDate: '2024-01-17',
-        respondedBy: 'Admin'
-      }
+    } catch (error) {
+      console.error('Error loading requests:', error)
     }
-  ]
+  }
 
-  // Simulate data loading
-  const loadData = async () => {
-    setLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setLoading(false)
+  // Load recipients by type
+  const loadRecipients = async () => {
+    try {
+      const types = ['client', 'employee', 'pm', 'sales']
+      const recipientsData = {}
+      
+      for (const type of types) {
+        try {
+          const response = await adminRequestService.getRecipients(type)
+          if (response.success) {
+            recipientsData[type] = response.data
+          }
+        } catch (error) {
+          console.error(`Error loading ${type} recipients:`, error)
+        }
+      }
+      
+      setRecipients(recipientsData)
+    } catch (error) {
+      console.error('Error loading recipients:', error)
+    }
   }
 
   useEffect(() => {
     loadData()
   }, [])
+
+  // Reload requests when filters change
+  useEffect(() => {
+    if (!loading) {
+      loadRequests()
+    }
+  }, [activeTab, requestDirection, selectedFilter, searchTerm, currentPage])
 
   // Helper functions
   const getStatusColor = (status) => {
@@ -315,14 +251,20 @@ const Admin_requests_management = () => {
         return FiCheckSquare
       case 'payment-recovery':
         return FiCreditCard
-      case 'withdrawal':
-        return FiDollarSign
       case 'hold-work':
         return FiPause
       case 'accelerate-work':
         return FiTrendingUp
       case 'increase-cost':
         return FiDollarSign
+      case 'access-request':
+        return FiShield
+      case 'timeline-extension':
+        return FiClock
+      case 'budget-approval':
+        return FiDollarSign
+      case 'resource-allocation':
+        return FiTrendingUp
       default:
         return FiAlertCircle
     }
@@ -360,40 +302,10 @@ const Admin_requests_management = () => {
     }).format(amount)
   }
 
-  // Filter data based on active tab, search and filter criteria
-  const filteredData = useMemo(() => {
-    let data = allRequests
-
-    // Filter by module/tab
-    if (activeTab !== 'all') {
-      data = data.filter(request => request.module === activeTab)
-    }
-
-    // Filter by search term
-    if (searchTerm) {
-      data = data.filter(request =>
-        request.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        request.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        request.submittedBy.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        request.projectName.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    }
-
-    // Filter by status
-    if (selectedFilter !== 'all') {
-      data = data.filter(request => request.status === selectedFilter)
-    }
-
-    return data
-  }, [activeTab, searchTerm, selectedFilter])
-
-  // Pagination
-  const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage
-    return filteredData.slice(startIndex, startIndex + itemsPerPage)
-  }, [filteredData, currentPage, itemsPerPage])
-
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage)
+  // Use allRequests directly (filtering is done on backend)
+  const filteredData = allRequests
+  const paginatedData = allRequests
+  const totalPages = pagination.pages || 1
 
   // Management functions
   const handleView = (request) => {
@@ -413,25 +325,88 @@ const Admin_requests_management = () => {
     
     setIsSubmitting(true)
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    try {
+      const requestId = selectedRequest._full?._id || selectedRequest.id
+      const response = await adminRequestService.respondToRequest(requestId, responseType, responseText)
+      
+      if (response.success) {
+        // Reload requests
+        await loadRequests()
+        await loadData() // Reload statistics
+        setShowResponseModal(false)
+        setSelectedRequest(null)
+        setResponseText('')
+        setResponseType('approve')
+      }
+    } catch (error) {
+      console.error('Error submitting response:', error)
+      alert(error.message || 'Failed to submit response')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleCreateRequest = async () => {
+    if (!newRequest.title.trim() || !newRequest.description.trim() || !newRequest.recipientId) {
+      alert('Please fill in all required fields')
+      return
+    }
+
+    if (newRequest.type === 'payment-recovery' && !newRequest.amount) {
+      alert('Amount is required for payment recovery requests')
+      return
+    }
+
+    setIsSubmitting(true)
     
-    console.log('Response submitted:', {
-      requestId: selectedRequest.id,
-      responseType,
-      responseText,
-      timestamp: new Date().toISOString()
-    })
-    
-    setIsSubmitting(false)
-    setShowResponseModal(false)
-    setSelectedRequest(null)
-    setResponseText('')
+    try {
+      const requestData = {
+        title: newRequest.title,
+        description: newRequest.description,
+        type: newRequest.type,
+        priority: newRequest.priority,
+        recipient: newRequest.recipientId,
+        recipientModel: newRequest.recipientType === 'pm' ? 'PM' : newRequest.recipientType.charAt(0).toUpperCase() + newRequest.recipientType.slice(1),
+        category: newRequest.category || '',
+        amount: newRequest.type === 'payment-recovery' ? parseFloat(newRequest.amount) : undefined
+      }
+
+      if (newRequest.project) {
+        requestData.project = newRequest.project
+      }
+
+      const response = await adminRequestService.createRequest(requestData)
+      
+      if (response.success) {
+        // Reset form
+        setNewRequest({
+          title: '',
+          description: '',
+          type: 'approval',
+          priority: 'normal',
+          recipientType: 'client',
+          recipientId: '',
+          project: '',
+          category: '',
+          amount: ''
+        })
+        setShowCreateModal(false)
+        // Reload data
+        await loadData()
+        setRequestDirection('outgoing') // Switch to outgoing tab to see new request
+      }
+    } catch (error) {
+      console.error('Error creating request:', error)
+      alert(error.message || 'Failed to create request')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const closeModals = () => {
     setShowViewModal(false)
     setShowResponseModal(false)
+    setShowCreateModal(false)
     setSelectedRequest(null)
     setResponseText('')
     setResponseType('approve')
@@ -474,13 +449,22 @@ const Admin_requests_management = () => {
                   Comprehensive oversight and management of all system requests
                 </p>
               </div>
-              <button
-                onClick={loadData}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-              >
-                <FiRefreshCw className="text-sm" />
-                <span>Refresh</span>
-              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                >
+                  <FiPlus className="text-sm" />
+                  <span>Create Request</span>
+                </button>
+                <button
+                  onClick={loadData}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                >
+                  <FiRefreshCw className="text-sm" />
+                  <span>Refresh</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -625,12 +609,44 @@ const Admin_requests_management = () => {
             </motion.div>
           </div>
 
+          {/* Direction Tabs */}
+          <div className="mb-4">
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8">
+                {[
+                  { id: 'incoming', label: 'Incoming Requests', icon: FiArrowDown },
+                  { id: 'outgoing', label: 'Outgoing Requests', icon: FiArrowUp },
+                  { id: 'all', label: 'All Requests', icon: FiFileText }
+                ].map((tab) => {
+                  const Icon = tab.icon
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setRequestDirection(tab.id)
+                        setCurrentPage(1)
+                      }}
+                      className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${
+                        requestDirection === tab.id
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <Icon className="text-sm" />
+                      <span>{tab.label}</span>
+                    </button>
+                  )
+                })}
+              </nav>
+            </div>
+          </div>
+
           {/* Navigation Tabs */}
           <div className="mb-6">
             <div className="border-b border-gray-200">
               <nav className="-mb-px flex space-x-8">
                 {[
-                  { id: 'all', label: 'All Requests', icon: FiFileText },
+                  { id: 'all', label: 'All Modules', icon: FiFileText },
                   { id: 'client', label: 'Client Requests', icon: FiUsers },
                   { id: 'employee', label: 'Employee Requests', icon: FiUser },
                   { id: 'pm', label: 'PM Requests', icon: FiShield },
@@ -640,7 +656,10 @@ const Admin_requests_management = () => {
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
+                      onClick={() => {
+                        setActiveTab(tab.id)
+                        setCurrentPage(1)
+                      }}
                       className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === tab.id
                           ? 'border-blue-500 text-blue-600'
@@ -774,7 +793,7 @@ const Admin_requests_management = () => {
           {totalPages > 1 && (
             <div className="mt-8 flex items-center justify-between">
               <div className="text-sm text-gray-700">
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, pagination.total)} of {pagination.total} results
               </div>
               <div className="flex items-center space-x-2">
                 <button
@@ -1066,6 +1085,204 @@ const Admin_requests_management = () => {
                        responseType === 'reject' ? 'Reject Request' :
                        'Request Changes'}
                     </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Create Request Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-hidden flex flex-col"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <FiPlus className="text-green-600 text-lg" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Create New Request</h2>
+                  <p className="text-sm text-gray-500">Send a request to a team member</p>
+                </div>
+              </div>
+              <button
+                onClick={closeModals}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <FiX className="text-lg" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-6">
+                {/* Request Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-3">Request Type</label>
+                  <select
+                    value={newRequest.type}
+                    onChange={(e) => setNewRequest({...newRequest, type: e.target.value, amount: e.target.value === 'payment-recovery' ? newRequest.amount : ''})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="approval">Approval</option>
+                    <option value="feedback">Feedback</option>
+                    <option value="confirmation">Confirmation</option>
+                    <option value="payment-recovery">Payment Recovery</option>
+                    <option value="hold-work">Hold Work</option>
+                    <option value="accelerate-work">Accelerate Work</option>
+                    <option value="increase-cost">Increase Cost</option>
+                    <option value="access-request">Access Request</option>
+                    <option value="timeline-extension">Timeline Extension</option>
+                    <option value="budget-approval">Budget Approval</option>
+                    <option value="resource-allocation">Resource Allocation</option>
+                  </select>
+                </div>
+
+                {/* Recipient Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-3">Recipient Type</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {['client', 'employee', 'pm', 'sales'].map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setNewRequest({...newRequest, recipientType: type, recipientId: ''})}
+                        className={`p-3 rounded-lg border-2 transition-all duration-200 ${
+                          newRequest.recipientType === type
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 hover:border-blue-300 text-gray-700'
+                        }`}
+                      >
+                        <span className="text-sm font-medium capitalize">{type}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Recipient Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Select Recipient *</label>
+                  <select
+                    value={newRequest.recipientId}
+                    onChange={(e) => setNewRequest({...newRequest, recipientId: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Select a {newRequest.recipientType}...</option>
+                    {recipients[newRequest.recipientType]?.map((recipient) => (
+                      <option key={recipient.id} value={recipient.id}>
+                        {recipient.name} {recipient.email ? `(${recipient.email})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Title */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Title *</label>
+                  <input
+                    type="text"
+                    value={newRequest.title}
+                    onChange={(e) => setNewRequest({...newRequest, title: e.target.value})}
+                    placeholder="Enter request title"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Description *</label>
+                  <textarea
+                    value={newRequest.description}
+                    onChange={(e) => setNewRequest({...newRequest, description: e.target.value})}
+                    placeholder="Enter request description"
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                    required
+                  />
+                </div>
+
+                {/* Priority and Category */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Priority</label>
+                    <select
+                      value={newRequest.priority}
+                      onChange={(e) => setNewRequest({...newRequest, priority: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="low">Low</option>
+                      <option value="normal">Normal</option>
+                      <option value="high">High</option>
+                      <option value="urgent">Urgent</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Category</label>
+                    <input
+                      type="text"
+                      value={newRequest.category}
+                      onChange={(e) => setNewRequest({...newRequest, category: e.target.value})}
+                      placeholder="Optional category"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Amount (for payment-recovery) */}
+                {newRequest.type === 'payment-recovery' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Amount (₹) *</label>
+                    <input
+                      type="number"
+                      value={newRequest.amount}
+                      onChange={(e) => setNewRequest({...newRequest, amount: e.target.value})}
+                      placeholder="Enter amount"
+                      min="0"
+                      step="0.01"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={closeModals}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateRequest}
+                disabled={isSubmitting || !newRequest.title.trim() || !newRequest.description.trim() || !newRequest.recipientId}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors duration-200 flex items-center space-x-2 ${
+                  isSubmitting || !newRequest.title.trim() || !newRequest.description.trim() || !newRequest.recipientId
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Creating...</span>
+                  </>
+                ) : (
+                  <>
+                    <FiPlus className="w-4 h-4" />
+                    <span>Create Request</span>
                   </>
                 )}
               </button>

@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
+import employeeRequestService from '../../DEV-services/employeeRequestService'
 import { 
   FiFileText, 
   FiCheckSquare, 
@@ -25,6 +26,7 @@ import {
 } from 'react-icons/fi'
 
 const Employee_request = () => {
+  const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedRequest, setSelectedRequest] = useState(null)
@@ -43,237 +45,142 @@ const Employee_request = () => {
     description: '',
     type: 'approval',
     priority: 'normal',
-    projectName: '',
-    recipientType: 'pm' // 'pm', 'client', or 'admin'
+    recipientType: 'pm', // 'pm', 'client', or 'admin'
+    recipientId: '',
+    category: ''
   })
 
-  // Mock requests data - Employee's perspective
-  const [requestsData] = useState({
+  // Data states
+  const [requestsData, setRequestsData] = useState({
     incoming: {
       statistics: {
-        total: 12,
-        pending: 5,
-        responded: 6,
-        urgent: 2
+        total: 0,
+        pending: 0,
+        responded: 0,
+        urgent: 0
       },
-      requests: [
-        {
-          id: 1,
-          title: "Code Review Request",
-          description: "Please review the authentication module code I've implemented. I need your feedback before merging to main branch.",
-          status: "pending",
-          priority: "high",
-          submittedDate: "2024-01-20",
-          submittedBy: "Sarah Johnson (PM)",
-          submittedByType: "pm",
-          type: "approval",
-          projectName: "E-commerce Website",
-          response: null
-        },
-        {
-          id: 2,
-          title: "Task Assignment - Payment Integration",
-          description: "I'm assigning you the payment gateway integration task. Please review the requirements and let me know if you need any clarification.",
-          status: "responded",
-          priority: "normal",
-          submittedDate: "2024-01-18",
-          submittedBy: "Mike Chen (PM)",
-          submittedByType: "pm",
-          type: "approval",
-          projectName: "Payment System",
-          response: {
-            type: "approve",
-            message: "I've reviewed the requirements and I'm ready to start. I'll begin with the API integration first.",
-            respondedDate: "2024-01-19",
-            respondedBy: "You (Employee)"
-          }
-        },
-        {
-          id: 3,
-          title: "Client Feedback on Dashboard Design",
-          description: "The client has provided feedback on the dashboard design. They want to discuss the color scheme and layout changes.",
-          status: "pending",
-          priority: "urgent",
-          submittedDate: "2024-01-22",
-          submittedBy: "John Smith (Client)",
-          submittedByType: "client",
-          type: "feedback",
-          projectName: "Dashboard Redesign",
-          response: null
-        },
-        {
-          id: 4,
-          title: "Bug Fix Request - User Authentication",
-          description: "There's a critical bug in the user authentication flow. Please investigate and fix it as soon as possible.",
-          status: "responded",
-          priority: "urgent",
-          submittedDate: "2024-01-15",
-          submittedBy: "Sarah Johnson (PM)",
-          submittedByType: "pm",
-          type: "approval",
-          projectName: "User Management",
-          response: {
-            type: "approve",
-            message: "I've identified the issue and implemented the fix. The authentication flow is now working correctly.",
-            respondedDate: "2024-01-16",
-            respondedBy: "You (Employee)"
-          }
-        },
-        {
-          id: 5,
-          title: "Meeting Request - Project Discussion",
-          description: "Let's schedule a meeting to discuss the upcoming project requirements and timeline.",
-          status: "pending",
-          priority: "normal",
-          submittedDate: "2024-01-23",
-          submittedBy: "Lisa Brown (Client)",
-          submittedByType: "client",
-          type: "feedback",
-          projectName: "New Project",
-          response: null
-        },
-        {
-          id: 6,
-          title: "Documentation Update Request",
-          description: "Please update the API documentation with the new endpoints we've implemented.",
-          status: "responded",
-          priority: "normal",
-          submittedDate: "2024-01-20",
-          submittedBy: "Mike Chen (PM)",
-          submittedByType: "pm",
-          type: "approval",
-          projectName: "API Documentation",
-          response: {
-            type: "request_changes",
-            message: "I'll update the documentation, but I need clarification on the authentication flow section.",
-            respondedDate: "2024-01-21",
-            respondedBy: "You (Employee)"
-          }
-        }
-      ]
+      requests: []
     },
     outgoing: {
       statistics: {
-        total: 8,
-        pending: 2,
-        responded: 5,
-        draft: 1
+        total: 0,
+        pending: 0,
+        responded: 0,
+        draft: 0
       },
-      requests: [
-      {
-        id: 1,
-        title: "Request for Additional Development Time",
-        description: "The current timeline for the payment integration is too tight. I need 3 additional days to ensure proper testing and security implementation.",
-        status: "pending",
-        priority: "high",
-        submittedDate: "2024-01-20",
-        recipientType: "pm",
-        recipientName: "Sarah Johnson (PM)",
-        type: "approval",
-        projectName: "E-commerce Website",
-        response: null
-      },
-      {
-        id: 2,
-        title: "Need Access to Production Database",
-        description: "I need temporary access to the production database to debug the user authentication issue that's affecting multiple clients.",
-        status: "responded",
-        priority: "urgent",
-        submittedDate: "2024-01-18",
-        recipientType: "pm",
-        recipientName: "Mike Chen (PM)",
-        type: "approval",
-        projectName: "Mobile App Development",
-        response: {
-          type: "approve",
-          message: "Access granted. Please use the temporary credentials provided in the secure channel. Access will expire in 24 hours.",
-          respondedDate: "2024-01-19",
-          respondedBy: "Mike Chen (PM)"
-        }
-      },
-      {
-        id: 3,
-        title: "Client Feedback on UI Design",
-        description: "The client has provided feedback on the new dashboard design. They want to discuss the color scheme and layout changes before we proceed.",
-        status: "responded",
-        priority: "normal",
-        submittedDate: "2024-01-15",
-        recipientType: "client",
-        recipientName: "John Smith (Client)",
-        type: "feedback",
-        projectName: "Dashboard Redesign",
-        response: {
-          type: "request_changes",
-          message: "I've reviewed the feedback. Let's schedule a meeting to discuss the changes. I'm available tomorrow afternoon.",
-          respondedDate: "2024-01-16",
-          respondedBy: "John Smith (Client)"
-        }
-      },
-      {
-        id: 4,
-        title: "Request for Code Review",
-        description: "I've completed the API integration module. Could someone please review the code before we merge it to the main branch?",
-        status: "pending",
-        priority: "normal",
-        submittedDate: "2024-01-22",
-        recipientType: "pm",
-        recipientName: "Sarah Johnson (PM)",
-        type: "approval",
-        projectName: "API Integration",
-        response: null
-      },
-      {
-        id: 5,
-        title: "Hardware Requirements Confirmation",
-        description: "For the video processing feature, I need to confirm if we have the necessary server resources. The current setup might not handle the load.",
-        status: "responded",
-        priority: "high",
-        submittedDate: "2024-01-10",
-        recipientType: "pm",
-        recipientName: "Mike Chen (PM)",
-        type: "confirmation",
-        projectName: "Video Processing Module",
-        response: {
-          type: "approve",
-          message: "Hardware upgrade approved. New servers will be provisioned by end of week. Proceed with development.",
-          respondedDate: "2024-01-12",
-          respondedBy: "Mike Chen (PM)"
-        }
-      },
-      {
-        id: 6,
-        title: "Client Meeting Request",
-        description: "I'd like to schedule a meeting with the client to demonstrate the new features and get their feedback on the current progress.",
-        status: "responded",
-        priority: "normal",
-        submittedDate: "2024-01-12",
-        recipientType: "client",
-        recipientName: "Lisa Brown (Client)",
-        type: "feedback",
-        projectName: "Feature Development",
-        response: {
-          type: "approve",
-          message: "Great idea! I'm available next Tuesday at 2 PM. Let me know if that works for you.",
-          respondedDate: "2024-01-13",
-          respondedBy: "Lisa Brown (Client)"
-        }
-      },
-      {
-        id: 7,
-        title: "Draft: Request for Training Resources",
-        description: "I need access to advanced React training materials to improve my skills for the upcoming complex components.",
-        status: "draft",
-        priority: "low",
-        submittedDate: "2024-01-23",
-        recipientType: "pm",
-        recipientName: "Sarah Johnson (PM)",
-        type: "approval",
-        projectName: "Skill Development",
-        response: null
-      }
-    ]
+      requests: []
     }
   })
+  const [recipients, setRecipients] = useState({})
+
+  // Load data from API
+  useEffect(() => {
+    loadData()
+  }, [requestType, activeFilter])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      
+      // Load statistics
+      const statsResponse = await employeeRequestService.getStatistics({ direction: requestType === 'all' ? 'all' : requestType })
+      if (statsResponse.success) {
+        const stats = statsResponse.data
+        setRequestsData(prev => ({
+          ...prev,
+          [requestType]: {
+            ...prev[requestType],
+            statistics: {
+              total: stats.totalRequests || 0,
+              pending: stats.pendingRequests || 0,
+              responded: stats.respondedRequests || 0,
+              urgent: stats.urgentRequests || 0,
+              draft: 0
+            }
+          }
+        }))
+      }
+      
+      // Load requests
+      await loadRequests()
+      
+      // Load recipients
+      await loadRecipients()
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadRequests = async () => {
+    try {
+      const params = {
+        direction: requestType === 'all' ? 'all' : requestType,
+        status: activeFilter !== 'all' ? activeFilter : undefined,
+        search: searchTerm || undefined
+      }
+      
+      const response = await employeeRequestService.getRequests(params)
+      if (response.success) {
+        const transformedRequests = response.data.map(req => ({
+          id: req._id || req.id,
+          title: req.title,
+          description: req.description,
+          status: req.status,
+          priority: req.priority,
+          submittedDate: req.createdAt,
+          submittedBy: req.requestedBy?.name || 'Unknown',
+          submittedByType: req.requestedByModel?.toLowerCase() || 'unknown',
+          recipientType: req.recipientModel?.toLowerCase() || 'unknown',
+          recipientName: req.recipient?.name || 'Unknown',
+          type: req.type,
+          projectName: req.project?.name || 'N/A',
+          category: req.category || '',
+          response: req.response ? {
+            type: req.response.type,
+            message: req.response.message,
+            respondedDate: req.response.respondedDate,
+            respondedBy: req.response.respondedBy?.name || 'Unknown'
+          } : null,
+          _full: req
+        }))
+        
+        setRequestsData(prev => ({
+          ...prev,
+          [requestType]: {
+            ...prev[requestType],
+            requests: transformedRequests
+          }
+        }))
+      }
+    } catch (error) {
+      console.error('Error loading requests:', error)
+    }
+  }
+
+  const loadRecipients = async () => {
+    try {
+      const types = ['pm', 'client', 'admin']
+      const recipientsData = {}
+      
+      for (const type of types) {
+        try {
+          const response = await employeeRequestService.getRecipients(type)
+          if (response.success) {
+            recipientsData[type] = response.data
+          }
+        } catch (error) {
+          console.error(`Error loading ${type} recipients:`, error)
+        }
+      }
+      
+      setRecipients(recipientsData)
+    } catch (error) {
+      console.error('Error loading recipients:', error)
+    }
+  }
+
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -363,8 +270,9 @@ const Employee_request = () => {
       description: '',
       type: 'approval',
       priority: 'normal',
-      projectName: '',
-      recipientType: 'pm'
+      recipientType: 'pm',
+      recipientId: '',
+      category: ''
     })
   }
 
@@ -379,23 +287,46 @@ const Employee_request = () => {
   }
 
   const handleSubmitNewRequest = async () => {
-    if (!newRequest.title.trim() || !newRequest.description.trim()) return
+    if (!newRequest.title.trim() || !newRequest.description.trim() || !newRequest.recipientId) {
+      alert('Please fill in all required fields')
+      return
+    }
     
     setIsSubmitting(true)
     
-    setTimeout(() => {
-      console.log('New request submitted:', {
-        ...newRequest,
-        id: Date.now(),
-        status: 'pending',
-        submittedDate: new Date().toISOString().split('T')[0],
-        recipientName: newRequest.recipientType === 'pm' ? 'Sarah Johnson (PM)' : 'John Smith (Client)'
-      })
+    try {
+      const requestData = {
+        title: newRequest.title,
+        description: newRequest.description,
+        type: newRequest.type,
+        priority: newRequest.priority,
+        recipient: newRequest.recipientId,
+        recipientModel: newRequest.recipientType === 'pm' ? 'PM' : newRequest.recipientType.charAt(0).toUpperCase() + newRequest.recipientType.slice(1),
+        category: newRequest.category || ''
+      }
+
+      const response = await employeeRequestService.createRequest(requestData)
       
+      if (response.success) {
+        setNewRequest({
+          title: '',
+          description: '',
+          type: 'approval',
+          priority: 'normal',
+          recipientType: 'pm',
+          recipientId: '',
+          category: ''
+        })
+        setIsCreateDialogOpen(false)
+        await loadData()
+        setRequestType('outgoing')
+      }
+    } catch (error) {
+      console.error('Error creating request:', error)
+      alert(error.message || 'Failed to create request')
+    } finally {
       setIsSubmitting(false)
-      handleCloseDialog()
-      console.log('New request created successfully')
-    }, 1000)
+    }
   }
 
   const handleEditDraft = (request) => {
@@ -404,15 +335,20 @@ const Employee_request = () => {
       description: request.description,
       type: request.type,
       priority: request.priority,
-      projectName: request.projectName,
-      recipientType: request.recipientType
+      recipientType: request.recipientType,
+      recipientId: request._full?.recipient?._id || '',
+      category: request.category || ''
     })
     setIsCreateDialogOpen(true)
   }
 
-  const handleDeleteDraft = (requestId) => {
-    console.log('Deleting draft request:', requestId)
-    // In real app, this would delete the draft
+  const handleDeleteDraft = async (requestId) => {
+    if (!window.confirm('Are you sure you want to delete this request?')) return
+    
+    // Note: Delete functionality would need to be implemented in the backend
+    // For now, this is a placeholder
+    console.log('Delete request:', requestId)
+    alert('Delete functionality not yet implemented')
   }
 
   const handleSubmitResponse = () => {
@@ -421,20 +357,24 @@ const Employee_request = () => {
   }
 
   const handleConfirmResponse = async () => {
+    if (responseType !== 'approve' && !responseText.trim()) return
+    
     setIsSubmitting(true)
     
-    setTimeout(() => {
-      console.log('Response submitted:', {
-        requestId: selectedRequest.id,
-        responseType,
-        responseText,
-        timestamp: new Date().toISOString()
-      })
+    try {
+      const requestId = selectedRequest._full?._id || selectedRequest.id
+      const response = await employeeRequestService.respondToRequest(requestId, responseType, responseText)
       
+      if (response.success) {
+        await loadData()
+        handleCloseDialog()
+      }
+    } catch (error) {
+      console.error('Error submitting response:', error)
+      alert(error.message || 'Failed to submit response')
+    } finally {
       setIsSubmitting(false)
-      handleCloseDialog()
-      console.log('Request status updated to responded')
-    }, 1000)
+    }
   }
 
   const handleCancelConfirmation = () => {
@@ -463,6 +403,24 @@ const Employee_request = () => {
 
   if (requestType === 'outgoing' && currentData.statistics.draft > 0) {
     filters.push({ key: 'draft', label: 'Drafts', count: currentData.statistics.draft })
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
+        <Employee_navbar />
+        <main className="pt-16 lg:pt-16 pb-16 lg:pb-8">
+          <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+            <div className="flex items-center justify-center h-96">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading requests...</p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -789,7 +747,7 @@ const Employee_request = () => {
                     <label className="block text-sm font-medium text-gray-900 mb-3">Send To *</label>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <button
-                        onClick={() => setNewRequest({...newRequest, recipientType: 'pm'})}
+                        onClick={() => setNewRequest({...newRequest, recipientType: 'pm', recipientId: ''})}
                         className={`p-3 rounded-lg border-2 transition-all duration-200 ${
                           newRequest.recipientType === 'pm'
                             ? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -802,7 +760,7 @@ const Employee_request = () => {
                         </div>
                       </button>
                       <button
-                        onClick={() => setNewRequest({...newRequest, recipientType: 'client'})}
+                        onClick={() => setNewRequest({...newRequest, recipientType: 'client', recipientId: ''})}
                         className={`p-3 rounded-lg border-2 transition-all duration-200 ${
                           newRequest.recipientType === 'client'
                             ? 'border-purple-500 bg-purple-50 text-purple-700'
@@ -815,7 +773,7 @@ const Employee_request = () => {
                         </div>
                       </button>
                       <button
-                        onClick={() => setNewRequest({...newRequest, recipientType: 'admin'})}
+                        onClick={() => setNewRequest({...newRequest, recipientType: 'admin', recipientId: ''})}
                         className={`p-3 rounded-lg border-2 transition-all duration-200 ${
                           newRequest.recipientType === 'admin'
                             ? 'border-red-500 bg-red-50 text-red-700'
@@ -828,6 +786,24 @@ const Employee_request = () => {
                         </div>
                       </button>
                     </div>
+                  </div>
+
+                  {/* Recipient Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Select Recipient *</label>
+                    <select
+                      value={newRequest.recipientId}
+                      onChange={(e) => setNewRequest({...newRequest, recipientId: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      required
+                    >
+                      <option value="">Select a {newRequest.recipientType}...</option>
+                      {recipients[newRequest.recipientType]?.map((recipient) => (
+                        <option key={recipient.id} value={recipient.id}>
+                          {recipient.name} {recipient.email ? `(${recipient.email})` : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Request Type */}
@@ -899,14 +875,14 @@ const Employee_request = () => {
                     </div>
                   </div>
 
-                  {/* Project Name */}
+                  {/* Category */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Project Name</label>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Category (Optional)</label>
                     <input
                       type="text"
-                      value={newRequest.projectName}
-                      onChange={(e) => setNewRequest({...newRequest, projectName: e.target.value})}
-                      placeholder="Enter project name (optional)..."
+                      value={newRequest.category}
+                      onChange={(e) => setNewRequest({...newRequest, category: e.target.value})}
+                      placeholder="Enter category..."
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                     />
                   </div>
@@ -938,9 +914,9 @@ const Employee_request = () => {
                 </button>
                 <button
                   onClick={handleSubmitNewRequest}
-                  disabled={isSubmitting || !newRequest.title.trim() || !newRequest.description.trim()}
+                  disabled={isSubmitting || !newRequest.title.trim() || !newRequest.description.trim() || !newRequest.recipientId}
                   className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors duration-200 flex items-center space-x-2 ${
-                    isSubmitting || !newRequest.title.trim() || !newRequest.description.trim()
+                    isSubmitting || !newRequest.title.trim() || !newRequest.description.trim() || !newRequest.recipientId
                       ? 'bg-gray-400 cursor-not-allowed'
                       : 'bg-teal-600 hover:bg-teal-700'
                   }`}

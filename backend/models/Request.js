@@ -1,40 +1,59 @@
 const mongoose = require('mongoose');
 
 const requestSchema = new mongoose.Schema({
-  // Module that created this request (e.g., 'sales', 'admin', 'pm')
+  // Module that created this request
   module: {
     type: String,
     required: true,
-    enum: ['sales', 'admin', 'pm', 'client'],
+    enum: ['admin', 'client', 'employee', 'pm', 'sales'],
     trim: true
   },
-  // Type of request (extensible for future types)
-  requestType: {
+  // Type of request
+  type: {
     type: String,
     required: true,
-    enum: ['accelerate_work', 'hold_work'],
+    enum: [
+      'approval',
+      'feedback',
+      'confirmation',
+      'payment-recovery',
+      'hold-work',
+      'accelerate-work',
+      'increase-cost',
+      'access-request',
+      'timeline-extension',
+      'budget-approval',
+      'resource-allocation'
+    ],
     trim: true
   },
-  // Related client (required)
-  client: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Client',
-    required: true
-  },
-  // Related project (required)
-  project: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Project',
-    required: true
-  },
-  // Reason for the request
-  reason: {
+  // Request title
+  title: {
     type: String,
     required: true,
     trim: true,
-    maxlength: [1000, 'Reason cannot exceed 1000 characters']
+    maxlength: [200, 'Title cannot exceed 200 characters']
   },
-  // Who created this request (polymorphic - can be Sales, Admin, PM, etc.)
+  // Request description
+  description: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: [2000, 'Description cannot exceed 2000 characters']
+  },
+  // Category for organization
+  category: {
+    type: String,
+    trim: true,
+    maxlength: [100, 'Category cannot exceed 100 characters']
+  },
+  // Priority level
+  priority: {
+    type: String,
+    enum: ['low', 'normal', 'high', 'urgent'],
+    default: 'normal'
+  },
+  // Who created this request (polymorphic - can be Admin, Client, Employee, PM, or Sales)
   requestedBy: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
@@ -43,27 +62,62 @@ const requestSchema = new mongoose.Schema({
   requestedByModel: {
     type: String,
     required: true,
-    enum: ['Sales', 'Admin', 'PM', 'Client']
+    enum: ['Admin', 'Client', 'Employee', 'PM', 'Sales']
   },
-  // Who handled this request (admin)
-  handledBy: {
+  // Who is the recipient (polymorphic - can be Admin, Client, Employee, PM, or Sales)
+  recipient: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admin'
+    required: true,
+    refPath: 'recipientModel'
   },
-  handledAt: {
-    type: Date
+  recipientModel: {
+    type: String,
+    required: true,
+    enum: ['Admin', 'Client', 'Employee', 'PM', 'Sales']
+  },
+  // Related project (optional for non-project requests)
+  project: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Project'
+  },
+  // Related client (optional for non-client requests)
+  client: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Client'
+  },
+  // Amount field (for payment-recovery requests only)
+  amount: {
+    type: Number,
+    min: 0
   },
   // Request status
   status: {
     type: String,
-    enum: ['pending', 'approved', 'rejected'],
+    enum: ['pending', 'responded', 'approved', 'rejected'],
     default: 'pending'
   },
-  // Admin response/notes
-  adminNotes: {
-    type: String,
-    trim: true,
-    maxlength: [1000, 'Admin notes cannot exceed 1000 characters']
+  // Response details
+  response: {
+    type: {
+      type: String,
+      enum: ['approve', 'reject', 'request_changes']
+    },
+    message: {
+      type: String,
+      trim: true,
+      maxlength: [2000, 'Response message cannot exceed 2000 characters']
+    },
+    respondedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: false
+    },
+    respondedByModel: {
+      type: String,
+      enum: ['Admin', 'Client', 'Employee', 'PM', 'Sales']
+    },
+    respondedDate: {
+      type: Date
+    }
   }
 }, {
   timestamps: true
@@ -71,35 +125,37 @@ const requestSchema = new mongoose.Schema({
 
 // Indexes for better performance
 requestSchema.index({ module: 1, status: 1 });
+requestSchema.index({ type: 1 });
+requestSchema.index({ requestedBy: 1, requestedByModel: 1 });
+requestSchema.index({ recipient: 1, recipientModel: 1 });
 requestSchema.index({ client: 1 });
 requestSchema.index({ project: 1 });
-requestSchema.index({ requestedBy: 1 });
+requestSchema.index({ priority: 1 });
 requestSchema.index({ createdAt: -1 });
+requestSchema.index({ status: 1, priority: 1 });
 
 // Virtual for checking if request is pending
 requestSchema.virtual('isPending').get(function() {
   return this.status === 'pending';
 });
 
-// Method to approve request
-requestSchema.methods.approve = function(adminId, notes) {
-  this.status = 'approved';
-  this.handledBy = adminId;
-  this.handledAt = new Date();
-  if (notes) {
-    this.adminNotes = notes;
+// Method to respond to request
+requestSchema.methods.respond = function(responderId, responderModel, responseType, message) {
+  if (!['approve', 'reject', 'request_changes'].includes(responseType)) {
+    throw new Error('Invalid response type');
   }
-  return this.save();
-};
 
-// Method to reject request
-requestSchema.methods.reject = function(adminId, notes) {
-  this.status = 'rejected';
-  this.handledBy = adminId;
-  this.handledAt = new Date();
-  if (notes) {
-    this.adminNotes = notes;
-  }
+  this.status = responseType === 'approve' ? 'approved' : 
+                responseType === 'reject' ? 'rejected' : 'responded';
+  
+  this.response = {
+    type: responseType,
+    message: message || '',
+    respondedBy: responderId,
+    respondedByModel: responderModel,
+    respondedDate: new Date()
+  };
+
   return this.save();
 };
 

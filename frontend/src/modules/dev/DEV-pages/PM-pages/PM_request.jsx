@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PM_navbar from '../../DEV-components/PM_navbar'
+import pmRequestService from '../../DEV-services/pmRequestService'
 import { 
   FiFileText, 
   FiCheckSquare, 
@@ -25,6 +26,7 @@ import {
 } from 'react-icons/fi'
 
 const PM_request = () => {
+  const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedRequest, setSelectedRequest] = useState(null)
@@ -43,183 +45,142 @@ const PM_request = () => {
     description: '',
     type: 'approval',
     priority: 'normal',
-    projectName: '',
-    recipientType: 'employee' // 'employee', 'client', 'admin'
+    recipientType: 'employee', // 'employee', 'client', 'admin'
+    recipientId: '',
+    category: ''
   })
 
-  // Mock requests data - PM's perspective
-  const [requestsData] = useState({
+  // Data states
+  const [requestsData, setRequestsData] = useState({
     incoming: {
       statistics: {
-        total: 15,
-        pending: 7,
-        responded: 7,
-        urgent: 4
+        total: 0,
+        pending: 0,
+        responded: 0,
+        urgent: 0
       },
-      requests: [
-        {
-          id: 1,
-          title: "Request for Additional Development Time",
-          description: "The current timeline for the payment integration is too tight. I need 3 additional days to ensure proper testing and security implementation.",
-          status: "pending",
-          priority: "high",
-          submittedDate: "2024-01-20",
-          submittedBy: "John Doe (Employee)",
-          submittedByType: "employee",
-          type: "approval",
-          projectName: "E-commerce Website",
-          response: null
-        },
-        {
-          id: 2,
-          title: "Client Feedback on UI Design",
-          description: "The client has provided feedback on the new dashboard design. They want to discuss the color scheme and layout changes before we proceed.",
-          status: "responded",
-          priority: "normal",
-          submittedDate: "2024-01-18",
-          submittedBy: "Sarah Wilson (Client)",
-          submittedByType: "client",
-          type: "feedback",
-          projectName: "Dashboard Redesign",
-          response: {
-            type: "approve",
-            message: "I've reviewed the feedback. Let's schedule a meeting to discuss the changes. I'm available tomorrow afternoon.",
-            respondedDate: "2024-01-19",
-            respondedBy: "You (PM)"
-          }
-        },
-        {
-          id: 3,
-          title: "Need Access to Production Database",
-          description: "I need temporary access to the production database to debug the user authentication issue that's affecting multiple clients.",
-          status: "pending",
-          priority: "urgent",
-          submittedDate: "2024-01-22",
-          submittedBy: "Mike Johnson (Employee)",
-          submittedByType: "employee",
-          type: "approval",
-          projectName: "Mobile App Development",
-          response: null
-        },
-        {
-          id: 4,
-          title: "Budget Approval for New Features",
-          description: "We need additional budget approval for implementing the advanced analytics features that the client requested.",
-          status: "responded",
-          priority: "high",
-          submittedDate: "2024-01-15",
-          submittedBy: "Lisa Brown (Client)",
-          submittedByType: "client",
-          type: "approval",
-          projectName: "Analytics Dashboard",
-          response: {
-            type: "request_changes",
-            message: "Please provide a detailed breakdown of costs and timeline. I'll review and get back to you by end of week.",
-            respondedDate: "2024-01-16",
-            respondedBy: "You (PM)"
-          }
-        },
-        {
-          id: 5,
-          title: "Task Completion - User Authentication Module",
-          description: "I have completed the user authentication module as per the requirements. All tests are passing and the code has been reviewed. Please approve the completion.",
-          status: "pending",
-          priority: "normal",
-          submittedDate: "2024-01-23",
-          submittedBy: "Alex Johnson (Employee)",
-          submittedByType: "employee",
-          type: "approval",
-          projectName: "E-commerce Website",
-          response: null
-        },
-        {
-          id: 6,
-          title: "Request for Code Review Approval",
-          description: "I've completed the payment gateway integration. The code has been tested and is ready for production. Please review and approve for deployment.",
-          status: "pending",
-          priority: "high",
-          submittedDate: "2024-01-22",
-          submittedBy: "Sarah Wilson (Employee)",
-          submittedByType: "employee",
-          type: "approval",
-          projectName: "Payment System",
-          response: null
-        },
-        {
-          id: 7,
-          title: "Milestone Completion - Phase 1",
-          description: "Phase 1 of the mobile app development is complete. All features have been implemented and tested. Ready for client review and approval.",
-          status: "pending",
-          priority: "urgent",
-          submittedDate: "2024-01-24",
-          submittedBy: "Mike Chen (Employee)",
-          submittedByType: "employee",
-          type: "approval",
-          projectName: "Mobile App Development",
-          response: null
-        }
-      ]
+      requests: []
     },
     outgoing: {
       statistics: {
-        total: 8,
-        pending: 2,
-        responded: 5,
-        draft: 1
+        total: 0,
+        pending: 0,
+        responded: 0,
+        draft: 0
       },
-      requests: [
-        {
-          id: 1,
-          title: "Request for Code Review",
-          description: "I've completed the API integration module. Could someone please review the code before we merge it to the main branch?",
-          status: "pending",
-          priority: "normal",
-          submittedDate: "2024-01-20",
-          recipientType: "employee",
-          recipientName: "John Doe (Employee)",
-          type: "approval",
-          projectName: "API Integration",
-          response: null
-        },
-        {
-          id: 2,
-          title: "Client Meeting Request",
-          description: "I'd like to schedule a meeting with the client to demonstrate the new features and get their feedback on the current progress.",
-          status: "responded",
-          priority: "normal",
-          submittedDate: "2024-01-18",
-          recipientType: "client",
-          recipientName: "Sarah Wilson (Client)",
-          type: "feedback",
-          projectName: "Feature Development",
-          response: {
-            type: "approve",
-            message: "Great idea! I'm available next Tuesday at 2 PM. Let me know if that works for you.",
-            respondedDate: "2024-01-19",
-            respondedBy: "Sarah Wilson (Client)"
-          }
-        },
-        {
-          id: 3,
-          title: "Admin Approval for Resource Allocation",
-          description: "We need additional server resources for the upcoming project. Please approve the resource allocation request.",
-          status: "responded",
-          priority: "high",
-          submittedDate: "2024-01-15",
-          recipientType: "admin",
-          recipientName: "Admin Team",
-          type: "approval",
-          projectName: "Infrastructure Upgrade",
-          response: {
-            type: "approve",
-            message: "Resources approved. New servers will be provisioned by end of week.",
-            respondedDate: "2024-01-16",
-            respondedBy: "Admin Team"
-          }
-        }
-      ]
+      requests: []
     }
   })
+  const [recipients, setRecipients] = useState({})
+
+  // Load data from API
+  useEffect(() => {
+    loadData()
+  }, [requestType, activeFilter])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      
+      // Load statistics
+      const statsResponse = await pmRequestService.getStatistics({ direction: requestType === 'all' ? 'all' : requestType })
+      if (statsResponse.success) {
+        const stats = statsResponse.data
+        setRequestsData(prev => ({
+          ...prev,
+          [requestType]: {
+            ...prev[requestType],
+            statistics: {
+              total: stats.totalRequests || 0,
+              pending: stats.pendingRequests || 0,
+              responded: stats.respondedRequests || 0,
+              urgent: stats.urgentRequests || 0,
+              draft: 0
+            }
+          }
+        }))
+      }
+      
+      // Load requests
+      await loadRequests()
+      
+      // Load recipients
+      await loadRecipients()
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadRequests = async () => {
+    try {
+      const params = {
+        direction: requestType === 'all' ? 'all' : requestType,
+        status: activeFilter !== 'all' ? activeFilter : undefined,
+        search: searchTerm || undefined
+      }
+      
+      const response = await pmRequestService.getRequests(params)
+      if (response.success) {
+        const transformedRequests = response.data.map(req => ({
+          id: req._id || req.id,
+          title: req.title,
+          description: req.description,
+          status: req.status,
+          priority: req.priority,
+          submittedDate: req.createdAt,
+          submittedBy: req.requestedBy?.name || 'Unknown',
+          submittedByType: req.requestedByModel?.toLowerCase() || 'unknown',
+          recipientType: req.recipientModel?.toLowerCase() || 'unknown',
+          recipientName: req.recipient?.name || 'Unknown',
+          type: req.type,
+          projectName: req.project?.name || 'N/A',
+          category: req.category || '',
+          response: req.response ? {
+            type: req.response.type,
+            message: req.response.message,
+            respondedDate: req.response.respondedDate,
+            respondedBy: req.response.respondedBy?.name || 'Unknown'
+          } : null,
+          _full: req
+        }))
+        
+        setRequestsData(prev => ({
+          ...prev,
+          [requestType]: {
+            ...prev[requestType],
+            requests: transformedRequests
+          }
+        }))
+      }
+    } catch (error) {
+      console.error('Error loading requests:', error)
+    }
+  }
+
+  const loadRecipients = async () => {
+    try {
+      const types = ['employee', 'client', 'admin']
+      const recipientsData = {}
+      
+      for (const type of types) {
+        try {
+          const response = await pmRequestService.getRecipients(type)
+          if (response.success) {
+            recipientsData[type] = response.data
+          }
+        } catch (error) {
+          console.error(`Error loading ${type} recipients:`, error)
+        }
+      }
+      
+      setRecipients(recipientsData)
+    } catch (error) {
+      console.error('Error loading recipients:', error)
+    }
+  }
+
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -309,8 +270,9 @@ const PM_request = () => {
       description: '',
       type: 'approval',
       priority: 'normal',
-      projectName: '',
-      recipientType: 'employee'
+      recipientType: 'employee',
+      recipientId: '',
+      category: ''
     })
   }
 
@@ -325,24 +287,46 @@ const PM_request = () => {
   }
 
   const handleSubmitNewRequest = async () => {
-    if (!newRequest.title.trim() || !newRequest.description.trim()) return
+    if (!newRequest.title.trim() || !newRequest.description.trim() || !newRequest.recipientId) {
+      alert('Please fill in all required fields')
+      return
+    }
     
     setIsSubmitting(true)
     
-    setTimeout(() => {
-      console.log('New request submitted:', {
-        ...newRequest,
-        id: Date.now(),
-        status: 'pending',
-        submittedDate: new Date().toISOString().split('T')[0],
-        recipientName: newRequest.recipientType === 'employee' ? 'John Doe (Employee)' : 
-                      newRequest.recipientType === 'client' ? 'Sarah Wilson (Client)' : 'Admin Team'
-      })
+    try {
+      const requestData = {
+        title: newRequest.title,
+        description: newRequest.description,
+        type: newRequest.type,
+        priority: newRequest.priority,
+        recipient: newRequest.recipientId,
+        recipientModel: newRequest.recipientType === 'pm' ? 'PM' : newRequest.recipientType.charAt(0).toUpperCase() + newRequest.recipientType.slice(1),
+        category: newRequest.category || ''
+      }
+
+      const response = await pmRequestService.createRequest(requestData)
       
+      if (response.success) {
+        setNewRequest({
+          title: '',
+          description: '',
+          type: 'approval',
+          priority: 'normal',
+          recipientType: 'employee',
+          recipientId: '',
+          category: ''
+        })
+        setIsCreateDialogOpen(false)
+        await loadData()
+        setRequestType('outgoing')
+      }
+    } catch (error) {
+      console.error('Error creating request:', error)
+      alert(error.message || 'Failed to create request')
+    } finally {
       setIsSubmitting(false)
-      handleCloseDialog()
-      console.log('New request created successfully')
-    }, 1000)
+    }
   }
 
   const handleSubmitResponse = () => {
@@ -351,20 +335,24 @@ const PM_request = () => {
   }
 
   const handleConfirmResponse = async () => {
+    if (responseType !== 'approve' && !responseText.trim()) return
+    
     setIsSubmitting(true)
     
-    setTimeout(() => {
-      console.log('Response submitted:', {
-        requestId: selectedRequest.id,
-        responseType,
-        responseText,
-        timestamp: new Date().toISOString()
-      })
+    try {
+      const requestId = selectedRequest._full?._id || selectedRequest.id
+      const response = await pmRequestService.respondToRequest(requestId, responseType, responseText)
       
+      if (response.success) {
+        await loadData()
+        handleCloseDialog()
+      }
+    } catch (error) {
+      console.error('Error submitting response:', error)
+      alert(error.message || 'Failed to submit response')
+    } finally {
       setIsSubmitting(false)
-      handleCloseDialog()
-      console.log('Request status updated to responded')
-    }, 1000)
+    }
   }
 
   const handleCancelConfirmation = () => {
@@ -393,6 +381,24 @@ const PM_request = () => {
 
   if (requestType === 'outgoing' && currentData.statistics.draft > 0) {
     filters.push({ key: 'draft', label: 'Drafts', count: currentData.statistics.draft })
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
+        <PM_navbar />
+        <main className="pt-16 lg:pt-16 pb-16 lg:pb-8">
+          <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+            <div className="flex items-center justify-center h-96">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading requests...</p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (

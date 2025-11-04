@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Client_navbar from '../../DEV-components/Client_navbar'
+import clientRequestService from '../../DEV-services/clientRequestService'
 import { 
   FiFileText, 
   FiCheckSquare, 
@@ -16,6 +17,7 @@ import {
 } from 'react-icons/fi'
 
 const Client_request = () => {
+  const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedRequest, setSelectedRequest] = useState(null)
@@ -25,83 +27,89 @@ const Client_request = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
 
-  // Mock requests data
-  const [requestsData] = useState({
+  // Data states
+  const [requestsData, setRequestsData] = useState({
     statistics: {
-      total: 12,
-      pending: 3,
-      responded: 8,
-      urgent: 2
+      total: 0,
+      pending: 0,
+      responded: 0,
+      urgent: 0
     },
-    requests: [
-      {
-        id: 1,
-        title: "Design Approval Required",
-        description: "Please review and approve the new homepage design mockups",
-        status: "pending",
-        priority: "high",
-        submittedDate: "2024-01-20",
-        submittedBy: "John Doe (PM)",
-        type: "approval",
-        projectName: "E-commerce Website"
-      },
-      {
-        id: 2,
-        title: "Content Review Needed",
-        description: "Please provide feedback on the product descriptions",
-        status: "pending",
-        priority: "normal",
-        submittedDate: "2024-01-18",
-        submittedBy: "Jane Smith (Developer)",
-        type: "feedback",
-        projectName: "E-commerce Website"
-      },
-      {
-        id: 3,
-        title: "Feature Requirements Confirmation",
-        description: "Please confirm the payment gateway integration requirements",
-        status: "responded",
-        priority: "urgent",
-        submittedDate: "2024-01-15",
-        submittedBy: "Mike Johnson (PM)",
-        type: "confirmation",
-        projectName: "Mobile App Development"
-      },
-      {
-        id: 4,
-        title: "API Documentation Review",
-        description: "Please review the API documentation for accuracy",
-        status: "pending",
-        priority: "normal",
-        submittedDate: "2024-01-22",
-        submittedBy: "Sarah Wilson (Developer)",
-        type: "approval",
-        projectName: "Mobile App Development"
-      },
-      {
-        id: 5,
-        title: "Database Schema Approval",
-        description: "Please approve the proposed database schema changes",
-        status: "responded",
-        priority: "high",
-        submittedDate: "2024-01-10",
-        submittedBy: "David Brown (PM)",
-        type: "approval",
-        projectName: "Database Migration"
-      },
-      {
-        id: 6,
-        title: "UI/UX Feedback Request",
-        description: "Please provide feedback on the new user interface design",
-        status: "responded",
-        priority: "normal",
-        submittedDate: "2024-01-12",
-        submittedBy: "Lisa Chen (Designer)",
-        type: "feedback",
-        projectName: "E-commerce Website"
-      }
-    ]
+    requests: []
   })
+
+  // Load data from API
+  useEffect(() => {
+    loadData()
+  }, [activeFilter])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      
+      // Load statistics
+      const statsResponse = await clientRequestService.getStatistics()
+      if (statsResponse.success) {
+        const stats = statsResponse.data
+        setRequestsData(prev => ({
+          ...prev,
+          statistics: {
+            total: stats.totalRequests || 0,
+            pending: stats.pendingRequests || 0,
+            responded: stats.respondedRequests || 0,
+            urgent: stats.urgentRequests || 0
+          }
+        }))
+      }
+      
+      // Load requests
+      await loadRequests()
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadRequests = async () => {
+    try {
+      const params = {
+        direction: 'incoming',
+        status: activeFilter !== 'all' ? activeFilter : undefined,
+        search: searchTerm || undefined
+      }
+      
+      const response = await clientRequestService.getRequests(params)
+      if (response.success) {
+        const transformedRequests = response.data.map(req => ({
+          id: req._id || req.id,
+          title: req.title,
+          description: req.description,
+          status: req.status,
+          priority: req.priority,
+          submittedDate: req.createdAt,
+          submittedBy: req.requestedBy?.name || 'Unknown',
+          type: req.type,
+          projectName: req.project?.name || 'N/A',
+          response: req.response ? {
+            type: req.response.type,
+            message: req.response.message,
+            respondedDate: req.response.respondedDate,
+            respondedBy: req.response.respondedBy?.name || 'Unknown'
+          } : null,
+          _full: req
+        }))
+        
+        setRequestsData(prev => ({
+          ...prev,
+          requests: transformedRequests
+        }))
+      }
+    } catch (error) {
+      console.error('Error loading requests:', error)
+    }
+  }
+
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -161,20 +169,24 @@ const Client_request = () => {
   }
 
   const handleConfirmResponse = async () => {
+    if (responseType !== 'approve' && !responseText.trim()) return
+    
     setIsSubmitting(true)
     
-    setTimeout(() => {
-      console.log('Response submitted:', {
-        requestId: selectedRequest.id,
-        responseType,
-        responseText,
-        timestamp: new Date().toISOString()
-      })
+    try {
+      const requestId = selectedRequest._full?._id || selectedRequest.id
+      const response = await clientRequestService.respondToRequest(requestId, responseType, responseText)
       
+      if (response.success) {
+        await loadData()
+        handleCloseDialog()
+      }
+    } catch (error) {
+      console.error('Error submitting response:', error)
+      alert(error.message || 'Failed to submit response')
+    } finally {
       setIsSubmitting(false)
-      handleCloseDialog()
-      console.log('Request status updated to responded')
-    }, 1000)
+    }
   }
 
   const handleCancelConfirmation = () => {
@@ -195,6 +207,24 @@ const Client_request = () => {
     { key: 'pending', label: 'Pending', count: requestsData.statistics.pending },
     { key: 'responded', label: 'Responded', count: requestsData.statistics.responded }
   ]
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
+        <Client_navbar />
+        <main className="pt-16 lg:pt-16 pb-16 lg:pb-8">
+          <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+            <div className="flex items-center justify-center h-96">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading requests...</p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
