@@ -88,8 +88,32 @@ const allowedOrigins = [
   'https://api.supercrm.appzeto.com'  // API domain (for cross-origin requests)
 ];
 
+// Handle OPTIONS requests explicitly (CORS preflight)
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '86400'); // 24 hours
+  }
+  res.sendStatus(204);
+});
+
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman, curl)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // Log blocked origins for debugging
+      console.log('⚠️  CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
@@ -103,11 +127,13 @@ console.log('🔒 CORS Configuration:');
 console.log('   Allowed origins:', allowedOrigins.length, 'origins configured');
 console.log('   CORS_ORIGIN from .env:', process.env.CORS_ORIGIN || 'not set (using defaults)');
 
-// Configure Helmet to work with CORS
+// Configure Helmet to work with CORS - MUST be after CORS middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
-  crossOriginEmbedderPolicy: false // Allow embedding if needed
+  crossOriginEmbedderPolicy: false, // Allow embedding if needed
+  contentSecurityPolicy: false // Disable CSP to avoid conflicts with CORS
 })); // Security headers
+
 app.use(morgan('combined')); // Logging
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
