@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-require('dotenv').config();
+
+// Hardcoded MongoDB URI
+const MONGODB_URI = 'mongodb+srv://ram312908_db_user:Ankit@cluster0.vg2zbcm.mongodb.net/Appzeto';
 
 // Admin Schema (inline for script)
 const adminSchema = new mongoose.Schema({
@@ -67,7 +69,7 @@ const createAdminUser = async () => {
   try {
     // Connect to MongoDB
     console.log('Connecting to MongoDB...');
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(MONGODB_URI);
     console.log('Connected to MongoDB successfully');
 
     // Check if admin already exists
@@ -130,7 +132,7 @@ const createHRUser = async () => {
   try {
     // Connect to MongoDB
     console.log('Connecting to MongoDB...');
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(MONGODB_URI);
     console.log('Connected to MongoDB successfully');
 
     // Check if HR user already exists
@@ -188,12 +190,75 @@ const createHRUser = async () => {
   }
 };
 
+// Function to create super admin user
+const createSuperAdmin = async () => {
+  try {
+    // Connect to MongoDB
+    console.log('Connecting to MongoDB...');
+    await mongoose.connect(MONGODB_URI);
+    console.log('Connected to MongoDB successfully');
+
+    // Check if super admin already exists
+    const existingSuperAdmin = await Admin.findOne({ email: 'appzetosupercrm@gmail.com' });
+    
+    if (existingSuperAdmin) {
+      console.log('Super Admin user already exists with email: appzetosupercrm@gmail.com');
+      console.log('Super Admin details:', {
+        id: existingSuperAdmin._id,
+        name: existingSuperAdmin.name,
+        email: existingSuperAdmin.email,
+        role: existingSuperAdmin.role,
+        isActive: existingSuperAdmin.isActive
+      });
+      return;
+    }
+
+    // Create new super admin user
+    const superAdminData = {
+      name: 'Appzeto Super Admin',
+      email: 'appzetosupercrm@gmail.com',
+      password: 'Appzeto@1399', // Strong password
+      role: 'admin',
+      isActive: true
+    };
+
+    const superAdmin = await Admin.create(superAdminData);
+    
+    console.log('Super Admin user created successfully!');
+    console.log('Super Admin details:', {
+      id: superAdmin._id,
+      name: superAdmin.name,
+      email: superAdmin.email,
+      role: superAdmin.role,
+      isActive: superAdmin.isActive,
+      createdAt: superAdmin.createdAt
+    });
+    
+    console.log('\nLogin credentials:');
+    console.log('Email: appzetosupercrm@gmail.com');
+    console.log('Password: Appzeto@1399');
+    console.log('Role: admin (full access)');
+
+  } catch (error) {
+    console.error('Error creating super admin user:', error.message);
+    
+    if (error.code === 11000) {
+      console.error('Email already exists in database');
+    }
+  } finally {
+    // Close database connection
+    await mongoose.connection.close();
+    console.log('\nDatabase connection closed');
+    process.exit(0);
+  }
+};
+
 // Function to create both users
 const createBothUsers = async () => {
   try {
     // Connect to MongoDB
     console.log('Connecting to MongoDB...');
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(MONGODB_URI);
     console.log('Connected to MongoDB successfully');
 
     // Create Admin user
@@ -262,6 +327,9 @@ switch (command) {
   case 'hr':
     createHRUser();
     break;
+  case 'super':
+    createSuperAdmin();
+    break;
   case 'both':
   default:
     createBothUsers();
@@ -269,15 +337,17 @@ switch (command) {
 }
 
 // Show usage if no command or invalid command
-if (!command || !['admin', 'hr', 'both'].includes(command)) {
+if (!command || !['admin', 'hr', 'super', 'both'].includes(command)) {
   console.log('Usage: node creating_admin.js [command]');
   console.log('Commands:');
   console.log('  admin  - Create admin user only');
   console.log('  hr     - Create HR user only');
+  console.log('  super  - Create super admin user (appzetosupercrm@gmail.com)');
   console.log('  both   - Create both admin and HR users (default)');
   console.log('\nExamples:');
   console.log('  node creating_admin.js');
   console.log('  node creating_admin.js both');
   console.log('  node creating_admin.js admin');
   console.log('  node creating_admin.js hr');
+  console.log('  node creating_admin.js super');
 }

@@ -9,8 +9,9 @@
 //
 // Note: Make sure your .env file exists in the backend directory
 // The application will automatically load environment variables from .env file
-
-require('dotenv').config();
+// IMPORTANT: Do NOT set env vars here except NODE_ENV and PORT
+// All other env vars should be loaded from .env file by server.js
+// This ensures PM2 always picks up the latest .env changes
 
 module.exports = {
   apps: [{
@@ -21,17 +22,14 @@ module.exports = {
     exec_mode: 'fork',
     
     // Environment variables
-    // These will be available to the application
-    // The .env file is loaded by dotenv in server.js, but we can also set them here
+    // Only set NODE_ENV and PORT here - all other vars loaded from .env by server.js
+    // This prevents PM2 from caching old env values
     env: {
       NODE_ENV: process.env.NODE_ENV || 'production',
-      PORT: process.env.PORT || 5000,
-      // Add other env vars here if needed, or rely on .env file loading in server.js
-      MONGODB_URI: process.env.MONGODB_URI,
-      JWT_SECRET: process.env.JWT_SECRET,
-      JWT_EXPIRE: process.env.JWT_EXPIRE,
-      JWT_EXPIRE_COOKIE: process.env.JWT_EXPIRE_COOKIE,
-      CORS_ORIGIN: process.env.CORS_ORIGIN
+      PORT: process.env.PORT || 5000
+      // All other environment variables (MONGODB_URI, JWT_SECRET, etc.)
+      // are loaded directly from .env file by server.js
+      // This ensures PM2 always uses the latest .env values after restart
     },
     
     // Logging
