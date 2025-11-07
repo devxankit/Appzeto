@@ -80,6 +80,12 @@ const recurringExpenseSchema = new mongoose.Schema({
     default: 1 // Day of month when payment is due (for monthly/quarterly)
   },
   
+  // Auto-pay settings
+  autoPay: {
+    type: Boolean,
+    default: false // If true, automatically mark ExpenseEntry as paid when due date arrives
+  },
+  
   // Audit
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,

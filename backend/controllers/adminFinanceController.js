@@ -4,6 +4,12 @@ const Client = require('../models/Client');
 const Project = require('../models/Project');
 const Employee = require('../models/Employee');
 const Payment = require('../models/Payment');
+const PaymentReceipt = require('../models/PaymentReceipt');
+const Salary = require('../models/Salary');
+const ExpenseEntry = require('../models/ExpenseEntry');
+const Allowance = require('../models/Allowance');
+const Incentive = require('../models/Incentive');
+const PMReward = require('../models/PMReward');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 
@@ -218,25 +224,62 @@ const getTransactions = asyncHandler(async (req, res, next) => {
   // Pagination
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
+  // For Sales Incentives category, also populate Sales model if employee is a sales employee
   const transactions = await AdminFinance.find(filter)
     .populate('client', 'name email phoneNumber companyName')
     .populate('project', 'name status')
-    .populate('employee', 'name email department')
+    .populate({
+      path: 'employee',
+      select: 'name email department',
+      // If it's a sales employee, we'll handle it separately
+      model: 'Employee'
+    })
     .populate('account', 'name bankName accountNumber')
     .populate('createdBy', 'name email')
     .sort({ transactionDate: -1, createdAt: -1 })
     .skip(skip)
     .limit(parseInt(limit));
 
+  // For Sales Incentives, populate Sales model if employee reference exists
+  // Check if we need to populate Sales model for sales incentives
+  const Sales = require('../models/Sales');
+  const transactionsWithSales = await Promise.all(
+    transactions.map(async (transaction) => {
+      // If category is Sales Incentives and employee exists, check if it's a sales employee
+      if (transaction.category === 'Sales Incentives' && transaction.employee) {
+        try {
+          // Try to find in Sales model
+          const salesEmployee = await Sales.findById(transaction.employee._id || transaction.employee)
+            .select('name email employeeId department');
+          if (salesEmployee) {
+            // Convert to plain object and add sales employee info
+            const transactionObj = transaction.toObject ? transaction.toObject() : transaction;
+            transactionObj.salesEmployee = {
+              id: salesEmployee._id,
+              name: salesEmployee.name,
+              email: salesEmployee.email,
+              employeeId: salesEmployee.employeeId,
+              department: salesEmployee.department
+            };
+            return transactionObj;
+          }
+        } catch (error) {
+          // If not found in Sales, it's a regular employee, keep as is
+        }
+      }
+      return transaction;
+    })
+  );
+
   const total = await AdminFinance.countDocuments(filter);
 
   res.status(200).json({
     success: true,
-    count: transactions.length,
+    count: transactionsWithSales.length,
     total,
     page: parseInt(page),
     pages: Math.ceil(total / parseInt(limit)),
-    data: transactions
+    data: transactionsWithSales
   });
 });
 
@@ -443,6 +486,11 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   let dateFilter = {};
   let todayStart, todayEnd;
   let currentMonthStart, lastMonthStart, lastMonthEnd;
+  
+  // Calculate current year and month once (used in multiple places)
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
   // Calculate date ranges (create new Date objects to avoid mutating)
   todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
@@ -472,121 +520,442 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       break;
   }
 
-  // Build transaction filter
+  // ========== REVENUE SOURCES - Query Actual Data ==========
+  
+  // 1. Completed Payments
+  const paymentDateFilter = timeFilter !== 'all' 
+    ? { paidAt: dateFilter, status: 'completed' }
+    : { status: 'completed' };
+  const paymentRevenue = await Payment.aggregate([
+    { $match: paymentDateFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+  ]);
+  const paymentRevenueAmount = paymentRevenue[0]?.totalAmount || 0;
+
+  // 2. Project Advances
+  const projectDateFilter = timeFilter !== 'all'
+    ? { createdAt: dateFilter, 'financialDetails.advanceReceived': { $gt: 0 } }
+    : { 'financialDetails.advanceReceived': { $gt: 0 } };
+  const projectAdvanceRevenue = await Project.aggregate([
+    { $match: projectDateFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$financialDetails.advanceReceived' } } }
+  ]);
+  const projectAdvanceRevenueAmount = projectAdvanceRevenue[0]?.totalAmount || 0;
+
+  // 3. Approved Payment Receipts
+  const receiptDateFilter = timeFilter !== 'all'
+    ? { verifiedAt: dateFilter, status: 'approved' }
+    : { status: 'approved' };
+  const paymentReceiptRevenue = await PaymentReceipt.aggregate([
+    { $match: receiptDateFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+  ]);
+  const paymentReceiptRevenueAmount = paymentReceiptRevenue[0]?.totalAmount || 0;
+
+  // 4. Finance incoming transactions
   const transactionFilter = timeFilter !== 'all' 
-    ? { transactionDate: dateFilter, recordType: 'transaction', status: 'completed' }
-    : { recordType: 'transaction', status: 'completed' };
-
-  // Get transaction statistics
-  const transactionStats = await AdminFinance.aggregate([
+    ? { transactionDate: dateFilter, recordType: 'transaction', transactionType: 'incoming', status: 'completed' }
+    : { recordType: 'transaction', transactionType: 'incoming', status: 'completed' };
+  const transactionRevenue = await AdminFinance.aggregate([
     { $match: transactionFilter },
-    {
-      $group: {
-        _id: '$transactionType',
-        totalAmount: { $sum: '$amount' },
-        count: { $sum: 1 }
-      }
-    }
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
   ]);
+  const transactionRevenueAmount = transactionRevenue[0]?.totalAmount || 0;
 
-  const incoming = transactionStats.find(s => s._id === 'incoming') || { totalAmount: 0, count: 0 };
-  const outgoing = transactionStats.find(s => s._id === 'outgoing') || { totalAmount: 0, count: 0 };
+  // Total Revenue
+  const totalRevenue = paymentRevenueAmount + projectAdvanceRevenueAmount + paymentReceiptRevenueAmount + transactionRevenueAmount;
 
-  // Get today's earnings (incoming transactions today)
-  const todayEarnings = await AdminFinance.aggregate([
-    {
-      $match: {
-        recordType: 'transaction',
-        transactionType: 'incoming',
-        status: 'completed',
-        transactionDate: { $gte: todayStart, $lte: todayEnd }
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        totalAmount: { $sum: '$amount' }
-      }
+  // ========== EXPENSE SOURCES - Query Actual Data ==========
+
+  // 1. Paid Salaries
+  // Use 'month' field instead of 'paidDate' to match HR Management's month-based view
+  // HR Management shows salaries based on the month they belong to, not when they were paid
+  // Default to current month to match HR Management behavior
+  let salaryMonthFilter = { month: currentMonthStr, status: 'paid' };
+  if (timeFilter !== 'all') {
+    switch (timeFilter) {
+      case 'today':
+      case 'week':
+      case 'month':
+        // For today/week/month, show salaries for current month (matches HR Management)
+        salaryMonthFilter = { month: currentMonthStr, status: 'paid' };
+        break;
+      case 'year':
+        // For year, show salaries for current year
+        salaryMonthFilter = { month: { $regex: `^${currentYear}-` }, status: 'paid' };
+        break;
     }
+  }
+  // Note: 'all' time filter also shows current month only to match HR Management default behavior
+  const salaryExpenses = await Salary.aggregate([
+    { $match: salaryMonthFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$fixedSalary' } } }
   ]);
-  const todayEarningsAmount = todayEarnings[0]?.totalAmount || 0;
+  const salaryExpensesAmount = salaryExpenses[0]?.totalAmount || 0;
 
-  // Get pending payments (from invoices and payments)
-  const pendingPayments = await AdminFinance.aggregate([
-    {
-      $match: {
-        recordType: 'invoice',
-        status: { $in: ['pending', 'overdue'] }
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        totalAmount: { $sum: '$amount' }
-      }
-    }
-  ]);
-  const pendingPaymentsAmount = pendingPayments[0]?.totalAmount || 0;
-
-  // Get employee salary (outgoing transactions with salary-related categories)
-  const employeeSalary = await AdminFinance.aggregate([
-    {
-      $match: {
+  // 2. Paid Recurring Expenses
+  // Query AdminFinance transactions created when ExpenseEntry records are marked as paid
+  // This is more reliable than querying ExpenseEntry directly since transactions are created automatically
+  let recurringExpenseFilter;
+  if (timeFilter !== 'all') {
+    if (dateFilter.$gte && dateFilter.$lte) {
+      recurringExpenseFilter = {
         recordType: 'transaction',
         transactionType: 'outgoing',
         status: 'completed',
-        category: { $regex: /salary|payroll|employee|wage/i },
-        ...(timeFilter !== 'all' ? { transactionDate: dateFilter } : {})
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        totalAmount: { $sum: '$amount' }
-      }
+        'metadata.sourceType': 'expenseEntry',
+        transactionDate: { $gte: dateFilter.$gte, $lte: dateFilter.$lte }
+      };
+    } else if (dateFilter.$gte) {
+      recurringExpenseFilter = {
+        recordType: 'transaction',
+        transactionType: 'outgoing',
+        status: 'completed',
+        'metadata.sourceType': 'expenseEntry',
+        transactionDate: { $gte: dateFilter.$gte }
+      };
+    } else {
+      recurringExpenseFilter = {
+        recordType: 'transaction',
+        transactionType: 'outgoing',
+        status: 'completed',
+        'metadata.sourceType': 'expenseEntry'
+      };
     }
+  } else {
+    recurringExpenseFilter = {
+      recordType: 'transaction',
+      transactionType: 'outgoing',
+      status: 'completed',
+      'metadata.sourceType': 'expenseEntry'
+    };
+  }
+  // Recurring Expenses: Query from ExpenseEntry records (primary source)
+  // This is more reliable as ExpenseEntry is the source of truth for recurring expenses
+  let expenseDateFilter;
+  if (timeFilter !== 'all') {
+    if (dateFilter.$gte && dateFilter.$lte) {
+      expenseDateFilter = {
+        status: 'paid',
+        paidDate: { $exists: true, $ne: null, $gte: dateFilter.$gte, $lte: dateFilter.$lte }
+      };
+    } else if (dateFilter.$gte) {
+      expenseDateFilter = {
+        status: 'paid',
+        paidDate: { $exists: true, $ne: null, $gte: dateFilter.$gte }
+      };
+    } else {
+      expenseDateFilter = {
+        status: 'paid',
+        paidDate: { $exists: true, $ne: null }
+      };
+    }
+  } else {
+    expenseDateFilter = { status: 'paid' };
+  }
+  
+  const expenseEntries = await ExpenseEntry.aggregate([
+    { $match: expenseDateFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
   ]);
-  const employeeSalaryAmount = employeeSalary[0]?.totalAmount || 0;
+  let recurringExpensesAmount = expenseEntries[0]?.totalAmount || 0;
+  
+  // Also check AdminFinance transactions as a secondary source
+  // This catches cases where transactions were created but ExpenseEntry query missed them
+  const recurringExpensesTransactions = await AdminFinance.aggregate([
+    { $match: recurringExpenseFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+  ]);
+  const transactionsAmount = recurringExpensesTransactions[0]?.totalAmount || 0;
+  
+  // Use the maximum value to ensure we capture all paid recurring expenses
+  // This handles edge cases where one source might be incomplete
+  recurringExpensesAmount = Math.max(recurringExpensesAmount, transactionsAmount);
 
-  // Get other expenses (outgoing transactions excluding salary)
+  // Calculate month-wise recurring expenses breakdown
+  let monthlyRecurringExpensesBreakdown = {};
+  if (timeFilter !== 'all') {
+    // For filtered periods, get month-wise breakdown
+    const monthlyBreakdown = await ExpenseEntry.aggregate([
+      { $match: expenseDateFilter },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m', date: '$paidDate' }
+          },
+          totalAmount: { $sum: '$amount' }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    monthlyBreakdown.forEach(item => {
+      monthlyRecurringExpensesBreakdown[item._id] = item.totalAmount;
+    });
+  } else {
+    // For all time, get month-wise breakdown from all paid entries
+    const monthlyBreakdown = await ExpenseEntry.aggregate([
+      { $match: { status: 'paid', paidDate: { $exists: true, $ne: null } } },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m', date: '$paidDate' }
+          },
+          totalAmount: { $sum: '$amount' }
+        }
+      },
+      { $sort: { _id: -1 } },
+      { $limit: 12 } // Show last 12 months
+    ]);
+    
+    monthlyBreakdown.forEach(item => {
+      monthlyRecurringExpensesBreakdown[item._id] = item.totalAmount;
+    });
+  }
+
+  // 3. Active Allowances
+  // For allowances, count all active ones regardless of when they were issued
+  // Allowances are ongoing expenses, so we count all active ones
+  const allowanceDateFilter = { status: 'active' };
+  const allowanceExpenses = await Allowance.aggregate([
+    { $match: allowanceDateFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$value' } } }
+  ]);
+  const allowanceExpensesAmount = allowanceExpenses[0]?.totalAmount || 0;
+
+  // 4. Paid Incentives
+  let incentiveDateFilter;
+  if (timeFilter !== 'all') {
+    if (dateFilter.$gte && dateFilter.$lte) {
+      incentiveDateFilter = {
+        status: 'paid',
+        paidAt: { $exists: true, $ne: null, $gte: dateFilter.$gte, $lte: dateFilter.$lte }
+      };
+    } else if (dateFilter.$gte) {
+      incentiveDateFilter = {
+        status: 'paid',
+        paidAt: { $exists: true, $ne: null, $gte: dateFilter.$gte }
+      };
+    } else {
+      incentiveDateFilter = { status: 'paid' };
+    }
+  } else {
+    incentiveDateFilter = { status: 'paid' };
+  }
+  const incentiveExpenses = await Incentive.aggregate([
+    { $match: incentiveDateFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+  ]);
+  const incentiveExpensesAmount = incentiveExpenses[0]?.totalAmount || 0;
+
+  // 5. Paid PM Rewards
+  let rewardDateFilter;
+  if (timeFilter !== 'all') {
+    if (dateFilter.$gte && dateFilter.$lte) {
+      rewardDateFilter = {
+        status: 'paid',
+        $or: [
+          { paidAt: { $exists: true, $ne: null, $gte: dateFilter.$gte, $lte: dateFilter.$lte } },
+          { dateAwarded: { $exists: true, $ne: null, $gte: dateFilter.$gte, $lte: dateFilter.$lte } }
+        ]
+      };
+    } else if (dateFilter.$gte) {
+      rewardDateFilter = {
+        status: 'paid',
+        $or: [
+          { paidAt: { $exists: true, $ne: null, $gte: dateFilter.$gte } },
+          { dateAwarded: { $exists: true, $ne: null, $gte: dateFilter.$gte } }
+        ]
+      };
+    } else {
+      rewardDateFilter = { status: 'paid' };
+    }
+  } else {
+    rewardDateFilter = { status: 'paid' };
+  }
+  const rewardExpenses = await PMReward.aggregate([
+    { $match: rewardDateFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+  ]);
+  const rewardExpensesAmount = rewardExpenses[0]?.totalAmount || 0;
+
+  // 6. Other Finance outgoing transactions (not from above sources)
+  // Exclude expenseEntry transactions since they're already counted in recurringExpensesAmount
+  let otherExpenseFilter;
+  if (timeFilter !== 'all') {
+    if (dateFilter.$gte && dateFilter.$lte) {
+      otherExpenseFilter = { 
+        transactionDate: { $gte: dateFilter.$gte, $lte: dateFilter.$lte }, 
+        recordType: 'transaction', 
+        transactionType: 'outgoing', 
+        status: 'completed',
+        'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'pmReward', 'expenseEntry'] },
+        category: { $nin: ['Salary Payment', 'Employee Allowance', 'Sales Incentive', 'PM Reward'] }
+      };
+    } else if (dateFilter.$gte) {
+      otherExpenseFilter = { 
+        transactionDate: { $gte: dateFilter.$gte }, 
+        recordType: 'transaction', 
+        transactionType: 'outgoing', 
+        status: 'completed',
+        'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'pmReward', 'expenseEntry'] },
+        category: { $nin: ['Salary Payment', 'Employee Allowance', 'Sales Incentive', 'PM Reward'] }
+      };
+    } else {
+      otherExpenseFilter = { 
+        recordType: 'transaction', 
+        transactionType: 'outgoing', 
+        status: 'completed',
+        'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'pmReward', 'expenseEntry'] },
+        category: { $nin: ['Salary Payment', 'Employee Allowance', 'Sales Incentive', 'PM Reward'] }
+      };
+    }
+  } else {
+    otherExpenseFilter = { 
+      recordType: 'transaction', 
+      transactionType: 'outgoing', 
+      status: 'completed',
+      'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'pmReward', 'expenseEntry'] },
+      category: { $nin: ['Salary Payment', 'Employee Allowance', 'Sales Incentive', 'PM Reward'] }
+    };
+  }
   const otherExpenses = await AdminFinance.aggregate([
-    {
-      $match: {
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        status: 'completed',
-        category: { $not: { $regex: /salary|payroll|employee|wage/i } },
-        ...(timeFilter !== 'all' ? { transactionDate: dateFilter } : {})
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        totalAmount: { $sum: '$amount' }
-      }
-    }
+    { $match: otherExpenseFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
   ]);
   const otherExpensesAmount = otherExpenses[0]?.totalAmount || 0;
 
-  // Get reward money (from incentives or transactions with reward category)
-  const rewardMoney = await AdminFinance.aggregate([
-    {
-      $match: {
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        status: 'completed',
-        category: { $regex: /reward|bonus|incentive/i },
-        ...(timeFilter !== 'all' ? { transactionDate: dateFilter } : {})
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        totalAmount: { $sum: '$amount' }
-      }
-    }
+  // Total Expenses
+  const totalExpenses = salaryExpensesAmount + recurringExpensesAmount + allowanceExpensesAmount + 
+                        incentiveExpensesAmount + rewardExpensesAmount + otherExpensesAmount;
+
+  // ========== PENDING AMOUNTS ==========
+
+  // Pending Payments
+  const pendingPayments = await Payment.aggregate([
+    { $match: { status: 'pending' } },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
   ]);
-  const rewardMoneyAmount = rewardMoney[0]?.totalAmount || 0;
+  const pendingPaymentsAmount = pendingPayments[0]?.totalAmount || 0;
+
+  // Pending Salaries
+  // Match HR Management behavior: Always show CURRENT MONTH pending salaries by default
+  // HR Management shows salaries for a specific month (defaults to current month)
+  // Finance Management should match this behavior to keep consistency
+  let pendingSalaryFilter = { 
+    status: 'pending',
+    month: currentMonthStr // Default to current month (matches HR Management)
+  };
+  
+  // Apply time filter if needed
+  if (timeFilter !== 'all') {
+    switch (timeFilter) {
+      case 'today':
+      case 'week':
+      case 'month':
+        // For today/week/month, show pending salaries for CURRENT MONTH only
+        pendingSalaryFilter.month = currentMonthStr;
+        break;
+      case 'year':
+        // For year, show pending salaries for current year (from Jan to current month, exclude future months)
+        const yearStartStr = `${currentYear}-01`;
+        pendingSalaryFilter.month = { 
+          $gte: yearStartStr,  // From start of year
+          $lte: currentMonthStr // Up to current month (exclude future months)
+        };
+        break;
+    }
+  }
+  // Note: 'all' time filter also shows current month only to match HR Management default behavior
+  
+  const pendingSalaries = await Salary.aggregate([
+    { $match: pendingSalaryFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$fixedSalary' } } }
+  ]);
+  const pendingSalariesAmount = pendingSalaries[0]?.totalAmount || 0;
+
+  // Pending/Due Recurring Expenses (pending + overdue entries)
+  const pendingRecurringExpenses = await ExpenseEntry.aggregate([
+    { $match: { status: { $in: ['pending', 'overdue'] } } },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+  ]);
+  const pendingRecurringExpensesAmount = pendingRecurringExpenses[0]?.totalAmount || 0;
+
+  // Pending Invoices
+  const pendingInvoices = await AdminFinance.aggregate([
+    { $match: { recordType: 'invoice', status: { $in: ['pending', 'overdue'] } } },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+  ]);
+  const pendingInvoicesAmount = pendingInvoices[0]?.totalAmount || 0;
+
+  const totalPendingReceivables = pendingPaymentsAmount + pendingInvoicesAmount;
+  const totalPendingPayables = pendingSalariesAmount + pendingRecurringExpensesAmount;
+
+  // ========== TODAY'S METRICS ==========
+
+  // Today's Earnings
+  const todayPayments = await Payment.aggregate([
+    { $match: { paidAt: { $gte: todayStart, $lte: todayEnd }, status: 'completed' } },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+  ]);
+  const todayPaymentsAmount = todayPayments[0]?.totalAmount || 0;
+
+  const todayAdvances = await Project.aggregate([
+    { $match: { createdAt: { $gte: todayStart, $lte: todayEnd }, 'financialDetails.advanceReceived': { $gt: 0 } } },
+    { $group: { _id: null, totalAmount: { $sum: '$financialDetails.advanceReceived' } } }
+  ]);
+  const todayAdvancesAmount = todayAdvances[0]?.totalAmount || 0;
+
+  const todayEarnings = todayPaymentsAmount + todayAdvancesAmount;
+
+  // Today's Expenses
+  // Use 'month' field to match HR Management - salaries paid today belong to current month
+  const todaySalaries = await Salary.aggregate([
+    { $match: { month: currentMonthStr, paidDate: { $gte: todayStart, $lte: todayEnd }, status: 'paid' } },
+    { $group: { _id: null, totalAmount: { $sum: '$fixedSalary' } } }
+  ]);
+  const todaySalariesAmount = todaySalaries[0]?.totalAmount || 0;
+
+  const todayExpenseEntries = await ExpenseEntry.aggregate([
+    { $match: { paidDate: { $gte: todayStart, $lte: todayEnd }, status: 'paid' } },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+  ]);
+  const todayExpenseEntriesAmount = todayExpenseEntries[0]?.totalAmount || 0;
+
+  // Today's Allowances (issued today)
+  const todayAllowances = await Allowance.aggregate([
+    { $match: { issueDate: { $gte: todayStart, $lte: todayEnd }, status: 'active' } },
+    { $group: { _id: null, totalAmount: { $sum: '$value' } } }
+  ]);
+  const todayAllowancesAmount = todayAllowances[0]?.totalAmount || 0;
+
+  // Today's Incentives (paid today)
+  const todayIncentives = await Incentive.aggregate([
+    { $match: { paidAt: { $gte: todayStart, $lte: todayEnd }, status: 'paid' } },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+  ]);
+  const todayIncentivesAmount = todayIncentives[0]?.totalAmount || 0;
+
+  // Today's Rewards (paid today)
+  const todayRewards = await PMReward.aggregate([
+    { 
+      $match: { 
+        status: 'paid',
+        $or: [
+          { paidAt: { $gte: todayStart, $lte: todayEnd } },
+          { dateAwarded: { $gte: todayStart, $lte: todayEnd } }
+        ]
+      } 
+    },
+    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+  ]);
+  const todayRewardsAmount = todayRewards[0]?.totalAmount || 0;
+
+  const todayExpenses = todaySalariesAmount + todayExpenseEntriesAmount + todayAllowancesAmount + 
+                        todayIncentivesAmount + todayRewardsAmount;
+  const todayProfit = todayEarnings - todayExpenses;
+
+  // ========== OTHER METRICS ==========
 
   // Get active projects
   const activeProjects = await Project.countDocuments({ 
@@ -596,82 +965,131 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // Get total clients
   const totalClients = await Client.countDocuments({ isActive: true });
 
-  // Calculate profit/loss for the period
-  const profitLoss = incoming.totalAmount - outgoing.totalAmount;
+  // Calculate profit/loss
+  const netProfit = totalRevenue - totalExpenses;
+  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-  // Calculate percentage changes (comparing with last period)
+  // ========== PERCENTAGE CHANGES ==========
   let revenueChange = 0;
   let expensesChange = 0;
   let profitChange = 0;
 
   if (timeFilter === 'month') {
-    // Compare with last month
-    const lastMonthIncoming = await AdminFinance.aggregate([
-      {
-        $match: {
-          recordType: 'transaction',
-          transactionType: 'incoming',
-          status: 'completed',
-          transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalAmount: { $sum: '$amount' }
-        }
-      }
+    // Compare with last month - query same sources
+    const lastMonthPaymentRevenue = await Payment.aggregate([
+      { $match: { paidAt: { $gte: lastMonthStart, $lte: lastMonthEnd }, status: 'completed' } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
     ]);
-
-    const lastMonthOutgoing = await AdminFinance.aggregate([
-      {
-        $match: {
-          recordType: 'transaction',
-          transactionType: 'outgoing',
-          status: 'completed',
-          transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalAmount: { $sum: '$amount' }
-        }
-      }
+    const lastMonthProjectAdvance = await Project.aggregate([
+      { $match: { createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd }, 'financialDetails.advanceReceived': { $gt: 0 } } },
+      { $group: { _id: null, totalAmount: { $sum: '$financialDetails.advanceReceived' } } }
     ]);
+    const lastMonthReceiptRevenue = await PaymentReceipt.aggregate([
+      { $match: { verifiedAt: { $gte: lastMonthStart, $lte: lastMonthEnd }, status: 'approved' } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+    ]);
+    const lastMonthTransactionRevenue = await AdminFinance.aggregate([
+      { $match: { transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }, recordType: 'transaction', transactionType: 'incoming', status: 'completed' } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+    ]);
+    const lastMonthRevenue = (lastMonthPaymentRevenue[0]?.totalAmount || 0) + 
+                             (lastMonthProjectAdvance[0]?.totalAmount || 0) + 
+                             (lastMonthReceiptRevenue[0]?.totalAmount || 0) + 
+                             (lastMonthTransactionRevenue[0]?.totalAmount || 0);
 
-    const lastMonthRevenue = lastMonthIncoming[0]?.totalAmount || 0;
-    const lastMonthExpenses = lastMonthOutgoing[0]?.totalAmount || 0;
+    // Use 'month' field to match HR Management - calculate last month's month string
+    const lastMonthYear = now.getFullYear();
+    const lastMonthNum = now.getMonth(); // 0-11, current month - 1
+    const lastMonthStr = `${lastMonthYear}-${String(lastMonthNum + 1).padStart(2, '0')}`;
+    const lastMonthSalary = await Salary.aggregate([
+      { $match: { month: lastMonthStr, status: 'paid' } },
+      { $group: { _id: null, totalAmount: { $sum: '$fixedSalary' } } }
+    ]);
+    const lastMonthExpenseEntries = await ExpenseEntry.aggregate([
+      { $match: { paidDate: { $gte: lastMonthStart, $lte: lastMonthEnd }, status: 'paid' } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+    ]);
+    const lastMonthAllowances = await Allowance.aggregate([
+      { $match: { issueDate: { $gte: lastMonthStart, $lte: lastMonthEnd }, status: 'active' } },
+      { $group: { _id: null, totalAmount: { $sum: '$value' } } }
+    ]);
+    const lastMonthIncentives = await Incentive.aggregate([
+      { $match: { paidAt: { $gte: lastMonthStart, $lte: lastMonthEnd }, status: 'paid' } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+    ]);
+    const lastMonthRewards = await PMReward.aggregate([
+      { $match: { paidAt: { $gte: lastMonthStart, $lte: lastMonthEnd }, status: 'paid' } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+    ]);
+    const lastMonthOtherExpenses = await AdminFinance.aggregate([
+      { $match: { transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }, recordType: 'transaction', transactionType: 'outgoing', status: 'completed', category: { $nin: ['Salary Payment', 'Employee Allowance', 'Sales Incentive', 'PM Reward'] } } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+    ]);
+    const lastMonthExpenses = (lastMonthSalary[0]?.totalAmount || 0) + 
+                             (lastMonthExpenseEntries[0]?.totalAmount || 0) + 
+                             (lastMonthAllowances[0]?.totalAmount || 0) + 
+                             (lastMonthIncentives[0]?.totalAmount || 0) + 
+                             (lastMonthRewards[0]?.totalAmount || 0) + 
+                             (lastMonthOtherExpenses[0]?.totalAmount || 0);
+
     const lastMonthProfit = lastMonthRevenue - lastMonthExpenses;
 
     if (lastMonthRevenue > 0) {
-      revenueChange = ((incoming.totalAmount - lastMonthRevenue) / lastMonthRevenue) * 100;
+      revenueChange = ((totalRevenue - lastMonthRevenue) / lastMonthRevenue) * 100;
     }
     if (lastMonthExpenses > 0) {
-      expensesChange = ((outgoing.totalAmount - lastMonthExpenses) / lastMonthExpenses) * 100;
+      expensesChange = ((totalExpenses - lastMonthExpenses) / lastMonthExpenses) * 100;
     }
     if (lastMonthProfit !== 0) {
-      profitChange = ((profitLoss - lastMonthProfit) / Math.abs(lastMonthProfit)) * 100;
+      profitChange = ((netProfit - lastMonthProfit) / Math.abs(lastMonthProfit)) * 100;
     }
   }
 
   res.status(200).json({
     success: true,
     data: {
-      totalRevenue: incoming.totalAmount,
-      totalExpenses: outgoing.totalAmount,
-      netProfit: profitLoss,
-      pendingPayments: pendingPaymentsAmount,
-      activeProjects,
-      totalClients,
-      todayEarnings: todayEarningsAmount,
-      rewardMoney: rewardMoneyAmount,
-      employeeSalary: employeeSalaryAmount,
-      otherExpenses: otherExpensesAmount,
-      profitLoss,
+      totalRevenue,
+      totalExpenses,
+      netProfit,
+      profitMargin: profitMargin.toFixed(2),
+      revenueBreakdown: {
+        paymentRevenue: paymentRevenueAmount,
+        projectAdvanceRevenue: projectAdvanceRevenueAmount,
+        paymentReceiptRevenue: paymentReceiptRevenueAmount,
+        transactionRevenue: transactionRevenueAmount
+      },
+      expenseBreakdown: {
+        salaryExpenses: salaryExpensesAmount,
+        recurringExpenses: recurringExpensesAmount,
+        dueRecurringExpenses: pendingRecurringExpensesAmount, // Due/pending recurring expenses
+        monthlyRecurringExpenses: monthlyRecurringExpensesBreakdown, // Month-wise breakdown
+        allowanceExpenses: allowanceExpensesAmount,
+        incentiveExpenses: incentiveExpensesAmount,
+        rewardExpenses: rewardExpensesAmount,
+        otherExpenses: otherExpensesAmount
+      },
+      pendingAmounts: {
+        pendingPayments: pendingPaymentsAmount,
+        pendingSalaries: pendingSalariesAmount,
+        pendingRecurringExpenses: pendingRecurringExpensesAmount,
+        pendingInvoices: pendingInvoicesAmount,
+        totalPendingReceivables,
+        totalPendingPayables
+      },
+      todayEarnings,
+      todayExpenses,
+      todayProfit,
       revenueChange: revenueChange.toFixed(1),
       expensesChange: expensesChange.toFixed(1),
-      profitChange: profitChange.toFixed(1)
+      profitChange: profitChange.toFixed(1),
+      activeProjects,
+      totalClients,
+      // Legacy fields for backward compatibility
+      pendingPayments: pendingPaymentsAmount,
+      rewardMoney: rewardExpensesAmount,
+      employeeSalary: salaryExpensesAmount,
+      otherExpenses: otherExpensesAmount,
+      profitLoss: netProfit
     }
   });
 });
@@ -1410,6 +1828,161 @@ const deleteBudget = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Record sales incentive payment (helper function)
+// @access  Internal
+const recordSalesIncentivePayment = async (salesEmployeeId, amount, transactionDate, adminId) => {
+  try {
+    const transactionData = {
+      recordType: 'transaction',
+      transactionType: 'outgoing',
+      category: 'Sales Incentives',
+      amount: parseFloat(amount),
+      transactionDate: transactionDate || new Date(),
+      paymentMethod: 'Bank Transfer',
+      description: 'Sales conversion incentive payment',
+      employee: salesEmployeeId,
+      createdBy: adminId,
+      status: 'completed'
+    };
+
+    const transaction = await AdminFinance.create(transactionData);
+    return transaction;
+  } catch (error) {
+    console.error('Error recording sales incentive payment:', error);
+    throw error;
+  }
+};
+
+// @desc    Get sales incentive monthly summary
+// @route   GET /api/admin/finance/sales-incentives/monthly-summary
+// @access  Admin only
+const getSalesIncentiveMonthlySummary = asyncHandler(async (req, res, next) => {
+  const { year, month } = req.query;
+  
+  if (!year || !month) {
+    return next(new ErrorResponse('Year and month are required', 400));
+  }
+
+  const yearNum = parseInt(year);
+  const monthNum = parseInt(month);
+
+  if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+    return next(new ErrorResponse('Invalid year or month', 400));
+  }
+
+  const startDate = new Date(yearNum, monthNum - 1, 1, 0, 0, 0, 0);
+  const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
+
+  try {
+    const Incentive = require('../models/Incentive');
+    const Sales = require('../models/Sales');
+
+    // Get all conversion-based incentives for the month
+    const incentives = await Incentive.find({
+      isConversionBased: true,
+      dateAwarded: {
+        $gte: startDate,
+        $lte: endDate
+      }
+    })
+      .populate('salesEmployee', 'name email employeeId')
+      .populate('clientId', 'name')
+      .populate('projectId', 'name')
+      .sort({ dateAwarded: -1 });
+
+    // Aggregate by sales employee
+    const employeeMap = new Map();
+    let totalAmount = 0;
+    let totalCurrentBalance = 0;
+    let totalPendingBalance = 0;
+
+    incentives.forEach(incentive => {
+      const salesId = incentive.salesEmployee._id.toString();
+      
+      if (!employeeMap.has(salesId)) {
+        employeeMap.set(salesId, {
+          salesEmployee: {
+            id: incentive.salesEmployee._id,
+            name: incentive.salesEmployee.name,
+            email: incentive.salesEmployee.email,
+            employeeId: incentive.salesEmployee.employeeId
+          },
+          totalAmount: 0,
+          currentBalance: 0,
+          pendingBalance: 0,
+          incentiveCount: 0,
+          incentives: []
+        });
+      }
+
+      const employeeData = employeeMap.get(salesId);
+      employeeData.totalAmount += incentive.amount;
+      employeeData.currentBalance += incentive.currentBalance || 0;
+      employeeData.pendingBalance += incentive.pendingBalance || 0;
+      employeeData.incentiveCount += 1;
+      employeeData.incentives.push({
+        id: incentive._id,
+        amount: incentive.amount,
+        currentBalance: incentive.currentBalance || 0,
+        pendingBalance: incentive.pendingBalance || 0,
+        clientName: incentive.clientId?.name || 'Unknown',
+        projectName: incentive.projectId?.name || 'Unknown',
+        dateAwarded: incentive.dateAwarded
+      });
+
+      totalAmount += incentive.amount;
+      totalCurrentBalance += incentive.currentBalance || 0;
+      totalPendingBalance += incentive.pendingBalance || 0;
+    });
+
+    const employeeBreakdown = Array.from(employeeMap.values())
+      .sort((a, b) => b.totalAmount - a.totalAmount);
+
+    // Get finance transactions for sales incentives in this month
+    const financeTransactions = await AdminFinance.find({
+      recordType: 'transaction',
+      category: 'Sales Incentives',
+      transactionDate: {
+        $gte: startDate,
+        $lte: endDate
+      }
+    })
+      .populate('employee', 'name email employeeId')
+      .sort({ transactionDate: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        month: monthNum,
+        year: yearNum,
+        summary: {
+          totalAmount,
+          totalCurrentBalance,
+          totalPendingBalance,
+          totalIncentives: incentives.length,
+          totalSalesEmployees: employeeMap.size
+        },
+        employeeBreakdown,
+        financeTransactions: financeTransactions.map(t => ({
+          id: t._id,
+          amount: t.amount,
+          transactionDate: t.transactionDate,
+          salesEmployee: t.employee ? {
+            id: t.employee._id,
+            name: t.employee.name,
+            email: t.employee.email,
+            employeeId: t.employee.employeeId
+          } : null,
+          description: t.description
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Error getting sales incentive monthly summary:', error);
+    return next(new ErrorResponse('Failed to fetch sales incentive monthly summary', 500));
+  }
+});
+
 module.exports = {
   createTransaction,
   getTransactions,
@@ -1433,5 +2006,7 @@ module.exports = {
   createBudget,
   updateBudget,
   deleteBudget,
-  getFinanceStatistics
+  getFinanceStatistics,
+  recordSalesIncentivePayment,
+  getSalesIncentiveMonthlySummary
 };

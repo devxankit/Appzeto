@@ -2,9 +2,12 @@ const Payment = require('../models/Payment');
 const Project = require('../models/Project');
 const Milestone = require('../models/Milestone');
 const Activity = require('../models/Activity');
+const Admin = require('../models/Admin');
 const socketService = require('../services/socketService');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
+const { createIncomingTransaction } = require('../utils/financeTransactionHelper');
+const { mapPaymentMethodToFinance, mapPaymentTypeToCategory } = require('../utils/paymentMethodMapper');
 
 // @desc    Create payment record
 // @route   POST /api/payments
@@ -172,9 +175,50 @@ const updatePaymentStatus = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Not authorized to update this payment', 403));
   }
 
+  // Store previous status for transaction creation
+  const previousStatus = payment.status;
+
   // Update payment based on status
   if (status === 'completed') {
     await payment.markPaid(transactionId);
+    
+    // Create finance transaction when payment is completed
+    try {
+      // Get Admin ID for createdBy - use req.admin.id if admin, otherwise find first admin
+      let adminId = null;
+      if (req.admin && req.admin.id) {
+        adminId = req.admin.id;
+      } else if (req.user && req.user.role === 'admin') {
+        adminId = req.user.id;
+      } else {
+        // Find first active admin as fallback
+        const admin = await Admin.findOne({ isActive: true }).select('_id');
+        adminId = admin ? admin._id : null;
+      }
+
+      if (adminId && previousStatus !== 'completed') {
+        await createIncomingTransaction({
+          amount: payment.amount,
+          category: mapPaymentTypeToCategory(payment.paymentType),
+          transactionDate: payment.paidAt || new Date(),
+          createdBy: adminId,
+          client: payment.client,
+          project: payment.project,
+          paymentMethod: mapPaymentMethodToFinance(payment.paymentMethod),
+          description: `${mapPaymentTypeToCategory(payment.paymentType)} payment for project "${project.name}" - ${payment.amount} ${payment.currency}`,
+          metadata: {
+            sourceType: 'payment',
+            sourceId: payment._id.toString(),
+            paymentType: payment.paymentType,
+            milestoneId: payment.milestone ? payment.milestone.toString() : null
+          },
+          checkDuplicate: true
+        });
+      }
+    } catch (error) {
+      // Log error but don't fail the payment update
+      console.error('Error creating finance transaction for payment:', error);
+    }
   } else if (status === 'failed') {
     await payment.markFailed(notes);
   } else if (status === 'refunded') {

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Client_navbar from '../../DEV-components/Client_navbar'
-import { FiUser as User, FiMail as Mail, FiCamera as Camera, FiSave as Save, FiX as X, FiCalendar as Calendar, FiAward as Award, FiBriefcase as Briefcase, FiPhone as Phone, FiMapPin as MapPin, FiLogOut as LogOut } from 'react-icons/fi'
-import { logoutClient } from '../../DEV-services/clientAuthService'
+import { FiUser as User, FiMail as Mail, FiSave as Save, FiX as X, FiCalendar as Calendar, FiAward as Award, FiBriefcase as Briefcase, FiPhone as Phone, FiMapPin as MapPin, FiLogOut as LogOut } from 'react-icons/fi'
+import { logoutClient, getProfile, updateProfile } from '../../DEV-services/clientAuthService'
 import { useToast } from '../../../../contexts/ToastContext'
 
 const Client_profile = () => {
@@ -12,6 +12,7 @@ const Client_profile = () => {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [originalProfile, setOriginalProfile] = useState(null)
   const [profileData, setProfileData] = useState({
     fullName: '',
     email: '',
@@ -22,39 +23,141 @@ const Client_profile = () => {
     joinDate: '',
     avatar: '',
     projectsCount: 0,
-    totalSpent: 0
+    totalSpent: 0,
+    address: {}
   })
 
+  const deriveAvatar = (name) => {
+    if (!name) return 'CL'
+    const initials = name
+      .split(' ')
+      .filter(Boolean)
+      .map((part) => part[0]?.toUpperCase())
+      .join('')
+    return initials.slice(0, 2) || 'CL'
+  }
+
+  const formatLocationFromAddress = (address = {}) => {
+    const parts = [address.city, address.state, address.country]
+      .filter(Boolean)
+      .map((part) => part.trim())
+    return parts.length > 0 ? parts.join(', ') : ''
+  }
+
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      await new Promise(r => setTimeout(r, 400))
-      setProfileData({
-        fullName: 'John Smith',
-        email: 'john.smith@company.com',
-        company: 'TechCorp Solutions',
-        industry: 'Technology',
-        phone: '+91 98765 43210',
-        location: 'Mumbai, India',
-        joinDate: new Date(Date.now()-300*24*60*60*1000).toISOString(),
-        avatar: 'JS',
-        projectsCount: 3,
-        totalSpent: 150000
-      })
-      setLoading(false)
+    const loadProfile = async () => {
+      try {
+        setLoading(true)
+        const response = await getProfile()
+        const client = response?.data || {}
+
+        const location = formatLocationFromAddress(client.address)
+        const addressCopy = client.address ? { ...client.address } : {}
+        const formattedProfile = {
+          fullName: client.name || 'Client',
+          email: client.email || 'Not provided',
+          company: client.companyName || 'Not specified',
+          industry: client.industry || 'Not specified',
+          phone: client.phoneNumber || 'Not provided',
+          location: location || 'Not specified',
+          joinDate: (client.joiningDate || client.createdAt || new Date().toISOString()),
+          avatar: deriveAvatar(client.name),
+          projectsCount: Array.isArray(client.projects) ? client.projects.length : 0,
+          totalSpent: client.totalSpent || 0,
+          address: addressCopy
+        }
+
+        setProfileData(formattedProfile)
+        setOriginalProfile({
+          ...formattedProfile,
+          address: { ...addressCopy }
+        })
+      } catch (error) {
+        console.error('Failed to load client profile:', error)
+        toast.error('Unable to load profile. Please try again later.', {
+          title: 'Profile Error',
+          duration: 4000
+        })
+      } finally {
+        setLoading(false)
+      }
     }
-    load()
-  }, [])
+
+    loadProfile()
+  }, [toast])
 
   const handleProfileUpdate = (field, value) => {
     setProfileData(prev => ({ ...prev, [field]: value }))
   }
 
+  const parseLocationToAddress = (locationString, previousAddress = {}) => {
+    if (!locationString || typeof locationString !== 'string') {
+      return { ...previousAddress }
+    }
+
+    const parts = locationString.split(',').map((part) => part.trim()).filter(Boolean)
+    if (parts.length === 0) return { ...previousAddress }
+
+    const updatedAddress = { ...previousAddress }
+
+    if (parts.length === 1) {
+      updatedAddress.city = parts[0]
+    } else if (parts.length === 2) {
+      updatedAddress.city = parts[0]
+      updatedAddress.country = parts[1]
+    } else {
+      updatedAddress.city = parts[0]
+      updatedAddress.state = parts.slice(1, parts.length - 1).join(', ')
+      updatedAddress.country = parts[parts.length - 1]
+    }
+
+    return updatedAddress
+  }
+
   const handleSaveProfile = async () => {
-    setSaving(true)
-    await new Promise(r => setTimeout(r, 500))
-    setSaving(false)
-    setIsEditing(false)
+    try {
+      setSaving(true)
+
+      const updatedAddress = parseLocationToAddress(profileData.location, profileData.address)
+
+      const sanitizedCompany = profileData.company?.trim() || 'Not specified'
+      const sanitizedIndustry = profileData.industry?.trim() || 'Not specified'
+      const sanitizedLocation = profileData.location?.trim() || 'Not specified'
+
+      await updateProfile({
+        companyName: sanitizedCompany === 'Not specified' ? '' : sanitizedCompany,
+        industry: sanitizedIndustry === 'Not specified' ? '' : sanitizedIndustry,
+        address: updatedAddress
+      })
+
+      const updatedProfile = {
+        ...profileData,
+        company: sanitizedCompany,
+        industry: sanitizedIndustry,
+        location: sanitizedLocation,
+        address: { ...updatedAddress }
+      }
+
+      setProfileData(updatedProfile)
+      setOriginalProfile({
+        ...updatedProfile,
+        address: { ...updatedAddress }
+      })
+      setIsEditing(false)
+
+      toast.success('Business information updated successfully.', {
+        title: 'Profile Updated',
+        duration: 3000
+      })
+    } catch (error) {
+      console.error('Failed to update profile:', error)
+      toast.error(error.message || 'Unable to save changes. Please try again.', {
+        title: 'Update Failed',
+        duration: 4000
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleLogout = async () => {
@@ -76,15 +179,6 @@ const Client_profile = () => {
     } finally {
       setLoggingOut(false)
     }
-  }
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount)
   }
 
   if (loading) {
@@ -117,11 +211,6 @@ const Client_profile = () => {
                       <div className="w-20 h-20 md:w-24 md:h-24 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border-4 border-white/30 shadow-xl">
                         <span className="text-2xl md:text-3xl font-bold text-white">{profileData.avatar}</span>
                       </div>
-                      {isEditing && (
-                        <button className="absolute -bottom-1 -right-1 w-8 h-8 bg-white text-primary rounded-full flex items-center justify-center hover:bg-gray-50 transition-all duration-200 shadow-lg hover:shadow-xl">
-                          <Camera className="h-4 w-4" />
-                        </button>
-                      )}
                     </div>
                     <div className="text-white">
                       <h1 className="text-xl md:text-2xl font-bold mb-1">{profileData.fullName}</h1>
@@ -135,7 +224,25 @@ const Client_profile = () => {
                   </div>
                   <div className="flex items-center space-x-4">
                     <button 
-                      onClick={() => setIsEditing(!isEditing)} 
+                      onClick={() => {
+                        if (isEditing) {
+                          if (originalProfile) {
+                            setProfileData({
+                              ...originalProfile,
+                              address: { ...(originalProfile.address || {}) }
+                            })
+                          }
+                          setIsEditing(false)
+                        } else {
+                          setProfileData((prev) => ({
+                            ...prev,
+                            company: prev.company === 'Not specified' ? '' : prev.company,
+                            industry: prev.industry === 'Not specified' ? '' : prev.industry,
+                            location: prev.location === 'Not specified' ? '' : prev.location
+                          }))
+                          setIsEditing(true)
+                        }
+                      }} 
                       className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl ${
                         isEditing 
                           ? 'bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm' 

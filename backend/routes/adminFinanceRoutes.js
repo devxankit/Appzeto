@@ -23,7 +23,8 @@ const {
   createBudget,
   updateBudget,
   deleteBudget,
-  getFinanceStatistics
+  getFinanceStatistics,
+  getSalesIncentiveMonthlySummary
 } = require('../controllers/adminFinanceController');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -81,6 +82,10 @@ router.route('/budgets/:id')
   .get(getBudget)
   .put(updateBudget)
   .delete(deleteBudget);
+
+// Sales Incentives routes
+router.route('/sales-incentives/monthly-summary')
+  .get(getSalesIncentiveMonthlySummary);
 
 module.exports = router;
 

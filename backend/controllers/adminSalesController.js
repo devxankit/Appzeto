@@ -919,12 +919,39 @@ const updateIncentiveRecord = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Incentive does not belong to this sales member', 400));
   }
 
+  // Store previous status for transaction creation
+  const previousStatus = incentive.status;
+
   // Update fields
   if (status !== undefined) {
     if (status === 'approved' && incentive.status === 'pending') {
       await incentive.approve(req.admin.id);
     } else if (status === 'paid' && incentive.status === 'approved') {
       await incentive.markAsPaid();
+      
+      // Create finance transaction when incentive is marked as paid
+      try {
+        const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
+        
+        if (previousStatus !== 'paid') {
+          await createOutgoingTransaction({
+            amount: incentive.amount,
+            category: 'Sales Incentive',
+            transactionDate: incentive.paidAt || new Date(),
+            createdBy: req.admin.id,
+            employee: incentive.salesEmployee, // Sales model reference
+            description: `Sales incentive: ${incentive.reason}`,
+            metadata: {
+              sourceType: 'incentive',
+              sourceId: incentive._id.toString()
+            },
+            checkDuplicate: true
+          });
+        }
+      } catch (error) {
+        // Log error but don't fail the incentive update
+        console.error('Error creating finance transaction for incentive:', error);
+      }
     } else {
       incentive.status = status;
     }

@@ -32,6 +32,16 @@ export const clientProjectService = {
     }
   },
 
+  // Get milestones for a specific project
+  getProjectMilestones: async (projectId) => {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/milestones`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // Get recent projects (automatically filters by authenticated client)
   getRecentProjects: async (limit = 5) => {
     try {

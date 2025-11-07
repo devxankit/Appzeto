@@ -80,5 +80,42 @@ pmRewardSchema.statics.getByStatus = function(status) {
     .sort({ dateAwarded: -1 });
 };
 
+// Post-save hook to create finance transaction when PM reward is created/updated with 'paid' status
+pmRewardSchema.post('save', async function(doc) {
+  // Only create transaction if status is 'paid'
+  if (doc.status === 'paid') {
+    try {
+      const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
+      const AdminFinance = require('./AdminFinance');
+      
+      // Check if transaction already exists
+      const existing = await AdminFinance.findOne({
+        recordType: 'transaction',
+        'metadata.sourceType': 'pmReward',
+        'metadata.sourceId': doc._id.toString()
+      });
+      
+      if (!existing) {
+        await createOutgoingTransaction({
+          amount: doc.amount,
+          category: 'PM Reward',
+          transactionDate: doc.paidAt || doc.dateAwarded || new Date(),
+          createdBy: doc.createdBy,
+          employee: doc.pmId, // PM model reference
+          description: `PM Reward: ${doc.reason} (${doc.category})`,
+          metadata: {
+            sourceType: 'pmReward',
+            sourceId: doc._id.toString()
+          },
+          checkDuplicate: true
+        });
+      }
+    } catch (error) {
+      // Log error but don't fail the save
+      console.error('Error creating finance transaction for PM reward:', error);
+    }
+  }
+});
+
 module.exports = mongoose.model('PMReward', pmRewardSchema);
 

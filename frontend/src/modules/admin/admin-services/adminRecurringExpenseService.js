@@ -59,6 +59,7 @@ const generateExpenseEntries = async (id) => {
 const getExpenseEntries = async (params = {}) => {
   const queryParams = new URLSearchParams();
   
+  if (params.recurringExpenseId) queryParams.append('recurringExpenseId', params.recurringExpenseId);
   if (params.month) queryParams.append('month', params.month);
   if (params.year) queryParams.append('year', params.year);
   if (params.status && params.status !== 'all') queryParams.append('status', params.status);

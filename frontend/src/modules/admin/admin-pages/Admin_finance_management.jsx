@@ -26,7 +26,11 @@ import {
   FiTarget,
   FiAward,
   FiHome,
-  FiX
+  FiX,
+  FiClock,
+  FiChevronDown,
+  FiChevronLeft,
+  FiChevronRight
 } from 'react-icons/fi'
 
 const Admin_finance_management = () => {
@@ -39,8 +43,9 @@ const Admin_finance_management = () => {
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [transactionTypeFilter, setTransactionTypeFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(20)
+  const [itemsPerPage, setItemsPerPage] = useState(20)
   const [timeFilter, setTimeFilter] = useState('all')
+  const [isTimeFilterOpen, setIsTimeFilterOpen] = useState(false)
   const [error, setError] = useState(null)
   
   // Modal states
@@ -130,9 +135,37 @@ const Admin_finance_management = () => {
     profitLoss: 0,
     revenueChange: '0',
     expensesChange: '0',
-    profitChange: '0'
+    profitChange: '0',
+    // New breakdown fields
+    revenueBreakdown: {
+      paymentRevenue: 0,
+      projectAdvanceRevenue: 0,
+      paymentReceiptRevenue: 0,
+      transactionRevenue: 0
+    },
+    expenseBreakdown: {
+      salaryExpenses: 0,
+      recurringExpenses: 0,
+      monthlyRecurringExpenses: {},
+      allowanceExpenses: 0,
+      incentiveExpenses: 0,
+      rewardExpenses: 0,
+      otherExpenses: 0
+    },
+    pendingAmounts: {
+      pendingPayments: 0,
+      pendingSalaries: 0,
+      pendingRecurringExpenses: 0,
+      pendingInvoices: 0,
+      totalPendingReceivables: 0,
+      totalPendingPayables: 0
+    },
+    todayExpenses: 0,
+    todayProfit: 0,
+    profitMargin: '0'
   })
   const [statisticsLoading, setStatisticsLoading] = useState(false)
+  const [showAllStats, setShowAllStats] = useState(false)
 
   // Fetch finance statistics from API
   const fetchFinanceStatistics = async () => {
@@ -155,7 +188,34 @@ const Admin_finance_management = () => {
           profitLoss: response.data.profitLoss || 0,
           revenueChange: response.data.revenueChange || '0',
           expensesChange: response.data.expensesChange || '0',
-          profitChange: response.data.profitChange || '0'
+          profitChange: response.data.profitChange || '0',
+          // New breakdown fields
+          revenueBreakdown: response.data.revenueBreakdown || {
+            paymentRevenue: 0,
+            projectAdvanceRevenue: 0,
+            paymentReceiptRevenue: 0,
+            transactionRevenue: 0
+          },
+          expenseBreakdown: response.data.expenseBreakdown || {
+            salaryExpenses: 0,
+            recurringExpenses: 0,
+            monthlyRecurringExpenses: {},
+            allowanceExpenses: 0,
+            incentiveExpenses: 0,
+            rewardExpenses: 0,
+            otherExpenses: 0
+          },
+          pendingAmounts: response.data.pendingAmounts || {
+            pendingPayments: 0,
+            pendingSalaries: 0,
+            pendingRecurringExpenses: 0,
+            pendingInvoices: 0,
+            totalPendingReceivables: 0,
+            totalPendingPayables: 0
+          },
+          todayExpenses: response.data.todayExpenses || 0,
+          todayProfit: response.data.todayProfit || 0,
+          profitMargin: response.data.profitMargin || '0'
         })
       }
     } catch (err) {
@@ -366,7 +426,7 @@ const Admin_finance_management = () => {
       if (response.success && response.data) {
         setTransactions(response.data)
         setTransactionsTotal(response.total || response.data.length)
-        setTransactionsPages(response.pages || 1)
+        setTransactionsPages(response.pages || Math.ceil((response.total || response.data.length) / itemsPerPage))
       }
     } catch (err) {
       console.error('Error fetching transactions:', err)
@@ -383,7 +443,7 @@ const Admin_finance_management = () => {
     if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets') {
       setCurrentPage(1)
     }
-  }, [transactionTypeFilter, selectedFilter, searchTerm, activeTab])
+  }, [transactionTypeFilter, selectedFilter, searchTerm, activeTab, itemsPerPage])
 
   // Load transactions when component mounts or filters change
   useEffect(() => {
@@ -398,7 +458,7 @@ const Admin_finance_management = () => {
       setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, currentPage, transactionTypeFilter, selectedFilter, searchTerm])
+  }, [activeTab, currentPage, transactionTypeFilter, selectedFilter, searchTerm, itemsPerPage])
 
   // Fetch accounts when component mounts
   useEffect(() => {
@@ -534,6 +594,8 @@ const Admin_finance_management = () => {
   const handleEdit = (item) => {
     if (activeTab === 'budgets') {
       handleEditBudget(item)
+    } else if (activeTab === 'transactions') {
+      handleEditTransaction(item)
     } else {
       setSelectedItem(item)
       setShowEditModal(true)
@@ -543,10 +605,37 @@ const Admin_finance_management = () => {
   const handleView = (item) => {
     if (activeTab === 'budgets') {
       handleViewBudget(item)
+    } else if (activeTab === 'transactions') {
+      handleViewTransaction(item)
     } else {
       setSelectedItem(item)
       setShowViewModal(true)
     }
+  }
+
+  // Transaction-specific handlers
+  const handleViewTransaction = (transaction) => {
+    setSelectedItem(transaction)
+    setShowViewModal(true)
+  }
+
+  const handleEditTransaction = async (transaction) => {
+    setSelectedItem(transaction)
+    
+    // Ensure accounts are loaded before opening edit modal
+    if (accounts.length === 0) {
+      await fetchAccounts()
+    }
+    
+    setTransactionFormData({
+      type: transaction.transactionType || transaction.type || 'incoming',
+      category: transaction.category || '',
+      amount: transaction.amount || '',
+      date: transaction.transactionDate || transaction.date || transaction.createdAt ? new Date(transaction.transactionDate || transaction.date || transaction.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      account: transaction.account?._id || transaction.account?.id || transaction.account || '',
+      description: transaction.description || ''
+    })
+    setShowTransactionModal(true)
   }
 
   // Budget-specific handlers
@@ -750,6 +839,7 @@ const Admin_finance_management = () => {
 
   // Handler functions for different tabs
   const handleCreateTransaction = () => {
+    setSelectedItem(null)
     setTransactionFormData({
       type: 'incoming',
       category: '',
@@ -822,22 +912,34 @@ const Admin_finance_management = () => {
         transactionData.account = transactionFormData.account
       }
 
-      console.log('Creating transaction with data:', transactionData)
-      const response = await adminFinanceService.createTransaction(transactionData)
-      console.log('Transaction creation response:', response)
+      let response
+      if (selectedItem && (selectedItem._id || selectedItem.id)) {
+        // Update existing transaction
+        const transactionId = selectedItem._id || selectedItem.id
+        console.log('Updating transaction with data:', transactionData)
+        response = await adminFinanceService.updateTransaction(transactionId, transactionData)
+        console.log('Transaction update response:', response)
+      } else {
+        // Create new transaction
+        console.log('Creating transaction with data:', transactionData)
+        response = await adminFinanceService.createTransaction(transactionData)
+        console.log('Transaction creation response:', response)
+      }
       
       if (response && response.success) {
-        toast.success(response.message || 'Transaction created successfully')
+        toast.success(response.message || (selectedItem ? 'Transaction updated successfully' : 'Transaction created successfully'))
         setShowTransactionModal(false)
         closeModals()
         // Refresh transactions list
         await fetchTransactions()
+        // Refresh statistics
+        await fetchFinanceStatistics()
       } else {
-        toast.error(response?.message || 'Failed to create transaction')
+        toast.error(response?.message || 'Failed to save transaction')
       }
     } catch (err) {
-      console.error('Error creating transaction:', err)
-      toast.error(err.message || 'Failed to create transaction')
+      console.error('Error saving transaction:', err)
+      toast.error(err.message || 'Failed to save transaction')
     } finally {
       setLoading(false)
     }
@@ -1069,39 +1171,99 @@ const Admin_finance_management = () => {
                   Comprehensive financial oversight and management dashboard
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  fetchFinanceStatistics() // Always refresh statistics
-                  if (activeTab === 'transactions') {
-                    fetchTransactions()
-                  } else if (activeTab === 'expenses') {
-                    fetchExpenses()
-                  } else if (activeTab === 'budgets') {
-                    fetchBudgets()
-                  }
-                }}
-                disabled={loading || statisticsLoading || (activeTab === 'transactions' && transactionsLoading) || (activeTab === 'expenses' && expensesLoading) || (activeTab === 'budgets' && budgetsLoading)}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <FiRefreshCw className={`text-sm ${(loading || statisticsLoading || transactionsLoading || expensesLoading || budgetsLoading) ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
-              </button>
+              <div className="flex items-center gap-3">
+                {/* Time Filter Combobox */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsTimeFilterOpen(!isTimeFilterOpen)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:border-gray-400 transition-colors duration-200 shadow-sm text-sm font-medium text-gray-700 min-w-[140px] justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <FiCalendar className="h-4 w-4 text-gray-500" />
+                      <span>
+                        {timeFilter === 'all' ? 'All Time' : 
+                         timeFilter === 'today' ? 'Today' : 
+                         timeFilter === 'week' ? 'This Week' : 
+                         timeFilter === 'month' ? 'This Month' : 
+                         timeFilter === 'year' ? 'This Year' : 'All Time'}
+                      </span>
+                    </span>
+                    <FiChevronDown className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${isTimeFilterOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {/* Dropdown Menu */}
+                  {isTimeFilterOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-10" 
+                        onClick={() => setIsTimeFilterOpen(false)}
+                      ></div>
+                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                        {[
+                          { value: 'all', label: 'All Time' },
+                          { value: 'today', label: 'Today' },
+                          { value: 'week', label: 'This Week' },
+                          { value: 'month', label: 'This Month' },
+                          { value: 'year', label: 'This Year' }
+                        ].map((option) => (
+                          <button
+                            key={option.value}
+                            onClick={() => {
+                              setTimeFilter(option.value)
+                              setIsTimeFilterOpen(false)
+                            }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${
+                              timeFilter === option.value ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                            }`}
+                          >
+                            {timeFilter === option.value && (
+                              <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
+                            )}
+                            <span>{option.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Refresh Button */}
+                <button
+                  onClick={() => {
+                    fetchFinanceStatistics() // Always refresh statistics
+                    if (activeTab === 'transactions') {
+                      fetchTransactions()
+                    } else if (activeTab === 'expenses') {
+                      fetchExpenses()
+                    } else if (activeTab === 'budgets') {
+                      fetchBudgets()
+                    }
+                  }}
+                  disabled={loading || statisticsLoading || (activeTab === 'transactions' && transactionsLoading) || (activeTab === 'expenses' && expensesLoading) || (activeTab === 'budgets' && budgetsLoading)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FiRefreshCw className={`text-sm ${(loading || statisticsLoading || transactionsLoading || expensesLoading || budgetsLoading) ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Statistics Cards - Row 1 */}
+          {/* Statistics Loading State */}
           {statisticsLoading ? (
             <div className="flex justify-center items-center py-12">
               <Loading size="medium" />
             </div>
           ) : (
+          <>
+          {/* PRIMARY KPIs - Hero Cards */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4"
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5"
           >
-            {/* Total Revenue */}
+            {/* Total Revenue - Hero Card */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
               <div className="relative z-10">
@@ -1110,22 +1272,21 @@ const Admin_finance_management = () => {
                     <FiTrendingUp className="h-4 w-4 text-green-600" />
                   </div>
                   <div className="text-right">
-                    <p className={`text-xs font-medium ${parseFloat(statistics.revenueChange) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                      {parseFloat(statistics.revenueChange) >= 0 ? '+' : ''}{statistics.revenueChange}%
-                    </p>
-                    <p className="text-xs text-green-600">
-                      {timeFilter === 'month' ? 'this month' : timeFilter === 'today' ? 'today' : timeFilter === 'week' ? 'this week' : timeFilter === 'year' ? 'this year' : 'all time'}
-                    </p>
+                    <p className="text-xs font-medium text-green-700">Total</p>
+                    <p className="text-xs text-green-600">revenue</p>
                   </div>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-green-700 mb-1">Total Revenue</p>
-                  <p className="text-lg font-bold text-green-800">{formatCurrency(statistics.totalRevenue)}</p>
+                  <p className="text-xl font-bold text-green-800 mb-1">{formatCurrency(statistics.totalRevenue)}</p>
+                  <p className={`text-xs font-semibold ${parseFloat(statistics.revenueChange) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {parseFloat(statistics.revenueChange) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(statistics.revenueChange))}%
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Total Expenses */}
+            {/* Total Expenses - Hero Card */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
               <div className="relative z-10">
@@ -1134,116 +1295,68 @@ const Admin_finance_management = () => {
                     <FiTrendingDown className="h-4 w-4 text-red-600" />
                   </div>
                   <div className="text-right">
-                    <p className={`text-xs font-medium ${parseFloat(statistics.expensesChange) >= 0 ? 'text-red-700' : 'text-green-700'}`}>
-                      {parseFloat(statistics.expensesChange) >= 0 ? '+' : ''}{statistics.expensesChange}%
-                    </p>
-                    <p className="text-xs text-red-600">
-                      {timeFilter === 'month' ? 'this month' : timeFilter === 'today' ? 'today' : timeFilter === 'week' ? 'this week' : timeFilter === 'year' ? 'this year' : 'all time'}
-                    </p>
+                    <p className="text-xs font-medium text-red-700">Total</p>
+                    <p className="text-xs text-red-600">expenses</p>
                   </div>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-red-700 mb-1">Total Expenses</p>
-                  <p className="text-lg font-bold text-red-800">{formatCurrency(statistics.totalExpenses)}</p>
+                  <p className="text-xl font-bold text-red-800 mb-1">{formatCurrency(statistics.totalExpenses)}</p>
+                  <p className={`text-xs font-semibold ${parseFloat(statistics.expensesChange) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {parseFloat(statistics.expensesChange) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(statistics.expensesChange))}%
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Net Profit */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-blue-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-blue-400/20 to-indigo-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+            {/* Net Profit - Hero Card */}
+            <div className={`group relative overflow-hidden rounded-xl p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border ${
+              statistics.netProfit >= 0 
+                ? 'bg-gradient-to-br from-blue-50 to-indigo-100 border-blue-200/50' 
+                : 'bg-gradient-to-br from-red-50 to-rose-100 border-red-200/50'
+            }`}>
+              <div className={`absolute top-0 right-0 w-12 h-12 rounded-full -translate-y-6 translate-x-6 ${
+                statistics.netProfit >= 0 
+                  ? 'bg-gradient-to-br from-blue-400/20 to-indigo-500/20' 
+                  : 'bg-gradient-to-br from-red-400/20 to-rose-500/20'
+              }`}></div>
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-blue-500/10">
-                    <FiBarChart className="h-4 w-4 text-blue-600" />
+                  <div className={`p-2 rounded-lg ${
+                    statistics.netProfit >= 0 
+                      ? 'bg-blue-500/10' 
+                      : 'bg-red-500/10'
+                  }`}>
+                    {statistics.netProfit >= 0 ? (
+                      <FiTrendingUp className={`h-4 w-4 ${statistics.netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`} />
+                    ) : (
+                      <FiTrendingDown className={`h-4 w-4 text-red-600`} />
+                    )}
                   </div>
                   <div className="text-right">
-                    <p className={`text-xs font-medium ${parseFloat(statistics.profitChange) >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
-                      {parseFloat(statistics.profitChange) >= 0 ? '+' : ''}{statistics.profitChange}%
-                    </p>
-                    <p className="text-xs text-blue-600">
-                      {timeFilter === 'month' ? 'this month' : timeFilter === 'today' ? 'today' : timeFilter === 'week' ? 'this week' : timeFilter === 'year' ? 'this year' : 'all time'}
-                    </p>
+                    <p className={`text-xs font-medium ${statistics.netProfit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>Net</p>
+                    <p className={`text-xs ${statistics.netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>profit</p>
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-blue-700 mb-1">Net Profit</p>
-                  <p className="text-lg font-bold text-blue-800">{formatCurrency(statistics.netProfit)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Pending Payments */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-yellow-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-yellow-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-yellow-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-yellow-500/10">
-                    <FiCreditCard className="h-4 w-4 text-yellow-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-yellow-700">Pending</p>
-                    <p className="text-xs text-yellow-600">payments</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-yellow-700 mb-1">Pending Payments</p>
-                  <p className="text-lg font-bold text-yellow-800">{formatCurrency(statistics.pendingPayments)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Active Projects */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-50 to-blue-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-indigo-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-indigo-400/20 to-blue-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-indigo-500/10">
-                    <FiHome className="h-4 w-4 text-indigo-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-indigo-700">Active</p>
-                    <p className="text-xs text-indigo-600">projects</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-indigo-700 mb-1">Active Projects</p>
-                  <p className="text-lg font-bold text-indigo-800">{statistics.activeProjects}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Total Clients */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-cyan-50 to-teal-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-cyan-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-cyan-400/20 to-teal-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-cyan-500/10">
-                    <FiUsers className="h-4 w-4 text-cyan-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-cyan-700">Total</p>
-                    <p className="text-xs text-cyan-600">clients</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-cyan-700 mb-1">Total Clients</p>
-                  <p className="text-lg font-bold text-cyan-800">{statistics.totalClients}</p>
+                  <p className={`text-xs font-medium mb-1 ${statistics.netProfit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>Net Profit</p>
+                  <p className={`text-xl font-bold mb-1 ${statistics.netProfit >= 0 ? 'text-blue-800' : 'text-red-800'}`}>{formatCurrency(statistics.netProfit)}</p>
+                  <p className={`text-xs font-semibold ${parseFloat(statistics.profitChange) >= 0 ? (statistics.netProfit >= 0 ? 'text-blue-600' : 'text-red-600') : 'text-red-600'}`}>
+                    {parseFloat(statistics.profitChange) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(statistics.profitChange))}%
+                  </p>
                 </div>
               </div>
             </div>
           </motion.div>
-          )}
 
-          {/* Statistics Cards - Row 2 */}
-          {statisticsLoading ? null : (
+          {/* ALL STATISTICS IN COMPACT GRID - Single Section */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 mb-6"
           >
-            {/* Today Earnings */}
+            {/* 1. Today Earnings */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-emerald-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-emerald-400/20 to-green-500/20 rounded-full -translate-y-6 translate-x-6"></div>
               <div className="relative z-10">
@@ -1263,7 +1376,87 @@ const Admin_finance_management = () => {
               </div>
             </div>
 
-            {/* Reward Money */}
+            {/* 2. Today Profit */}
+            <div className={`group relative overflow-hidden rounded-xl p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border ${
+              (statistics.todayProfit || 0) >= 0 
+                ? 'bg-gradient-to-br from-teal-50 to-cyan-100 border-teal-200/50' 
+                : 'bg-gradient-to-br from-red-50 to-rose-100 border-red-200/50'
+            }`}>
+              <div className={`absolute top-0 right-0 w-12 h-12 rounded-full -translate-y-6 translate-x-6 ${
+                (statistics.todayProfit || 0) >= 0 
+                  ? 'bg-gradient-to-br from-teal-400/20 to-cyan-500/20' 
+                  : 'bg-gradient-to-br from-red-400/20 to-rose-500/20'
+              }`}></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`p-2 rounded-lg ${
+                    (statistics.todayProfit || 0) >= 0 
+                      ? 'bg-teal-500/10' 
+                      : 'bg-red-500/10'
+                  }`}>
+                    {(statistics.todayProfit || 0) >= 0 ? (
+                      <FiTrendingUp className={`h-4 w-4 text-teal-600`} />
+                    ) : (
+                      <FiTrendingDown className={`h-4 w-4 text-red-600`} />
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-xs font-medium ${
+                      (statistics.todayProfit || 0) >= 0 
+                        ? 'text-teal-700' 
+                        : 'text-red-700'
+                    }`}>
+                      Today
+                    </p>
+                    <p className={`text-xs ${
+                      (statistics.todayProfit || 0) >= 0 
+                        ? 'text-teal-600' 
+                        : 'text-red-600'
+                    }`}>
+                      profit
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <p className={`text-xs font-medium mb-1 ${
+                    (statistics.todayProfit || 0) >= 0 
+                      ? 'text-teal-700' 
+                      : 'text-red-700'
+                  }`}>
+                    Today Profit
+                  </p>
+                  <p className={`text-lg font-bold ${
+                    (statistics.todayProfit || 0) >= 0 
+                      ? 'text-teal-800' 
+                      : 'text-red-800'
+                  }`}>
+                    {formatCurrency(Math.abs(statistics.todayProfit || 0))}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Sales Incentives */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 to-yellow-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-amber-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-amber-400/20 to-yellow-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-amber-500/10">
+                    <FiTarget className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-amber-700">Sales</p>
+                    <p className="text-xs text-amber-600">incentives</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-amber-700 mb-1">Sales Incentives</p>
+                  <p className="text-lg font-bold text-amber-800">{formatCurrency(statistics.expenseBreakdown?.incentiveExpenses || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Reward Money */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-50 to-violet-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-purple-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-purple-400/20 to-violet-500/20 rounded-full -translate-y-6 translate-x-6"></div>
               <div className="relative z-10">
@@ -1283,7 +1476,67 @@ const Admin_finance_management = () => {
               </div>
             </div>
 
-            {/* Employee Salary */}
+            {/* 5. Payment Revenue */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-green-500/10">
+                    <FiCreditCard className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-green-700">Payment</p>
+                    <p className="text-xs text-green-600">revenue</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-green-700 mb-1">Payment Revenue</p>
+                  <p className="text-lg font-bold text-green-800">{formatCurrency(statistics.revenueBreakdown?.paymentRevenue || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 6. Pending Payments */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-yellow-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-yellow-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-yellow-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-yellow-500/10">
+                    <FiCreditCard className="h-4 w-4 text-yellow-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-yellow-700">Pending</p>
+                    <p className="text-xs text-yellow-600">payments</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-yellow-700 mb-1">Pending Payments</p>
+                  <p className="text-lg font-bold text-yellow-800">{formatCurrency(statistics.pendingPayments)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 7. Project Advances */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-teal-50 to-cyan-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-teal-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-teal-400/20 to-cyan-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-teal-500/10">
+                    <FiHome className="h-4 w-4 text-teal-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-teal-700">Project</p>
+                    <p className="text-xs text-teal-600">advances</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-teal-700 mb-1">Project Advances</p>
+                  <p className="text-lg font-bold text-teal-800">{formatCurrency(statistics.revenueBreakdown?.projectAdvanceRevenue || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 8. Employee Salary */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-orange-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-orange-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
               <div className="relative z-10">
@@ -1303,7 +1556,127 @@ const Admin_finance_management = () => {
               </div>
             </div>
 
-            {/* Other Expenses */}
+            {/* 9. Pending Salaries */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-orange-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-orange-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-orange-500/10">
+                    <FiUsers className="h-4 w-4 text-orange-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-orange-700">Pending</p>
+                    <p className="text-xs text-orange-600">salaries</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-orange-700 mb-1">Pending Salaries</p>
+                  <p className="text-lg font-bold text-orange-800">{formatCurrency(statistics.pendingAmounts?.pendingSalaries || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 10. Pending Receivables */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-green-500/10">
+                    <FiTrendingUp className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-green-700">Pending</p>
+                    <p className="text-xs text-green-600">receivables</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-green-700 mb-1">Pending Receivables</p>
+                  <p className="text-lg font-bold text-green-800">{formatCurrency(statistics.pendingAmounts?.totalPendingReceivables || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 11. Allowances */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-pink-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-pink-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-pink-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-pink-500/10">
+                    <FiUsers className="h-4 w-4 text-pink-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-pink-700">Employee</p>
+                    <p className="text-xs text-pink-600">allowances</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-pink-700 mb-1">Allowances</p>
+                  <p className="text-lg font-bold text-pink-800">{formatCurrency(statistics.expenseBreakdown?.allowanceExpenses || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 12. Today Expenses */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-rose-50 to-red-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-rose-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-400/20 to-red-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-rose-500/10">
+                    <FiCalendar className="h-4 w-4 text-rose-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-rose-700">Today</p>
+                    <p className="text-xs text-rose-600">expenses</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-rose-700 mb-1">Today Expenses</p>
+                  <p className="text-lg font-bold text-rose-800">{formatCurrency(statistics.todayExpenses || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 13. Recurring Expenses */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-red-500/10">
+                    <FiCalendar className="h-4 w-4 text-red-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-red-700">Recurring</p>
+                    <p className="text-xs text-red-600">expenses</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-red-700 mb-1">Recurring Expenses</p>
+                  <p className="text-lg font-bold text-red-800">{formatCurrency(statistics.expenseBreakdown?.recurringExpenses || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 14. Pending Payables */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-red-500/10">
+                    <FiTrendingDown className="h-4 w-4 text-red-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-red-700">Pending</p>
+                    <p className="text-xs text-red-600">payables</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-red-700 mb-1">Pending Payables</p>
+                  <p className="text-lg font-bold text-red-800">{formatCurrency(statistics.pendingAmounts?.totalPendingPayables || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 15. Other Expenses */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-rose-50 to-pink-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-rose-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-400/20 to-pink-500/20 rounded-full -translate-y-6 translate-x-6"></div>
               <div className="relative z-10">
@@ -1322,97 +1695,9 @@ const Admin_finance_management = () => {
                 </div>
               </div>
             </div>
-
-            {/* Profit/Loss */}
-            <div className={`group relative overflow-hidden rounded-xl p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border ${
-              getTimeBasedStats().profitLoss >= 0 
-                ? 'bg-gradient-to-br from-teal-50 to-cyan-100 border-teal-200/50' 
-                : 'bg-gradient-to-br from-red-50 to-rose-100 border-red-200/50'
-            }`}>
-              <div className={`absolute top-0 right-0 w-12 h-12 rounded-full -translate-y-6 translate-x-6 ${
-                getTimeBasedStats().profitLoss >= 0 
-                  ? 'bg-gradient-to-br from-teal-400/20 to-cyan-500/20' 
-                  : 'bg-gradient-to-br from-red-400/20 to-rose-500/20'
-              }`}></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`p-2 rounded-lg ${
-                    getTimeBasedStats().profitLoss >= 0 
-                      ? 'bg-teal-500/10' 
-                      : 'bg-red-500/10'
-                  }`}>
-                    {getTimeBasedStats().profitLoss >= 0 ? (
-                      <FiTrendingUp className={`h-4 w-4 text-teal-600`} />
-                    ) : (
-                      <FiTrendingDown className={`h-4 w-4 text-red-600`} />
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-xs font-medium ${
-                      getTimeBasedStats().profitLoss >= 0 
-                        ? 'text-teal-700' 
-                        : 'text-red-700'
-                    }`}>
-                      {getTimeBasedStats().profitLoss >= 0 ? 'Profit' : 'Loss'}
-                    </p>
-                    <p className={`text-xs ${
-                      getTimeBasedStats().profitLoss >= 0 
-                        ? 'text-teal-600' 
-                        : 'text-red-600'
-                    }`}>
-                      {timeFilter === 'all' ? 'this month' : timeFilter}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <p className={`text-xs font-medium mb-1 ${
-                    getTimeBasedStats().profitLoss >= 0 
-                      ? 'text-teal-700' 
-                      : 'text-red-700'
-                  }`}>
-                    {getTimeBasedStats().profitLoss >= 0 ? 'Profit' : 'Loss'}
-                  </p>
-                  <p className={`text-lg font-bold ${
-                    getTimeBasedStats().profitLoss >= 0 
-                      ? 'text-teal-800' 
-                      : 'text-red-800'
-                  }`}>
-                    {formatCurrency(Math.abs(getTimeBasedStats().profitLoss))}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Time Filter */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-gray-50 to-slate-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-gray-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-gray-400/20 to-slate-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-gray-500/10">
-                    <FiCalendar className="h-4 w-4 text-gray-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-gray-700">Filter</p>
-                    <p className="text-xs text-gray-600">time period</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-700 mb-1">Time Filter</p>
-                  <select
-                    value={timeFilter}
-                    onChange={(e) => setTimeFilter(e.target.value)}
-                    className="w-full text-sm font-bold text-gray-800 bg-transparent border-none outline-none cursor-pointer"
-                  >
-                    <option value="all">All Time</option>
-                    <option value="today">Today</option>
-                    <option value="week">This Week</option>
-                    <option value="month">This Month</option>
-                    <option value="year">This Year</option>
-                  </select>
-                </div>
-              </div>
-            </div>
           </motion.div>
+
+          </>
           )}
 
           {/* Navigation Tabs */}
@@ -1889,49 +2174,181 @@ const Admin_finance_management = () => {
           </div>
           )}
 
-          {/* Pagination */}
+          {/* Enhanced Pagination */}
           {totalPages > 1 && (
-            <div className="mt-8 flex items-center justify-between">
-              <div className="text-sm text-gray-700">
-                {activeTab === 'transactions' ? (
-                  <>Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, transactionsTotal)} of {transactionsTotal} results</>
-                ) : activeTab === 'expenses' ? (
-                  <>Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, expensesTotal)} of {expensesTotal} results</>
-                ) : activeTab === 'budgets' ? (
-                  <>Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, budgetsTotal)} of {budgetsTotal} results</>
-                ) : (
-                  <>Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} results</>
-                )}
-              </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
-                  Previous
-                </button>
-                {[...Array(totalPages)].map((_, index) => (
+            <div className="mt-8 bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                {/* Results Info */}
+                <div className="flex items-center gap-4 text-sm text-gray-700">
+                  <span>
+                    {activeTab === 'transactions' ? (
+                      <>Showing <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold">{Math.min(currentPage * itemsPerPage, transactionsTotal)}</span> of <span className="font-semibold">{transactionsTotal}</span> transactions</>
+                    ) : activeTab === 'expenses' ? (
+                      <>Showing <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold">{Math.min(currentPage * itemsPerPage, expensesTotal)}</span> of <span className="font-semibold">{expensesTotal}</span> expenses</>
+                    ) : activeTab === 'budgets' ? (
+                      <>Showing <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold">{Math.min(currentPage * itemsPerPage, budgetsTotal)}</span> of <span className="font-semibold">{budgetsTotal}</span> budgets</>
+                    ) : (
+                      <>Showing <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> of <span className="font-semibold">{filteredData.length}</span> results</>
+                    )}
+                  </span>
+                  
+                  {/* Items Per Page Selector */}
+                  {activeTab === 'transactions' && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Show:</span>
+                      <select
+                        value={itemsPerPage}
+                        onChange={(e) => {
+                          setItemsPerPage(Number(e.target.value))
+                          setCurrentPage(1)
+                        }}
+                        className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                      <span className="text-gray-500">per page</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Pagination Controls */}
+                <div className="flex items-center gap-2">
+                  {/* First Page */}
                   <button
-                    key={index + 1}
-                    onClick={() => setCurrentPage(index + 1)}
-                    className={`px-3 py-1 border rounded-md text-sm ${
-                      currentPage === index + 1
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'border-gray-300 hover:bg-gray-50'
-                    }`}
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="p-2 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                    title="First page"
                   >
-                    {index + 1}
+                    <FiChevronLeft className="h-4 w-4" />
                   </button>
-                ))}
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
-                  Next
-                </button>
+                  
+                  {/* Previous Page */}
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                  >
+                    Previous
+                  </button>
+
+                  {/* Page Numbers */}
+                  <div className="flex items-center gap-1">
+                    {(() => {
+                      const pages = []
+                      const maxVisiblePages = 5
+                      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
+                      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+                      
+                      if (endPage - startPage < maxVisiblePages - 1) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1)
+                      }
+
+                      // First page
+                      if (startPage > 1) {
+                        pages.push(
+                          <button
+                            key={1}
+                            onClick={() => setCurrentPage(1)}
+                            className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors"
+                          >
+                            1
+                          </button>
+                        )
+                        if (startPage > 2) {
+                          pages.push(
+                            <span key="ellipsis-start" className="px-2 text-gray-500">
+                              ...
+                            </span>
+                          )
+                        }
+                      }
+
+                      // Visible page numbers
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <button
+                            key={i}
+                            onClick={() => setCurrentPage(i)}
+                            className={`px-3 py-2 border rounded-md text-sm font-medium transition-colors ${
+                              currentPage === i
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                : 'border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {i}
+                          </button>
+                        )
+                      }
+
+                      // Last page
+                      if (endPage < totalPages) {
+                        if (endPage < totalPages - 1) {
+                          pages.push(
+                            <span key="ellipsis-end" className="px-2 text-gray-500">
+                              ...
+                            </span>
+                          )
+                        }
+                        pages.push(
+                          <button
+                            key={totalPages}
+                            onClick={() => setCurrentPage(totalPages)}
+                            className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors"
+                          >
+                            {totalPages}
+                          </button>
+                        )
+                      }
+
+                      return pages
+                    })()}
+                  </div>
+
+                  {/* Next Page */}
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                  >
+                    Next
+                  </button>
+
+                  {/* Last Page */}
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="p-2 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                    title="Last page"
+                  >
+                    <FiChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
+
+              {/* Jump to Page */}
+              {totalPages > 10 && (
+                <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-center gap-2">
+                  <span className="text-sm text-gray-600">Go to page:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max={totalPages}
+                    value={currentPage}
+                    onChange={(e) => {
+                      const page = parseInt(e.target.value)
+                      if (page >= 1 && page <= totalPages) {
+                        setCurrentPage(page)
+                      }
+                    }}
+                    className="w-20 px-3 py-1.5 border border-gray-300 rounded-md text-sm text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <span className="text-sm text-gray-600">of {totalPages}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -2302,12 +2719,154 @@ const Admin_finance_management = () => {
         </div>
       )}
 
-      {/* Transaction Creation Modal */}
+      {/* Transaction View Modal */}
+      {showViewModal && selectedItem && activeTab === 'transactions' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Transaction Details</h3>
+              <button
+                onClick={closeModals}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Transaction Status */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                <div>
+                  <h4 className="font-semibold text-gray-900 text-lg">{selectedItem.category}</h4>
+                  <p className={`text-2xl font-bold mt-2 ${getTypeColor(selectedItem.transactionType || selectedItem.type)}`}>
+                    {(selectedItem.transactionType || selectedItem.type) === 'incoming' ? '+' : '-'}{formatCurrency(selectedItem.amount)}
+                  </p>
+                </div>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedItem.status)}`}>
+                  {selectedItem.status}
+                </span>
+              </div>
+
+              {/* Transaction Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
+                  <p className={`text-lg font-semibold ${getTypeColor(selectedItem.transactionType || selectedItem.type)}`}>
+                    {(selectedItem.transactionType || selectedItem.type) === 'incoming' ? 'Incoming' : 'Outgoing'}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <p className="text-lg bg-gray-50 p-3 rounded-lg">{selectedItem.category}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                  <p className={`text-lg font-bold bg-gray-50 p-3 rounded-lg ${getTypeColor(selectedItem.transactionType || selectedItem.type)}`}>
+                    {formatCurrency(selectedItem.amount)}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <p className="text-lg bg-gray-50 p-3 rounded-lg">
+                    {formatDate(selectedItem.transactionDate || selectedItem.date || selectedItem.createdAt)}
+                  </p>
+                </div>
+                {selectedItem.account && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Account</label>
+                    <p className="text-lg bg-gray-50 p-3 rounded-lg">
+                      {selectedItem.account?.accountName || selectedItem.accountName || 'N/A'}
+                    </p>
+                  </div>
+                )}
+                {selectedItem.paymentMethod && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                    <p className="text-lg bg-gray-50 p-3 rounded-lg">{selectedItem.paymentMethod}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              {selectedItem.description && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedItem.description}</p>
+                </div>
+              )}
+
+              {/* Additional Info */}
+              {(selectedItem.client || selectedItem.project || selectedItem.employee) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {selectedItem.client && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
+                      <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedItem.client?.name || selectedItem.client}</p>
+                    </div>
+                  )}
+                  {selectedItem.project && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                      <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedItem.project?.name || selectedItem.project}</p>
+                    </div>
+                  )}
+                  {selectedItem.employee && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
+                      <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedItem.employee?.name || selectedItem.employee}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Transaction Timeline */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedItem.createdAt && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Created Date</label>
+                    <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{formatDate(selectedItem.createdAt)}</p>
+                  </div>
+                )}
+                {selectedItem.updatedAt && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Updated</label>
+                    <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{formatDate(selectedItem.updatedAt)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={closeModals}
+                  className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setShowViewModal(false)
+                    handleEditTransaction(selectedItem)
+                  }}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                >
+                  <FiEdit className="h-4 w-4" />
+                  <span>Edit Transaction</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction Creation/Edit Modal */}
       {showTransactionModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">Add New Transaction</h3>
+              <h3 className="text-2xl font-bold text-gray-900">
+                {selectedItem ? 'Edit Transaction' : 'Add New Transaction'}
+              </h3>
               <button
                 onClick={closeModals}
                 className="p-2 hover:bg-gray-100 rounded-full"
@@ -2432,8 +2991,17 @@ const Admin_finance_management = () => {
                   type="submit"
                   className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
                 >
-                  <FiPlus className="h-4 w-4" />
-                  <span>Add Transaction</span>
+                  {selectedItem ? (
+                    <>
+                      <FiEdit className="h-4 w-4" />
+                      <span>Update Transaction</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiPlus className="h-4 w-4" />
+                      <span>Add Transaction</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

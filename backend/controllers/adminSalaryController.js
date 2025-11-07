@@ -231,6 +231,9 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
     });
   }
 
+  // Store previous status for transaction creation
+  const previousStatus = salary.status;
+
   // Update fields
   if (status) {
     if (!['pending', 'paid'].includes(status)) {
@@ -243,9 +246,47 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
     
     if (status === 'paid') {
       salary.paidDate = new Date();
+      
+      // Create finance transaction when salary is marked as paid
+      try {
+        const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
+        const { mapSalaryPaymentMethodToFinance } = require('../utils/paymentMethodMapper');
+        
+        if (previousStatus !== 'paid') {
+          await createOutgoingTransaction({
+            amount: salary.fixedSalary,
+            category: 'Salary Payment',
+            transactionDate: salary.paidDate || new Date(),
+            createdBy: req.admin.id,
+            employee: salary.employeeId,
+            paymentMethod: salary.paymentMethod ? mapSalaryPaymentMethodToFinance(salary.paymentMethod) : 'Bank Transfer',
+            description: `Salary payment for ${salary.employeeName} - ${salary.month}`,
+            metadata: {
+              sourceType: 'salary',
+              sourceId: salary._id.toString(),
+              month: salary.month
+            },
+            checkDuplicate: true
+          });
+        }
+      } catch (error) {
+        // Log error but don't fail the salary update
+        console.error('Error creating finance transaction for salary:', error);
+      }
     } else {
       salary.paidDate = null;
       salary.paymentMethod = null;
+      
+      // Cancel transaction if status changed back to pending
+      try {
+        const { cancelTransactionForSource } = require('../utils/financeTransactionHelper');
+        await cancelTransactionForSource({
+          sourceType: 'salary',
+          sourceId: salary._id.toString()
+        }, 'cancel');
+      } catch (error) {
+        console.error('Error canceling finance transaction for salary:', error);
+      }
     }
   }
 

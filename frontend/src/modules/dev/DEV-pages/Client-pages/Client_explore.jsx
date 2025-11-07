@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { 
   FiSearch, 
@@ -15,130 +15,63 @@ import {
   FiGlobe,
   FiShoppingCart,
   FiBarChart,
-  FiShield,
-  FiHeadphones,
-  FiCamera,
-  FiZap
+  FiZap,
+  FiLoader
 } from 'react-icons/fi'
 import Client_navbar from '../../DEV-components/Client_navbar'
+import clientExploreService from '../../DEV-services/clientExploreService'
 
 const Client_explore = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [showFilters, setShowFilters] = useState(false)
-  const [showRequestDialog, setShowRequestDialog] = useState(false)
   const [showDetailsDialog, setShowDetailsDialog] = useState(false)
   const [selectedService, setSelectedService] = useState(null)
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false)
   const [showThankYouDialog, setShowThankYouDialog] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [services, setServices] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [requestError, setRequestError] = useState(null)
 
+  const formatPriceRange = useCallback((range) => {
+    if (!range) return 'Custom pricing'
+    const formatter = new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: range.currency || 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    })
+    const min = formatter.format(range.min || 0)
+    const max = formatter.format(range.max || range.min || 0)
+    return `${min} - ${max}`
+  }, [])
 
-  // Mock services data - Website and Mobile App focused
-  const services = [
-    {
-      id: 1,
-      title: 'Website Development',
-      description: 'Custom website development with modern technologies and responsive design',
-      category: 'website',
-      icon: FiGlobe,
-      image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop',
-      price: '₹50,000 - ₹2,00,000',
-      duration: '4-8 weeks',
-      rating: 4.8,
-      reviews: 156,
-      features: ['Responsive Design', 'SEO Optimized', 'CMS Integration', 'Mobile Friendly', 'Fast Loading', 'Cross Browser Compatible'],
-      technologies: ['React', 'Next.js', 'Node.js', 'MongoDB', 'Express'],
-      popular: true,
-      detailedDescription: 'We create stunning, high-performance websites that are perfectly optimized for all devices. Our websites are built with modern technologies and follow best practices for SEO, security, and user experience.',
-      deliverables: ['Responsive Website', 'Admin Panel', 'SEO Optimization', 'Performance Optimization', 'Documentation', '3 Months Support']
-    },
-    {
-      id: 2,
-      title: 'Mobile App Development',
-      description: 'Native and cross-platform mobile applications for iOS and Android',
-      category: 'mobile',
-      icon: FiSmartphone,
-      image: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=400&h=300&fit=crop',
-      price: '₹1,00,000 - ₹5,00,000',
-      duration: '8-16 weeks',
-      rating: 4.9,
-      reviews: 89,
-      features: ['Cross Platform', 'Native Performance', 'App Store Ready', 'Push Notifications', 'Offline Support', 'Real-time Sync'],
-      technologies: ['React Native', 'Flutter', 'Swift', 'Kotlin', 'Firebase'],
-      popular: true,
-      detailedDescription: 'We develop powerful mobile applications that work seamlessly across iOS and Android platforms. Our apps are optimized for performance, user experience, and app store compliance.',
-      deliverables: ['iOS App', 'Android App', 'Admin Dashboard', 'Push Notifications', 'App Store Submission', '6 Months Support']
-    },
-    {
-      id: 3,
-      title: 'E-commerce Website',
-      description: 'Complete e-commerce platforms with payment integration and inventory management',
-      category: 'website',
-      icon: FiShoppingCart,
-      image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=300&fit=crop',
-      price: '₹75,000 - ₹3,00,000',
-      duration: '6-12 weeks',
-      rating: 4.7,
-      reviews: 124,
-      features: ['Payment Gateway', 'Inventory Management', 'Order Tracking', 'Admin Dashboard', 'Multi-vendor Support', 'Analytics'],
-      technologies: ['React', 'Node.js', 'Stripe', 'PayPal', 'MongoDB'],
-      popular: false,
-      detailedDescription: 'Complete e-commerce solutions with secure payment processing, inventory management, and comprehensive admin controls. Perfect for online businesses of all sizes.',
-      deliverables: ['E-commerce Website', 'Payment Integration', 'Admin Panel', 'Inventory System', 'Order Management', 'Analytics Dashboard']
-    },
-    {
-      id: 4,
-      title: 'Progressive Web App',
-      description: 'Modern PWA that works like a native app on any device',
-      category: 'website',
-      icon: FiZap,
-      image: 'https://images.unsplash.com/photo-1551650975-87deedd944c3?w=400&h=300&fit=crop',
-      price: '₹60,000 - ₹2,50,000',
-      duration: '6-10 weeks',
-      rating: 4.8,
-      reviews: 67,
-      features: ['Offline Functionality', 'Push Notifications', 'App-like Experience', 'Fast Loading', 'Installable', 'Responsive'],
-      technologies: ['React', 'Service Workers', 'Web App Manifest', 'IndexedDB', 'PWA'],
-      popular: false,
-      detailedDescription: 'Progressive Web Apps combine the best of websites and mobile apps. They work offline, can be installed on devices, and provide native app-like experiences.',
-      deliverables: ['PWA Website', 'Offline Support', 'Push Notifications', 'App Installation', 'Performance Optimization', 'Cross Platform']
-    },
-    {
-      id: 5,
-      title: 'Hybrid Mobile App',
-      description: 'Cross-platform mobile apps using web technologies',
-      category: 'mobile',
-      icon: FiCode,
-      image: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=400&h=300&fit=crop',
-      price: '₹80,000 - ₹3,50,000',
-      duration: '6-12 weeks',
-      rating: 4.6,
-      reviews: 45,
-      features: ['Single Codebase', 'Cost Effective', 'Faster Development', 'Easy Maintenance', 'Cross Platform', 'Native Features'],
-      technologies: ['Ionic', 'Cordova', 'Capacitor', 'Angular', 'React'],
-      popular: false,
-      detailedDescription: 'Hybrid mobile apps allow you to reach both iOS and Android users with a single codebase, reducing development time and costs while maintaining native functionality.',
-      deliverables: ['iOS App', 'Android App', 'Single Codebase', 'Native Features', 'App Store Submission', 'Maintenance Support']
-    },
-    {
-      id: 6,
-      title: 'Website Redesign',
-      description: 'Modern redesign of existing websites with improved UX/UI',
-      category: 'website',
-      icon: FiCamera,
-      image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop',
-      price: '₹30,000 - ₹1,50,000',
-      duration: '3-6 weeks',
-      rating: 4.9,
-      reviews: 92,
-      features: ['Modern Design', 'Improved UX', 'Mobile Optimization', 'Performance Boost', 'SEO Enhancement', 'Content Migration'],
-      technologies: ['Modern CSS', 'JavaScript', 'Performance Tools', 'SEO Tools', 'Analytics'],
-      popular: true,
-      detailedDescription: 'Transform your existing website with modern design, improved user experience, and better performance. We maintain your content while enhancing the overall look and functionality.',
-      deliverables: ['Redesigned Website', 'Improved Performance', 'Mobile Optimization', 'SEO Enhancement', 'Content Migration', 'Training']
+  const loadServices = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const response = await clientExploreService.getCatalog()
+      const items = Array.isArray(response) ? response : response?.data || []
+      const normalized = items.map((item) => ({
+        ...item,
+        priceLabel: item.priceRange ? formatPriceRange(item.priceRange) : item.price || 'Custom pricing'
+      }))
+
+      setServices(normalized)
+    } catch (err) {
+      console.error('Failed to load services:', err)
+      setError(err.message || 'Unable to load services at the moment.')
+    } finally {
+      setLoading(false)
     }
-  ]
+  }, [formatPriceRange])
+
+  useEffect(() => {
+    loadServices()
+  }, [loadServices])
 
   const categories = [
     { key: 'all', label: 'All Services' },
@@ -146,15 +79,46 @@ const Client_explore = () => {
     { key: 'mobile', label: 'Mobile App Development' }
   ]
 
-  const filteredServices = services.filter(service => {
-    const matchesSearch = service.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         service.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || service.category === selectedCategory
-    return matchesSearch && matchesCategory
-  })
+  const filteredServices = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+    return services.filter((service) => {
+      const matchesSearch =
+        term.length === 0 ||
+        service.title.toLowerCase().includes(term) ||
+        service.description.toLowerCase().includes(term)
+      const matchesCategory =
+        selectedCategory === 'all' || service.category === selectedCategory
+      return matchesCategory && matchesSearch
+    })
+  }, [services, searchTerm, selectedCategory])
+
+  const getServiceIcon = useCallback((service) => {
+    if (!service) return FiGlobe
+    switch (service.id) {
+      case 'website-development':
+      case 'website-redesign':
+        return FiGlobe
+      case 'mobile-app-development':
+        return FiSmartphone
+      case 'ecommerce-platform':
+        return FiShoppingCart
+      case 'pwa-solution':
+        return FiZap
+      case 'hybrid-app':
+        return FiCode
+      default:
+        return FiBarChart
+    }
+  }, [])
+
+  const selectedServiceIcon = useMemo(
+    () => (selectedService ? getServiceIcon(selectedService) : null),
+    [selectedService, getServiceIcon]
+  )
 
   const handleServiceRequest = (service) => {
     setSelectedService(service)
+    setRequestError(null)
     setShowConfirmationDialog(true)
   }
 
@@ -164,17 +128,65 @@ const Client_explore = () => {
   }
 
   const handleConfirmRequest = async () => {
+    if (!selectedService) return
     setIsSubmitting(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    setIsSubmitting(false)
-    setShowConfirmationDialog(false)
-    setShowThankYouDialog(true)
+    setRequestError(null)
+
+    try {
+      await clientExploreService.createServiceRequest({
+        serviceId: selectedService.id
+      })
+
+      setIsSubmitting(false)
+      setShowConfirmationDialog(false)
+      setShowThankYouDialog(true)
+    } catch (err) {
+      console.error('Failed to submit service request:', err)
+      setRequestError(err.message || 'Failed to submit request. Please try again.')
+      setIsSubmitting(false)
+    }
   }
 
   const handleCloseThankYou = () => {
     setShowThankYouDialog(false)
     setSelectedService(null)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        <Client_navbar />
+        <main className="pt-16 pb-20 lg:pt-20 lg:pb-8 flex items-center justify-center">
+          <div className="flex flex-col items-center space-y-3 text-gray-600">
+            <FiLoader className="h-8 w-8 animate-spin text-teal-600" />
+            <p>Loading service catalog...</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        <Client_navbar />
+        <main className="pt-16 pb-20 lg:pt-20 lg:pb-8">
+          <div className="max-w-md mx-auto bg-white border border-red-100 rounded-2xl shadow-sm p-8 text-center space-y-4">
+            <FiAlertCircle className="h-10 w-10 text-red-500 mx-auto" />
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Unable to load services</h2>
+              <p className="text-gray-600 mt-1">{error}</p>
+            </div>
+            <button
+              onClick={loadServices}
+              className="inline-flex items-center px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors"
+            >
+              Try again
+            </button>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -278,7 +290,7 @@ const Client_explore = () => {
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
             {filteredServices.map((service, index) => {
-              const IconComponent = service.icon
+              const IconComponent = getServiceIcon(service)
               
               return (
                 <motion.div
@@ -330,7 +342,7 @@ const Client_explore = () => {
                         <span className="font-semibold text-gray-900">{service.rating}</span>
                         <span className="text-gray-500">({service.reviews})</span>
                       </div>
-                      <span className="font-semibold text-teal-600">{service.price}</span>
+                      <span className="font-semibold text-teal-600">{service.priceLabel}</span>
                     </div>
 
                      {/* Action Buttons */}
@@ -402,7 +414,9 @@ const Client_explore = () => {
                   <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                       <div className="p-3 bg-white/90 rounded-xl">
-                        <selectedService.icon className="h-8 w-8 text-teal-600" />
+                        {selectedServiceIcon && (
+                          <selectedServiceIcon className="h-8 w-8 text-teal-600" />
+                        )}
                       </div>
                       <div>
                         <h2 className="text-2xl font-bold text-white">{selectedService.title}</h2>
@@ -484,7 +498,7 @@ const Client_explore = () => {
                         <div className="space-y-4">
                           <div className="flex items-center justify-between">
                             <span className="text-gray-600">Price Range:</span>
-                            <span className="font-semibold text-gray-900">{selectedService.price}</span>
+                            <span className="font-semibold text-gray-900">{selectedService.priceLabel}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-gray-600">Duration:</span>
@@ -547,13 +561,18 @@ const Client_explore = () => {
           >
             <div className="text-center">
               <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <selectedService.icon className="h-8 w-8 text-teal-600" />
+                {selectedServiceIcon && (
+                  <selectedServiceIcon className="h-8 w-8 text-teal-600" />
+                )}
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Request Service</h3>
               <p className="text-gray-600 mb-6">
                 Are you sure you want to request <strong>{selectedService.title}</strong>? 
                 Our team will reach out to you within 24 hours to discuss your requirements.
               </p>
+              {requestError && (
+                <p className="text-sm text-red-600 mb-4">{requestError}</p>
+              )}
               
               <div className="flex space-x-3">
                 <button

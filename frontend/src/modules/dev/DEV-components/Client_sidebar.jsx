@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { 
@@ -10,19 +10,62 @@ import {
   FiLogOut,
   FiX
 } from 'react-icons/fi'
-import { colors, gradients } from '../../../lib/colors'
+import { gradients } from '../../../lib/colors'
+import { getProfile, logoutClient, getStoredClientData } from '../DEV-services/clientAuthService'
+import { useToast } from '../../../contexts/ToastContext'
 
 const Client_sidebar = ({ isOpen, onClose }) => {
   const location = useLocation()
   const navigate = useNavigate()
-  
-  // Mock user data for Client
-  const user = {
-    name: 'Client User',
-    email: 'client@appzeto.com',
-    avatar: 'CU'
+  const { toast } = useToast()
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [user, setUser] = useState({
+    name: 'Client',
+    email: '',
+    avatar: 'CL'
+  })
+
+  const deriveAvatar = (name) => {
+    if (!name) return 'CL'
+    const initials = name
+      .split(' ')
+      .filter(Boolean)
+      .map((segment) => segment[0]?.toUpperCase())
+      .join('')
+    return initials.slice(0, 2) || 'CL'
   }
 
+  useEffect(() => {
+    const populateFromStored = () => {
+      const stored = getStoredClientData?.()
+      if (!stored) return
+      setUser({
+        name: stored.name || 'Client',
+        email: stored.email || '',
+        avatar: deriveAvatar(stored.name)
+      })
+    }
+
+    populateFromStored()
+
+    const loadProfile = async () => {
+      try {
+        const response = await getProfile()
+        const client = response?.data || {}
+        setUser({
+          name: client.name || 'Client',
+          email: client.email || '',
+          avatar: deriveAvatar(client.name)
+        })
+      } catch (error) {
+        // Silent fallback to stored data
+        console.error('Failed to load client sidebar profile:', error)
+      }
+    }
+
+    loadProfile()
+  }, [])
+  
   const navItems = [
     { 
       path: '/client-dashboard', 
@@ -51,9 +94,25 @@ const Client_sidebar = ({ isOpen, onClose }) => {
     }
   ]
 
-  const handleLogout = () => {
-    console.log('Logging out...')
-    // Handle logout logic here
+  const handleLogout = async () => {
+    if (loggingOut) return
+    try {
+      setLoggingOut(true)
+      await logoutClient()
+      toast.logout?.('You have been logged out successfully.', {
+        title: 'Logged Out',
+        duration: 3000
+      })
+      navigate('/client-login')
+    } catch (error) {
+      console.error('Client logout failed:', error)
+      toast.error?.('Unable to logout. Please try again.', {
+        title: 'Logout Failed',
+        duration: 4000
+      })
+    } finally {
+      setLoggingOut(false)
+    }
   }
 
   return (
@@ -110,7 +169,7 @@ const Client_sidebar = ({ isOpen, onClose }) => {
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ delay: 0.2, type: 'spring', damping: 20, stiffness: 300 }}
-                  className="w-12 h-12 bg-blue-400 rounded-full flex items-center justify-center shadow-lg"
+                  className="w-12 h-12 bg-blue-400 rounded-full flex items-center justify-center shadow-lg uppercase"
                 >
                   <span className="text-lg font-bold text-white">{user.avatar}</span>
                 </motion.div>
@@ -209,7 +268,7 @@ const Client_sidebar = ({ isOpen, onClose }) => {
                 className="flex items-center gap-3 p-2.5 rounded-lg text-red-600 hover:bg-red-50 transition-all duration-200 w-full"
               >
                 <FiLogOut className="w-4 h-4 text-red-600" />
-                <span className="font-medium text-sm">Logout</span>
+                <span className="font-medium text-sm">{loggingOut ? 'Logging out…' : 'Logout'}</span>
               </motion.button>
             </motion.div>
           </motion.div>

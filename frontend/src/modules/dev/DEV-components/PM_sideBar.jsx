@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { 
@@ -6,28 +6,143 @@ import {
   FiFolder, 
   FiCheckSquare, 
   FiTrendingUp,
-  FiUser,
   FiLogOut,
   FiX,
   FiCreditCard,
   FiFileText
 } from 'react-icons/fi'
-import { colors, gradients } from '../../../lib/colors'
+import { gradients } from '../../../lib/colors'
+import { 
+  pmWalletService, 
+  getPMProfile, 
+  getStoredPMData, 
+  storePMData, 
+  clearPMData, 
+  logoutPM 
+} from '../DEV-services'
 
 const PM_sideBar = ({ isOpen, onClose }) => {
   const location = useLocation()
   const navigate = useNavigate()
-  
-  // Mock user data for PM
-  const user = {
+  const [user, setUser] = useState({
     name: 'Project Manager',
     email: 'pm@appzeto.com',
-    avatar: 'PM',
-    monthlySalary: 35000,
-    monthlyRewards: 15000,
-    totalEarnings: 50000 // salary + rewards
+    avatar: 'PM'
+  })
+  const [walletSummary, setWalletSummary] = useState({
+    monthlySalary: 0,
+    monthlyRewards: 0,
+    totalEarnings: 0
+  })
+  const [isLoading, setIsLoading] = useState(false)
+
+  const getInitials = (name, fallback = 'PM') => {
+    if (!name) return fallback
+    const parts = name.trim().split(/\s+/)
+    const initials = parts.slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('')
+    return initials || fallback
   }
 
+  const normalizeProfileData = (data) => {
+    if (!data || typeof data !== 'object') return null
+
+    const firstName = data.firstName || data.firstname || data.givenName
+    const lastName = data.lastName || data.lastname || data.familyName
+    const fullName = data.fullName || data.fullname || data.name || [firstName, lastName].filter(Boolean).join(' ').trim()
+    const username = data.username || data.userName
+    const email = data.email || data.emailAddress || (username && username.includes('@') ? username : '')
+
+    const resolvedName = (fullName && fullName.length > 0)
+      ? fullName
+      : (username && !username.includes('@'))
+        ? username
+        : (email ? email.split('@')[0] : '')
+
+    return {
+      name: resolvedName || 'Project Manager',
+      email: email || data.contactEmail || 'pm@appzeto.com',
+      avatar: getInitials(resolvedName || email || 'PM'),
+      raw: data
+    }
+  }
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    let isMounted = true
+
+    const loadSidebarData = async () => {
+      setIsLoading(true)
+
+      try {
+        const storedProfile = getStoredPMData?.()
+        const normalizedStored = normalizeProfileData(storedProfile)
+        if (normalizedStored && isMounted) {
+          setUser({
+            name: normalizedStored.name,
+            email: normalizedStored.email,
+            avatar: normalizedStored.avatar
+          })
+        }
+
+        const [profileResponse, walletResponse] = await Promise.allSettled([
+          getPMProfile?.(),
+          pmWalletService.getWalletSummary()
+        ])
+
+        if (profileResponse.status === 'fulfilled') {
+          const response = profileResponse.value
+          const rawProfile = response?.data?.pm 
+            || response?.data?.profile 
+            || response?.data?.user 
+            || response?.data 
+            || response?.profile 
+            || null
+
+          const normalizedApiProfile = normalizeProfileData(rawProfile)
+
+          if (response?.success && normalizedApiProfile && isMounted) {
+            setUser({
+              name: normalizedApiProfile.name,
+              email: normalizedApiProfile.email,
+              avatar: normalizedApiProfile.avatar
+            })
+            const dataToStore = normalizedApiProfile.raw || rawProfile || {
+              name: normalizedApiProfile.name,
+              email: normalizedApiProfile.email
+            }
+            storePMData?.(dataToStore)
+          }
+        }
+
+        if (walletResponse.status === 'fulfilled') {
+          const response = walletResponse.value
+          const summaryData = response?.data || {}
+
+          if (response?.success && isMounted) {
+            setWalletSummary({
+              monthlySalary: summaryData.monthlySalary || 0,
+              monthlyRewards: summaryData.monthlyRewards || 0,
+              totalEarnings: summaryData.totalEarnings ?? ((summaryData.monthlySalary || 0) + (summaryData.monthlyRewards || 0))
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Error loading sidebar data:', error)
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadSidebarData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isOpen])
+  
   const navItems = [
     { 
       path: '/pm-dashboard', 
@@ -45,7 +160,7 @@ const PM_sideBar = ({ isOpen, onClose }) => {
       icon: FiCheckSquare
     },
     { 
-      path: '/pm-notice-board', 
+      path: '/pm-notice-board',
       label: 'Notice Board', 
       icon: FiFileText
     },
@@ -56,12 +171,20 @@ const PM_sideBar = ({ isOpen, onClose }) => {
     }
   ]
 
-  const handleLogout = () => {
-    console.log('Logging out...')
-    // Handle logout logic here
+  const handleLogout = async () => {
+    try {
+      await logoutPM()
+    } catch (error) {
+      console.error('Error during logout:', error)
+    } finally {
+      clearPMData?.()
+      onClose?.()
+      navigate('/pm-login', { replace: true })
+    }
   }
 
   const handleWalletClick = () => {
+    if (isLoading) return
     navigate('/pm-wallet')
     onClose()
   }
@@ -142,7 +265,8 @@ const PM_sideBar = ({ isOpen, onClose }) => {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 0.6, ease: "easeOut" }}
                 onClick={handleWalletClick}
-                className="w-full bg-white rounded-lg p-3 shadow-xl hover:shadow-2xl transition-all duration-200"
+                disabled={isLoading}
+                className={`w-full bg-white rounded-lg p-3 shadow-xl transition-all duration-200 ${isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-2xl'}`}
                 style={{
                   boxShadow: '0 8px 25px -5px rgba(0, 0, 0, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1)'
                 }}
@@ -155,11 +279,13 @@ const PM_sideBar = ({ isOpen, onClose }) => {
                       </div>
                       <span className="text-xs font-medium text-gray-700">Monthly Earnings</span>
                     </div>
-                    <span className="text-sm font-bold text-gray-900">₹{user.totalEarnings.toLocaleString()}</span>
+                    <span className="text-sm font-bold text-gray-900">
+                      {isLoading ? 'Loading...' : `₹${walletSummary.totalEarnings.toLocaleString()}`}
+                    </span>
                   </div>
                   <div className="flex justify-between text-xs text-gray-600">
-                    <span>Salary: ₹{user.monthlySalary.toLocaleString()}</span>
-                    <span>Rewards: ₹{user.monthlyRewards.toLocaleString()}</span>
+                    <span>Salary: ₹{walletSummary.monthlySalary.toLocaleString()}</span>
+                    <span>Rewards: ₹{walletSummary.monthlyRewards.toLocaleString()}</span>
                   </div>
                 </div>
               </motion.button>

@@ -435,11 +435,98 @@ projectSchema.pre('save', async function(next) {
   next();
 });
 
+// Post-save middleware to handle incentive movement when project becomes "no dues"
+projectSchema.post('save', async function(doc) {
+  // Check if project is completed and has no dues
+  const isCompleted = doc.status === 'completed';
+  const remainingAmount = doc.financialDetails?.remainingAmount || 0;
+  const isNoDues = isCompleted && Number(remainingAmount) === 0;
+  
+  if (isNoDues) {
+    try {
+      const Incentive = mongoose.model('Incentive');
+      
+      // Find all conversion-based incentives linked to this project that have pending balance
+      const incentives = await Incentive.find({
+        isConversionBased: true,
+        projectId: doc._id,
+        pendingBalance: { $gt: 0 }
+      });
+      
+      if (incentives.length > 0) {
+        // For each incentive, move the full pending amount to current
+        // Since each conversion gets its own incentive, when that project becomes no-dues,
+        // we move the full pending amount for that conversion
+        for (const incentive of incentives) {
+          if (incentive.pendingBalance > 0) {
+            const amountToMove = incentive.pendingBalance;
+            
+            try {
+              await incentive.movePendingToCurrent(amountToMove);
+              console.log(`Moved ${amountToMove} from pending to current for incentive ${incentive._id} (project ${doc._id})`);
+            } catch (moveError) {
+              console.error(`Error moving pending to current for incentive ${incentive._id}:`, moveError);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error processing incentive movement for no-dues project:', error);
+      // Don't fail the save operation
+    }
+  }
+});
+
 // Remove password and sensitive data from JSON output
 projectSchema.methods.toJSON = function() {
   const project = this.toObject();
   return project;
 };
+
+// Post-save hook to create finance transaction when project is created with advanceReceived > 0
+projectSchema.post('save', async function(doc) {
+  // Only create transaction if advanceReceived > 0 and this is a new document
+  if (doc.isNew && doc.financialDetails && doc.financialDetails.advanceReceived > 0) {
+    try {
+      const { createIncomingTransaction } = require('../utils/financeTransactionHelper');
+      const AdminFinance = require('./AdminFinance');
+      const Admin = require('./Admin');
+      
+      // Check if transaction already exists
+      const existing = await AdminFinance.findOne({
+        recordType: 'transaction',
+        'metadata.sourceType': 'project_conversion',
+        'metadata.projectId': doc._id.toString()
+      });
+      
+      if (!existing) {
+        // Find first active admin as createdBy
+        const admin = await Admin.findOne({ isActive: true }).select('_id');
+        const adminId = admin ? admin._id : null;
+        
+        if (adminId) {
+          await createIncomingTransaction({
+            amount: doc.financialDetails.advanceReceived,
+            category: 'Advance Payment',
+            transactionDate: doc.createdAt || new Date(),
+            createdBy: adminId,
+            client: doc.client,
+            project: doc._id,
+            description: `Advance payment received for project "${doc.name}"`,
+            metadata: {
+              sourceType: 'project_conversion',
+              projectId: doc._id.toString()
+            },
+            checkDuplicate: true
+          });
+        }
+      }
+    } catch (error) {
+      // Log error but don't fail the save
+      console.error('Error creating finance transaction for project advance:', error);
+    }
+  }
+});
 
 module.exports = mongoose.model('Project', projectSchema);
 

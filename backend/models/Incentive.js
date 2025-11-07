@@ -28,13 +28,46 @@ const incentiveSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'approved', 'paid'],
+    enum: ['pending', 'approved', 'paid', 'conversion-pending', 'conversion-current'],
     default: 'pending'
+  },
+  // Conversion-based incentive fields
+  isConversionBased: {
+    type: Boolean,
+    default: false
+  },
+  projectId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Project'
+  },
+  clientId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Client'
+  },
+  leadId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Lead'
+  },
+  currentBalance: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  pendingBalance: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  pendingMovedToCurrentAt: {
+    type: Date
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',
-    required: [true, 'Created by admin is required']
+    required: function() {
+      // Not required for conversion-based incentives
+      return !this.isConversionBased;
+    }
   },
   approvedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -55,6 +88,10 @@ incentiveSchema.index({ salesEmployee: 1 });
 incentiveSchema.index({ status: 1 });
 incentiveSchema.index({ dateAwarded: -1 });
 incentiveSchema.index({ createdAt: -1 });
+incentiveSchema.index({ isConversionBased: 1 });
+incentiveSchema.index({ projectId: 1 });
+incentiveSchema.index({ clientId: 1 });
+incentiveSchema.index({ leadId: 1 });
 
 // Virtual for days since awarded
 incentiveSchema.virtual('daysSinceAwarded').get(function() {
@@ -83,6 +120,32 @@ incentiveSchema.methods.markAsPaid = function() {
   
   this.status = 'paid';
   this.paidAt = new Date();
+  return this.save();
+};
+
+// Method to move pending balance to current balance (for conversion-based incentives)
+incentiveSchema.methods.movePendingToCurrent = function(amount) {
+  if (!this.isConversionBased) {
+    throw new Error('This method is only for conversion-based incentives');
+  }
+  
+  if (amount > this.pendingBalance) {
+    throw new Error('Cannot move more than available pending balance');
+  }
+  
+  if (amount <= 0) {
+    throw new Error('Amount must be greater than 0');
+  }
+  
+  this.pendingBalance = Math.max(0, this.pendingBalance - amount);
+  this.currentBalance += amount;
+  this.pendingMovedToCurrentAt = new Date();
+  
+  // Update status if all pending is moved
+  if (this.pendingBalance === 0 && this.currentBalance > 0) {
+    this.status = 'conversion-current';
+  }
+  
   return this.save();
 };
 
@@ -193,7 +256,8 @@ incentiveSchema.statics.getMonthlySummary = function(year, month) {
 
 // Pre-save middleware to update sales employee's current incentive
 incentiveSchema.pre('save', async function(next) {
-  if (this.isNew && this.status === 'approved') {
+  // Only update for admin-awarded incentives, not conversion-based ones
+  if (this.isNew && this.status === 'approved' && !this.isConversionBased) {
     const Sales = mongoose.model('Sales');
     await Sales.findByIdAndUpdate(this.salesEmployee, {
       $inc: { currentIncentive: this.amount }

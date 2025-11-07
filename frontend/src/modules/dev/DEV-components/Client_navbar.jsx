@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { 
   FiHome, 
@@ -12,19 +12,70 @@ import {
 } from 'react-icons/fi'
 import logo from '../../../assets/images/logo.png'
 import Client_sidebar from './Client_sidebar'
+import clientWalletService from '../DEV-services/clientWalletService'
 
 function Client_navbar() {
   const location = useLocation()
   
   // Sidebar state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-
-  // Mock wallet data - Client's current balance
-  const [walletData] = useState({
-    totalBalance: 125000,
-    availableBalance: 85000,
-    pendingBalance: 40000
+  const [walletSummary, setWalletSummary] = useState({
+    totalCost: 0,
+    currency: 'INR'
   })
+  const [loadingWallet, setLoadingWallet] = useState(false)
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadWalletSummary = async () => {
+      try {
+        setLoadingWallet(true)
+        const response = await clientWalletService.getSummary()
+        const summary = response?.summary || {}
+
+        if (!isActive) return
+
+        setWalletSummary({
+          totalCost: Number(summary.totalCost) || 0,
+          currency: summary.currency || 'INR'
+        })
+      } catch (error) {
+        console.error('Failed to fetch wallet summary for navbar:', error)
+        if (isActive) {
+          setWalletSummary((prev) => ({
+            ...prev,
+            totalCost: 0
+          }))
+        }
+      } finally {
+        if (isActive) {
+          setLoadingWallet(false)
+        }
+      }
+    }
+
+    loadWalletSummary()
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  const currencyFormatter = useMemo(() => {
+    const locale = walletSummary.currency === 'INR' ? 'en-IN' : 'en-US'
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: walletSummary.currency || 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    })
+  }, [walletSummary.currency])
+
+  const walletTotalDisplay = useMemo(() => {
+    const amount = Number.isFinite(walletSummary.totalCost) ? walletSummary.totalCost : 0
+    return currencyFormatter.format(amount)
+  }, [currencyFormatter, walletSummary.totalCost])
 
   const navItems = [
     { 
@@ -87,7 +138,9 @@ function Client_navbar() {
               className="flex items-center space-x-1 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-3 py-1.5 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
             >
               <FiCreditCard className="text-teal-600 text-sm" />
-              <span className="text-sm font-semibold text-teal-700">${walletData.totalBalance.toLocaleString()}</span>
+              <span className="text-sm font-semibold text-teal-700">
+                {loadingWallet ? '...' : walletTotalDisplay}
+              </span>
             </Link>
             
             {/* Hamburger Menu Icon */}
@@ -168,7 +221,9 @@ function Client_navbar() {
                 className="flex items-center space-x-2 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-4 py-2 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
               >
                 <FiCreditCard className="text-teal-600 text-lg" />
-                <span className="text-sm font-semibold text-teal-700">${walletData.totalBalance.toLocaleString()}</span>
+              <span className="text-sm font-semibold text-teal-700">
+                {loadingWallet ? '...' : walletTotalDisplay}
+              </span>
               </Link>
               
               <div className="flex items-center space-x-8">

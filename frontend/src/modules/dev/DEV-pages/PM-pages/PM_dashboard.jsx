@@ -11,6 +11,7 @@ import {
   taskService, 
   teamService, 
   milestoneService,
+  pmRequestService,
   socketService, 
   tokenUtils 
 } from '../../DEV-services'
@@ -42,6 +43,7 @@ const PM_dashboard = () => {
     teamStats: { totalMembers: 0, activeTasks: 0, completedTasks: 0, activeMilestones: 0 },
     projectStatusData: [],
     productivityMetrics: {},
+    requestsCount: 0,
     testingProjectsCount: 0,
     testingMilestonesCount: 0
   })
@@ -104,12 +106,20 @@ const PM_dashboard = () => {
       setLoading(true)
       
       // Load projects data first - this is the main source of truth
-      const [projectsResponse, teamStats, productivityMetrics, projectGrowth, testingProjectsResponse] = await Promise.all([
+      const [
+        projectsResponse,
+        teamStats,
+        productivityMetrics,
+        projectGrowth,
+        testingProjectsResponse,
+        requestStatsResponse
+      ] = await Promise.all([
         projectService.getAllProjects({ limit: 100 }), // Get all projects for statistics
         teamService.getTeamStatistics(),
         analyticsService.getProductivityMetrics(),
         analyticsService.getProjectGrowthAnalytics(), // Add this
-        projectService.getAllProjects({ status: 'testing', limit: 100 }) // Get testing projects for count
+        projectService.getAllProjects({ status: 'testing', limit: 100 }), // Get testing projects for count
+        pmRequestService.getStatistics({ direction: 'all' })
       ])
 
 
@@ -165,6 +175,19 @@ const PM_dashboard = () => {
       const testingProjects = Array.isArray(testingProjectsResponse) ? testingProjectsResponse : (testingProjectsResponse?.data || []);
       const testingProjectsCount = testingProjects.length;
 
+      // Extract request statistics count
+      const requestsCount = (() => {
+        if (!requestStatsResponse) return 0
+        if (typeof requestStatsResponse.totalRequests === 'number') return requestStatsResponse.totalRequests
+        if (requestStatsResponse.success && requestStatsResponse.data) {
+          return requestStatsResponse.data.totalRequests || 0
+        }
+        if (requestStatsResponse.data) {
+          return requestStatsResponse.data.totalRequests || 0
+        }
+        return 0
+      })();
+
       // Get testing milestones count by fetching all projects and their milestones
       let testingMilestonesCount = 0;
       try {
@@ -199,6 +222,7 @@ const PM_dashboard = () => {
         teamStats: processedTeamStats,
         projectStatusData,
         productivityMetrics: productivityMetrics?.data || {},
+        requestsCount,
         testingProjectsCount,
         testingMilestonesCount
       });
@@ -217,6 +241,7 @@ const PM_dashboard = () => {
           { name: 'Overdue', value: 0, color: '#EF4444', count: '0 projects' }
         ],
         productivityMetrics: {},
+        requestsCount: 0,
         testingProjectsCount: 0,
         testingMilestonesCount: 0
       })
@@ -417,7 +442,7 @@ const PM_dashboard = () => {
                   </div>
                 </div>
                  <div className="bg-teal-300 text-teal-800 px-4 py-2 rounded-xl shadow-sm">
-                   <p className="text-2xl font-bold">20</p>
+                   <p className="text-2xl font-bold">{dashboardData.requestsCount}</p>
                  </div>
               </div>
             </div>

@@ -237,18 +237,50 @@ exports.getAllRecurringExpenses = asyncHandler(async (req, res) => {
     .populate('updatedBy', 'name email')
     .sort({ createdAt: -1 });
 
+  // Add paid/due status for each recurring expense
+  const expensesWithStatus = await Promise.all(recurringExpenses.map(async (expense) => {
+    const expenseObj = expense.toObject();
+    
+    // Check if there are any unpaid/overdue entries
+    const unpaidEntries = await ExpenseEntry.find({
+      recurringExpenseId: expense._id,
+      status: { $in: ['pending', 'overdue'] }
+    }).sort({ dueDate: 1 }).limit(1);
+    
+    // Check if there are any paid entries
+    const paidEntries = await ExpenseEntry.find({
+      recurringExpenseId: expense._id,
+      status: 'paid'
+    }).countDocuments();
+    
+    // Determine status: 'paid' if all entries are paid, 'due' if there are unpaid entries
+    if (unpaidEntries.length > 0) {
+      expenseObj.paymentStatus = 'due';
+      expenseObj.nextDueEntry = unpaidEntries[0] ? {
+        dueDate: unpaidEntries[0].dueDate,
+        amount: unpaidEntries[0].amount
+      } : null;
+    } else if (paidEntries > 0) {
+      expenseObj.paymentStatus = 'paid';
+    } else {
+      expenseObj.paymentStatus = 'pending'; // No entries yet
+    }
+    
+    return expenseObj;
+  }));
+
   // Calculate statistics
   const stats = {
-    totalExpenses: recurringExpenses.length,
-    activeExpenses: recurringExpenses.filter(exp => exp.status === 'active').length,
-    inactiveExpenses: recurringExpenses.filter(exp => exp.status === 'inactive').length,
-    pausedExpenses: recurringExpenses.filter(exp => exp.status === 'paused').length,
+    totalExpenses: expensesWithStatus.length,
+    activeExpenses: expensesWithStatus.filter(exp => exp.status === 'active').length,
+    inactiveExpenses: expensesWithStatus.filter(exp => exp.status === 'inactive').length,
+    pausedExpenses: expensesWithStatus.filter(exp => exp.status === 'paused').length,
     monthlyTotal: 0,
     yearlyTotal: 0,
     categories: {}
   };
 
-  recurringExpenses.forEach(expense => {
+  expensesWithStatus.forEach(expense => {
     if (expense.status === 'active') {
       if (expense.frequency === 'monthly') {
         stats.monthlyTotal += expense.amount;
@@ -273,7 +305,7 @@ exports.getAllRecurringExpenses = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    data: recurringExpenses,
+    data: expensesWithStatus,
     stats
   });
 });
@@ -472,9 +504,14 @@ exports.generateExpenseEntries = asyncHandler(async (req, res) => {
 // @route   GET /api/admin/users/recurring-expenses/entries
 // @access  Private (Admin/HR)
 exports.getExpenseEntries = asyncHandler(async (req, res) => {
-  const { month, year, status, category } = req.query;
+  const { month, year, status, category, recurringExpenseId } = req.query;
 
   let filter = {};
+
+  // Filter by recurring expense ID
+  if (recurringExpenseId) {
+    filter.recurringExpenseId = recurringExpenseId;
+  }
 
   // Filter by period
   if (month && year) {
@@ -492,7 +529,17 @@ exports.getExpenseEntries = asyncHandler(async (req, res) => {
   // Filter by category (through recurring expense)
   if (category && category !== 'all') {
     const recurringExpenses = await RecurringExpense.find({ category }).select('_id');
-    filter.recurringExpenseId = { $in: recurringExpenses.map(re => re._id) };
+    if (filter.recurringExpenseId) {
+      // If recurringExpenseId is already set, combine with category filter
+      const categoryExpenses = recurringExpenses.map(re => re._id.toString());
+      if (Array.isArray(filter.recurringExpenseId)) {
+        filter.recurringExpenseId = { $in: filter.recurringExpenseId.filter(id => categoryExpenses.includes(id.toString())) };
+      } else {
+        filter.recurringExpenseId = categoryExpenses.includes(filter.recurringExpenseId.toString()) ? filter.recurringExpenseId : null;
+      }
+    } else {
+      filter.recurringExpenseId = { $in: recurringExpenses.map(re => re._id) };
+    }
   }
 
   const entries = await ExpenseEntry.find(filter)
@@ -536,6 +583,8 @@ exports.markEntryAsPaid = asyncHandler(async (req, res) => {
     });
   }
 
+  const previousStatus = entry.status;
+
   entry.status = 'paid';
   entry.paidDate = new Date();
   entry.paymentMethod = paymentMethod || entry.paymentMethod;
@@ -552,6 +601,33 @@ exports.markEntryAsPaid = asyncHandler(async (req, res) => {
     const nextDue = recurringExpense.calculateNextDueDate();
     recurringExpense.nextDueDate = nextDue;
     await recurringExpense.save();
+  }
+
+  // Create finance transaction when expense entry is marked as paid
+  try {
+    const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
+    const { mapPaymentMethodToFinance } = require('../utils/paymentMethodMapper');
+    
+    if (previousStatus !== 'paid') {
+      await createOutgoingTransaction({
+        amount: entry.amount,
+        category: recurringExpense.category || 'Recurring Expense',
+        transactionDate: entry.paidDate || new Date(),
+        createdBy: req.admin.id,
+        vendor: recurringExpense.vendor,
+        paymentMethod: entry.paymentMethod ? mapPaymentMethodToFinance(entry.paymentMethod) : 'Bank Transfer',
+        description: `Recurring expense: ${recurringExpense.name} - ${entry.period}`,
+        metadata: {
+          sourceType: 'expenseEntry',
+          sourceId: entry._id.toString(),
+          recurringExpenseId: recurringExpense._id.toString()
+        },
+        checkDuplicate: true
+      });
+    }
+  } catch (error) {
+    // Log error but don't fail the expense update
+    console.error('Error creating finance transaction for expense entry:', error);
   }
 
   res.json({

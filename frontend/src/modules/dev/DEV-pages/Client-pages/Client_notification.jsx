@@ -1,104 +1,133 @@
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { 
   FiBell, 
   FiCheck, 
   FiX, 
   FiClock, 
-  FiDollarSign, 
-  FiUser,
   FiAlertCircle,
   FiInfo,
-  FiAward,
   FiCheckSquare,
   FiTrendingUp,
   FiCreditCard,
-  FiFile,
-  FiMessageSquare
+  FiMessageSquare,
+  FiSend,
+  FiLoader
 } from 'react-icons/fi'
 import Client_navbar from '../../DEV-components/Client_navbar'
+import clientNotificationService from '../../DEV-services/clientNotificationService'
 
 const Client_notification = () => {
-  // Mock notification data for Client
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: 'project',
-      title: 'Project Update',
-      message: 'Your "E-commerce Website" project has reached 75% completion milestone',
-      time: '1 hour ago',
-      isRead: false,
-      icon: FiTrendingUp,
-      iconColor: 'text-blue-600',
-      iconBg: 'bg-blue-100'
-    },
-    {
-      id: 2,
-      type: 'payment',
-      title: 'Payment Request',
-      message: 'Payment of ₹30,000 is due for milestone completion. Please process payment.',
-      time: '3 hours ago',
-      isRead: false,
-      icon: FiCreditCard,
-      iconColor: 'text-green-600',
-      iconBg: 'bg-green-100'
-    },
-    {
-      id: 3,
-      type: 'urgent',
-      title: 'Urgent Approval Required',
-      message: 'Critical design changes need your immediate approval for the mobile app project',
-      time: '5 hours ago',
-      isRead: false,
-      icon: FiAlertCircle,
-      iconColor: 'text-red-600',
-      iconBg: 'bg-red-100'
-    },
-    {
-      id: 4,
-      type: 'milestone',
-      title: 'Milestone Completed',
-      message: 'Congratulations! The "UI/UX Design" milestone has been completed successfully',
-      time: '1 day ago',
-      isRead: true,
-      icon: FiCheckSquare,
-      iconColor: 'text-green-600',
-      iconBg: 'bg-green-100'
-    },
-    {
-      id: 5,
-      type: 'team',
-      title: 'Team Assignment',
-      message: 'New team member Sarah has been assigned to your project',
-      time: '2 days ago',
-      isRead: true,
-      icon: FiUser,
-      iconColor: 'text-purple-600',
-      iconBg: 'bg-purple-100'
-    },
-    {
-      id: 6,
-      type: 'document',
-      title: 'Document Ready',
-      message: 'Project documentation and user manual are ready for review',
-      time: '3 days ago',
-      isRead: true,
-      icon: FiFile,
-      iconColor: 'text-blue-600',
-      iconBg: 'bg-blue-100'
-    },
-    {
-      id: 7,
-      type: 'message',
-      title: 'New Message',
-      message: 'You have received a new message from your project manager regarding timeline updates',
-      time: '4 days ago',
-      isRead: true,
-      icon: FiMessageSquare,
-      iconColor: 'text-orange-600',
-      iconBg: 'bg-orange-100'
+  const [notifications, setNotifications] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  const formatRelativeTime = useCallback((dateString) => {
+    if (!dateString) return 'Just now'
+    const eventDate = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - eventDate.getTime()
+    const diffMinutes = Math.floor(diffMs / (1000 * 60))
+
+    if (diffMinutes < 1) return 'Just now'
+    if (diffMinutes < 60) return `${diffMinutes} min ago`
+
+    const diffHours = Math.floor(diffMinutes / 60)
+    if (diffHours < 24) return `${diffHours} hr${diffHours === 1 ? '' : 's'} ago`
+
+    const diffDays = Math.floor(diffHours / 24)
+    if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
+
+    return eventDate.toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  }, [])
+
+  const buildNotificationStyle = useCallback((notification) => {
+    if (notification.type === 'request') {
+      const incoming = notification.direction === 'incoming'
+      return {
+        icon: incoming ? FiMessageSquare : FiSend,
+        iconColor: incoming ? 'text-blue-600' : 'text-purple-600',
+        iconBg: incoming ? 'bg-blue-100' : 'bg-purple-100'
+      }
     }
-  ])
+
+    if (notification.type === 'activity') {
+      if (notification.scope === 'milestone') {
+        return {
+          icon: FiCheckSquare,
+          iconColor: 'text-green-600',
+          iconBg: 'bg-green-100'
+        }
+      }
+
+      return {
+        icon: FiTrendingUp,
+        iconColor: 'text-blue-600',
+        iconBg: 'bg-blue-100'
+      }
+    }
+
+    if (notification.type === 'payment') {
+      return {
+        icon: FiCreditCard,
+        iconColor: 'text-green-600',
+        iconBg: 'bg-green-100'
+      }
+    }
+
+    return {
+      icon: FiInfo,
+      iconColor: 'text-teal-600',
+      iconBg: 'bg-teal-100'
+    }
+  }, [])
+
+  const decorateNotification = useCallback(
+    (notification) => {
+      const style = buildNotificationStyle(notification)
+      const timestamp = notification.updatedAt || notification.createdAt
+
+      return {
+        id: notification.id,
+        type: notification.type,
+        title:
+          notification.title ||
+          (notification.type === 'activity' ? 'Project update' : 'Request update'),
+        message: notification.message,
+        time: formatRelativeTime(timestamp),
+        isRead: notification.read ?? false,
+        icon: style.icon,
+        iconColor: style.iconColor,
+        iconBg: style.iconBg
+      }
+    },
+    [buildNotificationStyle, formatRelativeTime]
+  )
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const response = await clientNotificationService.getNotifications({ limit: 50 })
+      const items = Array.isArray(response) ? response : response?.data || []
+      const decorated = items.map(decorateNotification)
+      setNotifications(decorated)
+    } catch (err) {
+      console.error('Failed to load notifications:', err)
+      setError(err.message || 'Unable to load notifications right now.')
+    } finally {
+      setLoading(false)
+    }
+  }, [decorateNotification])
+
+  useEffect(() => {
+    loadNotifications()
+  }, [loadNotifications])
 
   const markAsRead = (id) => {
     setNotifications(prev => 
@@ -122,7 +151,47 @@ const Client_notification = () => {
     )
   }
 
-  const unreadCount = notifications.filter(n => !n.isRead).length
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.isRead).length,
+    [notifications]
+  )
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
+        <Client_navbar />
+        <main className="max-w-md mx-auto min-h-screen pt-16 pb-20">
+          <div className="flex flex-col items-center justify-center h-64 text-gray-600 space-y-3">
+            <FiLoader className="h-7 w-7 animate-spin text-teal-600" />
+            <p>Fetching notifications...</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
+        <Client_navbar />
+        <main className="max-w-md mx-auto min-h-screen pt-16 pb-20 px-4">
+          <div className="bg-white border border-red-100 rounded-2xl shadow-sm p-8 text-center space-y-4">
+            <FiAlertCircle className="h-10 w-10 text-red-500 mx-auto" />
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Unable to load notifications</h2>
+              <p className="text-gray-600 mt-1">{error}</p>
+            </div>
+            <button
+              onClick={loadNotifications}
+              className="inline-flex items-center justify-center px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors"
+            >
+              Try again
+            </button>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">

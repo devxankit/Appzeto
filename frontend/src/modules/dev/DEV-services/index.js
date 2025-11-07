@@ -23,6 +23,7 @@ export { analyticsService } from './analyticsService';
 export { teamService } from './teamService';
 export { pmWalletService } from './pmWalletService';
 export { default as pmNoticeService } from './pmNoticeService';
+export { default as pmRequestService } from './pmRequestService';
 export { default as socketService } from './socketService';
 
 // Employee Module Services
@@ -32,6 +33,9 @@ export { default as employeeNoticeService } from './employeeNoticeService';
 // Client Module Services
 export { clientProjectService } from './clientProjectService';
 export { clientAnalyticsService } from './clientAnalyticsService';
+export { default as clientWalletService } from './clientWalletService';
+export { default as clientNotificationService } from './clientNotificationService';
+export { default as clientExploreService } from './clientExploreService';
 
 // Re-export commonly used functions from PM auth service
 export {

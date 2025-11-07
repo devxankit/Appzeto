@@ -1984,6 +1984,40 @@ const convertLeadToClient = async (req, res) => {
       await sales.updateLeadStats();
     }
 
+    // Create automatic incentive record for conversion (if incentivePerClient is set)
+    const Incentive = require('../models/Incentive');
+    const incentivePerClient = Number(sales?.incentivePerClient || 0);
+    
+    if (incentivePerClient > 0) {
+      try {
+        // Calculate split: 50% current, 50% pending
+        const totalAmount = incentivePerClient;
+        const currentBalance = totalAmount * 0.5;
+        const pendingBalance = totalAmount * 0.5;
+
+        // Create conversion-based incentive
+        await Incentive.create({
+          salesEmployee: req.sales.id,
+          amount: totalAmount,
+          currentBalance: currentBalance,
+          pendingBalance: pendingBalance,
+          reason: 'Lead conversion to client',
+          description: `Automatic incentive for converting lead to client: ${client.name || 'Client'}`,
+          dateAwarded: new Date(),
+          status: 'conversion-current', // Has current balance portion
+          isConversionBased: true,
+          projectId: newProject._id,
+          clientId: client._id,
+          leadId: lead._id
+          // createdBy is not required for conversion-based incentives
+        });
+      } catch (incentiveError) {
+        // Log error but don't fail the conversion
+        console.error('Error creating conversion incentive:', incentiveError);
+        // Continue with conversion even if incentive creation fails
+      }
+    }
+
     // Respond
     const populatedProject = await Project.findById(newProject._id).populate('client');
     return res.status(201).json({
@@ -2869,72 +2903,91 @@ const getWalletSummary = async (req, res) => {
     const perClient = Number(me?.incentivePerClient || 0);
     const fixedSalary = Number(me?.fixedSalary || 0);
 
-    // Get clients converted by me
-    const clients = await Client.find({ convertedBy: salesId }).select('_id name conversionDate');
-    const clientIds = clients.map(c => c._id);
+    // Get conversion-based incentives from Incentive model
+    const Incentive = require('../models/Incentive');
+    const conversionIncentives = await Incentive.find({
+      salesEmployee: salesId,
+      isConversionBased: true
+    })
+      .populate('clientId', 'name')
+      .populate('projectId', 'name status financialDetails')
+      .populate('leadId', 'phone')
+      .sort({ dateAwarded: -1 });
 
-    // Map clientId -> latest project
-    const projects = await Project.aggregate([
-      { $match: { client: { $in: clientIds } } },
-      { $sort: { createdAt: -1 } },
-      {
-        $group: {
-          _id: '$client',
-          project: { $first: '$$ROOT' }
-        }
-      }
-    ]);
-
-    const clientIdToProject = new Map();
-    projects.forEach(p => clientIdToProject.set(String(p._id), p.project));
-
-    // Compute incentive breakdown
-    let allConvertedCount = clients.length;
-    let pending = 0;
+    // Calculate totals from actual incentive records
+    let totalIncentive = 0;
     let current = 0;
-    const breakdown = clients.map(c => {
-      const proj = clientIdToProject.get(String(c._id));
-      const remaining = proj?.financialDetails?.remainingAmount ?? (proj?.financialDetails?.totalCost || 0) - (proj?.financialDetails?.advanceReceived || 0);
-      const isNoDues = !!(proj && proj.status === 'completed' && Number(remaining) === 0);
-      if (isNoDues) current += perClient; else pending += perClient;
-      return {
-        clientId: c._id,
-        clientName: c.name,
-        projectId: proj?._id || null,
-        isNoDues,
-        convertedAt: c.conversionDate || null,
-        amount: perClient
-      };
+    let pending = 0;
+    const breakdown = [];
+
+    conversionIncentives.forEach(incentive => {
+      totalIncentive += incentive.amount;
+      current += incentive.currentBalance || 0;
+      pending += incentive.pendingBalance || 0;
+
+      breakdown.push({
+        incentiveId: incentive._id,
+        clientId: incentive.clientId?._id || null,
+        clientName: incentive.clientId?.name || 'Unknown Client',
+        projectId: incentive.projectId?._id || null,
+        projectName: incentive.projectId?.name || null,
+        isNoDues: incentive.projectId?.status === 'completed' && 
+                  Number(incentive.projectId?.financialDetails?.remainingAmount || 0) === 0,
+        convertedAt: incentive.dateAwarded || null,
+        amount: incentive.amount,
+        currentBalance: incentive.currentBalance || 0,
+        pendingBalance: incentive.pendingBalance || 0
+      });
     });
 
-    // Monthly incentive: based on leads.convertedAt in current month
+    // Calculate monthly incentive (based on incentives created in current month)
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    const monthlyConverted = await require('../models/Lead').countDocuments({
-      assignedTo: salesId,
-      status: 'converted',
-      convertedAt: { $gte: monthStart, $lte: monthEnd }
+    const monthlyIncentives = conversionIncentives.filter(inc => {
+      const dateAwarded = new Date(inc.dateAwarded);
+      return dateAwarded >= monthStart && dateAwarded <= monthEnd;
     });
-    const monthly = monthlyConverted * perClient;
+    const monthly = monthlyIncentives.reduce((sum, inc) => sum + (inc.amount || 0), 0);
 
-    const allTime = allConvertedCount * perClient;
+    const allTime = totalIncentive;
 
-    // Transactions view: incentive (per converted client) + salary (current month)
+    // Transactions view: incentive records + salary (current month)
     const transactions = breakdown
-      .map(b => ({ id: `${b.clientId}`, type: 'incentive', amount: b.amount, date: b.convertedAt || me?.createdAt || new Date(), clientName: b.clientName }))
+      .map(b => ({
+        id: b.incentiveId.toString(),
+        type: 'incentive',
+        amount: b.amount,
+        date: b.convertedAt || me?.createdAt || new Date(),
+        clientName: b.clientName,
+        currentBalance: b.currentBalance,
+        pendingBalance: b.pendingBalance
+      }))
       .sort((a, b) => new Date(b.date) - new Date(a.date));
+    
     // Salary credit for this month (computed record)
     const salaryTxDate = new Date(now.getFullYear(), now.getMonth(), 1);
     if (fixedSalary > 0) {
-      transactions.unshift({ id: `salary-${salaryTxDate.toISOString()}`, type: 'salary', amount: fixedSalary, date: salaryTxDate });
+      transactions.unshift({
+        id: `salary-${salaryTxDate.toISOString()}`,
+        type: 'salary',
+        amount: fixedSalary,
+        date: salaryTxDate
+      });
     }
 
     res.status(200).json({
       success: true,
       data: {
         salary: { fixedSalary },
-        incentive: { perClient, current, pending, monthly, allTime, breakdown },
+        incentive: {
+          perClient, // Keep for backward compatibility
+          current,
+          pending,
+          monthly,
+          allTime,
+          breakdown
+        },
         transactions
       }
     });

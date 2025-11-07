@@ -178,6 +178,16 @@ const Admin_hr_management = () => {
   const [recurringExpenses, setRecurringExpenses] = useState([])
   const [showExpenseModal, setShowExpenseModal] = useState(false)
   const [showEditExpenseModal, setShowEditExpenseModal] = useState(false)
+  const [showExpenseEntriesModal, setShowExpenseEntriesModal] = useState(false)
+  const [expenseEntries, setExpenseEntries] = useState([])
+  const [expenseEntriesLoading, setExpenseEntriesLoading] = useState(false)
+  const [showMarkPaidModal, setShowMarkPaidModal] = useState(false)
+  const [selectedEntry, setSelectedEntry] = useState(null)
+  const [paymentFormData, setPaymentFormData] = useState({
+    paymentMethod: 'bank_transfer',
+    paymentReference: '',
+    notes: ''
+  })
   const [selectedExpense, setSelectedExpense] = useState(null)
   const [expenseData, setExpenseData] = useState({
     name: '',
@@ -909,6 +919,70 @@ const Admin_hr_management = () => {
       console.error('Error deleting recurring expense:', error)
       addToast({ type: 'error', message: error?.message || 'Failed to delete recurring expense' })
     }
+  }
+
+  // Load expense entries for a recurring expense
+  const loadExpenseEntries = async (expenseId) => {
+    setExpenseEntriesLoading(true)
+    try {
+      const res = await adminRecurringExpenseService.getExpenseEntries({
+        recurringExpenseId: expenseId
+      })
+      setExpenseEntries(res.data || [])
+    } catch (error) {
+      console.error('Error loading expense entries:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to load expense entries' })
+      setExpenseEntries([])
+    } finally {
+      setExpenseEntriesLoading(false)
+    }
+  }
+
+  // Handle view/manage expense entries
+  const handleViewExpenseEntries = async (expense) => {
+    setSelectedExpense(expense)
+    setShowExpenseEntriesModal(true)
+    await loadExpenseEntries(expense.id)
+  }
+
+  // Handle mark entry as paid
+  const handleMarkEntryAsPaid = async () => {
+    if (!selectedEntry) return
+    
+    try {
+      await adminRecurringExpenseService.markEntryAsPaid(selectedEntry._id, {
+        paymentMethod: paymentFormData.paymentMethod,
+        paymentReference: paymentFormData.paymentReference,
+        notes: paymentFormData.notes
+      })
+      addToast({ type: 'success', message: 'Expense entry marked as paid successfully' })
+      setShowMarkPaidModal(false)
+      setSelectedEntry(null)
+      setPaymentFormData({
+        paymentMethod: 'bank_transfer',
+        paymentReference: '',
+        notes: ''
+      })
+      // Reload entries and recurring expenses
+      if (selectedExpense) {
+        await loadExpenseEntries(selectedExpense.id)
+        await loadRecurringExpenses()
+      }
+    } catch (error) {
+      console.error('Error marking entry as paid:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to mark entry as paid' })
+    }
+  }
+
+  // Open mark paid modal
+  const openMarkPaidModal = (entry) => {
+    setSelectedEntry(entry)
+    setPaymentFormData({
+      paymentMethod: entry.recurringExpenseId?.paymentMethod || 'bank_transfer',
+      paymentReference: '',
+      notes: ''
+    })
+    setShowMarkPaidModal(true)
   }
 
   // Note: calculateNextDueDate removed - nextDueDate is now calculated by backend automatically
@@ -3177,9 +3251,22 @@ const Admin_hr_management = () => {
                                 <p className="text-xs text-gray-500">{expense.vendor}</p>
                               </div>
                             </div>
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getExpenseStatusColor(expense.status)}`}>
-                              {expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}
-                            </span>
+                            <div className="flex flex-col gap-1 items-end">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getExpenseStatusColor(expense.status)}`}>
+                                {expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}
+                              </span>
+                              {expense.paymentStatus && (
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  expense.paymentStatus === 'paid' 
+                                    ? 'bg-green-100 text-green-700' 
+                                    : expense.paymentStatus === 'due'
+                                    ? 'bg-orange-100 text-orange-700'
+                                    : 'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {expense.paymentStatus === 'paid' ? '✓ Paid' : expense.paymentStatus === 'due' ? '⚠ Due' : 'Pending'}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           <div className="space-y-2 mb-3">
@@ -3213,25 +3300,36 @@ const Admin_hr_management = () => {
                           )}
 
                           {/* Action Buttons */}
-                          <div className="flex gap-2">
+                          <div className="flex flex-col gap-2">
                             <Button
-                              onClick={() => handleEditExpense(expense)}
+                              onClick={() => handleViewExpenseEntries(expense)}
                               size="sm"
                               variant="outline"
-                              className="flex-1 text-xs py-1 h-8"
+                              className="w-full text-xs py-1 h-8 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
                             >
-                              <Edit3 className="h-3 w-3 mr-1" />
-                              Edit
+                              <Eye className="h-3 w-3 mr-1" />
+                              Manage Entries
                             </Button>
-                            <Button
-                              onClick={() => handleDeleteExpense(expense)}
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 text-xs py-1 h-8 text-red-600 border-red-200 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-3 w-3 mr-1" />
-                              Delete
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => handleEditExpense(expense)}
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 text-xs py-1 h-8"
+                              >
+                                <Edit3 className="h-3 w-3 mr-1" />
+                                Edit
+                              </Button>
+                              <Button
+                                onClick={() => handleDeleteExpense(expense)}
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 text-xs py-1 h-8 text-red-600 border-red-200 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Delete
+                              </Button>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -4998,6 +5096,289 @@ const Admin_hr_management = () => {
                       Close
                     </Button>
                   </div>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Expense Entries Modal */}
+            {showExpenseEntriesModal && selectedExpense && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={() => {
+                  setShowExpenseEntriesModal(false)
+                  setExpenseEntries([])
+                  setSelectedExpense(null)
+                }}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-2xl font-bold mb-2">Expense Entries - {selectedExpense.name}</h3>
+                        <p className="text-blue-100">Manage and mark expense entries as paid</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowExpenseEntriesModal(false)
+                          setExpenseEntries([])
+                          setSelectedExpense(null)
+                        }}
+                        className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-6 max-h-[calc(90vh-140px)] overflow-y-auto">
+                    {expenseEntriesLoading ? (
+                      <div className="flex justify-center items-center py-12">
+                        <Loading />
+                      </div>
+                    ) : expenseEntries.length === 0 ? (
+                      <div className="text-center py-12">
+                        <Receipt className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold text-gray-700 mb-2">No Expense Entries Found</h3>
+                        <p className="text-gray-500">No entries have been generated for this recurring expense yet.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {expenseEntries.map((entry) => (
+                          <div
+                            key={entry._id}
+                            className={`border rounded-lg p-4 ${
+                              entry.status === 'paid'
+                                ? 'bg-green-50 border-green-200'
+                                : entry.status === 'overdue'
+                                ? 'bg-red-50 border-red-200'
+                                : 'bg-gray-50 border-gray-200'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    entry.status === 'paid'
+                                      ? 'bg-green-100 text-green-800'
+                                      : entry.status === 'overdue'
+                                      ? 'bg-red-100 text-red-800'
+                                      : 'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {entry.status.charAt(0).toUpperCase() + entry.status.slice(1)}
+                                  </span>
+                                  <span className="text-sm font-semibold text-gray-900">{entry.period}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-gray-600">Amount:</span>
+                                    <span className="ml-2 font-semibold text-gray-900">{formatCurrency(entry.amount)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Due Date:</span>
+                                    <span className="ml-2 font-semibold text-gray-900">
+                                      {entry.dueDate ? formatDate(entry.dueDate) : 'N/A'}
+                                    </span>
+                                  </div>
+                                  {entry.paidDate && (
+                                    <div>
+                                      <span className="text-gray-600">Paid Date:</span>
+                                      <span className="ml-2 font-semibold text-green-600">
+                                        {formatDate(entry.paidDate)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {entry.paymentMethod && (
+                                    <div>
+                                      <span className="text-gray-600">Payment Method:</span>
+                                      <span className="ml-2 font-semibold text-gray-900 capitalize">
+                                        {entry.paymentMethod.replace('_', ' ')}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                                {entry.notes && (
+                                  <div className="mt-2">
+                                    <span className="text-gray-600 text-sm">Notes: </span>
+                                    <span className="text-sm text-gray-700">{entry.notes}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {entry.status !== 'paid' && (
+                                <div className="ml-4">
+                                  <Button
+                                    onClick={() => openMarkPaidModal(entry)}
+                                    size="sm"
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                  >
+                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                    Mark Paid
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="border-t border-gray-200 p-4 flex justify-end">
+                    <Button
+                      onClick={() => {
+                        setShowExpenseEntriesModal(false)
+                        setExpenseEntries([])
+                        setSelectedExpense(null)
+                      }}
+                      variant="outline"
+                      className="px-6"
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Mark Paid Modal */}
+            {showMarkPaidModal && selectedEntry && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={() => {
+                  setShowMarkPaidModal(false)
+                  setSelectedEntry(null)
+                  setPaymentFormData({
+                    paymentMethod: 'bank_transfer',
+                    paymentReference: '',
+                    notes: ''
+                  })
+                }}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white rounded-2xl shadow-xl max-w-md w-full"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-6 text-white">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-2xl font-bold mb-2">Mark Entry as Paid</h3>
+                        <p className="text-green-100">Period: {selectedEntry.period} - Amount: {formatCurrency(selectedEntry.amount)}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowMarkPaidModal(false)
+                          setSelectedEntry(null)
+                          setPaymentFormData({
+                            paymentMethod: 'bank_transfer',
+                            paymentReference: '',
+                            notes: ''
+                          })
+                        }}
+                        className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Form */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      handleMarkEntryAsPaid()
+                    }}
+                    className="p-6 space-y-4"
+                  >
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Payment Method *
+                      </label>
+                      <select
+                        value={paymentFormData.paymentMethod}
+                        onChange={(e) => setPaymentFormData({ ...paymentFormData, paymentMethod: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        required
+                      >
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="auto_debit">Auto Debit</option>
+                        <option value="credit_card">Credit Card</option>
+                        <option value="cheque">Cheque</option>
+                        <option value="cash">Cash</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Payment Reference
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentFormData.paymentReference}
+                        onChange={(e) => setPaymentFormData({ ...paymentFormData, paymentReference: e.target.value })}
+                        placeholder="Transaction ID, Cheque Number, etc."
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Notes
+                      </label>
+                      <textarea
+                        value={paymentFormData.notes}
+                        onChange={(e) => setPaymentFormData({ ...paymentFormData, notes: e.target.value })}
+                        placeholder="Additional notes about this payment..."
+                        rows={3}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      />
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 pt-4">
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setShowMarkPaidModal(false)
+                          setSelectedEntry(null)
+                          setPaymentFormData({
+                            paymentMethod: 'bank_transfer',
+                            paymentReference: '',
+                            notes: ''
+                          })
+                        }}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Mark as Paid
+                      </Button>
+                    </div>
+                  </form>
                 </motion.div>
               </motion.div>
             )}

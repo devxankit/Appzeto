@@ -58,6 +58,9 @@ const employeeAnalyticsRoutes = require('./routes/employeeAnalyticsRoutes');
 const employeeMilestoneRoutes = require('./routes/employeeMilestoneRoutes');
 const clientProjectRoutes = require('./routes/clientProjectRoutes');
 const clientPaymentRoutes = require('./routes/clientPaymentRoutes');
+const clientWalletRoutes = require('./routes/clientWalletRoutes');
+const clientNotificationRoutes = require('./routes/clientNotificationRoutes');
+const clientExploreRoutes = require('./routes/clientExploreRoutes');
 const requestRoutes = require('./routes/requestRoutes');
 
 // Import socket service
@@ -65,6 +68,8 @@ const socketService = require('./services/socketService');
 
 // Import daily points scheduler
 const { startDailyScheduler } = require('./services/dailyPointsScheduler');
+// Import recurring expense auto-pay scheduler
+const { startRecurringExpenseAutoPayScheduler } = require('./services/recurringExpenseAutoPayScheduler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -272,6 +277,9 @@ app.use('/api/employee/milestones', employeeMilestoneRoutes);
 // Client routes
 app.use('/api/client/projects', clientProjectRoutes);
 app.use('/api/client/payments', clientPaymentRoutes);
+app.use('/api/client/wallet', clientWalletRoutes);
+app.use('/api/client/notifications', clientNotificationRoutes);
+app.use('/api/client/explore', clientExploreRoutes);
 
 // Role-specific API routes without /api prefix (for reverse proxy compatibility)
 // Admin routes
@@ -290,6 +298,9 @@ app.use('/employee/milestones', employeeMilestoneRoutes);
 // Client routes
 app.use('/client/projects', clientProjectRoutes);
 app.use('/client/payments', clientPaymentRoutes);
+app.use('/client/wallet', clientWalletRoutes);
+app.use('/client/notifications', clientNotificationRoutes);
+app.use('/client/explore', clientExploreRoutes);
 
 // API routes documentation
 app.get('/api', (req, res) => {
@@ -539,6 +550,7 @@ const startServer = async () => {
 
     // Start daily points scheduler
     startDailyScheduler();
+    startRecurringExpenseAutoPayScheduler();
 
     // Graceful shutdown handling
     process.on('SIGINT', () => {
