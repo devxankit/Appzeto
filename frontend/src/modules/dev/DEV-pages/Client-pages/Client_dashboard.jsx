@@ -308,7 +308,7 @@ const Client_dashboard = () => {
           <div className="mb-6 md:mb-8">
             <div className="w-full rounded-xl overflow-hidden shadow-sm">
               <img 
-                src="/src/assets/images/client_banner.png" 
+                src={new URL('../../../../assets/images/client_banner.png', import.meta.url).href}
                 alt="Welcome to Appzeto" 
                 className="w-full h-auto object-cover"
               />
