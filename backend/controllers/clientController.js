@@ -3,6 +3,10 @@ const smsService = require('../services/smsService');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 
+const DEFAULT_DEMO_PHONE = process.env.DEFAULT_DEMO_PHONE || '9755620716';
+const DEFAULT_DEMO_OTP = process.env.DEFAULT_DEMO_OTP || '123456';
+const isNonProductionEnv = (process.env.NODE_ENV || 'development') !== 'production';
+
 // Helper function to send token in cookie
 const sendTokenResponse = (client, statusCode, res) => {
   const token = client.getSignedJwtToken();
@@ -67,22 +71,39 @@ exports.sendOTP = asyncHandler(async (req, res, next) => {
       return next(new ErrorResponse('Too many OTP attempts. Please try again later.', 403));
     }
 
-    // For development, always use default OTP for the demo phone number
-    if (process.env.NODE_ENV === 'development' && cleanPhoneNumber === '9755620716') {
-      const defaultOTP = '123456';
-      client.otp = defaultOTP;
-      client.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    // In non-production environments, always use a non-expiring default OTP for the demo phone number
+    if (isNonProductionEnv && cleanPhoneNumber === DEFAULT_DEMO_PHONE) {
+      client.otp = DEFAULT_DEMO_OTP;
+      client.otpExpires = null; // Non-expiring for demo usage
       client.otpAttempts = 0;
       client.otpLockUntil = undefined;
       await client.save();
       
-      console.log(`[Development Mode] Using default OTP for ${cleanPhoneNumber}: ${defaultOTP}`);
+      console.log(`[Development Mode] Using default OTP for ${cleanPhoneNumber}: ${DEFAULT_DEMO_OTP}`);
       return res.status(200).json({
         success: true,
         message: 'OTP sent successfully (Development Mode)',
         phoneNumber: cleanPhoneNumber,
-        otp: defaultOTP, // Include OTP in development mode
-        expiresIn: 600 // 10 minutes
+        otp: DEFAULT_DEMO_OTP, // Include OTP in development mode
+        expiresIn: null // Non-expiring OTP
+      });
+    }
+
+    // In non-production environments, always use a non-expiring default OTP for the demo phone number
+    if (isNonProductionEnv && cleanPhoneNumber === DEFAULT_DEMO_PHONE) {
+      client.otp = DEFAULT_DEMO_OTP;
+      client.otpExpires = null;
+      client.otpAttempts = 0;
+      client.otpLockUntil = undefined;
+      await client.save();
+
+      console.log(`[Development Mode] Resending default OTP for ${cleanPhoneNumber}: ${DEFAULT_DEMO_OTP}`);
+      return res.status(200).json({
+        success: true,
+        message: 'OTP resent successfully (Development Mode)',
+        phoneNumber: cleanPhoneNumber,
+        otp: DEFAULT_DEMO_OTP,
+        expiresIn: null
       });
     }
 

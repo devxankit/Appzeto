@@ -74,6 +74,16 @@ const Client_profile = () => {
         })
       } catch (error) {
         console.error('Failed to load client profile:', error)
+
+        if (error?.status === 401 || error?.isUnauthorized) {
+          toast.info('Session expired. Please log in again.', {
+            title: 'Session Ended',
+            duration: 4000
+          })
+          navigate('/client-login', { replace: true })
+          return
+        }
+
         toast.error('Unable to load profile. Please try again later.', {
           title: 'Profile Error',
           duration: 4000
@@ -84,7 +94,7 @@ const Client_profile = () => {
     }
 
     loadProfile()
-  }, [toast])
+  }, [navigate, toast])
 
   const handleProfileUpdate = (field, value) => {
     setProfileData(prev => ({ ...prev, [field]: value }))

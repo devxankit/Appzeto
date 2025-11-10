@@ -192,11 +192,11 @@ clientSchema.methods.generateOTP = function() {
 
 // Verify OTP
 clientSchema.methods.verifyOTP = function(candidateOTP) {
-  if (!this.otp || !this.otpExpires) {
+  if (!this.otp) {
     return false;
   }
   
-  if (this.otpExpires < Date.now()) {
+  if (this.otpExpires && this.otpExpires < Date.now()) {
     return false;
   }
   

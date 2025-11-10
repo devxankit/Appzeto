@@ -15,6 +15,32 @@ const removeAuthToken = () => {
   localStorage.removeItem('clientToken');
 };
 
+// Local storage utilities for client data
+export const clientStorage = {
+  get: () => {
+    try {
+      const clientData = localStorage.getItem('clientUser');
+      return clientData ? JSON.parse(clientData) : null;
+    } catch (error) {
+      console.error('Error parsing stored client data:', error);
+      return null;
+    }
+  },
+  
+  set: (clientData) => {
+    try {
+      localStorage.setItem('clientUser', JSON.stringify(clientData));
+    } catch (error) {
+      console.error('Error storing client data:', error);
+    }
+  },
+  
+  clear: () => {
+    removeAuthToken();
+    localStorage.removeItem('clientUser');
+  }
+};
+
 // Helper function to get auth headers
 const getAuthHeaders = () => {
   const token = getAuthToken();
@@ -22,6 +48,42 @@ const getAuthHeaders = () => {
     'Content-Type': 'application/json',
     ...(token && { Authorization: `Bearer ${token}` })
   };
+};
+
+const handleUnauthorized = () => {
+  clientStorage.clear();
+};
+
+const buildApiError = (response, payload) => {
+  const message =
+    (payload && (payload.message || payload.error || payload.errorMessage)) ||
+    'Something went wrong';
+
+  const error = new Error(message);
+  error.status = response.status;
+  error.payload = payload;
+  error.isUnauthorized = response.status === 401;
+  return error;
+};
+
+const parseResponseBody = async (response) => {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      return await response.json();
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // For non-JSON payloads attempt text, ignore parsing issues
+  try {
+    const text = await response.text();
+    return text ? { message: text } : null;
+  } catch (error) {
+    return null;
+  }
 };
 
 // Base API request helper
@@ -36,10 +98,14 @@ export const apiRequest = async (url, options = {}) => {
       credentials: 'include' // Include cookies for CORS
     });
 
-    const data = await response.json();
+    const data = await parseResponseBody(response);
 
     if (!response.ok) {
-      throw new Error(data.message || 'Something went wrong');
+      if (response.status === 401) {
+        handleUnauthorized();
+      }
+
+      throw buildApiError(response, data);
     }
 
     return data;
@@ -69,32 +135,6 @@ export const tokenUtils = {
       removeAuthToken();
       return false;
     }
-  }
-};
-
-// Local storage utilities for client data
-export const clientStorage = {
-  get: () => {
-    try {
-      const clientData = localStorage.getItem('clientUser');
-      return clientData ? JSON.parse(clientData) : null;
-    } catch (error) {
-      console.error('Error parsing stored client data:', error);
-      return null;
-    }
-  },
-  
-  set: (clientData) => {
-    try {
-      localStorage.setItem('clientUser', JSON.stringify(clientData));
-    } catch (error) {
-      console.error('Error storing client data:', error);
-    }
-  },
-  
-  clear: () => {
-    removeAuthToken();
-    localStorage.removeItem('clientUser');
   }
 };
 
