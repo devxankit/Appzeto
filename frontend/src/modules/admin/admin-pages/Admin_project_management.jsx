@@ -31,12 +31,24 @@ import {
   FiArrowUp,
   FiArrowDown,
   FiActivity,
-  FiX
+  FiX,
+  FiFileText
 } from 'react-icons/fi'
 import { Combobox } from '../../../components/ui/combobox'
+import { MultiSelect } from '../../../components/ui/multi-select'
 import Loading from '../../../components/ui/loading'
+import CloudinaryUpload from '../../../components/ui/cloudinary-upload'
+import { useToast } from '../../../contexts/ToastContext'
+
+const formatDateForInput = (date) => {
+  if (!date) return ''
+  const parsedDate = typeof date === 'string' ? new Date(date) : date
+  if (Number.isNaN(parsedDate?.getTime?.())) return ''
+  return parsedDate.toISOString().split('T')[0]
+}
 
 const Admin_project_management = () => {
+  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('pending-projects')
   const [searchTerm, setSearchTerm] = useState('')
@@ -120,6 +132,63 @@ const Admin_project_management = () => {
   const [projectManagers, setProjectManagers] = useState([])
   const [pmOptions, setPMOptions] = useState([])
   const [error, setError] = useState(null)
+  const getDefaultProjectForm = () => ({
+    name: '',
+    description: '',
+    client: '',
+    projectManager: '',
+    assignedTeam: [],
+    priority: 'normal',
+    status: 'active',
+    startDate: formatDateForInput(new Date()),
+    dueDate: '',
+    totalCost: '',
+    attachments: []
+  })
+  const [projectForm, setProjectForm] = useState(() => getDefaultProjectForm())
+  const [projectFormErrors, setProjectFormErrors] = useState({})
+  const [clientOptions, setClientOptions] = useState([])
+  const [pmSelectOptions, setPmSelectOptions] = useState([])
+  const [employeeOptions, setEmployeeOptions] = useState([])
+  const [createModalLoading, setCreateModalLoading] = useState(false)
+  const [createModalError, setCreateModalError] = useState(null)
+  const [isSubmittingProject, setIsSubmittingProject] = useState(false)
+
+  const fetchFullList = async (fetchFn, baseParams = {}, pageSize = 100) => {
+    let page = 1
+    let aggregated = []
+    let hasMore = true
+
+    while (hasMore) {
+      const response = await fetchFn({
+        ...baseParams,
+        page,
+        limit: pageSize
+      })
+
+      if (!response?.success) {
+        throw new Error(response?.message || 'Failed to load data')
+      }
+
+      const items = response.data || []
+      aggregated = aggregated.concat(items)
+
+      const total = response.total ?? response.pagination?.total
+      if (total !== undefined) {
+        hasMore = aggregated.length < total
+      } else {
+        hasMore = items.length === pageSize
+      }
+
+      if (!items.length) {
+        hasMore = false
+      }
+
+      page += 1
+    }
+
+    return aggregated
+  }
 
   useEffect(() => {
     loadData()
@@ -509,8 +578,10 @@ const Admin_project_management = () => {
     }
   }
 
-  const loadData = async () => {
-    setLoading(true)
+  const loadData = async (showLoader = true) => {
+    if (showLoader) {
+      setLoading(true)
+    }
     try {
       // Load statistics
       const statsResponse = await adminProjectService.getProjectManagementStatistics()
@@ -532,7 +603,72 @@ const Admin_project_management = () => {
       setError('Failed to load data. Please try again.')
       // Keep existing mock data as fallback
     } finally {
-      setLoading(false)
+      if (showLoader) {
+        setLoading(false)
+      }
+    }
+  }
+
+  const loadProjectCreationData = async () => {
+    setCreateModalLoading(true)
+    setCreateModalError(null)
+
+    try {
+      const [clients, pms, employees] = await Promise.all([
+        fetchFullList(adminProjectService.getClients.bind(adminProjectService)),
+        fetchFullList(adminProjectService.getPMs.bind(adminProjectService)),
+        fetchFullList(adminProjectService.getEmployees.bind(adminProjectService))
+      ])
+
+      const clientOpts = clients
+        .map((client) => ({
+          value: client.id?.toString() || '',
+          label: client.companyName
+            ? `${client.companyName}${client.name ? ` (${client.name})` : ''}`
+            : client.name || client.email || 'Unnamed Client'
+        }))
+        .filter(option => option.value)
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+
+      const pmOpts = pms
+        .map((pm) => ({
+          value: pm.id?.toString() || '',
+          label: pm.name || pm.email || 'Unnamed PM'
+        }))
+        .filter(option => option.value)
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+
+      const employeeOpts = employees
+        .filter((employee) => {
+          // Filter out sales employees - exclude if team is 'sales' or department is 'sales'
+          const isSalesTeam = employee.team?.toLowerCase() === 'sales'
+          const isSalesDepartment = employee.department?.toLowerCase() === 'sales'
+          return !isSalesTeam && !isSalesDepartment
+        })
+        .map((employee) => ({
+          value: employee.id?.toString() || '',
+          label: employee.name || employee.email || 'Unnamed Employee',
+          subtitle: [employee.role, employee.department].filter(Boolean).join(' • '),
+          avatar: employee.avatar
+        }))
+        .filter(option => option.value)
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+
+      setClientOptions(clientOpts)
+      setPmSelectOptions(pmOpts)
+      setEmployeeOptions(employeeOpts)
+
+      if (!clientOpts.length || !pmOpts.length || !employeeOpts.length) {
+        setCreateModalError('Some lists are empty. Ensure clients, PMs, and employees are registered.')
+      }
+    } catch (error) {
+      console.error('Error loading project creation data:', error)
+      setCreateModalError('Failed to load project creation data. Please try again.')
+      setClientOptions([])
+      setPmSelectOptions([])
+      setEmployeeOptions([])
+    } finally {
+      setCreateModalLoading(false)
     }
   }
 
@@ -696,15 +832,54 @@ const Admin_project_management = () => {
   const totalPages = Math.ceil(filteredData.length / itemsPerPage)
 
   // Management Functions
-  const handleCreate = (type) => {
+  const handleCreate = async (type) => {
     setModalType(type)
     setSelectedItem(null)
+    if (type === 'project') {
+      setProjectForm(getDefaultProjectForm())
+      setProjectFormErrors({})
+      setCreateModalError(null)
+      setShowCreateModal(true)
+      await loadProjectCreationData()
+      return
+    }
     setShowCreateModal(true)
   }
 
-  const handleEdit = (item, type) => {
+  const handleEdit = async (item, type) => {
     setModalType(type)
     setSelectedItem(item)
+    
+    if (type === 'project') {
+      // Load project creation data if not already loaded
+      if (clientOptions.length === 0 || pmSelectOptions.length === 0 || employeeOptions.length === 0) {
+        await loadProjectCreationData()
+      }
+      
+      // Populate edit form with project data
+      const clientId = typeof item.client === 'object' ? (item.client?._id || item.client?.id) : item.client
+      const pmId = typeof item.projectManager === 'object' ? (item.projectManager?._id || item.projectManager?.id) : item.projectManager
+      const teamIds = Array.isArray(item.assignedTeam) 
+        ? item.assignedTeam.map(member => typeof member === 'object' ? (member._id || member.id) : member)
+        : []
+      
+      setProjectForm({
+        name: item.name || '',
+        description: item.description || '',
+        client: clientId?.toString() || '',
+        projectManager: pmId?.toString() || '',
+        assignedTeam: teamIds.map(id => id?.toString()).filter(Boolean),
+        priority: item.priority || 'normal',
+        status: item.status || 'active',
+        startDate: formatDateForInput(item.startDate || item.createdAt),
+        dueDate: formatDateForInput(item.dueDate),
+        totalCost: (item.financialDetails?.totalCost || item.budget || 0).toString(),
+        attachments: item.attachments || []
+      })
+      setProjectFormErrors({})
+      setCreateModalError(null)
+    }
+    
     setShowEditModal(true)
   }
 
@@ -750,6 +925,10 @@ const Admin_project_management = () => {
     setSelectedPendingProject(null)
     setSelectedPM('')
     setModalType('')
+    setProjectForm(getDefaultProjectForm())
+    setProjectFormErrors({})
+    setCreateModalError(null)
+    setIsSubmittingProject(false)
   }
 
   // PM Assignment Functions
@@ -762,6 +941,219 @@ const Admin_project_management = () => {
   const handleViewPendingDetails = (pendingProject) => {
     setSelectedPendingProject(pendingProject)
     setShowPendingDetailsModal(true)
+  }
+
+  const formatFileSize = (bytes) => {
+    if (!bytes || bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const removeAttachment = (attachmentId) => {
+    setProjectForm(prev => ({
+      ...prev,
+      attachments: prev.attachments.filter(att => 
+        (att.id || att.public_id || att._id) !== attachmentId
+      )
+    }))
+  }
+
+  const validateProjectForm = () => {
+    const errors = {}
+
+    if (!projectForm.name.trim()) {
+      errors.name = 'Project name is required.'
+    }
+
+    if (!projectForm.description.trim()) {
+      errors.description = 'Project description is required.'
+    }
+
+    if (!projectForm.client) {
+      errors.client = 'Select a client for this project.'
+    }
+
+    if (!projectForm.projectManager) {
+      errors.projectManager = 'Select a project manager.'
+    }
+
+    if (!projectForm.assignedTeam.length) {
+      errors.assignedTeam = 'Assign at least one team member.'
+    }
+
+    if (!projectForm.startDate) {
+      errors.startDate = 'Start date is required.'
+    }
+
+    if (!projectForm.dueDate) {
+      errors.dueDate = 'Due date is required.'
+    }
+
+    if (projectForm.startDate && projectForm.dueDate) {
+      const start = new Date(projectForm.startDate)
+      const due = new Date(projectForm.dueDate)
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(due.getTime()) && due < start) {
+        errors.dueDate = 'Due date must be on or after the start date.'
+      }
+    }
+
+    const costValue = Number(projectForm.totalCost)
+    if (Number.isNaN(costValue) || costValue <= 0) {
+      errors.totalCost = 'Enter a valid project cost greater than zero.'
+    }
+
+    setProjectFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleProjectCreateSubmit = async (event) => {
+    event.preventDefault()
+    if (isSubmittingProject) return
+
+    if (!validateProjectForm()) {
+      return
+    }
+
+    setIsSubmittingProject(true)
+    setCreateModalError(null)
+
+    try {
+      const totalCostValue = Number(projectForm.totalCost)
+      const payload = {
+        name: projectForm.name.trim(),
+        description: projectForm.description.trim(),
+        client: projectForm.client,
+        projectManager: projectForm.projectManager,
+        status: projectForm.status,
+        priority: projectForm.priority,
+        startDate: projectForm.startDate ? new Date(projectForm.startDate).toISOString() : undefined,
+        dueDate: projectForm.dueDate ? new Date(projectForm.dueDate).toISOString() : undefined,
+        assignedTeam: projectForm.assignedTeam,
+        budget: totalCostValue,
+        financialDetails: {
+          totalCost: totalCostValue,
+          advanceReceived: 0,
+          includeGST: false,
+          remainingAmount: totalCostValue
+        },
+        attachments: projectForm.attachments.map(att => ({
+          public_id: att.public_id || att.id,
+          secure_url: att.secure_url || att.url,
+          originalName: att.originalName || att.original_filename || att.name,
+          original_filename: att.original_filename || att.originalName || att.name,
+          format: att.format || att.type,
+          size: att.size || att.bytes,
+          bytes: att.bytes || att.size,
+          width: att.width,
+          height: att.height,
+          resource_type: att.resource_type || 'auto'
+        }))
+      }
+
+      const response = await adminProjectService.createProject(payload)
+
+      if (response?.success) {
+        toast.success(`Project "${projectForm.name.trim()}" created successfully!`)
+        if (activeTab === 'active-projects' && currentPage !== 1) {
+          setCurrentPage(1)
+        }
+        setError(null)
+        closeModals()
+        await loadData(false)
+      } else {
+        const errorMessage = response?.message || 'Failed to create project. Please try again.'
+        setCreateModalError(errorMessage)
+        toast.error(errorMessage)
+      }
+    } catch (error) {
+      console.error('Error creating project:', error)
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to create project. Please try again.'
+      setCreateModalError(message)
+      toast.error(message)
+    } finally {
+      setIsSubmittingProject(false)
+    }
+  }
+
+  const handleProjectUpdateSubmit = async (event) => {
+    event.preventDefault()
+    if (isSubmittingProject) return
+
+    if (!validateProjectForm()) {
+      return
+    }
+
+    if (!selectedItem || !selectedItem._id && !selectedItem.id) {
+      setCreateModalError('Project ID is missing. Cannot update project.')
+      toast.error('Project ID is missing. Cannot update project.')
+      return
+    }
+
+    setIsSubmittingProject(true)
+    setCreateModalError(null)
+
+    try {
+      const projectId = selectedItem._id || selectedItem.id
+      const totalCostValue = Number(projectForm.totalCost)
+      const payload = {
+        name: projectForm.name.trim(),
+        description: projectForm.description.trim(),
+        client: projectForm.client,
+        projectManager: projectForm.projectManager,
+        status: projectForm.status,
+        priority: projectForm.priority,
+        startDate: projectForm.startDate ? new Date(projectForm.startDate).toISOString() : undefined,
+        dueDate: projectForm.dueDate ? new Date(projectForm.dueDate).toISOString() : undefined,
+        assignedTeam: projectForm.assignedTeam,
+        budget: totalCostValue,
+        financialDetails: {
+          totalCost: totalCostValue,
+          advanceReceived: selectedItem.financialDetails?.advanceReceived || 0,
+          includeGST: selectedItem.financialDetails?.includeGST || false,
+          remainingAmount: totalCostValue - (selectedItem.financialDetails?.advanceReceived || 0)
+        },
+        attachments: projectForm.attachments.map(att => ({
+          public_id: att.public_id || att.id,
+          secure_url: att.secure_url || att.url,
+          originalName: att.originalName || att.original_filename || att.name,
+          original_filename: att.original_filename || att.originalName || att.name,
+          format: att.format || att.type,
+          size: att.size || att.bytes,
+          bytes: att.bytes || att.size,
+          width: att.width,
+          height: att.height,
+          resource_type: att.resource_type || 'auto'
+        }))
+      }
+
+      const response = await adminProjectService.updateProject(projectId, payload)
+
+      if (response?.success) {
+        toast.success(`Project "${projectForm.name.trim()}" updated successfully!`)
+        setError(null)
+        closeModals()
+        await loadData(false)
+      } else {
+        const errorMessage = response?.message || 'Failed to update project. Please try again.'
+        setCreateModalError(errorMessage)
+        toast.error(errorMessage)
+      }
+    } catch (error) {
+      console.error('Error updating project:', error)
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to update project. Please try again.'
+      setCreateModalError(message)
+      toast.error(message)
+    } finally {
+      setIsSubmittingProject(false)
+    }
   }
 
   const confirmPMAssignment = async () => {
@@ -795,16 +1187,21 @@ const Admin_project_management = () => {
           }
         }))
         
-        // Show success message
-        console.log('PM assigned successfully:', response.message)
+        // Show success toast
+        const projectName = selectedPendingProject.name || 'Project'
+        toast.success(`Project "${projectName}" assigned to PM successfully!`)
         setError(null) // Clear any previous errors
       } else {
-        setError('Failed to assign PM. Please try again.')
+        const errorMessage = response?.message || 'Failed to assign PM. Please try again.'
+        setError(errorMessage)
+        toast.error(errorMessage)
       }
       
     } catch (error) {
       console.error('Error assigning PM:', error)
-      setError('Failed to assign PM. Please try again.')
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to assign PM. Please try again.'
+      setError(errorMessage)
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
       closeModals()
@@ -878,11 +1275,18 @@ const Admin_project_management = () => {
               </div>
               <div className="flex items-center space-x-3">
                 <button
-                  onClick={loadData}
+                  onClick={() => loadData()}
                   className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <FiRefreshCw className="h-4 w-4" />
                   <span>Refresh</span>
+                </button>
+                <button
+                  onClick={() => handleCreate('project')}
+                  className="flex items-center space-x-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                >
+                  <FiPlus className="h-4 w-4" />
+                  <span>Create Project</span>
                 </button>
               </div>
             </div>
@@ -2103,184 +2507,414 @@ const Admin_project_management = () => {
                 </button>
               </div>
               
-              <form className="space-y-4">
-                {modalType === 'project' && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Project Name</label>
-                      <input
-                        type="text"
-                        defaultValue={selectedItem?.name || ''}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                        placeholder="Enter project name"
-                      />
+              {modalType === 'project' && (showCreateModal || showEditModal) ? (
+                <form className="space-y-6" onSubmit={showCreateModal ? handleProjectCreateSubmit : handleProjectUpdateSubmit}>
+                  {createModalError && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {createModalError}
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Client</label>
-                      <input
-                        type="text"
-                        defaultValue={selectedItem?.client || ''}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                        placeholder="Enter client name"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                        <select
-                          defaultValue={selectedItem?.status || 'active'}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                        >
-                          <option value="active">Active</option>
-                          <option value="in-progress">In Progress</option>
-                          <option value="completed">Completed</option>
-                          <option value="on-hold">On Hold</option>
-                          <option value="overdue">Overdue</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
-                        <select
-                          defaultValue={selectedItem?.priority || 'normal'}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                        >
-                          <option value="low">Low</option>
-                          <option value="normal">Normal</option>
-                          <option value="high">High</option>
-                          <option value="urgent">Urgent</option>
-                        </select>
-                      </div>
-                    </div>
-                  </>
-                )}
+                  )}
 
-                {modalType === 'employee' && (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
+                  {createModalLoading ? (
+                    <div className="flex items-center justify-center py-16">
+                      <Loading size="large" />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">Project Name</label>
+                          <input
+                            type="text"
+                            value={projectForm.name}
+                            onChange={(e) => setProjectForm(prev => ({ ...prev, name: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary"
+                            placeholder="Enter project name"
+                          />
+                          {projectFormErrors.name && (
+                            <p className="mt-1 text-xs text-red-500">{projectFormErrors.name}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">Client</label>
+                          <Combobox
+                            options={clientOptions}
+                            value={projectForm.client}
+                            onChange={(value) => setProjectForm(prev => ({ ...prev, client: value }))}
+                            placeholder="Select client"
+                            searchable
+                            disabled={!clientOptions.length}
+                            error={!!projectFormErrors.client}
+                          />
+                          {projectFormErrors.client && (
+                            <p className="mt-1 text-xs text-red-500">{projectFormErrors.client}</p>
+                          )}
+                          {!clientOptions.length && !createModalLoading && (
+                            <p className="mt-1 text-xs text-amber-600">
+                              No active clients found. Add a client before creating a project.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">Project Manager</label>
+                          <Combobox
+                            options={pmSelectOptions}
+                            value={projectForm.projectManager}
+                            onChange={(value) => setProjectForm(prev => ({ ...prev, projectManager: value }))}
+                            placeholder="Assign a project manager"
+                            searchable
+                            disabled={!pmSelectOptions.length}
+                            error={!!projectFormErrors.projectManager}
+                          />
+                          {projectFormErrors.projectManager && (
+                            <p className="mt-1 text-xs text-red-500">{projectFormErrors.projectManager}</p>
+                          )}
+                          {!pmSelectOptions.length && !createModalLoading && (
+                            <p className="mt-1 text-xs text-amber-600">
+                              No active project managers found. Activate a PM to proceed.
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">Project Cost (INR)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={projectForm.totalCost}
+                            onChange={(e) => setProjectForm(prev => ({ ...prev, totalCost: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary"
+                            placeholder="Enter total project cost"
+                          />
+                          {projectFormErrors.totalCost && (
+                            <p className="mt-1 text-xs text-red-500">{projectFormErrors.totalCost}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">Start Date</label>
+                          <input
+                            type="date"
+                            value={projectForm.startDate}
+                            onChange={(e) => setProjectForm(prev => ({ ...prev, startDate: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary"
+                          />
+                          {projectFormErrors.startDate && (
+                            <p className="mt-1 text-xs text-red-500">{projectFormErrors.startDate}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">Due Date</label>
+                          <input
+                            type="date"
+                            value={projectForm.dueDate}
+                            onChange={(e) => setProjectForm(prev => ({ ...prev, dueDate: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary"
+                          />
+                          {projectFormErrors.dueDate && (
+                            <p className="mt-1 text-xs text-red-500">{projectFormErrors.dueDate}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">Priority</label>
+                          <select
+                            value={projectForm.priority}
+                            onChange={(e) => setProjectForm(prev => ({ ...prev, priority: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary"
+                          >
+                            <option value="low">Low</option>
+                            <option value="normal">Normal</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">Status</label>
+                          <select
+                            value={projectForm.status}
+                            onChange={(e) => setProjectForm(prev => ({ ...prev, status: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary"
+                          >
+                            <option value="pending-assignment">Pending Assignment</option>
+                            <option value="untouched">Untouched</option>
+                            <option value="started">Started</option>
+                            <option value="active">Active</option>
+                            <option value="on-hold">On Hold</option>
+                            <option value="testing">Testing</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        </div>
+                      </div>
+
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                        <label className="mb-2 block text-sm font-medium text-gray-700">Project Description</label>
+                        <textarea
+                          value={projectForm.description}
+                          onChange={(e) => setProjectForm(prev => ({ ...prev, description: e.target.value }))}
+                          rows={4}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary"
+                          placeholder="Provide an overview of the project scope and deliverables"
+                        />
+                        {projectFormErrors.description && (
+                          <p className="mt-1 text-xs text-red-500">{projectFormErrors.description}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-gray-700">Assign Development Team Members</label>
+                        <MultiSelect
+                          options={employeeOptions}
+                          value={projectForm.assignedTeam}
+                          onChange={(value) => setProjectForm(prev => ({ ...prev, assignedTeam: value }))}
+                          placeholder="Select development team members"
+                          disabled={!employeeOptions.length}
+                        />
+                        {projectFormErrors.assignedTeam && (
+                          <p className="mt-1 text-xs text-red-500">{projectFormErrors.assignedTeam}</p>
+                        )}
+                        {!employeeOptions.length && !createModalLoading && (
+                          <p className="mt-1 text-xs text-amber-600">
+                            No active development team employees available for assignment.
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-gray-700">Project Attachments</label>
+                        <CloudinaryUpload
+                          onUploadSuccess={(uploadData) => {
+                            const newAttachments = Array.isArray(uploadData) ? uploadData : [uploadData]
+                            setProjectForm(prev => ({
+                              ...prev,
+                              attachments: [
+                                ...prev.attachments,
+                                ...newAttachments.map(data => ({
+                                  id: data.public_id,
+                                  name: data.original_filename || data.originalName,
+                                  size: data.bytes || data.size,
+                                  type: data.format || data.type,
+                                  url: data.secure_url,
+                                  public_id: data.public_id,
+                                  originalName: data.original_filename || data.originalName,
+                                  original_filename: data.original_filename || data.originalName,
+                                  format: data.format,
+                                  bytes: data.bytes,
+                                  width: data.width,
+                                  height: data.height,
+                                  resource_type: data.resource_type || 'auto'
+                                }))
+                              ]
+                            }))
+                          }}
+                          onUploadError={(error) => {
+                            console.error('Upload error:', error)
+                            setCreateModalError('Failed to upload file. Please try again.')
+                          }}
+                          folder="appzeto/projects/attachments"
+                          maxSize={10 * 1024 * 1024}
+                          allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'video/mp4', 'video/avi', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'application/zip', 'application/x-rar-compressed']}
+                          accept=".jpg,.jpeg,.png,.gif,.mp4,.avi,.pdf,.doc,.docx,.txt,.zip,.rar"
+                          placeholder="Click to upload files or drag and drop"
+                          showPreview={true}
+                          multiple={true}
+                        />
+                        {projectForm.attachments.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            {projectForm.attachments.map((att, index) => (
+                              <div key={att.id || att.public_id || att._id || `attachment-${index}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                  <div className="p-1 bg-primary/10 rounded flex-shrink-0">
+                                    <FiFileText className="h-4 w-4 text-primary" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    {(att.secure_url || att.url) ? (
+                                      <a
+                                        href={att.secure_url || att.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-sm font-medium text-primary hover:text-primary-dark hover:underline truncate block"
+                                      >
+                                        {att.originalName || att.original_filename || att.name || 'Attachment'}
+                                      </a>
+                                    ) : (
+                                      <p className="text-sm font-medium text-gray-900 truncate">{att.originalName || att.original_filename || att.name || 'Attachment'}</p>
+                                    )}
+                                    <p className="text-xs text-gray-500">{formatFileSize(att.size || att.bytes)}</p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeAttachment(att.id || att.public_id || att._id)}
+                                  className="p-1 text-gray-400 hover:text-red-600 transition-colors duration-200 flex-shrink-0 ml-2"
+                                >
+                                  <FiX className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  <div className="flex items-center justify-end gap-3 border-t border-gray-200 pt-6">
+                    <button
+                      type="button"
+                      onClick={closeModals}
+                      className="rounded-lg bg-gray-100 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingProject || createModalLoading}
+                      className="rounded-lg bg-primary px-4 py-2 font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSubmittingProject 
+                        ? (showCreateModal ? 'Creating...' : 'Updating...') 
+                        : (showCreateModal ? 'Create Project' : 'Update Project')}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <form className="space-y-4">
+                  {modalType === 'employee' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                          <input
+                            type="text"
+                            defaultValue={selectedItem?.name || ''}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            placeholder="Enter employee name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                          <input
+                            type="email"
+                            defaultValue={selectedItem?.email || ''}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            placeholder="Enter email address"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                          <input
+                            type="text"
+                            defaultValue={selectedItem?.role || ''}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            placeholder="Enter role"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+                          <select
+                            defaultValue={selectedItem?.department || 'Engineering'}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                          >
+                            <option value="Engineering">Engineering</option>
+                            <option value="Design">Design</option>
+                            <option value="Management">Management</option>
+                            <option value="Business">Business</option>
+                          </select>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {modalType === 'client' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
                         <input
                           type="text"
                           defaultValue={selectedItem?.name || ''}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                          placeholder="Enter employee name"
+                          placeholder="Enter company name"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                        <input
-                          type="email"
-                          defaultValue={selectedItem?.email || ''}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                          placeholder="Enter email address"
-                        />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Contact Person</label>
+                          <input
+                            type="text"
+                            defaultValue={selectedItem?.contact || ''}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            placeholder="Enter contact person"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                          <input
+                            type="email"
+                            defaultValue={selectedItem?.email || ''}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            placeholder="Enter email address"
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-                        <input
-                          type="text"
-                          defaultValue={selectedItem?.role || ''}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                          placeholder="Enter role"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
-                        <select
-                          defaultValue={selectedItem?.department || 'Engineering'}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                        >
-                          <option value="Engineering">Engineering</option>
-                          <option value="Design">Design</option>
-                          <option value="Management">Management</option>
-                          <option value="Business">Business</option>
-                        </select>
-                      </div>
-                    </div>
-                  </>
-                )}
+                    </>
+                  )}
 
-                {modalType === 'client' && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
-                      <input
-                        type="text"
-                        defaultValue={selectedItem?.name || ''}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                        placeholder="Enter company name"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Contact Person</label>
-                        <input
-                          type="text"
-                          defaultValue={selectedItem?.contact || ''}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                          placeholder="Enter contact person"
-                        />
+                  {modalType === 'pm' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                          <input
+                            type="text"
+                            defaultValue={selectedItem?.name || ''}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            placeholder="Enter PM name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                          <input
+                            type="email"
+                            defaultValue={selectedItem?.email || ''}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            placeholder="Enter email address"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                        <input
-                          type="email"
-                          defaultValue={selectedItem?.email || ''}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                          placeholder="Enter email address"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
+                    </>
+                  )}
 
-                {modalType === 'pm' && (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                        <input
-                          type="text"
-                          defaultValue={selectedItem?.name || ''}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                          placeholder="Enter PM name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                        <input
-                          type="email"
-                          defaultValue={selectedItem?.email || ''}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                          placeholder="Enter email address"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={closeModals}
-                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      handleSave({})
-                    }}
-                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
-                  >
-                    {showCreateModal ? 'Create' : 'Update'}
-                  </button>
-                </div>
-              </form>
+                  <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={closeModals}
+                      className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        handleSave({})
+                      }}
+                      className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                    >
+                      {showCreateModal ? 'Create' : 'Update'}
+                    </button>
+                  </div>
+                </form>
+              )}
             </motion.div>
           </motion.div>
         )}
