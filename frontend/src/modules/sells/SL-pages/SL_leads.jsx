@@ -18,7 +18,6 @@ import {
   FiChevronDown
 } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
-import api from '../../../utils/api'
 import { useToast } from '../../../contexts/ToastContext'
 import { salesLeadService } from '../SL-services'
 import SL_navbar from '../SL-components/SL_navbar'
@@ -169,12 +168,13 @@ const LeadDashboard = () => {
   const fetchCategories = async () => {
     setIsLoadingCategories(true)
     try {
-      const response = await api.get('/api/sales/lead-categories')
+      // Use salesLeadService which handles environment variables properly
+      const categoriesData = await salesLeadService.getLeadCategories()
       
-      if (response.data.success) {
-        setCategories(response.data.data)
+      if (categoriesData && Array.isArray(categoriesData) && categoriesData.length > 0) {
+        setCategories(categoriesData)
       } else {
-        console.error('API Error:', response.data.message)
+        console.error('API Error: No categories returned')
         // Set default categories on API error
         setCategories([
           { _id: '1', name: 'Hot Leads', description: 'High priority leads', color: '#EF4444', icon: '🔥' },
@@ -186,7 +186,7 @@ const LeadDashboard = () => {
       console.error('Error fetching categories:', error)
       
       // Handle different types of errors
-      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+      if (error.message === 'Network Error' || error.message === 'Failed to fetch' || error.code === 'ERR_NETWORK') {
         console.log('Server not available, using default categories')
       } else {
         console.error('API Error:', error)
@@ -273,40 +273,25 @@ const LeadDashboard = () => {
 
     setIsSubmitting(true)
     try {
-      const response = await api.post('/api/sales/leads', {
+      // Use salesLeadService which handles environment variables properly
+      const response = await salesLeadService.createLead({
         phone: formData.phoneNumber,
         category: formData.categoryId
       })
 
-      if (response.data.success) {
+      if (response.success) {
         toast.success('Lead created successfully!')
         closeModal()
         // Refresh the dashboard data to show updated counts
         refreshDashboardStats()
       } else {
-        toast.error(response.data.message || 'Failed to create lead')
+        toast.error(response.message || 'Failed to create lead')
       }
     } catch (error) {
       console.error('Error creating lead:', error)
-      if (error.response) {
-        // Server responded with error status
-        const errorData = error.response.data
-        
-        // Handle validation errors with multiple messages
-        if (errorData.errors && Array.isArray(errorData.errors)) {
-          errorData.errors.forEach(errorMsg => {
-            toast.error(errorMsg)
-          })
-        } else {
-          toast.error(errorData.message || 'Server error occurred')
-        }
-      } else if (error.request) {
-        // Request was made but no response received
-        toast.error('Server error. Please check if the backend server is running.')
-      } else {
-        // Something else happened
-        toast.error('An error occurred while creating the lead')
-      }
+      // Handle error messages
+      const errorMessage = error.message || 'An error occurred while creating the lead'
+      toast.error(errorMessage)
     } finally {
       setIsSubmitting(false)
     }

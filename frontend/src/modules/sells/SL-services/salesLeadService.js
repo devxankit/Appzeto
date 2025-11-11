@@ -232,6 +232,20 @@ export const getLeadCategories = async () => {
   }
 };
 
+// Create a new lead
+export const createLead = async (leadData) => {
+  try {
+    const response = await apiRequest('/sales/leads', {
+      method: 'POST',
+      body: JSON.stringify(leadData)
+    });
+    return response;
+  } catch (error) {
+    console.error('Error creating lead:', error);
+    throw error;
+  }
+};
+
 // Utility functions for status management
 export const getStatusDisplayName = (status) => {
   const statusMap = {
@@ -359,6 +373,7 @@ const salesLeadService = {
   updateLeadProfile,
   convertLeadToClient,
   getLeadCategories,
+  createLead,
   getStatusDisplayName,
   getStatusColor,
   getValidStatusTransitions,

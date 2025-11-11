@@ -69,6 +69,7 @@ import { adminUserService } from '../admin-services'
 import adminSalaryService from '../admin-services/adminSalaryService'
 import adminAllowanceService from '../admin-services/adminAllowanceService'
 import adminRecurringExpenseService from '../admin-services/adminRecurringExpenseService'
+import adminRequestService from '../admin-services/adminRequestService'
 
 const Admin_hr_management = () => {
   const { addToast } = useToast()
@@ -148,14 +149,19 @@ const Admin_hr_management = () => {
 
   // Requests states
   const [requests, setRequests] = useState([])
+  const [requestsLoading, setRequestsLoading] = useState(false)
   const [showRequestModal, setShowRequestModal] = useState(false)
   const [requestData, setRequestData] = useState({
     title: '',
     description: '',
     category: '',
-    priority: 'medium',
-    department: ''
+    priority: 'normal',
+    department: '',
+    type: 'approval',
+    recipientType: 'admin', // Default to admin so HR can send requests to admin
+    recipientId: ''
   })
+  const [requestRecipients, setRequestRecipients] = useState({})
 
   // Allowances states
   const [allowances, setAllowances] = useState([])
@@ -373,88 +379,156 @@ const Admin_hr_management = () => {
     }).format(amount)
   }
 
-  // Requests functions
-  const generateRequestsData = () => {
-    const mockRequests = [
-      {
-        id: 1,
-        title: 'New Laptop Request',
-        description: 'Need new laptops for the development team as current ones are outdated',
-        category: 'Equipment',
-        priority: 'high',
-        department: 'nodejs',
-        status: 'pending',
-        requestedBy: 'HR Manager',
-        requestDate: '2024-01-15',
-        adminResponse: null,
-        responseDate: null
-      },
-      {
-        id: 2,
-        title: 'Office Furniture',
-        description: 'Request for ergonomic chairs and standing desks for better employee comfort',
-        category: 'Furniture',
-        priority: 'medium',
-        department: 'all',
-        status: 'approved',
-        requestedBy: 'HR Manager',
-        requestDate: '2024-01-10',
-        adminResponse: 'Approved. Budget allocated for Q1.',
-        responseDate: '2024-01-12'
-      },
-      {
-        id: 3,
-        title: 'Team Building Event',
-        description: 'Organize team building activities for better team collaboration',
-        category: 'Events',
-        priority: 'low',
-        department: 'all',
-        status: 'pending',
-        requestedBy: 'HR Manager',
-        requestDate: '2024-01-18',
-        adminResponse: null,
-        responseDate: null
+  // Requests functions - now using real API
+  // Load requests data from backend
+  const loadRequests = async () => {
+    setRequestsLoading(true)
+    try {
+      const response = await adminRequestService.getRequests({
+        direction: 'all',
+        // Load all requests (not just employee module) to see requests sent to admin
+        status: 'all'
+      })
+      
+      if (response.success) {
+        // Transform API data to match component expectations
+        const transformedRequests = (response.data || []).map(req => ({
+          id: req._id || req.id,
+          title: req.title,
+          description: req.description,
+          category: req.category || '',
+          priority: req.priority || 'normal',
+          department: req.department || 'all',
+          status: req.status || 'pending',
+          requestedBy: req.requestedBy?.name || 'HR Manager',
+          requestDate: req.createdAt || new Date().toISOString(),
+          adminResponse: req.response?.message || null,
+          responseDate: req.response?.respondedDate || null,
+          responseType: req.response?.type || null,
+          respondedBy: req.response?.respondedBy?.name || null,
+          // Store full request object for API calls
+          _full: req
+        }))
+        setRequests(transformedRequests)
+      } else {
+        setRequests([])
       }
-    ]
-    setRequests(mockRequests)
+    } catch (error) {
+      console.error('Error loading requests:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to load requests' })
+      setRequests([])
+    } finally {
+      setRequestsLoading(false)
+    }
   }
 
-  const handleCreateRequest = () => {
+  // Load recipients for request creation
+  const loadRequestRecipients = async () => {
+    try {
+      const types = ['employee', 'pm', 'sales', 'admin']
+      const recipientsData = {}
+      
+      for (const type of types) {
+        try {
+          const response = await adminRequestService.getRecipients(type)
+          if (response.success) {
+            recipientsData[type] = response.data || []
+          }
+        } catch (error) {
+          console.error(`Error loading ${type} recipients:`, error)
+          recipientsData[type] = []
+        }
+      }
+      
+      setRequestRecipients(recipientsData)
+    } catch (error) {
+      console.error('Error loading recipients:', error)
+    }
+  }
+
+  const handleCreateRequest = async () => {
     setRequestData({
       title: '',
       description: '',
       category: '',
-      priority: 'medium',
-      department: ''
+      priority: 'normal',
+      department: '',
+      type: 'approval',
+      recipientType: 'admin', // Default to admin so HR can easily send requests to admin
+      recipientId: ''
     })
+    // Load recipients when opening modal
+    await loadRequestRecipients()
     setShowRequestModal(true)
   }
 
-  const handleSaveRequest = () => {
-    const newRequest = {
-      id: requests.length + 1,
-      ...requestData,
-      status: 'pending',
-      requestedBy: 'HR Manager',
-      requestDate: new Date().toISOString().split('T')[0],
-      adminResponse: null,
-      responseDate: null
+  const handleSaveRequest = async () => {
+    // Validation
+    if (!requestData.title.trim() || !requestData.description.trim()) {
+      addToast({ type: 'error', message: 'Please fill in title and description' })
+      return
     }
-    setRequests([...requests, newRequest])
-    setShowRequestModal(false)
-    setRequestData({
-      title: '',
-      description: '',
-      category: '',
-      priority: 'medium',
-      department: ''
-    })
+
+    if (requestData.recipientType && !requestData.recipientId) {
+      addToast({ type: 'error', message: 'Please select a recipient' })
+      return
+    }
+
+    try {
+      const requestPayload = {
+        title: requestData.title,
+        description: requestData.description,
+        type: requestData.type || 'approval',
+        priority: requestData.priority || 'normal',
+        category: requestData.category || '',
+        department: requestData.department || 'all'
+      }
+
+      // Add recipient if provided
+      if (requestData.recipientId && requestData.recipientType) {
+        requestPayload.recipient = requestData.recipientId
+        // Map recipient types to correct model names
+        const recipientModelMap = {
+          'pm': 'PM',
+          'admin': 'Admin',
+          'employee': 'Employee',
+          'sales': 'Sales'
+        }
+        requestPayload.recipientModel = recipientModelMap[requestData.recipientType] || 
+          requestData.recipientType.charAt(0).toUpperCase() + requestData.recipientType.slice(1)
+      }
+
+      const response = await adminRequestService.createRequest(requestPayload)
+      
+      if (response.success) {
+        addToast({ type: 'success', message: 'Request created successfully' })
+        setShowRequestModal(false)
+        setRequestData({
+          title: '',
+          description: '',
+          category: '',
+          priority: 'normal',
+          department: '',
+          type: 'approval',
+          recipientType: 'admin',
+          recipientId: ''
+        })
+        // Reload requests
+        await loadRequests()
+      } else {
+        addToast({ type: 'error', message: response.message || 'Failed to create request' })
+      }
+    } catch (error) {
+      console.error('Error creating request:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to create request' })
+    }
   }
 
   const getRequestStatusColor = (status) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800'
-      case 'approved': return 'bg-green-100 text-green-800'
+      case 'approved':
+      case 'responded': return 'bg-green-100 text-green-800'
       case 'rejected': return 'bg-red-100 text-red-800'
       default: return 'bg-gray-100 text-gray-800'
     }
@@ -462,7 +536,9 @@ const Admin_hr_management = () => {
 
   const getPriorityColor = (priority) => {
     switch (priority) {
-      case 'high': return 'bg-red-100 text-red-800'
+      case 'urgent': return 'bg-red-100 text-red-800'
+      case 'high': return 'bg-orange-100 text-orange-800'
+      case 'normal':
       case 'medium': return 'bg-yellow-100 text-yellow-800'
       case 'low': return 'bg-green-100 text-green-800'
       default: return 'bg-gray-100 text-gray-800'
@@ -1500,8 +1576,11 @@ const Admin_hr_management = () => {
       title: '',
       description: '',
       category: '',
-      priority: 'medium',
-      department: ''
+      priority: 'normal',
+      department: '',
+      type: 'approval',
+      recipientType: 'admin',
+      recipientId: ''
     })
     setAllowanceData({
       employeeId: '',
@@ -1543,13 +1622,13 @@ const Admin_hr_management = () => {
     }
   }, [activeTab])
 
-  // Generate data on component mount (salary data is loaded dynamically when tab is active)
+  // Load requests when requests tab is active
   useEffect(() => {
-    // generateSalaryData() - Removed: salary data now loads dynamically when salary tab is active
-    generateRequestsData()
-    // generateAllowancesData() - Removed: allowances data now loads dynamically when allowances tab is active
-    // generateRecurringExpensesData() - Removed: recurring expenses data now loads dynamically when expenses tab is active
-  }, [])
+    if (activeTab === 'requests') {
+      loadRequests()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
 
   // Attendance functions
   // Load attendance data for selected month
@@ -2849,13 +2928,25 @@ const Admin_hr_management = () => {
                   <h2 className="text-2xl font-bold text-gray-900">HR Requests</h2>
                   <p className="text-gray-600 mt-1">Submit and track requests to admin</p>
                 </div>
-                <Button
-                  onClick={handleCreateRequest}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2"
-                >
-                  <Send className="h-4 w-4" />
-                  New Request
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={loadRequests}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    disabled={requestsLoading}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${requestsLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                  <Button
+                    onClick={handleCreateRequest}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2"
+                  >
+                    <Send className="h-4 w-4" />
+                    New Request
+                  </Button>
+                </div>
               </div>
 
               {/* Request Statistics */}
@@ -2897,9 +2988,17 @@ const Admin_hr_management = () => {
                 </Card>
               </div>
 
+              {/* Loading State */}
+              {requestsLoading && (
+                <div className="flex items-center justify-center py-12">
+                  <Loading />
+                </div>
+              )}
+
               {/* Requests List */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {requests.map((request, index) => (
+              {!requestsLoading && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {requests.map((request, index) => (
                   <Card key={index} className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-3">
@@ -2908,7 +3007,7 @@ const Admin_hr_management = () => {
                           <p className="text-xs text-gray-500 mb-2 line-clamp-2">{request.description}</p>
                         </div>
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRequestStatusColor(request.status)}`}>
-                          {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                          {request.status ? request.status.charAt(0).toUpperCase() + request.status.slice(1) : 'Pending'}
                         </span>
                       </div>
 
@@ -2920,7 +3019,7 @@ const Admin_hr_management = () => {
                         <div className="flex justify-between items-center">
                           <span className="text-xs text-gray-500">Priority</span>
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(request.priority)}`}>
-                            {request.priority.charAt(0).toUpperCase() + request.priority.slice(1)}
+                            {request.priority ? request.priority.charAt(0).toUpperCase() + request.priority.slice(1) : 'Normal'}
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
@@ -2937,15 +3036,41 @@ const Admin_hr_management = () => {
                         <div className="bg-gray-50 rounded-lg p-2">
                           <p className="text-xs font-medium text-gray-700 mb-1">Admin Response:</p>
                           <p className="text-xs text-gray-600 line-clamp-2">{request.adminResponse}</p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {new Date(request.responseDate).toLocaleDateString()}
-                          </p>
+                          {request.responseDate && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {new Date(request.responseDate).toLocaleDateString()}
+                            </p>
+                          )}
+                          {request.respondedBy && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              By: {request.respondedBy}
+                            </p>
+                          )}
                         </div>
                       )}
                     </CardContent>
                   </Card>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Empty State */}
+              {!requestsLoading && requests.length === 0 && (
+                <Card className="border-2 border-dashed border-gray-300">
+                  <CardContent className="p-12 text-center">
+                    <MessageSquare className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Requests Found</h3>
+                    <p className="text-gray-500 mb-6">Start by creating your first request.</p>
+                    <Button
+                      onClick={handleCreateRequest}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto"
+                    >
+                      <Send className="h-4 w-4" />
+                      Create First Request
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
                 </motion.div>
               )}
 
@@ -3992,100 +4117,163 @@ const Admin_hr_management = () => {
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.9, opacity: 0 }}
-                  className="bg-white rounded-xl p-4 max-w-sm w-full"
+                  className="bg-white rounded-xl p-6 max-w-2xl w-full max-h-[95vh] overflow-hidden flex flex-col"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-gray-900">New Request</h3>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">New Request</h3>
+                      <p className="text-gray-600 text-sm mt-1">Create a new request</p>
+                    </div>
                     <button
                       onClick={() => setShowRequestModal(false)}
-                      className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full transition-colors"
+                      className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-5 w-5" />
                     </button>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="flex-1 overflow-y-auto space-y-4">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Title</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Request Type</label>
+                      <select
+                        value={requestData.type}
+                        onChange={(e) => setRequestData({...requestData, type: e.target.value})}
+                        className="w-full h-10 px-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="approval">Approval</option>
+                        <option value="feedback">Feedback</option>
+                        <option value="confirmation">Confirmation</option>
+                        <option value="payment-recovery">Payment Recovery</option>
+                        <option value="hold-work">Hold Work</option>
+                        <option value="accelerate-work">Accelerate Work</option>
+                        <option value="increase-cost">Increase Cost</option>
+                        <option value="access-request">Access Request</option>
+                        <option value="timeline-extension">Timeline Extension</option>
+                        <option value="budget-approval">Budget Approval</option>
+                        <option value="resource-allocation">Resource Allocation</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Recipient Type (Optional)</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {['employee', 'pm', 'sales', 'admin'].map((type) => (
+                          <button
+                            key={type}
+                            onClick={() => setRequestData({...requestData, recipientType: type, recipientId: ''})}
+                            className={`p-2 rounded-lg border-2 text-sm transition-all ${
+                              requestData.recipientType === type
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                                : 'border-gray-200 hover:border-blue-300 text-gray-700'
+                            }`}
+                          >
+                            {type === 'pm' ? 'PM' : type.charAt(0).toUpperCase() + type.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Select a recipient type to send the request to a specific person, or leave blank for general requests
+                      </p>
+                    </div>
+
+                    {requestData.recipientType && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Select Recipient</label>
+                        <select
+                          value={requestData.recipientId}
+                          onChange={(e) => setRequestData({...requestData, recipientId: e.target.value})}
+                          className="w-full h-10 px-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="">Select a {requestData.recipientType}...</option>
+                          {requestRecipients[requestData.recipientType]?.map((recipient) => (
+                            <option key={recipient.id || recipient._id} value={recipient.id || recipient._id}>
+                              {recipient.name} {recipient.email ? `(${recipient.email})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Title *</label>
                       <input
                         type="text"
                         value={requestData.title}
                         onChange={(e) => setRequestData({...requestData, title: e.target.value})}
-                        className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full h-10 px-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="Enter request title"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Description</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Description *</label>
                       <textarea
                         value={requestData.description}
                         onChange={(e) => setRequestData({...requestData, description: e.target.value})}
-                        className="w-full h-16 px-2 py-1 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                        className="w-full h-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
                         placeholder="Describe your request"
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">Category</label>
-                        <select
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
+                        <input
+                          type="text"
                           value={requestData.category}
                           onChange={(e) => setRequestData({...requestData, category: e.target.value})}
-                          className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="">Select category</option>
-                          <option value="Equipment">Equipment</option>
-                          <option value="Furniture">Furniture</option>
-                          <option value="Events">Events</option>
-                          <option value="Software">Software</option>
-                          <option value="Training">Training</option>
-                          <option value="Other">Other</option>
-                        </select>
+                          className="w-full h-10 px-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., Equipment, Furniture"
+                        />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">Priority</label>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Priority</label>
                         <select
                           value={requestData.priority}
                           onChange={(e) => setRequestData({...requestData, priority: e.target.value})}
-                          className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full h-10 px-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="low">Low</option>
-                          <option value="medium">Medium</option>
+                          <option value="normal">Normal</option>
                           <option value="high">High</option>
+                          <option value="urgent">Urgent</option>
                         </select>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Department</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Department</label>
                       <select
                         value={requestData.department}
                         onChange={(e) => setRequestData({...requestData, department: e.target.value})}
-                        className="w-full h-8 px-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full h-10 px-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       >
                         <option value="">Select department</option>
                         <option value="all">All Departments</option>
-                        <option value="nodejs">Node.js</option>
-                        <option value="flutter">Flutter</option>
-                        <option value="web">Web</option>
-                        <option value="management">Management</option>
+                        {departmentFilterOptions.map((dept) => (
+                          <option key={dept} value={dept}>{dept}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end space-x-2 pt-4 border-t border-gray-200">
+                  <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200 mt-4">
                     <button
                       onClick={() => setShowRequestModal(false)}
-                      className="px-3 py-1.5 text-xs text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                      className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleSaveRequest}
-                      className="px-4 py-1.5 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+                      disabled={!requestData.title.trim() || !requestData.description.trim()}
+                      className={`px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold ${
+                        !requestData.title.trim() || !requestData.description.trim() 
+                          ? 'opacity-50 cursor-not-allowed' 
+                          : ''
+                      }`}
                     >
                       Submit Request
                     </button>
