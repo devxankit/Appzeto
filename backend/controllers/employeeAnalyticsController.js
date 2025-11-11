@@ -7,31 +7,55 @@ const asyncHandler = require('../middlewares/asyncHandler');
 // @route   GET /api/employee/analytics/dashboard
 // @access  Private (Employee)
 const getEmployeeDashboardStats = asyncHandler(async (req, res) => {
-  const employeeId = req.user.id;
-
-  // Get employee's assigned tasks
-  const tasks = await Task.find({ assignedTo: employeeId });
+  const employeeId = req.employee?.id || req.user?.id;
   
-  // Get employee's assigned projects
-  const projects = await Project.find({ 
-    $or: [
-      { assignedTeam: employeeId },
-      { 'milestones.tasks.assignedTo': employeeId }
-    ]
-  });
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
+
+  // Get employee's assigned tasks (assignedTo is an array)
+  const tasks = await Task.find({ assignedTo: { $in: [employeeId] } });
+  
+  // Get projects where employee is in assignedTeam
+  const teamProjects = await Project.find({ assignedTeam: { $in: [employeeId] } }).select('_id');
+  const teamProjectIds = teamProjects.map(p => p._id);
+  
+  // Get projects where employee has tasks assigned (since every task belongs to a project)
+  const tasksWithProjects = await Task.find({ assignedTo: { $in: [employeeId] } }).select('project').distinct('project');
+  const taskProjectIds = tasksWithProjects.filter(Boolean);
+  
+  // Combine and deduplicate project IDs
+  const allProjectIds = [...new Set([...teamProjectIds.map(id => id.toString()), ...taskProjectIds.map(id => id.toString())])];
+  
+  // Get all assigned projects (from team or tasks)
+  const projects = await Project.find({ _id: { $in: allProjectIds } });
 
   // Calculate task statistics
+  const now = new Date();
+  const threeDaysFromNow = new Date();
+  threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+  
   const taskStats = {
     total: tasks.length,
     completed: tasks.filter(t => t.status === 'completed').length,
     'in-progress': tasks.filter(t => t.status === 'in-progress').length,
     pending: tasks.filter(t => t.status === 'pending').length,
-    urgent: tasks.filter(t => t.priority === 'high' && t.status !== 'completed').length,
-    overdue: tasks.filter(t => t.dueDate < new Date() && t.status !== 'completed').length,
+    urgent: tasks.filter(t => 
+      (t.isUrgent || t.priority === 'urgent' || t.priority === 'high') && 
+      t.status !== 'completed'
+    ).length,
+    overdue: tasks.filter(t => 
+      t.dueDate && 
+      new Date(t.dueDate) < now && 
+      t.status !== 'completed'
+    ).length,
     dueSoon: tasks.filter(t => {
-      const threeDaysFromNow = new Date();
-      threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
-      return t.dueDate <= threeDaysFromNow && t.dueDate > new Date() && t.status !== 'completed';
+      if (!t.dueDate || t.status === 'completed') return false;
+      const dueDate = new Date(t.dueDate);
+      return dueDate <= threeDaysFromNow && dueDate > now;
     }).length
   };
 
@@ -71,7 +95,14 @@ const getEmployeeDashboardStats = asyncHandler(async (req, res) => {
 // @route   GET /api/employee/analytics/performance
 // @access  Private (Employee)
 const getEmployeePerformanceStats = asyncHandler(async (req, res) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
   const employee = await Employee.findById(employeeId);
 
   if (!employee) {
@@ -110,7 +141,14 @@ const getEmployeePerformanceStats = asyncHandler(async (req, res) => {
 // @access  Private (Employee)
 const getEmployeeLeaderboard = asyncHandler(async (req, res) => {
   const { page = 1, limit = 50, period = 'month' } = req.query;
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
 
   // Calculate date range based on period
   const dateRange = getDateRange(period);
@@ -179,7 +217,14 @@ const getEmployeeLeaderboard = asyncHandler(async (req, res) => {
 // @route   GET /api/employee/analytics/points-history
 // @access  Private (Employee)
 const getEmployeePointsHistory = asyncHandler(async (req, res) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
   const { page = 1, limit = 20 } = req.query;
 
   const employee = await Employee.findById(employeeId)

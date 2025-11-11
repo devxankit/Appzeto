@@ -91,13 +91,22 @@ const Employee_dashboard = () => {
         employeeService.getEmployeeTasks({ limit: 10 })
       ])
       
-      setDashboardStats(dashboardResponse || {
-        tasks: { total: 0, completed: 0, 'in-progress': 0, pending: 0, urgent: 0, overdue: 0, dueSoon: 0 },
-        projects: { total: 0, active: 0, completed: 0 },
-        points: { current: 0, rank: 0, totalEmployees: 0, tasksCompleted: 0, tasksOnTime: 0, tasksOverdue: 0 },
-        recentPointsHistory: []
-      })
-      setTasks(tasksResponse?.data || [])
+      // Ensure dashboardResponse has the correct structure
+      if (dashboardResponse && dashboardResponse.tasks) {
+        setDashboardStats(dashboardResponse)
+      } else {
+        // Fallback to default structure
+        setDashboardStats({
+          tasks: { total: 0, completed: 0, 'in-progress': 0, pending: 0, urgent: 0, overdue: 0, dueSoon: 0 },
+          projects: { total: 0, active: 0, completed: 0 },
+          points: { current: 0, rank: 0, totalEmployees: 0, tasksCompleted: 0, tasksOnTime: 0, tasksOverdue: 0 },
+          recentPointsHistory: []
+        })
+      }
+      
+      // Handle tasks response - could be { data: [...] } or just [...]
+      const tasksData = tasksResponse?.data || tasksResponse || []
+      setTasks(Array.isArray(tasksData) ? tasksData : [])
     } catch (error) {
       console.error('Error loading dashboard data:', error)
       setError('Failed to load dashboard data. Please try again.')

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   FiHome,
@@ -12,18 +12,32 @@ import {
 } from 'react-icons/fi'
 import logo from '../../../assets/images/logo.png'
 import Employee_sideBar from './Employee_sideBar'
+import { employeeWalletService } from '../DEV-services'
 
 function Employee_navbar() {
   const location = useLocation()
 
-  // Mock wallet data - Employee's current month earnings
-  const [walletData] = useState({
-    monthlySalary: 25000,
-    monthlyRewards: 8000,
-    totalThisMonth: 33000
-  })
+  // Employee wallet data - fetched from API
+  const [monthlyRewards, setMonthlyRewards] = useState(0)
 
-  // Sidebar state (sidebar not implemented yet; kept for parity with PM navbar)
+  // Fetch wallet data on component mount
+  useEffect(() => {
+    const loadWalletData = async () => {
+      try {
+        const response = await employeeWalletService.getWalletSummary();
+        if (response.success && response.data) {
+          setMonthlyRewards(response.data.monthlyRewards || 0);
+        }
+      } catch (error) {
+        console.error('Error loading wallet data in navbar:', error);
+        // Keep default values (0) on error
+      }
+    };
+
+    loadWalletData();
+  }, []);
+
+  // Sidebar state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   const navItems = [
@@ -81,13 +95,13 @@ function Employee_navbar() {
               <FiBell className="text-lg" />
             </Link>
 
-            {/* Wallet Balance Box */}
+            {/* Monthly Rewards Box */}
             <Link
               to="/employee-wallet"
               className="flex items-center space-x-1 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-3 py-1.5 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
             >
               <FiCreditCard className="text-teal-600 text-sm" />
-              <span className="text-sm font-semibold text-teal-700">₹{walletData.totalThisMonth.toLocaleString()}</span>
+              <span className="text-sm font-semibold text-teal-700">₹{monthlyRewards.toLocaleString()}</span>
             </Link>
 
             {/* Hamburger Menu Icon (no sidebar wired yet) */}
@@ -162,13 +176,13 @@ function Employee_navbar() {
                 <FiBell className="text-xl" />
               </Link>
 
-              {/* Desktop Wallet Balance */}
+              {/* Desktop Monthly Rewards */}
               <Link
                 to="/employee-wallet"
                 className="flex items-center space-x-2 bg-gradient-to-r from-teal-500/10 to-teal-600/10 px-4 py-2 rounded-lg border border-teal-200/50 hover:from-teal-500/20 hover:to-teal-600/20 transition-all duration-200"
               >
                 <FiCreditCard className="text-teal-600 text-lg" />
-                <span className="text-sm font-semibold text-teal-700">₹{walletData.totalThisMonth.toLocaleString()}</span>
+                <span className="text-sm font-semibold text-teal-700">₹{monthlyRewards.toLocaleString()}</span>
               </Link>
 
               <div className="flex items-center space-x-8">

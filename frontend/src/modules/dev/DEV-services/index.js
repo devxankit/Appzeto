@@ -29,6 +29,7 @@ export { default as socketService } from './socketService';
 // Employee Module Services
 export { default as employeeService } from './employeeService';
 export { default as employeeNoticeService } from './employeeNoticeService';
+export { employeeWalletService } from './employeeWalletService';
 
 // Client Module Services
 export { clientProjectService } from './clientProjectService';

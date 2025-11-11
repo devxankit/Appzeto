@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
-import { taskService, socketService } from '../../DEV-services'
+import { employeeService, socketService } from '../../DEV-services'
 import { CheckSquare, Search, Filter, Calendar, User, MoreVertical, Loader2, Clock, AlertTriangle } from 'lucide-react'
 
 const Employee_tasks = () => {
@@ -49,18 +49,15 @@ const Employee_tasks = () => {
       setIsLoading(true)
       setError(null)
       
-      const employeeId = localStorage.getItem('employeeId')
-      if (!employeeId) {
-        throw new Error('Employee ID not found')
-      }
-      
-      const response = await taskService.getTasksByEmployee(employeeId, {
+      // Use employeeService.getEmployeeTasks which automatically uses the logged-in employee's ID
+      const response = await employeeService.getEmployeeTasks({
         limit: 100,
         sortBy: 'dueDate',
         sortOrder: 'asc'
       })
       
-      setTasks(response.data || [])
+      // employeeService.getEmployeeTasks returns response.data which is the tasks array
+      setTasks(Array.isArray(response) ? response : [])
     } catch (err) {
       console.error('Error loading tasks:', err)
       setError(err.message || 'Failed to load tasks')

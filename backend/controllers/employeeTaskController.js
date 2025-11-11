@@ -10,11 +10,19 @@ const socketService = require('../services/socketService');
 // @route   GET /api/employee/tasks
 // @access  Employee only
 const getEmployeeTasks = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
+  
   const { status, priority, isUrgent, project, milestone, page = 1, limit = 20 } = req.query;
   
-  // Build filter - employee must be in assignedTo
-  const filter = { assignedTo: employeeId };
+  // Build filter - employee must be in assignedTo array
+  const filter = { assignedTo: { $in: [employeeId] } };
   if (status) filter.status = status;
   if (priority) filter.priority = priority;
   if (isUrgent !== undefined) filter.isUrgent = isUrgent === 'true';
@@ -56,11 +64,18 @@ const getEmployeeTasks = asyncHandler(async (req, res, next) => {
 // @route   GET /api/employee/tasks/:id
 // @access  Employee only
 const getEmployeeTaskById = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
   
   const task = await Task.findOne({
     _id: req.params.id,
-    assignedTo: employeeId
+    assignedTo: { $in: [employeeId] }
   })
     .populate('project', 'name status description')
     .populate('milestone', 'title status description')
@@ -81,12 +96,20 @@ const getEmployeeTaskById = asyncHandler(async (req, res, next) => {
 // @route   PATCH /api/employee/tasks/:id/status
 // @access  Employee only
 const updateEmployeeTaskStatus = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
+  
   const { status, actualHours, comments } = req.body;
 
   const task = await Task.findOne({
     _id: req.params.id,
-    assignedTo: employeeId
+    assignedTo: { $in: [employeeId] }
   });
 
   if (!task) {
@@ -209,12 +232,20 @@ const updateEmployeeTaskStatus = asyncHandler(async (req, res, next) => {
 // @route   POST /api/employee/tasks/:id/comments
 // @access  Employee only
 const addEmployeeTaskComment = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
+  
   const { message } = req.body;
 
   const task = await Task.findOne({
     _id: req.params.id,
-    assignedTo: employeeId
+    assignedTo: { $in: [employeeId] }
   });
 
   if (!task) {
@@ -259,14 +290,22 @@ const addEmployeeTaskComment = asyncHandler(async (req, res, next) => {
 // @route   GET /api/employee/tasks/urgent
 // @access  Employee only
 const getEmployeeUrgentTasks = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
+  
   const { page = 1, limit = 20 } = req.query;
 
   // Calculate pagination
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   const urgentTasks = await Task.find({
-    assignedTo: employeeId,
+    assignedTo: { $in: [employeeId] },
     isUrgent: true,
     status: { $nin: ['completed', 'cancelled'] }
   })
@@ -279,7 +318,7 @@ const getEmployeeUrgentTasks = asyncHandler(async (req, res, next) => {
     .limit(parseInt(limit));
 
   const total = await Task.countDocuments({
-    assignedTo: employeeId,
+    assignedTo: { $in: [employeeId] },
     isUrgent: true,
     status: { $nin: ['completed', 'cancelled'] }
   });
@@ -301,11 +340,18 @@ const getEmployeeUrgentTasks = asyncHandler(async (req, res, next) => {
 // @route   GET /api/employee/tasks/statistics
 // @access  Employee only
 const getEmployeeTaskStatistics = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
 
   // Get task statistics
   const taskStats = await Task.aggregate([
-    { $match: { assignedTo: employeeId } },
+    { $match: { assignedTo: { $in: [employeeId] } } },
     {
       $group: {
         _id: '$status',
@@ -318,14 +364,14 @@ const getEmployeeTaskStatistics = asyncHandler(async (req, res, next) => {
 
   // Get urgent tasks count
   const urgentTasksCount = await Task.countDocuments({
-    assignedTo: employeeId,
+    assignedTo: { $in: [employeeId] },
     isUrgent: true,
     status: { $nin: ['completed', 'cancelled'] }
   });
 
   // Get overdue tasks count
   const overdueTasksCount = await Task.countDocuments({
-    assignedTo: employeeId,
+    assignedTo: { $in: [employeeId] },
     dueDate: { $lt: new Date() },
     status: { $nin: ['completed', 'cancelled'] }
   });
@@ -352,11 +398,18 @@ const getEmployeeTaskStatistics = asyncHandler(async (req, res, next) => {
 // @route   POST /api/employee/tasks/:id/attachments
 // @access  Employee only
 const uploadEmployeeTaskAttachment = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
 
   const task = await Task.findOne({
     _id: req.params.id,
-    assignedTo: employeeId
+    assignedTo: { $in: [employeeId] }
   });
 
   if (!task) {
@@ -410,11 +463,18 @@ const uploadEmployeeTaskAttachment = asyncHandler(async (req, res, next) => {
 // @route   GET /api/employee/tasks/:id/attachments
 // @access  Employee only
 const getEmployeeTaskAttachments = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
 
   const task = await Task.findOne({
     _id: req.params.id,
-    assignedTo: employeeId
+    assignedTo: { $in: [employeeId] }
   }).select('attachments');
 
   if (!task) {
@@ -431,12 +491,20 @@ const getEmployeeTaskAttachments = asyncHandler(async (req, res, next) => {
 // @route   DELETE /api/employee/tasks/:id/attachments/:attachmentId
 // @access  Employee only
 const deleteEmployeeTaskAttachment = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
+  
   const { attachmentId } = req.params;
 
   const task = await Task.findOne({
     _id: req.params.id,
-    assignedTo: employeeId
+    assignedTo: { $in: [employeeId] }
   });
 
   if (!task) {

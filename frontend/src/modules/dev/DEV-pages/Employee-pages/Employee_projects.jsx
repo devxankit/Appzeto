@@ -48,8 +48,9 @@ const Employee_projects = () => {
       setError(null)
       
       // Load employee's assigned projects
+      // employeeService.getEmployeeProjects() returns response.data which is the projects array
       const response = await employeeService.getEmployeeProjects()
-      setProjects(response.data || [])
+      setProjects(Array.isArray(response) ? response : [])
     } catch (error) {
       console.error('Error loading projects:', error)
       setError('Failed to load projects. Please try again.')

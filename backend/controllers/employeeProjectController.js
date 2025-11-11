@@ -8,11 +8,30 @@ const ErrorResponse = require('../utils/errorResponse');
 // @route   GET /api/employee/projects
 // @access  Employee only
 const getEmployeeProjects = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
+  
   const { status, page = 1, limit = 20 } = req.query;
   
-  // Build filter - employee must be in assignedTeam
-  const filter = { assignedTeam: employeeId };
+  // Find projects where employee is in assignedTeam (assignedTeam is an array)
+  const teamProjects = await Project.find({ assignedTeam: { $in: [employeeId] } }).select('_id');
+  const teamProjectIds = teamProjects.map(p => p._id);
+  
+  // Find projects where employee has tasks assigned (since every task belongs to a project)
+  const tasksWithProjects = await Task.find({ assignedTo: { $in: [employeeId] } }).select('project').distinct('project');
+  const taskProjectIds = tasksWithProjects.filter(Boolean); // Remove null/undefined
+  
+  // Combine and deduplicate project IDs
+  const allProjectIds = [...new Set([...teamProjectIds.map(id => id.toString()), ...taskProjectIds.map(id => id.toString())])];
+  
+  // Build filter - include projects from both sources
+  const filter = { _id: { $in: allProjectIds } };
   if (status) filter.status = status;
 
   // Calculate pagination
@@ -27,12 +46,34 @@ const getEmployeeProjects = asyncHandler(async (req, res, next) => {
     .limit(parseInt(limit));
 
   const total = await Project.countDocuments(filter);
+  
+  // Calculate employee-specific task counts and progress for each project
+  const projectsWithEmployeeData = await Promise.all(projects.map(async (project) => {
+    // Get tasks assigned to this employee in this project
+    const employeeTasks = await Task.find({
+      project: project._id,
+      assignedTo: { $in: [employeeId] }
+    });
+    
+    const employeeCompletedTasks = employeeTasks.filter(t => t.status === 'completed').length;
+    const employeeTasksCount = employeeTasks.length;
+    const employeeProgress = employeeTasksCount > 0 
+      ? Math.round((employeeCompletedTasks / employeeTasksCount) * 100) 
+      : 0;
+    
+    return {
+      ...project.toObject(),
+      employeeTasks: employeeTasksCount,
+      employeeCompletedTasks,
+      employeeProgress
+    };
+  }));
 
   res.json({
     success: true,
-    count: projects.length,
+    count: projectsWithEmployeeData.length,
     total,
-    data: projects,
+    data: projectsWithEmployeeData,
     pagination: {
       current: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
@@ -45,29 +86,49 @@ const getEmployeeProjects = asyncHandler(async (req, res, next) => {
 // @route   GET /api/employee/projects/:id
 // @access  Employee only
 const getEmployeeProjectById = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
   
-  const project = await Project.findOne({
-    _id: req.params.id,
-    assignedTeam: employeeId
-  })
-    .populate('client', 'name email company phoneNumber')
-    .populate('projectManager', 'name email phone')
-    .populate('assignedTeam', 'name email department position')
-    .populate({
-      path: 'milestones',
-      populate: {
-        path: 'tasks',
-        populate: {
-          path: 'assignedTo',
-          select: 'name email department'
-        }
-      }
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
     });
-
+  }
+  
+  // Check if employee is in assignedTeam OR has tasks in this project
+  const project = await Project.findById(req.params.id);
+  
   if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
+  
+  // Check if employee is in assignedTeam
+  const isInTeam = project.assignedTeam.some(id => id.toString() === employeeId.toString());
+  
+  // Check if employee has tasks in this project
+  const hasTasks = await Task.findOne({
+    project: project._id,
+    assignedTo: { $in: [employeeId] }
+  });
+  
+  if (!isInTeam && !hasTasks) {
     return next(new ErrorResponse('Project not found or you are not assigned to this project', 404));
   }
+  
+  // Populate project data
+  await project.populate('client', 'name email company phoneNumber');
+  await project.populate('projectManager', 'name email phone');
+  await project.populate('assignedTeam', 'name email department position');
+  await project.populate({
+    path: 'milestones',
+    populate: {
+      path: 'tasks',
+      populate: {
+        path: 'assignedTo',
+        select: 'name email department'
+      }
+    }
+  });
 
   // Calculate employee's task count per milestone
   const milestonesWithEmployeeTasks = project.milestones.map(milestone => {
@@ -99,15 +160,32 @@ const getEmployeeProjectById = asyncHandler(async (req, res, next) => {
 // @route   GET /api/employee/projects/:id/milestones
 // @access  Employee only
 const getEmployeeProjectMilestones = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
   
-  // First verify employee is assigned to project
-  const project = await Project.findOne({
-    _id: req.params.id,
-    assignedTeam: employeeId
-  });
-
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
+  
+  // First verify employee is assigned to project or has tasks in it
+  const project = await Project.findById(req.params.id);
+  
   if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
+  
+  // Check if employee is in assignedTeam
+  const isInTeam = project.assignedTeam.some(id => id.toString() === employeeId.toString());
+  
+  // Check if employee has tasks in this project
+  const hasTasks = await Task.findOne({
+    project: project._id,
+    assignedTo: { $in: [employeeId] }
+  });
+  
+  if (!isInTeam && !hasTasks) {
     return next(new ErrorResponse('Project not found or you are not assigned to this project', 404));
   }
 
@@ -149,15 +227,33 @@ const getEmployeeProjectMilestones = asyncHandler(async (req, res, next) => {
 // @route   GET /api/employee/projects/statistics
 // @access  Employee only
 const getEmployeeProjectStatistics = asyncHandler(async (req, res, next) => {
-  const employeeId = req.user.id;
+  const employeeId = req.employee?.id || req.user?.id;
+  
+  if (!employeeId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Employee ID not found'
+    });
+  }
 
-  // Get assigned projects
-  const assignedProjects = await Project.find({ assignedTeam: employeeId });
+  // Get projects where employee is in assignedTeam
+  const teamProjects = await Project.find({ assignedTeam: { $in: [employeeId] } }).select('_id');
+  const teamProjectIds = teamProjects.map(p => p._id);
+  
+  // Get projects where employee has tasks assigned
+  const tasksWithProjects = await Task.find({ assignedTo: { $in: [employeeId] } }).select('project').distinct('project');
+  const taskProjectIds = tasksWithProjects.filter(Boolean);
+  
+  // Combine and deduplicate project IDs
+  const allProjectIds = [...new Set([...teamProjectIds.map(id => id.toString()), ...taskProjectIds.map(id => id.toString())])];
+  
+  // Get all assigned projects (from team or tasks)
+  const assignedProjects = await Project.find({ _id: { $in: allProjectIds } });
   const projectIds = assignedProjects.map(p => p._id);
 
   // Get task statistics for assigned projects
   const taskStats = await Task.aggregate([
-    { $match: { project: { $in: projectIds }, assignedTo: employeeId } },
+    { $match: { project: { $in: projectIds }, assignedTo: { $in: [employeeId] } } },
     {
       $group: {
         _id: '$status',

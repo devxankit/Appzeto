@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -9,39 +9,162 @@ import {
   FiUser,
   FiLogOut,
   FiX,
-  FiCreditCard,
-  FiFileText
+  FiCreditCard
 } from 'react-icons/fi'
 import { colors, gradients } from '../../../lib/colors'
+import { 
+  employeeWalletService, 
+  getEmployeeProfile, 
+  getStoredEmployeeData, 
+  storeEmployeeData, 
+  clearEmployeeData, 
+  logoutEmployee 
+} from '../DEV-services'
 
 const Employee_sideBar = ({ isOpen, onClose }) => {
   const location = useLocation()
   const navigate = useNavigate()
-
-  // Mock user data
-  const user = {
+  const [user, setUser] = useState({
     name: 'Employee',
     email: 'employee@appzeto.com',
-    avatar: 'EM',
-    monthlySalary: 25000,
-    monthlyRewards: 8000,
-    totalThisMonth: 33000
+    avatar: 'EM'
+  })
+  const [walletSummary, setWalletSummary] = useState({
+    monthlySalary: 0,
+    monthlyRewards: 0,
+    totalEarnings: 0
+  })
+  const [isLoading, setIsLoading] = useState(false)
+
+  const getInitials = (name, fallback = 'EM') => {
+    if (!name) return fallback
+    const parts = name.trim().split(/\s+/)
+    const initials = parts.slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('')
+    return initials || fallback
   }
+
+  const normalizeProfileData = (data) => {
+    if (!data || typeof data !== 'object') return null
+
+    const firstName = data.firstName || data.firstname || data.givenName
+    const lastName = data.lastName || data.lastname || data.familyName
+    const fullName = data.fullName || data.fullname || data.name || [firstName, lastName].filter(Boolean).join(' ').trim()
+    const username = data.username || data.userName
+    const email = data.email || data.emailAddress || (username && username.includes('@') ? username : '')
+
+    const resolvedName = (fullName && fullName.length > 0)
+      ? fullName
+      : (username && !username.includes('@'))
+        ? username
+        : (email ? email.split('@')[0] : '')
+
+    return {
+      name: resolvedName || 'Employee',
+      email: email || data.contactEmail || 'employee@appzeto.com',
+      avatar: getInitials(resolvedName || email || 'EM'),
+      raw: data
+    }
+  }
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    let isMounted = true
+
+    const loadSidebarData = async () => {
+      setIsLoading(true)
+
+      try {
+        const storedProfile = getStoredEmployeeData?.()
+        const normalizedStored = normalizeProfileData(storedProfile)
+        if (normalizedStored && isMounted) {
+          setUser({
+            name: normalizedStored.name,
+            email: normalizedStored.email,
+            avatar: normalizedStored.avatar
+          })
+        }
+
+        const [profileResponse, walletResponse] = await Promise.allSettled([
+          getEmployeeProfile?.(),
+          employeeWalletService.getWalletSummary()
+        ])
+
+        if (profileResponse.status === 'fulfilled') {
+          const response = profileResponse.value
+          const rawProfile = response?.data?.employee 
+            || response?.data?.profile 
+            || response?.data?.user 
+            || response?.data 
+            || response?.profile 
+            || null
+
+          const normalizedApiProfile = normalizeProfileData(rawProfile)
+
+          if (response?.success && normalizedApiProfile && isMounted) {
+            setUser({
+              name: normalizedApiProfile.name,
+              email: normalizedApiProfile.email,
+              avatar: normalizedApiProfile.avatar
+            })
+            const dataToStore = normalizedApiProfile.raw || rawProfile || {
+              name: normalizedApiProfile.name,
+              email: normalizedApiProfile.email
+            }
+            storeEmployeeData?.(dataToStore)
+          }
+        }
+
+        if (walletResponse.status === 'fulfilled') {
+          const response = walletResponse.value
+          const summaryData = response?.data || {}
+
+          if (response?.success && isMounted) {
+            setWalletSummary({
+              monthlySalary: summaryData.monthlySalary || 0,
+              monthlyRewards: summaryData.monthlyRewards || 0,
+              totalEarnings: summaryData.totalEarnings ?? ((summaryData.monthlySalary || 0) + (summaryData.monthlyRewards || 0))
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Error loading sidebar data:', error)
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadSidebarData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isOpen])
 
   const navItems = [
     { path: '/employee-dashboard', label: 'Home', icon: FiHome },
     { path: '/employee-projects', label: 'Projects', icon: FiFolder },
     { path: '/employee-tasks', label: 'Tasks', icon: FiCheckSquare },
-    { path: '/employee-notice-board', label: 'Notice Board', icon: FiFileText },
     { path: '/employee-leaderboard', label: 'Leaderboard', icon: FiTrendingUp },
     { path: '/employee-profile', label: 'Profile', icon: FiUser }
   ]
 
-  const handleLogout = () => {
-    console.log('Logging out...')
+  const handleLogout = async () => {
+    try {
+      await logoutEmployee()
+    } catch (error) {
+      console.error('Error during logout:', error)
+    } finally {
+      clearEmployeeData?.()
+      onClose?.()
+      navigate('/employee-login', { replace: true })
+    }
   }
 
   const handleWalletClick = () => {
+    if (isLoading) return
     navigate('/employee-wallet')
     onClose()
   }
@@ -88,15 +211,31 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
                 </motion.div>
               </div>
 
-              <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3, duration: 0.6, ease: 'easeOut' }} onClick={handleWalletClick} className="w-full bg-white rounded-lg p-3 shadow-xl hover:shadow-2xl transition-all duration-200" style={{ boxShadow: '0 8px 25px -5px rgba(0, 0, 0, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1)' }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-teal-100 rounded flex items-center justify-center">
-                      <FiCreditCard className="w-3 h-3 text-teal-600" />
+              <motion.button 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                transition={{ delay: 0.3, duration: 0.6, ease: 'easeOut' }} 
+                onClick={handleWalletClick}
+                disabled={isLoading}
+                className={`w-full bg-white rounded-lg p-3 shadow-xl transition-all duration-200 ${isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-2xl'}`}
+                style={{ boxShadow: '0 8px 25px -5px rgba(0, 0, 0, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1)' }}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-teal-100 rounded flex items-center justify-center">
+                        <FiCreditCard className="w-3 h-3 text-teal-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-700">Monthly Earnings</span>
                     </div>
-                    <span className="text-xs font-medium text-gray-700">This month</span>
+                    <span className="text-sm font-bold text-gray-900">
+                      {isLoading ? 'Loading...' : `₹${(walletSummary.monthlySalary + walletSummary.monthlyRewards).toLocaleString()}`}
+                    </span>
                   </div>
-                  <span className="text-sm font-bold text-gray-900">₹{user.totalThisMonth.toLocaleString()}</span>
+                  <div className="flex justify-between text-xs text-gray-600">
+                    <span>Salary: ₹{walletSummary.monthlySalary.toLocaleString()}</span>
+                    <span>Rewards: ₹{walletSummary.monthlyRewards.toLocaleString()}</span>
+                  </div>
                 </div>
               </motion.button>
             </motion.div>

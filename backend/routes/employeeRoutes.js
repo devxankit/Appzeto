@@ -3,7 +3,9 @@ const {
   loginEmployee,
   getEmployeeProfile,
   logoutEmployee,
-  createDemoEmployee
+  createDemoEmployee,
+  getWalletSummary,
+  getWalletTransactions
 } = require('../controllers/employeeController');
 const {
   getPublishedNoticesForEmployee,
@@ -26,6 +28,10 @@ router.post('/logout', logoutEmployee);
 // Notice board routes
 router.get('/notices', getPublishedNoticesForEmployee);
 router.post('/notices/:id/view', incrementNoticeViews);
+
+// Employee wallet routes
+router.get('/wallet/summary', getWalletSummary);
+router.get('/wallet/transactions', getWalletTransactions);
 
 // Future Employee-specific routes can be added here
 // router.get('/projects', getEmployeeProjects);

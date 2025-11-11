@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
+import { employeeService } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
 import { ArrowLeft, CheckSquare, Calendar, User, Clock, FileText, Download, Eye, Users, Paperclip, AlertCircle, CheckCircle, Loader2, AlertTriangle, Save } from 'lucide-react'
 
 const Employee_task_detail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [searchParams] = useState(() => new URLSearchParams(window.location.search))
   const projectId = searchParams.get('projectId')
   const [task, setTask] = useState(null)
@@ -13,34 +16,49 @@ const Employee_task_detail = () => {
   const [isUpdating, setIsUpdating] = useState(false)
   const [currentStatus, setCurrentStatus] = useState('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [error, setError] = useState(null)
+
+  // Helper functions to convert between backend and frontend status formats
+  const backendToDisplayStatus = (backendStatus) => {
+    const statusMap = {
+      'pending': 'Pending',
+      'in-progress': 'In Progress',
+      'testing': 'Testing',
+      'completed': 'Completed',
+      'cancelled': 'Cancelled'
+    }
+    return statusMap[backendStatus] || backendStatus
+  }
+
+  const displayToBackendStatus = (displayStatus) => {
+    const statusMap = {
+      'Pending': 'pending',
+      'In Progress': 'in-progress',
+      'Testing': 'testing',
+      'Completed': 'completed',
+      'Cancelled': 'cancelled'
+    }
+    return statusMap[displayStatus] || displayStatus.toLowerCase()
+  }
 
   useEffect(() => {
-    const load = async () => {
-      setIsLoading(true)
-      await new Promise(r => setTimeout(r, 500))
-      setTask({
-        _id: id,
-        title: 'Design Landing Page',
-        description: 'Create hero, features, and CTA sections for new brand. This includes responsive design, animations, and ensuring cross-browser compatibility.',
-        status: 'In Progress',
-        priority: 'High',
-        dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-        completedAt: null,
-        assignedTo: [{ _id: 'u-001', fullName: 'John Doe', email: 'john@example.com' }],
-        project: { _id: projectId, name: 'Website Redesign' },
-        milestone: { _id: 'm-001', title: 'M1 - UI/UX' },
-        attachments: [
-          { id: 'att-001', name: 'design-brief.pdf', size: 1024000, type: 'application/pdf', url: '#' },
-          { id: 'att-002', name: 'wireframes.fig', size: 2048000, type: 'application/figma', url: '#' }
-        ],
-        isUrgent: false
-      })
-      setCurrentStatus('In Progress')
-      setIsLoading(false)
+    const loadTask = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        const taskData = await employeeService.getEmployeeTaskById(id)
+        setTask(taskData)
+        setCurrentStatus(backendToDisplayStatus(taskData.status))
+      } catch (err) {
+        console.error('Error loading task:', err)
+        setError(err.message || 'Failed to load task details')
+        toast.error('Failed to load task details')
+      } finally {
+        setIsLoading(false)
+      }
     }
-    load()
-  }, [id, projectId])
+    loadTask()
+  }, [id, toast])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -55,27 +73,53 @@ const Employee_task_detail = () => {
   }, [isDropdownOpen])
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'Completed': return 'bg-green-100 text-green-800 border-green-200'
-      case 'In Progress': return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'Pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'Cancelled': return 'bg-red-100 text-red-800 border-red-200'
+    // Handle both backend format (pending, in-progress) and display format (Pending, In Progress)
+    const normalizedStatus = status.toLowerCase()
+    switch (normalizedStatus) {
+      case 'completed': return 'bg-green-100 text-green-800 border-green-200'
+      case 'in-progress': 
+      case 'in progress': return 'bg-blue-100 text-blue-800 border-blue-200'
+      case 'testing': return 'bg-purple-100 text-purple-800 border-purple-200'
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
 
   const getPriorityColor = (p) => {
-    switch (p) {
-      case 'Urgent': return 'bg-red-100 text-red-800 border-red-200'
-      case 'High': return 'bg-orange-100 text-orange-800 border-orange-200'
-      case 'Medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'Low': return 'bg-gray-100 text-gray-800 border-gray-200'
+    // Handle both backend format (urgent, high) and display format (Urgent, High)
+    const normalizedPriority = p?.toLowerCase() || ''
+    switch (normalizedPriority) {
+      case 'urgent': return 'bg-red-100 text-red-800 border-red-200'
+      case 'high': return 'bg-orange-100 text-orange-800 border-orange-200'
+      case 'normal':
+      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      case 'low': return 'bg-gray-100 text-gray-800 border-gray-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
 
-  const formatStatus = (s) => s === 'In Progress' ? 'In Progress' : s.charAt(0).toUpperCase() + s.slice(1)
-  const formatPriority = (p) => p.charAt(0).toUpperCase() + p.slice(1)
+  const formatStatus = (s) => {
+    if (!s) return 'Unknown'
+    // If already in display format, return as is
+    if (s === 'In Progress' || s === 'Pending' || s === 'Completed' || s === 'Cancelled' || s === 'Testing') {
+      return s
+    }
+    // Convert backend format to display format
+    return backendToDisplayStatus(s)
+  }
+  
+  const formatPriority = (p) => {
+    if (!p) return 'Normal'
+    const priorityMap = {
+      'urgent': 'Urgent',
+      'high': 'High',
+      'normal': 'Normal',
+      'medium': 'Medium',
+      'low': 'Low'
+    }
+    return priorityMap[p.toLowerCase()] || p.charAt(0).toUpperCase() + p.slice(1)
+  }
   const formatFileSize = (b) => `${(b/1024/1024).toFixed(2)} MB`
 
   const getTimeRemaining = (dueDate) => {
@@ -93,32 +137,49 @@ const Employee_task_detail = () => {
   }
 
   const statusOptions = [
-    { value: 'Pending', label: 'Pending' },
-    { value: 'In Progress', label: 'In Progress' },
-    { value: 'Completed', label: 'Completed' },
-    { value: 'Cancelled', label: 'Cancelled' }
+    { value: 'Pending', label: 'Pending', backendValue: 'pending' },
+    { value: 'In Progress', label: 'In Progress', backendValue: 'in-progress' },
+    { value: 'Testing', label: 'Testing', backendValue: 'testing' },
+    { value: 'Completed', label: 'Completed', backendValue: 'completed' },
+    { value: 'Cancelled', label: 'Cancelled', backendValue: 'cancelled' }
   ]
 
   const handleStatusUpdate = async () => {
-    if (currentStatus === task.status) return
+    if (!task) return
+    
+    const currentDisplayStatus = backendToDisplayStatus(task.status)
+    if (currentStatus === currentDisplayStatus) {
+      toast.info('Status is already up to date')
+      return
+    }
     
     setIsUpdating(true)
     try {
-      await new Promise(r => setTimeout(r, 1000))
-      setTask(prev => ({
-        ...prev,
-        status: currentStatus,
-        completedAt: currentStatus === 'Completed' ? new Date().toISOString() : null
-      }))
-      console.log('Status updated to:', currentStatus)
+      const backendStatus = displayToBackendStatus(currentStatus)
+      // actualHours and comments are optional, pass undefined
+      const response = await employeeService.updateEmployeeTaskStatus(id, backendStatus, undefined, undefined)
+      
+      // Update task with response data
+      setTask(response)
+      setCurrentStatus(backendToDisplayStatus(response.status))
+      
+      toast.success(`Task status updated to ${currentStatus}`)
+      
+      // If completed, show points notification if available
+      if (backendStatus === 'completed' && response.pointsAwarded) {
+        toast.success(`You earned ${response.pointsAwarded} point(s)!`)
+      }
     } catch (error) {
       console.error('Error updating status:', error)
+      toast.error(error.message || 'Failed to update task status')
+      // Reset to original status on error
+      setCurrentStatus(backendToDisplayStatus(task.status))
     } finally {
       setIsUpdating(false)
     }
   }
 
-  if (isLoading || !task) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Employee_navbar />
@@ -127,6 +188,33 @@ const Employee_task_detail = () => {
             <div className="flex items-center space-x-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <span className="text-lg text-gray-600">Loading task details...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !task) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Employee_navbar />
+        <div className="pt-16 pb-24 md:pt-20 md:pb-8">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <button 
+              onClick={() => navigate('/employee-tasks')} 
+              className="mb-4 text-gray-600 hover:text-gray-900 flex items-center"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />Back to Tasks
+            </button>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+              <div className="flex items-center space-x-3">
+                <AlertCircle className="h-6 w-6 text-red-600" />
+                <div>
+                  <h3 className="text-lg font-semibold text-red-900">Error Loading Task</h3>
+                  <p className="text-sm text-red-700 mt-1">{error || 'Task not found'}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -177,7 +265,7 @@ const Employee_task_detail = () => {
                   <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getPriorityColor(task.priority)}`}>
                     {formatPriority(task.priority)}
                   </span>
-                  {task.isUrgent && (
+                  {(task.isUrgent || task.priority === 'urgent') && (
                     <span className="px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 border border-red-200">
                       URGENT
                     </span>
@@ -252,7 +340,7 @@ const Employee_task_detail = () => {
                 </div>
                 <button 
                   onClick={handleStatusUpdate}
-                  disabled={isUpdating || currentStatus === task.status}
+                  disabled={isUpdating || currentStatus === backendToDisplayStatus(task.status)}
                   className="w-full bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white px-6 py-3 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-sm hover:shadow-md transition-all duration-200"
                 >
                   {isUpdating ? (
@@ -267,7 +355,7 @@ const Employee_task_detail = () => {
                     </>
                   )}
                 </button>
-                {currentStatus === task.status && (
+                {currentStatus === backendToDisplayStatus(task.status) && (
                   <p className="text-xs text-gray-500 text-center">Status is already up to date</p>
                 )}
               </div>
@@ -280,34 +368,41 @@ const Employee_task_detail = () => {
                   <span>Attachments ({task.attachments.length})</span>
                 </h3>
                 <div className="space-y-3">
-                  {task.attachments.map((att, idx) => (
-                    <div key={att.id || idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <span className="text-2xl">📎</span>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{att.name}</p>
-                          <p className="text-xs text-gray-500">{formatFileSize(att.size)} • Uploaded {new Date().toLocaleDateString()}</p>
+                  {task.attachments.map((att, idx) => {
+                    const attachmentUrl = att.secure_url || att.url || '#'
+                    const attachmentName = att.originalName || att.original_filename || att.name || `Attachment ${idx + 1}`
+                    const attachmentSize = att.bytes || att.size || 0
+                    const uploadDate = att.uploadedAt || att.createdAt || new Date()
+                    
+                    return (
+                      <div key={att._id || att.id || idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <span className="text-2xl">📎</span>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{attachmentName}</p>
+                            <p className="text-xs text-gray-500">{formatFileSize(attachmentSize)} • Uploaded {new Date(uploadDate).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <a 
+                            href={attachmentUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </a>
+                          <a 
+                            href={attachmentUrl} 
+                            download={attachmentName} 
+                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <a 
-                          href={att.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </a>
-                        <a 
-                          href={att.url} 
-                          download={att.name} 
-                          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                          <Download className="h-4 w-4" />
-                        </a>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -335,12 +430,12 @@ const Employee_task_detail = () => {
                     <span>{new Date(task.createdAt).toLocaleDateString()}</span>
                   </p>
                 </div>
-                {task.completedAt && (
+                {task.completedDate && (
                   <div>
                     <label className="text-sm font-medium text-gray-600">Completed</label>
                     <p className="text-base font-medium text-gray-900 flex items-center space-x-2 mt-1">
                       <CheckCircle className="h-4 w-4 text-green-500" />
-                      <span>{new Date(task.completedAt).toLocaleDateString()}</span>
+                      <span>{new Date(task.completedDate).toLocaleDateString()}</span>
                     </p>
                   </div>
                 )}
@@ -354,14 +449,14 @@ const Employee_task_detail = () => {
               </h3>
               {task.assignedTo && task.assignedTo.length > 0 ? (
                 <div className="space-y-3">
-                  {task.assignedTo.map(m => (
-                    <div key={m._id} className="flex items-center space-x-3">
+                  {task.assignedTo.map((m, idx) => (
+                    <div key={m._id || m.id || idx} className="flex items-center space-x-3">
                       <div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-primary/30 rounded-full flex items-center justify-center">
                         <User className="h-4 w-4 text-primary" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{m.fullName}</p>
-                        <p className="text-xs text-gray-500">{m.email}</p>
+                        <p className="text-sm font-medium text-gray-900">{m.name || m.fullName || 'Unknown'}</p>
+                        <p className="text-xs text-gray-500">{m.email || ''}</p>
                       </div>
                     </div>
                   ))}
