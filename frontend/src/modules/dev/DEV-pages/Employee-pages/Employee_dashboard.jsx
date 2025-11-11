@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
-import { employeeService, socketService } from '../../DEV-services'
+import { employeeService, socketService, employeeRequestService } from '../../DEV-services'
 import { 
   FiCheckSquare as CheckSquare,
   FiClock as Clock,
@@ -48,6 +48,7 @@ const Employee_dashboard = () => {
     recentPointsHistory: []
   })
   const [filter, setFilter] = useState('all')
+  const [requestsCount, setRequestsCount] = useState(0)
 
   useEffect(() => {
     loadDashboardData()
@@ -85,10 +86,11 @@ const Employee_dashboard = () => {
       setLoading(true)
       setError(null)
       
-      // Load dashboard statistics and tasks
-      const [dashboardResponse, tasksResponse] = await Promise.all([
+      // Load dashboard statistics, tasks, and requests count
+      const [dashboardResponse, tasksResponse, requestsResponse] = await Promise.all([
         employeeService.getEmployeeDashboardStats(),
-        employeeService.getEmployeeTasks({ limit: 10 })
+        employeeService.getEmployeeTasks({ limit: 10 }),
+        employeeRequestService.getRequests({ direction: 'outgoing', limit: 1 }).catch(() => ({ pagination: { total: 0 } }))
       ])
       
       // Ensure dashboardResponse has the correct structure
@@ -107,6 +109,11 @@ const Employee_dashboard = () => {
       // Handle tasks response - could be { data: [...] } or just [...]
       const tasksData = tasksResponse?.data || tasksResponse || []
       setTasks(Array.isArray(tasksData) ? tasksData : [])
+      
+      // Handle requests count - get total from pagination
+      // The service returns the full response object, so pagination is at the top level
+      const requestsTotal = requestsResponse?.pagination?.total || 0
+      setRequestsCount(requestsTotal)
     } catch (error) {
       console.error('Error loading dashboard data:', error)
       setError('Failed to load dashboard data. Please try again.')
@@ -118,6 +125,7 @@ const Employee_dashboard = () => {
         recentPointsHistory: []
       })
       setTasks([])
+      setRequestsCount(0)
     } finally {
       setLoading(false)
     }
@@ -293,7 +301,7 @@ const Employee_dashboard = () => {
                   </div>
                 </div>
                  <div className="bg-teal-300 text-teal-800 px-4 py-2 rounded-xl shadow-sm">
-                   <p className="text-2xl font-bold">3</p>
+                   <p className="text-2xl font-bold">{requestsCount}</p>
                  </div>
               </div>
             </div>
