@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { 
@@ -11,18 +11,59 @@ import {
   FiCreditCard
 } from 'react-icons/fi'
 import { colors, gradients } from '../../../lib/colors'
+import { getStoredSalesData, logoutSales, clearSalesData } from '../SL-services/salesAuthService'
+import { salesWalletService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_sideBar = ({ isOpen, onClose }) => {
   const location = useLocation()
   const navigate = useNavigate()
+  const { toast } = useToast()
   
-  // Mock user data
-  const user = {
-    name: 'Abhishek Sen',
-    email: 'abhishek@appzeto.com',
-    avatar: 'A',
-    balance: 22750
-  }
+  const [user, setUser] = useState({
+    name: '',
+    email: '',
+    avatar: '',
+    balance: 0
+  })
+  
+  // Load user data and wallet balance
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        // Get user data from stored auth data
+        const salesData = getStoredSalesData()
+        if (salesData) {
+          const firstName = salesData.name?.split(' ')[0] || ''
+          const lastName = salesData.name?.split(' ')[1] || ''
+          const avatar = firstName.charAt(0).toUpperCase() + (lastName ? lastName.charAt(0).toUpperCase() : '')
+          
+          setUser(prev => ({
+            ...prev,
+            name: salesData.name || '',
+            email: salesData.email || '',
+            avatar: avatar || 'U'
+          }))
+        }
+        
+        // Get wallet balance
+        try {
+          const walletData = await salesWalletService.getWalletSummary()
+          const balance = Number(walletData?.incentive?.current || 0)
+          setUser(prev => ({ ...prev, balance }))
+        } catch (error) {
+          console.error('Failed to load wallet balance:', error)
+          // Keep balance as 0 if fetch fails
+        }
+      } catch (error) {
+        console.error('Failed to load user data:', error)
+      }
+    }
+    
+    if (isOpen) {
+      loadUserData()
+    }
+  }, [isOpen])
 
   const navItems = [
     { 
@@ -47,9 +88,28 @@ const SL_sideBar = ({ isOpen, onClose }) => {
     }
   ]
 
-  const handleLogout = () => {
-    console.log('Logging out...')
-    // Handle logout logic here
+  const handleLogout = async () => {
+    try {
+      await logoutSales()
+      clearSalesData()
+      toast.logout('You have been successfully logged out', {
+        title: 'Logged Out',
+        duration: 2000
+      })
+      setTimeout(() => {
+        navigate('/sales-login')
+      }, 800)
+    } catch (error) {
+      console.error('Logout error:', error)
+      clearSalesData()
+      toast.error('Logout failed, but you have been logged out locally', {
+        title: 'Logout Error',
+        duration: 2000
+      })
+      setTimeout(() => {
+        navigate('/sales-login')
+      }, 1000)
+    }
   }
 
   const handleWalletClick = () => {
@@ -118,7 +178,7 @@ const SL_sideBar = ({ isOpen, onClose }) => {
                   transition={{ delay: 0.2, type: 'spring', damping: 20, stiffness: 300 }}
                   className="w-12 h-12 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg"
                 >
-                  <span className="text-lg font-bold text-gray-800">{user.avatar}</span>
+                  <span className="text-lg font-bold text-gray-800">{user.avatar || 'U'}</span>
                 </motion.div>
                 
                 <motion.div 
@@ -127,8 +187,8 @@ const SL_sideBar = ({ isOpen, onClose }) => {
                   transition={{ delay: 0.25, duration: 0.3, ease: "easeOut" }}
                   className="flex-1"
                 >
-                  <h2 className="text-base font-bold text-white">{user.name}</h2>
-                  <p className="text-xs text-white/80">{user.email}</p>
+                  <h2 className="text-base font-bold text-white">{user.name || 'Sales User'}</h2>
+                  <p className="text-xs text-white/80">{user.email || 'sales@example.com'}</p>
                 </motion.div>
               </div>
 
