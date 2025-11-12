@@ -349,7 +349,8 @@ export const adminFinanceService = {
     } catch (error) {
       throw error;
     }
-  }
+  },
+
 };
 
 export default adminFinanceService;

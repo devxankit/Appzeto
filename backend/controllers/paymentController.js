@@ -214,6 +214,7 @@ const updatePaymentStatus = asyncHandler(async (req, res, next) => {
           },
           checkDuplicate: true
         });
+
       }
     } catch (error) {
       // Log error but don't fail the payment update

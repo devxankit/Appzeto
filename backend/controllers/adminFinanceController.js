@@ -2008,5 +2008,5 @@ module.exports = {
   deleteBudget,
   getFinanceStatistics,
   recordSalesIncentivePayment,
-  getSalesIncentiveMonthlySummary
+  getSalesIncentiveMonthlySummary,
 };

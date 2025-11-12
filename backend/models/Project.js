@@ -560,6 +560,7 @@ projectSchema.post('save', async function(doc) {
             },
             checkDuplicate: true
           });
+
         }
       }
     } catch (error) {

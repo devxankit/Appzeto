@@ -335,6 +335,10 @@ const optionalAuth = async (req, res, next) => {
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
     }
+    // Check for token in query (for iframe viewing)
+    else if (req.query.token) {
+      token = req.query.token;
+    }
     // Check for token in cookies
     else if (req.cookies.token) {
       token = req.cookies.token;
@@ -354,6 +358,9 @@ const optionalAuth = async (req, res, next) => {
         
         if (admin && admin.isActive) {
           req.admin = admin;
+          req.user = admin;
+          req.userType = 'admin';
+          req.user.role = 'admin';
         }
       } catch (error) {
         // Token is invalid, but we don't fail the request

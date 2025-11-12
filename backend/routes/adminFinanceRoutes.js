@@ -24,7 +24,7 @@ const {
   updateBudget,
   deleteBudget,
   getFinanceStatistics,
-  getSalesIncentiveMonthlySummary
+  getSalesIncentiveMonthlySummary,
 } = require('../controllers/adminFinanceController');
 const { protect, authorize } = require('../middlewares/auth');
 

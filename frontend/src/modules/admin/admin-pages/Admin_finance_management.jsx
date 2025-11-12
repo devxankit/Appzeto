@@ -30,7 +30,8 @@ import {
   FiClock,
   FiChevronDown,
   FiChevronLeft,
-  FiChevronRight
+  FiChevronRight,
+  FiDownload
 } from 'react-icons/fi'
 
 const Admin_finance_management = () => {
@@ -61,7 +62,6 @@ const Admin_finance_management = () => {
   const [showBudgetViewModal, setShowBudgetViewModal] = useState(false)
   const [showBudgetEditModal, setShowBudgetEditModal] = useState(false)
   const [showBudgetSpendModal, setShowBudgetSpendModal] = useState(false)
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [showExpenseModal, setShowExpenseModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState('')
@@ -99,13 +99,6 @@ const Admin_finance_management = () => {
     description: ''
   })
 
-  const [invoiceFormData, setInvoiceFormData] = useState({
-    client: '',
-    project: '',
-    amount: '',
-    dueDate: '',
-    description: ''
-  })
 
   const [expenseFormData, setExpenseFormData] = useState({
     category: '',
@@ -255,42 +248,6 @@ const Admin_finance_management = () => {
   const [budgetsTotal, setBudgetsTotal] = useState(0)
   const [budgetsPages, setBudgetsPages] = useState(1)
 
-  // Mock data - Invoices
-  const [invoices, setInvoices] = useState([
-    {
-      id: 1,
-      invoiceNumber: 'INV-2024-001',
-      client: 'TechCorp Solutions',
-      project: 'E-commerce Platform',
-      amount: 150000,
-      dueDate: '2024-02-15',
-      status: 'paid',
-      issueDate: '2024-01-15',
-      description: 'Phase 2 Development - Payment Milestone'
-    },
-    {
-      id: 2,
-      invoiceNumber: 'INV-2024-002',
-      client: 'StartupXYZ',
-      project: 'Mobile App Development',
-      amount: 75000,
-      dueDate: '2024-02-20',
-      status: 'pending',
-      issueDate: '2024-01-20',
-      description: 'Consulting Services - App Architecture'
-    },
-    {
-      id: 3,
-      invoiceNumber: 'INV-2024-003',
-      client: 'RetailChain',
-      project: 'Website Maintenance',
-      amount: 12000,
-      dueDate: '2024-02-25',
-      status: 'paid',
-      issueDate: '2024-01-25',
-      description: 'Monthly Maintenance Contract'
-    }
-  ])
 
   // Expenses state - fetched from API
   const [expenses, setExpenses] = useState([])
@@ -466,6 +423,7 @@ const Admin_finance_management = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+
   // Helper functions
   const getStatusColor = (status) => {
     switch (status) {
@@ -519,8 +477,6 @@ const Admin_finance_management = () => {
           ...b,
           id: b._id || b.id
         }))
-      case 'invoices':
-        return invoices
       case 'expenses':
         return expenses.map(e => ({
           ...e,
@@ -555,9 +511,7 @@ const Admin_finance_management = () => {
       
       let matchesFilter = true
       if (selectedFilter !== 'all') {
-        if (activeTab === 'invoices') {
-          matchesFilter = item.status === selectedFilter
-        } else if (activeTab === 'accounts') {
+        if (activeTab === 'accounts') {
           matchesFilter = item.isActive === (selectedFilter === 'active')
         }
       }
@@ -703,7 +657,6 @@ const Admin_finance_management = () => {
     setShowBudgetViewModal(false)
     setShowBudgetEditModal(false)
     setShowBudgetSpendModal(false)
-    setShowInvoiceModal(false)
     setShowExpenseModal(false)
     setSelectedItem(null)
     setDeleteConfirm('')
@@ -731,13 +684,6 @@ const Admin_finance_management = () => {
       allocated: '',
       startDate: '',
       endDate: '',
-      description: ''
-    })
-    setInvoiceFormData({
-      client: '',
-      project: '',
-      amount: '',
-      dueDate: '',
       description: ''
     })
     setExpenseFormData({
@@ -863,16 +809,6 @@ const Admin_finance_management = () => {
     setShowBudgetModal(true)
   }
 
-  const handleCreateInvoice = () => {
-    setInvoiceFormData({
-      client: '',
-      project: '',
-      amount: '',
-      dueDate: '',
-      description: ''
-    })
-    setShowInvoiceModal(true)
-  }
 
   const handleCreateExpense = () => {
     setExpenseFormData({
@@ -1077,25 +1013,6 @@ const Admin_finance_management = () => {
     }
   }
 
-  const handleSaveInvoice = () => {
-    if (!invoiceFormData.client || !invoiceFormData.amount) {
-      alert('Please fill in all required fields')
-      return
-    }
-
-    const newInvoice = {
-      id: invoices.length + 1,
-      invoiceNumber: `INV-2024-${String(invoices.length + 1).padStart(3, '0')}`,
-      ...invoiceFormData,
-      amount: parseFloat(invoiceFormData.amount),
-      status: 'pending',
-      issueDate: new Date().toISOString().split('T')[0]
-    }
-
-    setInvoices([...invoices, newInvoice])
-    setShowInvoiceModal(false)
-    closeModals()
-  }
 
   const handleSaveExpense = async () => {
     if (!expenseFormData.category || !expenseFormData.amount || !expenseFormData.date) {
@@ -1707,7 +1624,6 @@ const Admin_finance_management = () => {
                 {[
                   { id: 'transactions', label: 'Transactions', icon: FiActivity },
                   { id: 'budgets', label: 'Budgets', icon: FiTarget },
-                  { id: 'invoices', label: 'Invoices', icon: FiFileText },
                   { id: 'expenses', label: 'Expenses', icon: FiTrendingDown },
                   { id: 'accounts', label: 'Accounts', icon: FiCreditCard }
                 ].map((tab) => {
@@ -1789,15 +1705,6 @@ const Admin_finance_management = () => {
                   <span>Add Budget</span>
                 </button>
               )}
-              {activeTab === 'invoices' && (
-                <button
-                  onClick={handleCreateInvoice}
-                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-                >
-                  <FiPlus className="text-sm" />
-                  <span>Add Invoice</span>
-                </button>
-              )}
               {activeTab === 'expenses' && (
                 <button
                   onClick={handleCreateExpense}
@@ -1846,7 +1753,14 @@ const Admin_finance_management = () => {
                     <option value="failed">Failed</option>
                   </>
                 )}
-                {(activeTab === 'budgets' || activeTab === 'invoices' || activeTab === 'expenses') && (
+                {activeTab === 'budgets' && (
+                  <>
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="pending">Pending</option>
+                  </>
+                )}
+                {activeTab === 'expenses' && (
                   <>
                     <option value="active">Active</option>
                     <option value="completed">Completed</option>
@@ -1875,6 +1789,7 @@ const Admin_finance_management = () => {
                 onClick={() => {
                   if (activeTab === 'transactions') fetchTransactions()
                   else if (activeTab === 'expenses') fetchExpenses()
+                  else if (activeTab === 'budgets') fetchBudgets()
                 }}
                 className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
@@ -2008,42 +1923,6 @@ const Admin_finance_management = () => {
                       >
                         <span className="inline mr-1">₹</span>
                         Spend
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Invoice Card */}
-                {activeTab === 'invoices' && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-gray-900 text-sm">{formatCurrency(item.amount)}</span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
-                        {item.status}
-                      </span>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-sm">{item.invoiceNumber}</h3>
-                      <p className="text-xs text-gray-600 mt-1">{item.client}</p>
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      <p>Due: {formatDate(item.dueDate)}</p>
-                      <p>Project: {item.project}</p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleView(item)}
-                        className="flex-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
-                      >
-                        <FiEye className="inline mr-1" />
-                        View
-                      </button>
-                      <button
-                        onClick={() => handleEdit(item)}
-                        className="flex-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 transition-colors"
-                      >
-                        <FiEdit className="inline mr-1" />
-                        Edit
                       </button>
                     </div>
                   </div>
@@ -3108,100 +2987,6 @@ const Admin_finance_management = () => {
                 >
                   <FiPlus className="h-4 w-4" />
                   <span>Add Budget</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Invoice Creation Modal */}
-      {showInvoiceModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">Add New Invoice</h3>
-              <button
-                onClick={closeModals}
-                className="p-2 hover:bg-gray-100 rounded-full"
-              >
-                <FiX className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={(e) => { e.preventDefault(); handleSaveInvoice(); }} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Client *</label>
-                  <input
-                    type="text"
-                    value={invoiceFormData.client}
-                    onChange={(e) => setInvoiceFormData({...invoiceFormData, client: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter client name"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Project</label>
-                  <input
-                    type="text"
-                    value={invoiceFormData.project}
-                    onChange={(e) => setInvoiceFormData({...invoiceFormData, project: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter project name"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Amount *</label>
-                  <input
-                    type="number"
-                    value={invoiceFormData.amount}
-                    onChange={(e) => setInvoiceFormData({...invoiceFormData, amount: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter amount"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
-                  <input
-                    type="date"
-                    value={invoiceFormData.dueDate}
-                    onChange={(e) => setInvoiceFormData({...invoiceFormData, dueDate: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                <textarea
-                  value={invoiceFormData.description}
-                  onChange={(e) => setInvoiceFormData({...invoiceFormData, description: e.target.value})}
-                  rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter invoice description"
-                />
-              </div>
-
-              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={closeModals}
-                  className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
-                >
-                  <FiPlus className="h-4 w-4" />
-                  <span>Add Invoice</span>
                 </button>
               </div>
             </form>
