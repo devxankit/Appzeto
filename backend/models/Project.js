@@ -220,6 +220,65 @@ const projectSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
+  }],
+  // Project expenses (domain, server, APIs, hosting, etc.)
+  expenses: [{
+    name: {
+      type: String,
+      required: [true, 'Expense name is required'],
+      trim: true,
+      maxlength: [200, 'Expense name cannot exceed 200 characters']
+    },
+    category: {
+      type: String,
+      required: [true, 'Expense category is required'],
+      enum: ['domain', 'server', 'api', 'hosting', 'ssl', 'other'],
+      trim: true
+    },
+    amount: {
+      type: Number,
+      required: [true, 'Expense amount is required'],
+      min: [0, 'Amount cannot be negative']
+    },
+    vendor: {
+      type: String,
+      trim: true,
+      maxlength: [200, 'Vendor name cannot exceed 200 characters'],
+      default: ''
+    },
+    paymentMethod: {
+      type: String,
+      enum: ['Bank Transfer', 'UPI', 'Credit Card', 'Debit Card', 'Cash', 'Cheque', 'Other'],
+      default: 'Bank Transfer'
+    },
+    expenseDate: {
+      type: Date,
+      required: [true, 'Expense date is required'],
+      default: Date.now
+    },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: [1000, 'Description cannot exceed 1000 characters'],
+      default: ''
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Admin',
+      required: true
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Admin'
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
   }]
 }, {
   timestamps: true
@@ -252,7 +311,8 @@ projectSchema.virtual('isOverdue').get(function() {
 // Method to update project progress
 projectSchema.methods.updateProgress = async function() {
   try {
-    // Calculate progress based on milestones
+    // Calculate progress based on completed milestones vs total milestones
+    // This matches the calculation used in backend controllers for consistency
     const milestones = await this.constructor.model('Milestone').find({ 
       project: this._id 
     });
@@ -260,8 +320,14 @@ projectSchema.methods.updateProgress = async function() {
     if (milestones.length === 0) {
       this.progress = 0;
     } else {
-      const totalProgress = milestones.reduce((sum, milestone) => sum + milestone.progress, 0);
-      this.progress = Math.round(totalProgress / milestones.length);
+      // For completed projects, always set progress to 100%
+      if (this.status === 'completed') {
+        this.progress = 100;
+      } else {
+        // Calculate progress as percentage of completed milestones
+        const completedMilestones = milestones.filter(m => m.status === 'completed').length;
+        this.progress = Math.round((completedMilestones / milestones.length) * 100);
+      }
     }
     
     await this.save();
@@ -477,14 +543,44 @@ projectSchema.pre('save', async function(next) {
 });
 
 // Post-save middleware to handle incentive movement when project becomes "no dues"
+// Use a Set to track projects currently being processed to prevent infinite recursion
+const processingProjects = new Set();
+
 projectSchema.post('save', async function(doc) {
+  const projectId = doc._id.toString();
+  
+  // Prevent infinite recursion
+  if (processingProjects.has(projectId)) {
+    return;
+  }
+  
+  const remainingAmount = doc.financialDetails?.remainingAmount || 0;
+  const isNoDues = Number(remainingAmount) === 0;
+  
+  // If project has no dues but status is not completed, automatically mark as completed
+  if (isNoDues && doc.status !== 'completed') {
+    try {
+      processingProjects.add(projectId);
+      // Use updateOne to set status, which will trigger another post-save
+      await mongoose.model('Project').updateOne(
+        { _id: doc._id },
+        { status: 'completed' }
+      );
+      processingProjects.delete(projectId);
+      // Return early - the next post-save will handle incentive movement
+      return;
+    } catch (error) {
+      console.error('Error auto-completing project:', error);
+      processingProjects.delete(projectId);
+    }
+  }
+  
   // Check if project is completed and has no dues
   const isCompleted = doc.status === 'completed';
-  const remainingAmount = doc.financialDetails?.remainingAmount || 0;
-  const isNoDues = isCompleted && Number(remainingAmount) === 0;
   
-  if (isNoDues) {
+  if (isCompleted && isNoDues) {
     try {
+      processingProjects.add(projectId);
       const Incentive = mongoose.model('Incentive');
       
       // Find all conversion-based incentives linked to this project that have pending balance
@@ -511,8 +607,10 @@ projectSchema.post('save', async function(doc) {
           }
         }
       }
+      processingProjects.delete(projectId);
     } catch (error) {
       console.error('Error processing incentive movement for no-dues project:', error);
+      processingProjects.delete(projectId);
       // Don't fail the save operation
     }
   }
@@ -525,47 +623,57 @@ projectSchema.methods.toJSON = function() {
 };
 
 // Post-save hook to create finance transaction when project is created with advanceReceived > 0
+// Note: This serves as a backup. The main transaction creation happens explicitly in convertLeadToClient
 projectSchema.post('save', async function(doc) {
-  // Only create transaction if advanceReceived > 0 and this is a new document
-  if (doc.isNew && doc.financialDetails && doc.financialDetails.advanceReceived > 0) {
+  // Only create transaction if advanceReceived > 0
+  // Check if document was recently created (within last 5 seconds) to identify new projects
+  if (doc.financialDetails && doc.financialDetails.advanceReceived > 0) {
     try {
-      const { createIncomingTransaction } = require('../utils/financeTransactionHelper');
-      const AdminFinance = require('./AdminFinance');
-      const Admin = require('./Admin');
+      const now = new Date();
+      const createdAt = doc.createdAt || doc._id.getTimestamp();
+      const timeDiff = now - createdAt;
       
-      // Check if transaction already exists
-      const existing = await AdminFinance.findOne({
-        recordType: 'transaction',
-        'metadata.sourceType': 'project_conversion',
-        'metadata.projectId': doc._id.toString()
-      });
-      
-      if (!existing) {
-        // Find first active admin as createdBy
-        const admin = await Admin.findOne({ isActive: true }).select('_id');
-        const adminId = admin ? admin._id : null;
+      // Only process if document was created recently (within 5 seconds) - indicates new project
+      // This avoids creating transactions for updates to existing projects
+      if (timeDiff < 5000) {
+        const { createIncomingTransaction } = require('../utils/financeTransactionHelper');
+        const AdminFinance = require('./AdminFinance');
+        const Admin = require('./Admin');
         
-        if (adminId) {
-          await createIncomingTransaction({
-            amount: doc.financialDetails.advanceReceived,
-            category: 'Advance Payment',
-            transactionDate: doc.createdAt || new Date(),
-            createdBy: adminId,
-            client: doc.client,
-            project: doc._id,
-            description: `Advance payment received for project "${doc.name}"`,
-            metadata: {
-              sourceType: 'project_conversion',
-              projectId: doc._id.toString()
-            },
-            checkDuplicate: true
-          });
-
+        // Check if transaction already exists (prevent duplicates)
+        const existing = await AdminFinance.findOne({
+          recordType: 'transaction',
+          'metadata.sourceType': 'project_conversion',
+          'metadata.projectId': doc._id.toString()
+        });
+        
+        if (!existing) {
+          // Find first active admin as createdBy
+          const admin = await Admin.findOne({ isActive: true }).select('_id');
+          const adminId = admin ? admin._id : null;
+          
+          if (adminId) {
+            await createIncomingTransaction({
+              amount: doc.financialDetails.advanceReceived,
+              category: 'Advance Payment',
+              transactionDate: createdAt,
+              createdBy: adminId,
+              client: doc.client,
+              project: doc._id,
+              description: `Advance payment received for project "${doc.name}"`,
+              metadata: {
+                sourceType: 'project_conversion',
+                projectId: doc._id.toString()
+              },
+              checkDuplicate: true
+            });
+            console.log(`[Post-save hook] Created finance transaction for advance payment: ₹${doc.financialDetails.advanceReceived} for project ${doc._id}`);
+          }
         }
       }
     } catch (error) {
       // Log error but don't fail the save
-      console.error('Error creating finance transaction for project advance:', error);
+      console.error('Error creating finance transaction for project advance (post-save hook):', error);
     }
   }
 });

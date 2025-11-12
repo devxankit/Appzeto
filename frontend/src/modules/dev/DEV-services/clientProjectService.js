@@ -42,6 +42,16 @@ export const clientProjectService = {
     }
   },
 
+  // Get tasks for a specific project
+  getProjectTasks: async (projectId) => {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/tasks`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // Get recent projects (automatically filters by authenticated client)
   getRecentProjects: async (limit = 5) => {
     try {

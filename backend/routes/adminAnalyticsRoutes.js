@@ -2,7 +2,8 @@ const express = require('express');
 const {
   getAdminDashboardStats,
   getSystemAnalytics,
-  getAdminLeaderboard
+  getAdminLeaderboard,
+  getRecentActivities
 } = require('../controllers/adminAnalyticsController');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -16,5 +17,6 @@ router.use(authorize('admin'));
 router.get('/dashboard', getAdminDashboardStats);
 router.get('/system', getSystemAnalytics);
 router.get('/leaderboard', getAdminLeaderboard);
+router.get('/recent-activities', getRecentActivities);
 
 module.exports = router;

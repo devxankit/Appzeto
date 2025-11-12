@@ -270,6 +270,93 @@ export const adminFinanceService = {
     }
   },
 
+  // ========== PROJECT EXPENSE MANAGEMENT ==========
+
+  // Get all project expenses
+  getProjectExpenses: async (params = {}) => {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const url = queryString ? `/admin/project-expenses?${queryString}` : '/admin/project-expenses';
+      
+      const response = await apiRequest(url, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get expenses for a specific project
+  getProjectExpensesByProject: async (projectId, params = {}) => {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const url = queryString 
+        ? `/admin/project-expenses/project/${projectId}?${queryString}` 
+        : `/admin/project-expenses/project/${projectId}`;
+      
+      const response = await apiRequest(url, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Create project expense
+  createProjectExpense: async (expenseData) => {
+    try {
+      const response = await apiRequest('/admin/project-expenses', {
+        method: 'POST',
+        body: JSON.stringify(expenseData)
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Update project expense
+  updateProjectExpense: async (expenseId, expenseData) => {
+    try {
+      const response = await apiRequest(`/admin/project-expenses/${expenseId}`, {
+        method: 'PUT',
+        body: JSON.stringify(expenseData)
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Delete project expense
+  deleteProjectExpense: async (expenseId) => {
+    try {
+      const response = await apiRequest(`/admin/project-expenses/${expenseId}`, {
+        method: 'DELETE'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get project expense statistics
+  getProjectExpenseStats: async (params = {}) => {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const url = queryString ? `/admin/project-expenses/stats?${queryString}` : '/admin/project-expenses/stats';
+      
+      const response = await apiRequest(url, {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // ========== BUDGET MANAGEMENT ==========
 
   // Get all budgets

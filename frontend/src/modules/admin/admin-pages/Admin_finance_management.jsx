@@ -121,6 +121,7 @@ const Admin_finance_management = () => {
     pendingPayments: 0,
     activeProjects: 0,
     totalClients: 0,
+    totalSales: 0,
     todayEarnings: 0,
     rewardMoney: 0,
     employeeSalary: 0,
@@ -133,6 +134,7 @@ const Admin_finance_management = () => {
     revenueBreakdown: {
       paymentRevenue: 0,
       projectAdvanceRevenue: 0,
+      projectInstallmentRevenue: 0,
       paymentReceiptRevenue: 0,
       transactionRevenue: 0
     },
@@ -140,16 +142,15 @@ const Admin_finance_management = () => {
       salaryExpenses: 0,
       recurringExpenses: 0,
       monthlyRecurringExpenses: {},
-      allowanceExpenses: 0,
+      projectExpenses: 0,
       incentiveExpenses: 0,
       rewardExpenses: 0,
       otherExpenses: 0
     },
     pendingAmounts: {
-      pendingPayments: 0,
       pendingSalaries: 0,
       pendingRecurringExpenses: 0,
-      pendingInvoices: 0,
+      pendingProjectOutstanding: 0,
       totalPendingReceivables: 0,
       totalPendingPayables: 0
     },
@@ -174,6 +175,7 @@ const Admin_finance_management = () => {
           pendingPayments: response.data.pendingPayments || 0,
           activeProjects: response.data.activeProjects || 0,
           totalClients: response.data.totalClients || 0,
+          totalSales: response.data.totalSales || 0,
           todayEarnings: response.data.todayEarnings || 0,
           rewardMoney: response.data.rewardMoney || 0,
           employeeSalary: response.data.employeeSalary || 0,
@@ -186,23 +188,23 @@ const Admin_finance_management = () => {
           revenueBreakdown: response.data.revenueBreakdown || {
             paymentRevenue: 0,
             projectAdvanceRevenue: 0,
+            projectInstallmentRevenue: 0,
             paymentReceiptRevenue: 0,
             transactionRevenue: 0
           },
-          expenseBreakdown: response.data.expenseBreakdown || {
-            salaryExpenses: 0,
-            recurringExpenses: 0,
-            monthlyRecurringExpenses: {},
-            allowanceExpenses: 0,
-            incentiveExpenses: 0,
-            rewardExpenses: 0,
-            otherExpenses: 0
+          expenseBreakdown: {
+            salaryExpenses: response.data.expenseBreakdown?.salaryExpenses || 0,
+            recurringExpenses: response.data.expenseBreakdown?.recurringExpenses || 0,
+            monthlyRecurringExpenses: response.data.expenseBreakdown?.monthlyRecurringExpenses || {},
+            projectExpenses: response.data.expenseBreakdown?.projectExpenses || 0,
+            incentiveExpenses: response.data.expenseBreakdown?.incentiveExpenses || 0,
+            rewardExpenses: response.data.expenseBreakdown?.rewardExpenses || 0,
+            otherExpenses: response.data.expenseBreakdown?.otherExpenses || 0
           },
           pendingAmounts: response.data.pendingAmounts || {
-            pendingPayments: 0,
             pendingSalaries: 0,
             pendingRecurringExpenses: 0,
-            pendingInvoices: 0,
+            pendingProjectOutstanding: 0,
             totalPendingReceivables: 0,
             totalPendingPayables: 0
           },
@@ -229,7 +231,7 @@ const Admin_finance_management = () => {
   const getTimeBasedStats = () => {
     return {
       todayEarnings: statistics.todayEarnings,
-      rewardMoney: statistics.rewardMoney,
+      rewardMoney: statistics.expenseBreakdown?.rewardExpenses || 0, // Use paid reward expenses from breakdown
       employeeSalary: statistics.employeeSalary,
       otherExpenses: statistics.otherExpenses,
       profitLoss: statistics.profitLoss
@@ -254,6 +256,28 @@ const Admin_finance_management = () => {
   const [expensesLoading, setExpensesLoading] = useState(false)
   const [expensesTotal, setExpensesTotal] = useState(0)
   const [expensesPages, setExpensesPages] = useState(1)
+
+  // Project Expenses state
+  const [projectExpenses, setProjectExpenses] = useState([])
+  const [projectExpensesLoading, setProjectExpensesLoading] = useState(false)
+  const [projectExpensesTotal, setProjectExpensesTotal] = useState(0)
+  const [projectExpensesPages, setProjectExpensesPages] = useState(1)
+  const [projectExpenseFormData, setProjectExpenseFormData] = useState({
+    projectId: '',
+    name: '',
+    category: '',
+    amount: '',
+    vendor: '',
+    paymentMethod: 'Bank Transfer',
+    expenseDate: new Date().toISOString().split('T')[0],
+    description: ''
+  })
+  const [showProjectExpenseModal, setShowProjectExpenseModal] = useState(false)
+  const [projectExpenseModalMode, setProjectExpenseModalMode] = useState('create') // 'create' or 'edit' or 'view'
+  const [selectedProjectExpense, setSelectedProjectExpense] = useState(null)
+  const [showDeleteProjectExpenseModal, setShowDeleteProjectExpenseModal] = useState(false)
+  const [projectExpenseToDelete, setProjectExpenseToDelete] = useState(null)
+  const [projectsList, setProjectsList] = useState([])
 
   // Fetch accounts from API
   const fetchAccounts = async () => {
@@ -304,6 +328,123 @@ const Admin_finance_management = () => {
     } finally {
       setExpensesLoading(false)
       setLoading(false)
+    }
+  }
+
+  // Fetch project expenses from API
+  const fetchProjectExpenses = async () => {
+    try {
+      setProjectExpensesLoading(true)
+      setError(null)
+      
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage
+      }
+      
+      // Add filters
+      if (selectedFilter !== 'all') {
+        params.category = selectedFilter
+      }
+      if (searchTerm) {
+        params.search = searchTerm
+      }
+      
+      const response = await adminFinanceService.getProjectExpenses(params)
+      
+      if (response && response.success) {
+        const expensesData = response.data || []
+        setProjectExpenses(expensesData)
+        setProjectExpensesTotal(response.total || expensesData.length || 0)
+        setProjectExpensesPages(response.pages || Math.ceil((response.total || expensesData.length) / parseInt(itemsPerPage)) || 1)
+      } else {
+        console.error('Failed to fetch project expenses - response:', response)
+        setProjectExpenses([])
+        setProjectExpensesTotal(0)
+        setProjectExpensesPages(1)
+      }
+    } catch (err) {
+      console.error('Error fetching project expenses:', err)
+      setError(err.message || 'Failed to fetch project expenses')
+      toast.error('Failed to load project expenses')
+    } finally {
+      setProjectExpensesLoading(false)
+      setLoading(false)
+    }
+  }
+
+  // Fetch projects list for dropdown
+  const fetchProjectsList = async () => {
+    try {
+      // Import adminProjectService dynamically to avoid circular dependencies
+      const { adminProjectService } = await import('../admin-services/adminProjectService')
+      const response = await adminProjectService.getActiveProjects({ limit: 1000 })
+      if (response.success && response.data) {
+        setProjectsList(response.data.map(project => {
+          // Extract client name - prefer companyName, then name
+          let clientName = null
+          if (project.client) {
+            if (typeof project.client === 'object') {
+              clientName = project.client.companyName || project.client.name || null
+            } else if (typeof project.client === 'string') {
+              clientName = project.client
+            }
+          }
+          
+          return {
+            value: project._id || project.id,
+            label: project.name || 'Unnamed Project',
+            client: project.client || null,
+            clientName: clientName
+          }
+        }))
+      }
+    } catch (err) {
+      console.error('Error fetching projects:', err)
+      toast.error('Failed to load projects')
+    }
+  }
+
+  // Handle project selection change to auto-fill vendor
+  const handleProjectChange = async (projectId) => {
+    setProjectExpenseFormData(prev => ({...prev, projectId}))
+    
+    // Find the selected project and auto-fill vendor with client name
+    const selectedProject = projectsList.find(p => p.value === projectId)
+    if (selectedProject && selectedProject.clientName) {
+      setProjectExpenseFormData(prev => ({
+        ...prev,
+        projectId,
+        vendor: selectedProject.clientName
+      }))
+    } else if (projectId) {
+      // If client info not in list, fetch project details
+      try {
+        const { adminProjectService } = await import('../admin-services/adminProjectService')
+        const response = await adminProjectService.getProjectById(projectId)
+        if (response.success && response.data) {
+          const project = response.data
+          // Extract client name - prefer companyName, then name
+          let clientName = null
+          if (project.client) {
+            if (typeof project.client === 'object') {
+              clientName = project.client.companyName || project.client.name || null
+            } else if (typeof project.client === 'string') {
+              clientName = project.client
+            }
+          }
+          
+          if (clientName) {
+            setProjectExpenseFormData(prev => ({
+              ...prev,
+              projectId,
+              vendor: clientName
+            }))
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching project details:', err)
+      }
     }
   }
 
@@ -397,7 +538,7 @@ const Admin_finance_management = () => {
 
   // Reset to page 1 when filters change
   useEffect(() => {
-    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets') {
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses') {
       setCurrentPage(1)
     }
   }, [transactionTypeFilter, selectedFilter, searchTerm, activeTab, itemsPerPage])
@@ -411,6 +552,9 @@ const Admin_finance_management = () => {
       fetchExpenses()
     } else if (activeTab === 'budgets') {
       fetchBudgets()
+    } else if (activeTab === 'project-expenses') {
+      fetchProjectExpenses()
+      fetchProjectsList() // Fetch projects list for dropdown
     } else {
       setLoading(false)
     }
@@ -462,6 +606,128 @@ const Admin_finance_management = () => {
     })
   }
 
+  // Project Expense CRUD Handlers
+  const handleCreateProjectExpense = () => {
+    setProjectExpenseFormData({
+      projectId: '',
+      name: '',
+      category: '',
+      amount: '',
+      vendor: '',
+      paymentMethod: 'Bank Transfer',
+      expenseDate: new Date().toISOString().split('T')[0],
+      description: ''
+    })
+    setProjectExpenseModalMode('create')
+    setSelectedProjectExpense(null)
+    setShowProjectExpenseModal(true)
+  }
+
+  const handleEditProjectExpense = (expense) => {
+    setProjectExpenseFormData({
+      projectId: expense.project?._id || expense.projectId || '',
+      name: expense.name || '',
+      category: expense.category || '',
+      amount: expense.amount || '',
+      vendor: expense.vendor || '',
+      paymentMethod: expense.paymentMethod || 'Bank Transfer',
+      expenseDate: expense.expenseDate ? new Date(expense.expenseDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      description: expense.description || ''
+    })
+    setProjectExpenseModalMode('edit')
+    setSelectedProjectExpense(expense)
+    setShowProjectExpenseModal(true)
+  }
+
+  const handleViewProjectExpense = (expense) => {
+    setProjectExpenseFormData({
+      projectId: expense.project?._id || expense.projectId || '',
+      name: expense.name || '',
+      category: expense.category || '',
+      amount: expense.amount || '',
+      vendor: expense.vendor || '',
+      paymentMethod: expense.paymentMethod || 'Bank Transfer',
+      expenseDate: expense.expenseDate ? new Date(expense.expenseDate).toISOString().split('T')[0] : '',
+      description: expense.description || ''
+    })
+    setProjectExpenseModalMode('view')
+    setSelectedProjectExpense(expense)
+    setShowProjectExpenseModal(true)
+  }
+
+  const handleDeleteProjectExpense = (expense) => {
+    setProjectExpenseToDelete(expense)
+    setShowDeleteProjectExpenseModal(true)
+  }
+
+  const confirmDeleteProjectExpense = async () => {
+    if (!projectExpenseToDelete) return
+
+    try {
+      const expenseId = projectExpenseToDelete._id || projectExpenseToDelete.id
+      const response = await adminFinanceService.deleteProjectExpense(expenseId)
+      if (response.success) {
+        toast.success('Project expense deleted successfully')
+        setShowDeleteProjectExpenseModal(false)
+        setProjectExpenseToDelete(null)
+        await fetchProjectExpenses()
+        fetchFinanceStatistics() // Refresh statistics
+      } else {
+        toast.error(response.message || 'Failed to delete project expense')
+      }
+    } catch (err) {
+      console.error('Error deleting project expense:', err)
+      toast.error(err.message || 'Failed to delete project expense')
+    }
+  }
+
+  const handleSaveProjectExpense = async () => {
+    // Validation
+    if (!projectExpenseFormData.projectId || !projectExpenseFormData.name || 
+        !projectExpenseFormData.category || !projectExpenseFormData.amount || 
+        !projectExpenseFormData.expenseDate) {
+      toast.error('Please fill in all required fields')
+      return
+    }
+
+    try {
+      let response
+      if (projectExpenseModalMode === 'create') {
+        response = await adminFinanceService.createProjectExpense(projectExpenseFormData)
+      } else {
+        response = await adminFinanceService.updateProjectExpense(
+          selectedProjectExpense._id || selectedProjectExpense.id,
+          projectExpenseFormData
+        )
+      }
+
+      if (response.success) {
+        toast.success(`Project expense ${projectExpenseModalMode === 'create' ? 'created' : 'updated'} successfully`)
+        setShowProjectExpenseModal(false)
+        // Reset form
+        setProjectExpenseFormData({
+          projectId: '',
+          name: '',
+          category: '',
+          amount: '',
+          vendor: '',
+          paymentMethod: 'Bank Transfer',
+          expenseDate: new Date().toISOString().split('T')[0],
+          description: ''
+        })
+        setSelectedProjectExpense(null)
+        // Always refresh project expenses data after create/update
+        await fetchProjectExpenses()
+        fetchFinanceStatistics() // Refresh statistics
+      } else {
+        toast.error(response.message || `Failed to ${projectExpenseModalMode === 'create' ? 'create' : 'update'} project expense`)
+      }
+    } catch (err) {
+      console.error(`Error ${projectExpenseModalMode === 'create' ? 'creating' : 'updating'} project expense:`, err)
+      toast.error(err.message || `Failed to ${projectExpenseModalMode === 'create' ? 'create' : 'update'} project expense`)
+    }
+  }
+
   // Get current data based on active tab
   const getCurrentData = () => {
     switch (activeTab) {
@@ -483,6 +749,12 @@ const Admin_finance_management = () => {
           id: e._id || e.id,
           date: e.transactionDate || e.date || e.createdAt
         }))
+      case 'project-expenses':
+        return projectExpenses.map(e => ({
+          ...e,
+          id: e._id || e.id,
+          date: e.expenseDate || e.createdAt
+        }))
       case 'accounts':
         return accounts.map(a => ({
           ...a,
@@ -498,8 +770,8 @@ const Admin_finance_management = () => {
   const filteredData = useMemo(() => {
     const data = getCurrentData()
     
-    // For transactions, expenses, and budgets, backend handles filtering, so return data as-is
-    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets') {
+    // For transactions, expenses, budgets, and project-expenses, backend handles filtering, so return data as-is
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses') {
       return data
     }
     
@@ -518,12 +790,12 @@ const Admin_finance_management = () => {
       
       return matchesSearch && matchesFilter
     })
-  }, [activeTab, searchTerm, selectedFilter, transactionTypeFilter, transactions, expenses, budgets])
+  }, [activeTab, searchTerm, selectedFilter, transactionTypeFilter, transactions, expenses, budgets, projectExpenses])
 
   // Pagination
   const paginatedData = useMemo(() => {
-    // For transactions, expenses, and budgets, backend handles pagination, so return data as-is
-    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets') {
+    // For transactions, expenses, budgets, and project-expenses, backend handles pagination, so return data as-is
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses') {
       return filteredData
     }
     // For other tabs, apply client-side pagination
@@ -537,6 +809,8 @@ const Admin_finance_management = () => {
     ? expensesPages
     : activeTab === 'budgets'
     ? budgetsPages
+    : activeTab === 'project-expenses'
+    ? projectExpensesPages
     : Math.ceil(filteredData.length / itemsPerPage)
 
   // Management functions
@@ -658,6 +932,9 @@ const Admin_finance_management = () => {
     setShowBudgetEditModal(false)
     setShowBudgetSpendModal(false)
     setShowExpenseModal(false)
+    setShowProjectExpenseModal(false)
+    setShowDeleteProjectExpenseModal(false)
+    setProjectExpenseToDelete(null)
     setSelectedItem(null)
     setDeleteConfirm('')
     setAccountFormData({
@@ -1273,13 +1550,53 @@ const Admin_finance_management = () => {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 mb-6"
           >
-            {/* 1. Today Earnings */}
+            {/* 1. Total Sales */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-purple-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-purple-400/20 to-indigo-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                    <span className="text-sm font-semibold text-purple-600">₹</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-purple-700">Total</p>
+                    <p className="text-xs text-purple-600">sales</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-purple-700 mb-1">Total Sales</p>
+                  <p className="text-lg font-bold text-purple-800">{formatCurrency(statistics.totalSales || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Pending Receivables */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-green-500/10">
+                    <FiTrendingUp className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-green-700">Pending</p>
+                    <p className="text-xs text-green-600">receivables</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-green-700 mb-1">Pending Receivables</p>
+                  <p className="text-lg font-bold text-green-800">{formatCurrency(statistics.pendingAmounts?.totalPendingReceivables || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Today Earnings */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-emerald-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-emerald-400/20 to-green-500/20 rounded-full -translate-y-6 translate-x-6"></div>
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-emerald-500/10">
-                    <span className="text-lg text-emerald-600">₹</span>
+                  <div className="p-2 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                    <span className="text-sm font-semibold text-emerald-600">₹</span>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-medium text-emerald-700">Today</p>
@@ -1293,7 +1610,7 @@ const Admin_finance_management = () => {
               </div>
             </div>
 
-            {/* 2. Today Profit */}
+            {/* 3. Today Profit */}
             <div className={`group relative overflow-hidden rounded-xl p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border ${
               (statistics.todayProfit || 0) >= 0 
                 ? 'bg-gradient-to-br from-teal-50 to-cyan-100 border-teal-200/50' 
@@ -1367,7 +1684,7 @@ const Admin_finance_management = () => {
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-amber-700 mb-1">Sales Incentives</p>
+                  <p className="text-xs font-medium text-amber-700 mb-1">Sales Incentives (Paid)</p>
                   <p className="text-lg font-bold text-amber-800">{formatCurrency(statistics.expenseBreakdown?.incentiveExpenses || 0)}</p>
                 </div>
               </div>
@@ -1387,48 +1704,8 @@ const Admin_finance_management = () => {
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-purple-700 mb-1">Reward Money</p>
-                  <p className="text-lg font-bold text-purple-800">{formatCurrency(getTimeBasedStats().rewardMoney)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 5. Payment Revenue */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-green-500/10">
-                    <FiCreditCard className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-green-700">Payment</p>
-                    <p className="text-xs text-green-600">revenue</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-green-700 mb-1">Payment Revenue</p>
-                  <p className="text-lg font-bold text-green-800">{formatCurrency(statistics.revenueBreakdown?.paymentRevenue || 0)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 6. Pending Payments */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-yellow-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-yellow-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-yellow-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-yellow-500/10">
-                    <FiCreditCard className="h-4 w-4 text-yellow-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-yellow-700">Pending</p>
-                    <p className="text-xs text-yellow-600">payments</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-yellow-700 mb-1">Pending Payments</p>
-                  <p className="text-lg font-bold text-yellow-800">{formatCurrency(statistics.pendingPayments)}</p>
+                  <p className="text-xs font-medium text-purple-700 mb-1">Reward Money (Paid)</p>
+                  <p className="text-lg font-bold text-purple-800">{formatCurrency(statistics.expenseBreakdown?.rewardExpenses || 0)}</p>
                 </div>
               </div>
             </div>
@@ -1493,46 +1770,6 @@ const Admin_finance_management = () => {
               </div>
             </div>
 
-            {/* 10. Pending Receivables */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-green-500/10">
-                    <FiTrendingUp className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-green-700">Pending</p>
-                    <p className="text-xs text-green-600">receivables</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-green-700 mb-1">Pending Receivables</p>
-                  <p className="text-lg font-bold text-green-800">{formatCurrency(statistics.pendingAmounts?.totalPendingReceivables || 0)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 11. Allowances */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-pink-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-pink-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-pink-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-pink-500/10">
-                    <FiUsers className="h-4 w-4 text-pink-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-pink-700">Employee</p>
-                    <p className="text-xs text-pink-600">allowances</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-pink-700 mb-1">Allowances</p>
-                  <p className="text-lg font-bold text-pink-800">{formatCurrency(statistics.expenseBreakdown?.allowanceExpenses || 0)}</p>
-                </div>
-              </div>
-            </div>
-
             {/* 12. Today Expenses */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-rose-50 to-red-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-rose-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-400/20 to-red-500/20 rounded-full -translate-y-6 translate-x-6"></div>
@@ -1593,7 +1830,27 @@ const Admin_finance_management = () => {
               </div>
             </div>
 
-            {/* 15. Other Expenses */}
+            {/* 15. Project Expenses Total */}
+            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-blue-200/50">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-blue-400/20 to-indigo-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-blue-500/10">
+                    <FiFileText className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-blue-700">Project</p>
+                    <p className="text-xs text-blue-600">expenses</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-blue-700 mb-1">Project Expenses</p>
+                  <p className="text-lg font-bold text-blue-800">{formatCurrency(statistics.expenseBreakdown?.projectExpenses || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 16. Other Expenses */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-rose-50 to-pink-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-rose-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-400/20 to-pink-500/20 rounded-full -translate-y-6 translate-x-6"></div>
               <div className="relative z-10">
@@ -1625,6 +1882,7 @@ const Admin_finance_management = () => {
                   { id: 'transactions', label: 'Transactions', icon: FiActivity },
                   { id: 'budgets', label: 'Budgets', icon: FiTarget },
                   { id: 'expenses', label: 'Expenses', icon: FiTrendingDown },
+                  { id: 'project-expenses', label: 'Project Expenses', icon: FiFileText },
                   { id: 'accounts', label: 'Accounts', icon: FiCreditCard }
                 ].map((tab) => {
                   const Icon = tab.icon
@@ -1714,6 +1972,15 @@ const Admin_finance_management = () => {
                   <span>Add Expense</span>
                 </button>
               )}
+              {activeTab === 'project-expenses' && (
+                <button
+                  onClick={handleCreateProjectExpense}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                >
+                  <FiPlus className="text-sm" />
+                  <span>Add Project Expense</span>
+                </button>
+              )}
               {activeTab === 'accounts' && (
                 <button
                   onClick={handleCreateAccount}
@@ -1773,16 +2040,27 @@ const Admin_finance_management = () => {
                     <option value="inactive">Inactive</option>
                   </>
                 )}
+                {activeTab === 'project-expenses' && (
+                  <>
+                    <option value="all">All Categories</option>
+                    <option value="domain">Domain</option>
+                    <option value="server">Server</option>
+                    <option value="api">API Service</option>
+                    <option value="hosting">Hosting</option>
+                    <option value="ssl">SSL Certificate</option>
+                    <option value="other">Other</option>
+                  </>
+                )}
               </select>
             </div>
           </div>
 
           {/* Content Grid */}
-          {(transactionsLoading && activeTab === 'transactions') || (expensesLoading && activeTab === 'expenses') || (budgetsLoading && activeTab === 'budgets') ? (
+          {(transactionsLoading && activeTab === 'transactions') || (expensesLoading && activeTab === 'expenses') || (budgetsLoading && activeTab === 'budgets') || (projectExpensesLoading && activeTab === 'project-expenses') ? (
             <div className="flex justify-center items-center py-12">
               <Loading size="medium" />
             </div>
-          ) : error && (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets') ? (
+          ) : error && (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses') ? (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
               <p className="text-red-600">{error}</p>
               <button
@@ -1790,6 +2068,7 @@ const Admin_finance_management = () => {
                   if (activeTab === 'transactions') fetchTransactions()
                   else if (activeTab === 'expenses') fetchExpenses()
                   else if (activeTab === 'budgets') fetchBudgets()
+                  else if (activeTab === 'project-expenses') fetchProjectExpenses()
                 }}
                 className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
@@ -1824,6 +2103,16 @@ const Admin_finance_management = () => {
                 className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Add First Budget
+              </button>
+            </div>
+          ) : paginatedData.length === 0 && activeTab === 'project-expenses' ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+              <p className="text-gray-600">No project expenses found</p>
+              <button
+                onClick={handleCreateProjectExpense}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Add First Project Expense
               </button>
             </div>
           ) : (
@@ -1923,6 +2212,59 @@ const Admin_finance_management = () => {
                       >
                         <span className="inline mr-1">₹</span>
                         Spend
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Project Expense Card */}
+                {activeTab === 'project-expenses' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-red-600">
+                        -{formatCurrency(item.amount)}
+                      </span>
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
+                        {item.category}
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900 text-sm">{item.name}</h3>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Project: {item.project?.name || 'N/A'}
+                      </p>
+                      {item.vendor && (
+                        <p className="text-xs text-gray-500 mt-1">Vendor: {item.vendor}</p>
+                      )}
+                      {item.description && (
+                        <p className="text-xs text-gray-500 mt-1">{item.description}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>Payment: {item.paymentMethod || 'N/A'}</span>
+                      <span>{formatDate(item.expenseDate || item.date || item.createdAt)}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleViewProjectExpense(item)}
+                        className="flex-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
+                      >
+                        <FiEye className="inline mr-1" />
+                        View
+                      </button>
+                      <button
+                        onClick={() => handleEditProjectExpense(item)}
+                        className="flex-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 transition-colors"
+                      >
+                        <FiEdit className="inline mr-1" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProjectExpense(item)}
+                        className="flex-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs hover:bg-red-200 transition-colors"
+                      >
+                        <FiTrash2 className="inline mr-1" />
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -3400,6 +3742,260 @@ const Admin_finance_management = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Project Expense Modal */}
+      {showProjectExpenseModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">
+                {projectExpenseModalMode === 'create' ? 'Add New Project Expense' : 
+                 projectExpenseModalMode === 'edit' ? 'Edit Project Expense' : 
+                 'View Project Expense'}
+              </h3>
+              <button
+                onClick={() => setShowProjectExpenseModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => { 
+              e.preventDefault(); 
+              if (projectExpenseModalMode !== 'view') {
+                handleSaveProjectExpense(); 
+              }
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Project *</label>
+                <select
+                  value={projectExpenseFormData.projectId}
+                  onChange={(e) => handleProjectChange(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={projectExpenseModalMode === 'view'}
+                >
+                  <option value="">Select a project</option>
+                  {projectsList.map(project => (
+                    <option key={project.value} value={project.value}>{project.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
+                  <input
+                    type="text"
+                    value={projectExpenseFormData.name}
+                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, name: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., Domain Purchase, Server Hosting"
+                    required
+                    disabled={projectExpenseModalMode === 'view'}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                  <select
+                    value={projectExpenseFormData.category}
+                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, category: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                    disabled={projectExpenseModalMode === 'view'}
+                  >
+                    <option value="">Select category</option>
+                    <option value="domain">Domain</option>
+                    <option value="server">Server</option>
+                    <option value="api">API Service</option>
+                    <option value="hosting">Hosting</option>
+                    <option value="ssl">SSL Certificate</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Amount *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={projectExpenseFormData.amount}
+                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, amount: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter amount"
+                    required
+                    disabled={projectExpenseModalMode === 'view'}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Expense Date *</label>
+                  <input
+                    type="date"
+                    value={projectExpenseFormData.expenseDate}
+                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, expenseDate: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                    disabled={projectExpenseModalMode === 'view'}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Vendor</label>
+                  <input
+                    type="text"
+                    value={projectExpenseFormData.vendor}
+                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, vendor: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Vendor/provider name"
+                    disabled={projectExpenseModalMode === 'view'}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method *</label>
+                  <select
+                    value={projectExpenseFormData.paymentMethod}
+                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, paymentMethod: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                    disabled={projectExpenseModalMode === 'view'}
+                  >
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Credit Card">Credit Card</option>
+                    <option value="Debit Card">Debit Card</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={projectExpenseFormData.description}
+                  onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, description: e.target.value})}
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter additional notes or description"
+                  disabled={projectExpenseModalMode === 'view'}
+                />
+              </div>
+
+              {projectExpenseModalMode !== 'view' && (
+                <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowProjectExpenseModal(false)}
+                    className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                  >
+                    <FiPlus className="h-4 w-4" />
+                    <span>{projectExpenseModalMode === 'create' ? 'Add Project Expense' : 'Update Project Expense'}</span>
+                  </button>
+                </div>
+              )}
+              {projectExpenseModalMode === 'view' && (
+                <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowProjectExpenseModal(false)}
+                    className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleEditProjectExpense(selectedProjectExpense)}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                  >
+                    <FiEdit className="h-4 w-4" />
+                    <span>Edit</span>
+                  </button>
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Project Expense Confirmation Modal */}
+      {showDeleteProjectExpenseModal && projectExpenseToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Delete Project Expense</h3>
+              <button
+                onClick={() => {
+                  setShowDeleteProjectExpenseModal(false)
+                  setProjectExpenseToDelete(null)
+                }}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-700 mb-4">
+                Are you sure you want to delete this project expense? This action cannot be undone.
+              </p>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Name:</span>
+                    <span className="ml-2 text-gray-900">{projectExpenseToDelete.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Project:</span>
+                    <span className="ml-2 text-gray-900">{projectExpenseToDelete.project?.name || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Amount:</span>
+                    <span className="ml-2 text-gray-900 font-semibold">{formatCurrency(projectExpenseToDelete.amount)}</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Category:</span>
+                    <span className="ml-2 text-gray-900 capitalize">{projectExpenseToDelete.category}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteProjectExpenseModal(false)
+                  setProjectExpenseToDelete(null)
+                }}
+                className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteProjectExpense}
+                className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center space-x-2"
+              >
+                <FiTrash2 className="h-4 w-4" />
+                <span>Delete Expense</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

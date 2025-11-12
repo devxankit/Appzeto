@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
+import { employeeService } from '../../DEV-services'
 import {
   FiFolder as FolderKanban,
   FiCalendar as Calendar,
@@ -19,38 +20,83 @@ const Employee_project_detail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [project, setProject] = useState(null)
   const [milestones, setMilestones] = useState([])
   const [activeTab, setActiveTab] = useState('overview')
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true)
-      await new Promise(r => setTimeout(r, 400))
-      // mock project and milestones
-      const mockProject = {
-        _id: id,
-        name: 'Website Revamp',
-        description: 'Modernize the marketing site and improve performance',
-        status: 'active',
-        priority: 'high',
-        progress: 45,
-        myTasks: 6,
-        myCompletedTasks: 2,
-        assignedTeam: [{ _id: 'u1', fullName: 'Alex' }, { _id: 'u2', fullName: 'Sam' }],
-        dueDate: new Date(Date.now()+7*24*60*60*1000).toISOString(),
-        startDate: new Date(Date.now()-10*24*60*60*1000).toISOString(),
-        customer: { company: 'Acme Inc.' }
+      if (!id) return
+      
+      try {
+        setLoading(true)
+        setError(null)
+        
+        // Load project details
+        const projectData = await employeeService.getEmployeeProjectById(id)
+        
+        // Handle case where response might be wrapped in data property
+        const project = projectData?.data || projectData
+        
+        if (!project) {
+          throw new Error('Project data not found in response')
+        }
+        
+        // Transform project data to match component expectations
+        const transformedProject = {
+          ...project,
+          // Map client to customer for backward compatibility
+          customer: project.client ? {
+            company: project.client.company || project.client.companyName || 'N/A'
+          } : null,
+          // Map assignedTeam members to have fullName
+          assignedTeam: (project.assignedTeam || []).map(member => ({
+            ...member,
+            fullName: member.name || `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown'
+          })),
+          // Calculate overall progress from milestones based on completed milestones vs total milestones
+          progress: (() => {
+            if (project.milestones && project.milestones.length > 0) {
+              const totalMilestones = project.milestones.length
+              const completedMilestones = project.milestones.filter(m => m.status === 'completed').length
+              return totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0
+            }
+            // Fallback to project progress if no milestones
+            return project.progress || 0
+          })(),
+          // Calculate myTasks and myCompletedTasks from milestones
+          myTasks: project.milestones ? project.milestones.reduce((sum, m) => sum + (m.employeeTasks || 0), 0) : 0,
+          myCompletedTasks: project.milestones ? project.milestones.reduce((sum, m) => sum + (m.employeeCompletedTasks || 0), 0) : 0
+        }
+        
+        // Transform milestones data
+        const transformedMilestones = (project.milestones || []).map(milestone => ({
+          ...milestone,
+          // Use employeeProgress if available, otherwise calculate from employeeTasks
+          progress: milestone.employeeProgress !== undefined 
+            ? milestone.employeeProgress 
+            : (milestone.employeeTasks > 0 
+                ? Math.round((milestone.employeeCompletedTasks / milestone.employeeTasks) * 100) 
+                : 0),
+          // Map employeeTasks to myTasks for consistency
+          myTasks: milestone.employeeTasks || 0,
+          myCompletedTasks: milestone.employeeCompletedTasks || 0
+        }))
+        
+        setProject(transformedProject)
+        setMilestones(transformedMilestones)
+      } catch (error) {
+        console.error('Error loading project details:', error)
+        setError(error.message || 'Failed to load project details. Please try again.')
+        setProject(null)
+        setMilestones([])
+      } finally {
+        setLoading(false)
       }
-      const mockMilestones = [
-        { _id: 'm1', title: 'Auth & Users', status: 'in-progress', progress: 60, dueDate: new Date(Date.now()+5*24*60*60*1000).toISOString(), myTasks: 3, myCompletedTasks: 1 },
-        { _id: 'm2', title: 'Landing Page', status: 'planning', progress: 10, dueDate: new Date(Date.now()+12*24*60*60*1000).toISOString(), myTasks: 2, myCompletedTasks: 0 }
-      ]
-      setProject(mockProject)
-      setMilestones(mockMilestones)
-      setLoading(false)
     }
-    if (id) load()
+    
+    load()
   }, [id])
 
   const getStatusColor = (status) => {
@@ -87,7 +133,53 @@ const Employee_project_detail = () => {
     )
   }
 
-  if (!project) return null
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
+        <Employee_navbar />
+        <main className="pt-16 pb-24 md:pt-20 md:pb-8">
+          <div className="px-4 md:max-w-4xl md:mx-auto md:px-6 lg:px-8">
+            <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-red-100">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FiFileText className="h-8 w-8 text-red-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Project</h3>
+                <p className="text-gray-600 mb-4">{error}</p>
+                <button
+                  onClick={() => navigate('/employee/projects')}
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                >
+                  Back to Projects
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (!project) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
+        <Employee_navbar />
+        <main className="pt-16 pb-24 md:pt-20 md:pb-8">
+          <div className="px-4 md:max-w-4xl md:mx-auto md:px-6 lg:px-8">
+            <div className="text-center py-12">
+              <p className="text-gray-600">Project not found</p>
+              <button
+                onClick={() => navigate('/employee/projects')}
+                className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+              >
+                Back to Projects
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   const tabs = [
     { key: 'overview', label: 'Overview', icon: BarChart3 },

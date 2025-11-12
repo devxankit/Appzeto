@@ -18,7 +18,9 @@ const {
   updateSalaryRecord,
   generateMonthlySalaries,
   getEmployeeSalaryHistory,
-  deleteSalaryRecord
+  deleteSalaryRecord,
+  updateIncentivePayment,
+  updateRewardPayment
 } = require('../controllers/adminSalaryController');
 const {
   createAllowance,
@@ -60,6 +62,8 @@ router.post('/salary/generate/:month', generateMonthlySalaries);
 router.get('/salary/generate/:month', generateMonthlySalaries);
 router.get('/salary/employee/:userType/:employeeId', getEmployeeSalaryHistory);
 router.put('/salary/set/:userType/:employeeId', setEmployeeSalary);
+router.put('/salary/:id/incentive', updateIncentivePayment);
+router.put('/salary/:id/reward', updateRewardPayment);
 router.get('/salary/:id', getSalaryRecord);
 router.put('/salary/:id', updateSalaryRecord);
 router.delete('/salary/:id', deleteSalaryRecord);

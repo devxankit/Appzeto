@@ -308,6 +308,51 @@ salesSchema.methods.addActivity = async function(leadId, activityType, descripti
   }
 };
 
+// Method to calculate total incentive from conversion-based incentives
+// This calculates currentIncentive as sum of (currentBalance + pendingBalance) from all conversion-based incentives
+salesSchema.methods.calculateTotalIncentive = async function() {
+  try {
+    const Incentive = mongoose.model('Incentive');
+    
+    // Aggregate all conversion-based incentives for this sales employee
+    const result = await Incentive.aggregate([
+      {
+        $match: {
+          salesEmployee: this._id,
+          isConversionBased: true
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalCurrentBalance: { $sum: '$currentBalance' },
+          totalPendingBalance: { $sum: '$pendingBalance' },
+          totalAmount: { $sum: { $add: ['$currentBalance', '$pendingBalance'] } }
+        }
+      }
+    ]);
+    
+    // Return total (currentBalance + pendingBalance) or 0 if no incentives
+    return result.length > 0 ? result[0].totalAmount : 0;
+  } catch (error) {
+    console.error('Error calculating total incentive:', error);
+    return 0;
+  }
+};
+
+// Method to update currentIncentive field from conversion-based incentives
+salesSchema.methods.updateCurrentIncentive = async function() {
+  try {
+    const totalIncentive = await this.calculateTotalIncentive();
+    this.currentIncentive = totalIncentive;
+    await this.save();
+    return totalIncentive;
+  } catch (error) {
+    console.error('Error updating current incentive:', error);
+    throw error;
+  }
+};
+
 // Remove password from JSON output
 salesSchema.methods.toJSON = function() {
   const sales = this.toObject();

@@ -51,13 +51,16 @@ const adminProjectRoutes = require('./routes/adminProjectRoutes');
 const adminAnalyticsRoutes = require('./routes/adminAnalyticsRoutes');
 const adminSalesRoutes = require('./routes/adminSalesRoutes');
 const adminFinanceRoutes = require('./routes/adminFinanceRoutes');
+const adminProjectExpenseRoutes = require('./routes/adminProjectExpenseRoutes');
 const adminRewardRoutes = require('./routes/adminRewardRoutes');
 const adminNoticeRoutes = require('./routes/adminNoticeRoutes');
 const employeeProjectRoutes = require('./routes/employeeProjectRoutes');
 const employeeTaskRoutes = require('./routes/employeeTaskRoutes');
 const employeeAnalyticsRoutes = require('./routes/employeeAnalyticsRoutes');
 const employeeMilestoneRoutes = require('./routes/employeeMilestoneRoutes');
+const employeeNotificationRoutes = require('./routes/employeeNotificationRoutes');
 const clientProjectRoutes = require('./routes/clientProjectRoutes');
+const clientMilestoneRoutes = require('./routes/clientMilestoneRoutes');
 const clientPaymentRoutes = require('./routes/clientPaymentRoutes');
 const clientWalletRoutes = require('./routes/clientWalletRoutes');
 const clientNotificationRoutes = require('./routes/clientNotificationRoutes');
@@ -270,6 +273,7 @@ app.use('/api/admin/projects', adminProjectRoutes);
 app.use('/api/admin/analytics', adminAnalyticsRoutes);
 app.use('/api/admin/sales', adminSalesRoutes);
 app.use('/api/admin/finance', adminFinanceRoutes);
+app.use('/api/admin/project-expenses', adminProjectExpenseRoutes);
 app.use('/api/admin/rewards', adminRewardRoutes);
 app.use('/api/admin/notices', adminNoticeRoutes);
 
@@ -278,9 +282,11 @@ app.use('/api/employee/projects', employeeProjectRoutes);
 app.use('/api/employee/tasks', employeeTaskRoutes);
 app.use('/api/employee/analytics', employeeAnalyticsRoutes);
 app.use('/api/employee/milestones', employeeMilestoneRoutes);
+app.use('/api/employee/notifications', employeeNotificationRoutes);
 
 // Client routes
 app.use('/api/client/projects', clientProjectRoutes);
+app.use('/api/client/milestones', clientMilestoneRoutes);
 app.use('/api/client/payments', clientPaymentRoutes);
 app.use('/api/client/wallet', clientWalletRoutes);
 app.use('/api/client/notifications', clientNotificationRoutes);
@@ -292,6 +298,7 @@ app.use('/admin/projects', adminProjectRoutes);
 app.use('/admin/analytics', adminAnalyticsRoutes);
 app.use('/admin/sales', adminSalesRoutes);
 app.use('/admin/finance', adminFinanceRoutes);
+app.use('/admin/project-expenses', adminProjectExpenseRoutes);
 app.use('/admin/rewards', adminRewardRoutes);
 app.use('/admin/notices', adminNoticeRoutes);
 
@@ -300,9 +307,11 @@ app.use('/employee/projects', employeeProjectRoutes);
 app.use('/employee/tasks', employeeTaskRoutes);
 app.use('/employee/analytics', employeeAnalyticsRoutes);
 app.use('/employee/milestones', employeeMilestoneRoutes);
+app.use('/employee/notifications', employeeNotificationRoutes);
 
 // Client routes
 app.use('/client/projects', clientProjectRoutes);
+app.use('/client/milestones', clientMilestoneRoutes);
 app.use('/client/payments', clientPaymentRoutes);
 app.use('/client/wallet', clientWalletRoutes);
 app.use('/client/notifications', clientNotificationRoutes);

@@ -180,6 +180,165 @@ const createPaymentReceipt = async (req, res) => {
   }
 };
 
+// @desc    Get installments for a project
+// @route   GET /api/sales/payment-recovery/:projectId/installments
+// @access  Private (Sales)
+const getProjectInstallments = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const { projectId } = req.params;
+
+    const project = await Project.findById(projectId).populate('client');
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+
+    // Verify access - client must be converted by this sales person
+    const client = await Client.findById(project.client);
+    if (!client || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({ success: false, message: 'Not authorized for this project' });
+    }
+
+    // Get installments and check for pending approval requests
+    const installments = project.installmentPlan || [];
+    
+    // Fetch pending approval requests for these installments
+    const installmentIds = installments.map(inst => inst._id.toString());
+    const pendingRequests = await Request.find({
+      module: 'sales',
+      type: 'approval',
+      project: projectId,
+      status: 'pending',
+      'metadata.installmentId': { $in: installmentIds }
+    }).select('metadata response');
+
+    // Create a map of installmentId -> request status
+    const requestMap = {};
+    pendingRequests.forEach(req => {
+      const instId = req.metadata?.installmentId;
+      if (instId) {
+        requestMap[instId] = {
+          requestId: req._id,
+          status: req.status,
+          hasPendingRequest: true
+        };
+      }
+    });
+
+    // Format installments with request status
+    const formattedInstallments = installments.map((inst, index) => ({
+      _id: inst._id,
+      id: inst._id,
+      amount: inst.amount,
+      dueDate: inst.dueDate,
+      status: inst.status,
+      paidDate: inst.paidDate,
+      notes: inst.notes,
+      index: index + 1,
+      pendingApproval: requestMap[inst._id.toString()] || null
+    }));
+
+    res.json({ 
+      success: true, 
+      data: formattedInstallments, 
+      message: 'Installments fetched successfully' 
+    });
+  } catch (error) {
+    console.error('getProjectInstallments error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch installments' });
+  }
+};
+
+// @desc    Request approval to mark installment as paid
+// @route   POST /api/sales/payment-recovery/:projectId/installments/:installmentId/request-payment
+// @access  Private (Sales)
+const requestInstallmentPayment = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const { projectId, installmentId } = req.params;
+    const { paidDate, notes } = req.body;
+
+    const project = await Project.findById(projectId).populate('client');
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+
+    // Verify access
+    const client = await Client.findById(project.client);
+    if (!client || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({ success: false, message: 'Not authorized for this project' });
+    }
+
+    // Find the installment
+    const installment = project.installmentPlan?.id(installmentId);
+    if (!installment) {
+      return res.status(404).json({ success: false, message: 'Installment not found' });
+    }
+
+    // Check if already paid
+    if (installment.status === 'paid') {
+      return res.status(400).json({ success: false, message: 'Installment is already marked as paid' });
+    }
+
+    // Check if there's already a pending request for this installment
+    const existingRequest = await Request.findOne({
+      module: 'sales',
+      type: 'approval',
+      project: projectId,
+      status: 'pending',
+      'metadata.installmentId': installmentId
+    });
+
+    if (existingRequest) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'A pending approval request already exists for this installment' 
+      });
+    }
+
+    // Get first admin as recipient
+    const Admin = require('../models/Admin');
+    const admin = await Admin.findOne({ isActive: true }).select('_id');
+    if (!admin) {
+      return res.status(500).json({ success: false, message: 'No admin found to approve the request' });
+    }
+
+    // Find installment index
+    const installmentIndex = project.installmentPlan.findIndex(inst => String(inst._id) === String(installmentId)) + 1;
+
+    // Create approval request
+    const request = await Request.create({
+      module: 'sales',
+      type: 'approval',
+      title: `Mark Installment as Paid - ₹${installment.amount}`,
+      description: `Sales person requests to mark installment #${installmentIndex} (₹${installment.amount}) as paid for project "${project.name}".${notes ? ` Notes: ${notes}` : ''}`,
+      priority: 'normal',
+      requestedBy: salesId,
+      requestedByModel: 'Sales',
+      recipient: admin._id,
+      recipientModel: 'Admin',
+      project: projectId,
+      client: client._id,
+      amount: installment.amount,
+      metadata: {
+        installmentId: installmentId,
+        projectId: projectId,
+        paidDate: paidDate || new Date(),
+        notes: notes || ''
+      }
+    });
+
+    res.status(201).json({ 
+      success: true, 
+      data: request, 
+      message: 'Payment approval request created successfully. Waiting for admin approval.' 
+    });
+  } catch (error) {
+    console.error('requestInstallmentPayment error:', error);
+    res.status(500).json({ success: false, message: 'Failed to create payment request' });
+  }
+};
+
 // Demo Requests
 // @desc    List my demo requests stored on leads.demoRequest
 // @route   GET /api/sales/demo-requests
@@ -1026,10 +1185,28 @@ const getDashboardHeroStats = async (req, res) => {
     // Count clients converted today
     const todayConvertedCount = todayClientIds.length;
     
-    // Calculate incentives
-    const incentivePerClient = sales.incentivePerClient || 0;
-    const todaysIncentive = todayConvertedCount * incentivePerClient;
-    const monthlyIncentive = monthlyConvertedCount * incentivePerClient;
+    // Calculate incentives from actual conversion-based incentives
+    const Incentive = require('../models/Incentive');
+    
+    // Get all conversion-based incentives for this sales employee
+    const conversionIncentives = await Incentive.find({
+      salesEmployee: salesId,
+      isConversionBased: true
+    }).select('amount dateAwarded');
+    
+    // Calculate monthly incentive (sum of amounts from incentives created this month)
+    const monthlyIncentives = conversionIncentives.filter(inc => {
+      const dateAwarded = new Date(inc.dateAwarded);
+      return dateAwarded >= monthStart && dateAwarded <= monthEnd;
+    });
+    const monthlyIncentive = monthlyIncentives.reduce((sum, inc) => sum + (inc.amount || 0), 0);
+    
+    // Calculate today's incentive (sum of amounts from incentives created today)
+    const todaysIncentives = conversionIncentives.filter(inc => {
+      const dateAwarded = new Date(inc.dateAwarded);
+      return dateAwarded >= todayStart && dateAwarded <= todayEnd;
+    });
+    const todaysIncentive = todaysIncentives.reduce((sum, inc) => sum + (inc.amount || 0), 0);
     
     // Calculate progress to target
     const target = sales.salesTarget || 0;
@@ -2016,6 +2193,54 @@ const convertLeadToClient = async (req, res) => {
 
     const newProject = await Project.create(projectFields);
 
+    // Create incoming transaction for advance payment (if advanceReceived > 0)
+    if (advanceReceived > 0) {
+      try {
+        const { createIncomingTransaction } = require('../utils/financeTransactionHelper');
+        const AdminFinance = require('../models/AdminFinance');
+        const Admin = require('../models/Admin');
+        
+        // Check if transaction already exists (prevent duplicates)
+        const existing = await AdminFinance.findOne({
+          recordType: 'transaction',
+          'metadata.sourceType': 'project_conversion',
+          'metadata.projectId': newProject._id.toString()
+        });
+        
+        if (!existing) {
+          // Find first active admin as createdBy
+          const admin = await Admin.findOne({ isActive: true }).select('_id');
+          const adminId = admin ? admin._id : null;
+          
+          if (adminId) {
+            await createIncomingTransaction({
+              amount: advanceReceived,
+              category: 'Advance Payment',
+              transactionDate: newProject.createdAt || new Date(),
+              createdBy: adminId,
+              client: client._id,
+              project: newProject._id,
+              description: `Advance payment received for project "${newProject.name}"`,
+              metadata: {
+                sourceType: 'project_conversion',
+                projectId: newProject._id.toString(),
+                leadId: lead._id.toString()
+              },
+              checkDuplicate: true
+            });
+            console.log(`Created finance transaction for advance payment: ₹${advanceReceived} for project ${newProject._id}`);
+          } else {
+            console.warn('No active admin found to create finance transaction for advance payment');
+          }
+        } else {
+          console.log(`Finance transaction already exists for project conversion: ${newProject._id}`);
+        }
+      } catch (error) {
+        // Log error but don't fail the conversion
+        console.error('Error creating finance transaction for project advance:', error);
+      }
+    }
+
     // Update lead status/value
     lead.status = 'converted';
     lead.value = totalCost;
@@ -2342,12 +2567,19 @@ const getClientProfile = async (req, res) => {
     }
 
     // Find associated project(s) for this client
+    // Reload project to ensure we have latest financialDetails updated by PaymentReceipt hook
     const projects = await Project.find({ client: clientId })
-      .select('name description status progress projectType financialDetails budget startDate dueDate finishedDays')
+      .select('name description status progress projectType financialDetails budget startDate dueDate finishedDays installmentPlan')
       .sort({ createdAt: -1 });
 
     // Use primary project (most recent or first one)
-    const primaryProject = projects[0] || null;
+    let primaryProject = projects[0] || null;
+    
+    // Reload project with fresh data to ensure financialDetails are up-to-date
+    if (primaryProject) {
+      primaryProject = await Project.findById(primaryProject._id)
+        .select('name description status progress projectType financialDetails budget startDate dueDate finishedDays installmentPlan');
+    }
 
     // Calculate financial summary from primary project
     let totalCost = 0;
@@ -2358,11 +2590,82 @@ const getClientProfile = async (req, res) => {
     let projectType = 'N/A';
     let startDate = null;
     let expectedCompletion = null;
+    
+    // Variables for detailed breakdown
+    let initialAdvance = 0;
+    let totalApprovedPayments = 0;
+    let paidInstallmentAmount = 0;
+    let totalFromReceiptsAndInstallments = 0;
 
     if (primaryProject) {
       totalCost = primaryProject.financialDetails?.totalCost || primaryProject.budget || 0;
-      advanceReceived = primaryProject.financialDetails?.advanceReceived || 0;
-      pending = primaryProject.financialDetails?.remainingAmount || (totalCost - advanceReceived);
+      
+      // Recalculate from actual payment sources to ensure accuracy
+      // This matches the logic used in recalculateProjectFinancials and PaymentReceipt hook
+      const PaymentReceipt = require('../models/PaymentReceipt');
+      const approvedReceipts = await PaymentReceipt.find({
+        project: primaryProject._id,
+        status: 'approved'
+      }).select('amount');
+      
+      totalApprovedPayments = approvedReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
+      
+      // Calculate paid installments
+      const installmentPlan = primaryProject.installmentPlan || [];
+      const paidInstallments = installmentPlan.filter(inst => inst.status === 'paid');
+      paidInstallmentAmount = paidInstallments.reduce((sum, inst) => sum + Number(inst.amount || 0), 0);
+      
+      // Get stored advanceReceived (might include initial advance)
+      const storedAdvance = Number(primaryProject.financialDetails?.advanceReceived || 0);
+      totalFromReceiptsAndInstallments = totalApprovedPayments + paidInstallmentAmount;
+      
+      // Calculate initial advance (the amount set during conversion, before any receipts/installments)
+      // If stored advance > receipts+installments, the difference is initial advance
+      if (storedAdvance > totalFromReceiptsAndInstallments) {
+        initialAdvance = storedAdvance - totalFromReceiptsAndInstallments;
+      } else if (storedAdvance > 0 && totalFromReceiptsAndInstallments === 0) {
+        // No receipts/installments yet, stored is initial advance
+        initialAdvance = storedAdvance;
+      } else {
+        // Initial advance might be 0 or already included
+        initialAdvance = 0;
+      }
+      
+      // Calculate total received using same logic as recalculateProjectFinancials
+      if (storedAdvance >= totalFromReceiptsAndInstallments) {
+        // Stored advance already includes everything
+        advanceReceived = storedAdvance;
+      } else if (storedAdvance > 0 && totalFromReceiptsAndInstallments > storedAdvance) {
+        // Stored is initial advance, receipts+installments are additional
+        advanceReceived = storedAdvance + totalFromReceiptsAndInstallments;
+      } else {
+        // No initial advance or already included - use receipts+installments
+        advanceReceived = totalFromReceiptsAndInstallments;
+      }
+      
+      // Calculate pending amount
+      pending = Math.max(0, totalCost - advanceReceived);
+      
+      // Update project's financialDetails if different (for consistency)
+      const tolerance = 0.01;
+      const needsUpdate = 
+        Math.abs((primaryProject.financialDetails?.remainingAmount || 0) - pending) > tolerance ||
+        Math.abs((primaryProject.financialDetails?.advanceReceived || 0) - advanceReceived) > tolerance ||
+        Math.abs((primaryProject.financialDetails?.totalCost || 0) - totalCost) > tolerance;
+      
+      if (needsUpdate) {
+        try {
+          primaryProject.financialDetails = primaryProject.financialDetails || {};
+          primaryProject.financialDetails.advanceReceived = advanceReceived;
+          primaryProject.financialDetails.remainingAmount = pending;
+          primaryProject.financialDetails.totalCost = totalCost;
+          await primaryProject.save();
+        } catch (updateError) {
+          console.error('Error updating project financials in getClientProfile:', updateError);
+          // Continue with calculated values even if save fails
+        }
+      }
+      
       workProgress = primaryProject.progress || 0;
       status = primaryProject.status || 'N/A';
       
@@ -2393,7 +2696,14 @@ const getClientProfile = async (req, res) => {
         financial: {
           totalCost,
           advanceReceived,
-          pending
+          pending,
+          // Detailed breakdown for better clarity
+          breakdown: {
+            initialAdvance: initialAdvance,
+            fromReceipts: totalApprovedPayments,
+            fromInstallments: paidInstallmentAmount,
+            totalPaid: advanceReceived
+          }
         },
         project: {
           workProgress,
@@ -3073,6 +3383,8 @@ module.exports = {
   getPaymentRecovery,
   getPaymentRecoveryStats,
   createPaymentReceipt,
+  getProjectInstallments,
+  requestInstallmentPayment,
   getDemoRequests,
   updateDemoRequestStatus,
   listSalesTasks,

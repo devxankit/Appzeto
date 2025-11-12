@@ -90,6 +90,25 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
     return map;
   }, new Map());
 
+  // Fetch all approved PaymentReceipts for all projects upfront (outside the map)
+  const PaymentReceipt = require('../models/PaymentReceipt');
+  const projectIds = projects.map(p => p._id);
+  const allApprovedReceipts = await PaymentReceipt.find({
+    project: { $in: projectIds },
+    status: 'approved'
+  }).select('project amount').lean();
+  
+  // Create a map of projectId -> total approved receipts
+  const receiptsByProject = allApprovedReceipts.reduce((map, receipt) => {
+    const projectId = receipt.project?.toString();
+    if (!projectId) return map;
+    if (!map.has(projectId)) {
+      map.set(projectId, 0);
+    }
+    map.set(projectId, map.get(projectId) + Number(receipt.amount || 0));
+    return map;
+  }, new Map());
+
   const projectSummaries = projects.map((project) => {
     const key = project._id.toString();
     const stats = paymentStatsByProject.get(key) || {
@@ -99,10 +118,7 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
     };
 
     const totalCost = project.financialDetails?.totalCost || 0;
-    const remainingAmount =
-      project.financialDetails?.remainingAmount ??
-      Math.max(totalCost - stats.paidAmount, 0);
-
+    const advanceReceived = project.financialDetails?.advanceReceived || 0;
     const installments = Array.isArray(project.installmentPlan)
       ? project.installmentPlan
       : [];
@@ -147,6 +163,31 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
       ? pendingInstallments[0]
       : null;
 
+    // IMPORTANT: advanceReceived already includes:
+    // - Initial advance (set during conversion)
+    // - Approved PaymentReceipts (created by sales team)
+    // - Paid installments (from installmentPlan)
+    // So we should NOT add paidInstallmentAmount again to avoid double-counting
+    
+    // Get approved receipts for this project (from the pre-fetched map)
+    const totalApprovedPayments = receiptsByProject.get(key) || 0;
+    
+    // Calculate what advanceReceived actually contains:
+    // advanceReceived = initialAdvance + approvedReceipts + paidInstallments
+    // So: initialAdvance + approvedReceipts = advanceReceived - paidInstallments
+    const advanceAndReceipts = Math.max(0, advanceReceived - paidInstallmentAmount);
+    
+    // Payment records (from Payment model) are separate and should be added
+    const paymentRecordsPaid = stats.paidAmount || 0;
+    
+    // Total paid = advanceReceived (which already includes installments) + payment records
+    // OR: advanceAndReceipts + paidInstallments + paymentRecordsPaid
+    // Both should give the same result since advanceReceived = advanceAndReceipts + paidInstallments
+    const totalPaidAmount = advanceReceived + paymentRecordsPaid;
+    
+    // Calculate remaining amount
+    const remainingAmount = Math.max(totalCost - totalPaidAmount, 0);
+
     return {
       id: project._id,
       name: project.name,
@@ -154,10 +195,24 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
       dueDate: project.dueDate,
       progress: project.progress || 0,
       totalCost,
-      paidAmount: stats.paidAmount,
+      paidAmount: totalPaidAmount, // advanceReceived (includes advance + receipts + installments) + payment records
+      advanceReceived: advanceAndReceipts, // Initial advance + approved receipts (excluding installments for clarity)
+      installmentPaidAmount: paidInstallmentAmount,
+      paymentRecordsPaid: paymentRecordsPaid,
       pendingAmount: stats.pendingAmount,
       refundedAmount: stats.refundedAmount,
       remainingAmount,
+      installmentPlan: installments.map((inst, idx) => ({
+        _id: inst._id || `inst-${idx}`,
+        amount: inst.amount || 0,
+        dueDate: inst.dueDate,
+        status: inst.status || 'pending',
+        paidDate: inst.paidDate,
+        notes: inst.notes,
+        createdAt: inst.createdAt,
+        updatedAt: inst.updatedAt,
+        sequence: idx + 1
+      })),
       installmentSummary: {
         totalInstallments: installments.length,
         pendingInstallments: installments.filter(
@@ -165,6 +220,10 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
         ).length,
         paidInstallments: installments.filter(
           (installment) => installment.status === 'paid'
+        ).length,
+        overdueInstallments: installments.filter(
+          (installment) => installment.status === 'overdue' || 
+          (installment.status !== 'paid' && installment.dueDate && new Date(installment.dueDate) < now)
         ).length,
         totalAmount: totalInstallmentAmount,
         pendingAmount: pendingInstallmentAmount,
@@ -186,6 +245,19 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
     0
   );
 
+  // Calculate totals - note: advanceReceived in projectSummaries is now advanceAndReceipts (excluding installments)
+  const totalAdvanceAndReceipts = projectSummaries.reduce(
+    (sum, project) => sum + (project.advanceReceived || 0),
+    0
+  );
+  const totalInstallmentPaid = projectSummaries.reduce(
+    (sum, project) => sum + (project.installmentPaidAmount || 0),
+    0
+  );
+  const totalPaymentRecordsPaid = paymentTotals.paid || 0;
+  // Total paid = advance + receipts + installments + payment records
+  const totalPaid = totalAdvanceAndReceipts + totalInstallmentPaid + totalPaymentRecordsPaid;
+
   const currencyDoc = await Payment.findOne({ client: clientObjectId })
     .select('currency')
     .lean();
@@ -197,11 +269,14 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
       summary: {
         currency,
         totalCost: totalProjectCost,
-        totalPaid: paymentTotals.paid,
+        totalPaid: totalPaid, // advance + receipts + installments + payment records
+        totalAdvanceReceived: totalAdvanceAndReceipts, // Initial advance + approved receipts (excluding installments)
+        totalInstallmentPaid: totalInstallmentPaid,
+        totalPaymentRecordsPaid: totalPaymentRecordsPaid,
         totalPending: paymentTotals.pending,
         totalRefunded: paymentTotals.refunded,
         totalFailed: paymentTotals.failed,
-        totalOutstanding: Math.max(totalProjectCost - paymentTotals.paid, 0),
+        totalOutstanding: Math.max(totalProjectCost - totalPaid, 0),
         totalProjects: projectSummaries.length
       },
       projects: projectSummaries
@@ -394,9 +469,69 @@ const getUpcomingPayments = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get overdue installments count for the authenticated client
+// @route   GET /api/client/wallet/overdue-count
+// @access  Client only
+const getOverdueInstallmentsCount = asyncHandler(async (req, res, next) => {
+  const clientId = req.client?.id || req.user?.id;
+  const clientObjectId = toObjectId(clientId);
+
+  if (!clientObjectId) {
+    return next(new ErrorResponse('Client context not found', 401));
+  }
+
+  const projectsWithInstallments = await Project.find({
+    client: clientObjectId,
+    'installmentPlan.0': { $exists: true }
+  })
+    .select('name status installmentPlan')
+    .lean();
+
+  const now = new Date();
+  let overdueCount = 0;
+  let totalOverdueAmount = 0;
+
+  projectsWithInstallments.forEach((project) => {
+    const installments = Array.isArray(project.installmentPlan)
+      ? project.installmentPlan
+      : [];
+
+    installments.forEach((installment) => {
+      const amount = Number(installment.amount) || 0;
+      if (amount <= 0) {
+        return;
+      }
+
+      // Check if installment is overdue
+      // An installment is overdue if:
+      // 1. It's explicitly marked as 'overdue' by admin, OR
+      // 2. It's not paid and the due date has passed
+      const dueDate = installment.dueDate ? new Date(installment.dueDate) : null;
+      const isOverdue = 
+        installment.status === 'overdue' ||
+        (installment.status !== 'paid' && dueDate && dueDate < now);
+
+      if (isOverdue) {
+        overdueCount++;
+        totalOverdueAmount += amount;
+      }
+    });
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      count: overdueCount,
+      totalAmount: totalOverdueAmount,
+      hasOverdue: overdueCount > 0
+    }
+  });
+});
+
 module.exports = {
   getWalletSummary,
   getWalletTransactions,
-  getUpcomingPayments
+  getUpcomingPayments,
+  getOverdueInstallmentsCount
 };
 

@@ -76,6 +76,36 @@ const salarySchema = new mongoose.Schema({
     default: ''
   },
   
+  // Incentive fields (for sales team)
+  incentiveAmount: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  incentiveStatus: {
+    type: String,
+    enum: ['pending', 'paid'],
+    default: 'pending'
+  },
+  incentivePaidDate: {
+    type: Date
+  },
+  
+  // Reward fields (for sales and dev teams)
+  rewardAmount: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  rewardStatus: {
+    type: String,
+    enum: ['pending', 'paid'],
+    default: 'pending'
+  },
+  rewardPaidDate: {
+    type: Date
+  },
+  
   // Audit
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,

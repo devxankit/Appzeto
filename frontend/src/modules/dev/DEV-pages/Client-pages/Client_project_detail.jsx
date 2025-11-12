@@ -21,20 +21,24 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiCreditCard,
-  FiDollarSign,
   FiFile,
   FiDownload,
   FiPlus,
   FiMinus,
   FiEye
 } from 'react-icons/fi'
+import { clientProjectService } from '../../DEV-services/clientProjectService'
+import { clientPaymentService } from '../../DEV-services/clientPaymentService'
+import clientRequestService from '../../DEV-services/clientRequestService'
+import { useToast } from '../../../../contexts/ToastContext'
 
 const Client_project_detail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState('overview')
   const [timeLeft, setTimeLeft] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [showModificationDialog, setShowModificationDialog] = useState(false)
   const [selectedMilestone, setSelectedMilestone] = useState(null)
   const [modificationRequest, setModificationRequest] = useState('')
@@ -42,197 +46,236 @@ const Client_project_detail = () => {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState('')
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
-
-  // Mock project data - in real app, this would come from API
-  const [projectData] = useState({
-    project: {
-      id: parseInt(id),
-      name: "E-commerce Website",
-      description: "Modern e-commerce platform with payment integration and mobile responsiveness. This project includes a comprehensive online store with advanced features like inventory management, order tracking, and customer analytics.",
-      status: "active",
-      priority: "high",
-      progress: 65,
-      dueDate: "2024-02-15",
-      startDate: "2024-01-01",
-      assignedTeam: [
-        { name: "John Doe", role: "Project Manager" },
-        { name: "Jane Smith", role: "Frontend Developer" },
-        { name: "Mike Wilson", role: "UI/UX Designer" },
-        { name: "Sarah Johnson", role: "Backend Developer" }
-      ],
-      totalTasks: 25,
-      completedTasks: 16,
-      awaitingClientFeedback: 2,
-      lastUpdate: "2024-01-22",
-      // Payment Information
-      totalCost: 150000, // Total project cost in rupees
-      paidAmount: 45000, // Amount already paid
-      remainingAmount: 105000, // Remaining amount to pay
-      nextPaymentDue: 30000, // Next payment amount based on progress
-      paymentSchedule: [
-        { milestone: "Project Setup & Planning", amount: 15000, status: "paid", date: "2024-01-08" },
-        { milestone: "UI/UX Design Phase", amount: 30000, status: "paid", date: "2024-01-18" },
-        { milestone: "Frontend Development", amount: 45000, status: "due", dueDate: "2024-02-05" },
-        { milestone: "Backend Integration", amount: 30000, status: "pending", dueDate: "2024-02-10" },
-        { milestone: "Testing & Deployment", amount: 30000, status: "pending", dueDate: "2024-02-15" }
-      ]
-    },
-    milestones: [
-      {
-        id: 1,
-        title: "Project Setup & Planning",
-        description: "Initial project setup, requirements gathering, and team coordination",
-        status: "completed",
-        progress: 100,
-        dueDate: "2024-01-10",
-        completedDate: "2024-01-08",
-        sequence: 1,
-        isLocked: false,
-        isClickable: false
-      },
-      {
-        id: 2,
-        title: "UI/UX Design Phase",
-        description: "Create wireframes, mockups, and design system for the platform",
-        status: "completed",
-        progress: 100,
-        dueDate: "2024-01-20",
-        completedDate: "2024-01-18",
-        sequence: 2,
-        isLocked: false,
-        isClickable: false
-      },
-      {
-        id: 3,
-        title: "Frontend Development",
-        description: "Develop responsive user interface and client-side functionality",
-        status: "active",
-        progress: 75,
-        dueDate: "2024-02-05",
-        sequence: 3,
-        isLocked: false,
-        isClickable: true
-      },
-      {
-        id: 4,
-        title: "Backend Integration",
-        description: "API development, database setup, and server-side logic",
-        status: "planning",
-        progress: 0,
-        dueDate: "2024-02-10",
-        sequence: 4,
-        isLocked: true,
-        isClickable: false
-      },
-      {
-        id: 5,
-        title: "Testing & Deployment",
-        description: "Quality assurance, bug fixes, and production deployment",
-        status: "planning",
-        progress: 0,
-        dueDate: "2024-02-15",
-        sequence: 5,
-        isLocked: true,
-        isClickable: false
-      }
-    ],
-    tasks: [
-      {
-        id: 1,
-        title: "Design Homepage Layout",
-        description: "Create responsive homepage with hero section and product showcase",
-        status: "completed",
-        priority: "high",
-        assignedTo: "Mike Wilson",
-        dueDate: "2024-01-15",
-        completedDate: "2024-01-14"
-      },
-      {
-        id: 2,
-        title: "Implement User Authentication",
-        description: "Set up login, registration, and password reset functionality",
-        status: "completed",
-        priority: "high",
-        assignedTo: "Jane Smith",
-        dueDate: "2024-01-18",
-        completedDate: "2024-01-17"
-      },
-      {
-        id: 3,
-        title: "Product Catalog Page",
-        description: "Develop product listing page with filtering and search",
-        status: "in-progress",
-        priority: "normal",
-        assignedTo: "Jane Smith",
-        dueDate: "2024-01-25"
-      },
-      {
-        id: 4,
-        title: "Shopping Cart Implementation",
-        description: "Create cart functionality with add/remove items and quantity updates",
-        status: "in-progress",
-        priority: "high",
-        assignedTo: "Sarah Johnson",
-        dueDate: "2024-01-28"
-      },
-      {
-        id: 5,
-        title: "Payment Gateway Integration",
-        description: "Integrate Stripe payment processing for secure transactions",
-        status: "pending",
-        priority: "urgent",
-        assignedTo: "Sarah Johnson",
-        dueDate: "2024-02-01"
-      },
-      {
-        id: 6,
-        title: "Admin Dashboard",
-        description: "Build admin panel for inventory and order management",
-        status: "pending",
-        priority: "normal",
-        assignedTo: "John Doe",
-        dueDate: "2024-02-05"
-      }
-    ],
-    // Payment Transaction History
-    paymentHistory: [
-      {
-        id: 1,
-        amount: 15000,
-        milestone: "Project Setup & Planning",
-        date: "2024-01-08",
-        method: "UPI",
-        status: "completed",
-        transactionId: "TXN001234567"
-      },
-      {
-        id: 2,
-        amount: 30000,
-        milestone: "UI/UX Design Phase",
-        date: "2024-01-18",
-        method: "Bank Transfer",
-        status: "completed",
-        transactionId: "TXN001234568"
-      }
-    ],
-    // Project Revisions
-    revisions: [
-      {
-        id: 1,
-        title: "First Revision",
-        status: "completed",
-        completedDate: "2024-01-20",
-        description: "Initial project delivery and client approval"
-      },
-      {
-        id: 2,
-        title: "Final Revision",
-        status: "pending",
-        completedDate: null,
-        description: "Final project delivery and client approval"
-      }
-    ]
+  
+  // Real project data from API
+  const [projectData, setProjectData] = useState({
+    project: null,
+    milestones: [],
+    tasks: [],
+    paymentHistory: [],
+    revisions: []
   })
+
+  // Load project data
+  useEffect(() => {
+    const loadProjectData = async () => {
+      if (!id) return
+      
+      try {
+        setLoading(true)
+        
+        // Load project, milestones, tasks, and payments in parallel
+        const [projectResponse, milestonesResponse, tasksResponse, paymentsResponse] = await Promise.all([
+          clientProjectService.getProjectById(id),
+          clientProjectService.getProjectMilestones(id),
+          clientProjectService.getProjectTasks(id),
+          clientPaymentService.getProjectPayments(id)
+        ])
+
+        const project = projectResponse.data || projectResponse
+        const milestones = milestonesResponse.data || milestonesResponse || []
+        const tasks = tasksResponse.data || tasksResponse || []
+        const payments = paymentsResponse.data || paymentsResponse || []
+
+        // Calculate financial details
+        const totalCost = project.budget || project.financialDetails?.totalCost || 0
+        const advanceReceived = project.financialDetails?.advanceReceived || 0
+        const installmentPlan = project.installmentPlan || []
+        
+        // Calculate paid installments
+        const paidInstallments = installmentPlan.filter(inst => inst.status === 'paid')
+        const installmentPaidAmount = paidInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0)
+        
+        // Calculate payment records paid amount
+        const paymentRecordsPaid = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0)
+        
+        // Total paid = advance + paid installments + payment records
+        const totalPaidAmount = advanceReceived + installmentPaidAmount + paymentRecordsPaid
+        
+        // Calculate remaining amount
+        const remainingAmount = Math.max(0, totalCost - totalPaidAmount)
+        
+        // Find next payment due (first pending installment or first pending payment)
+        const nextPendingInstallment = installmentPlan.find(inst => inst.status === 'pending')
+        const nextPendingPayment = payments.find(p => p.status === 'pending')
+        const nextPaymentDue = nextPendingInstallment?.amount || nextPendingPayment?.amount || 0
+
+        // Use backend-calculated progress (based on completed milestones vs total milestones)
+        // Backend already calculates this correctly, so we use it directly
+        // If backend didn't calculate it, fallback to calculating it here for consistency
+        let projectProgress = project.progress !== undefined ? project.progress : 0
+        
+        // Ensure progress is calculated if backend didn't provide it
+        if (projectProgress === 0 && milestones.length > 0) {
+          const completedMilestones = milestones.filter(m => m.status === 'completed').length
+          projectProgress = project.status === 'completed' 
+            ? 100 
+            : Math.round((completedMilestones / milestones.length) * 100)
+        }
+
+        // Transform project data
+        const transformedProject = {
+          _id: project._id,
+          id: project._id,
+          name: project.name || '',
+          description: project.description || '',
+          status: project.status || 'pending',
+          priority: project.priority || 'normal',
+          progress: projectProgress,
+          dueDate: project.dueDate || new Date(),
+          startDate: project.startDate || project.createdAt || new Date(),
+          assignedTeam: project.assignedTeam || [],
+          projectManager: project.projectManager || null,
+          budget: totalCost,
+          totalCost: totalCost,
+          advanceReceived: advanceReceived,
+          installmentPlan: installmentPlan,
+          paidAmount: totalPaidAmount,
+          installmentPaidAmount: installmentPaidAmount,
+          paymentRecordsPaid: paymentRecordsPaid,
+          remainingAmount: remainingAmount,
+          nextPaymentDue: nextPaymentDue,
+          totalTasks: tasks.length,
+          completedTasks: tasks.filter(t => t.status === 'completed').length,
+          revisions: project.revisions ? [
+            {
+              id: 1,
+              title: 'First Revision',
+              status: project.revisions.firstRevision?.status || 'pending',
+              completedDate: project.revisions.firstRevision?.completedDate || null,
+              description: 'Initial project delivery and client approval'
+            },
+            {
+              id: 2,
+              title: 'Final Revision',
+              status: project.revisions.secondRevision?.status || 'pending',
+              completedDate: project.revisions.secondRevision?.completedDate || null,
+              description: 'Final project delivery and client approval'
+            }
+          ] : []
+        }
+
+        // Transform milestones
+        const transformedMilestones = milestones.map((milestone, index) => {
+          // Calculate milestone progress - completed milestones should show 100%
+          let milestoneProgress = milestone.progress || 0
+          if (milestone.status === 'completed') {
+            milestoneProgress = 100
+          } else if (milestoneProgress === 0 && milestone.status !== 'pending') {
+            // If milestone is active/in-progress but progress is 0, calculate from tasks if available
+            // This is a fallback - backend should provide correct progress
+            milestoneProgress = milestone.progress || 0
+          }
+          
+          return {
+            _id: milestone._id,
+            id: milestone._id,
+            title: milestone.title || '',
+            description: milestone.description || '',
+            status: milestone.status || 'pending',
+            progress: milestoneProgress,
+            dueDate: milestone.dueDate || new Date(),
+            completedDate: milestone.status === 'completed' ? milestone.updatedAt : null,
+            sequence: milestone.sequence || index + 1,
+            isLocked: milestone.status === 'pending' && index > 0 && milestones[index - 1]?.status !== 'completed',
+            isClickable: milestone.status === 'active' || milestone.status === 'in-progress'
+          }
+        })
+
+        // Transform tasks
+        const transformedTasks = tasks.map(task => ({
+          _id: task._id,
+          id: task._id,
+          title: task.title || '',
+          description: task.description || '',
+          status: task.status || 'pending',
+          priority: task.priority || 'normal',
+          dueDate: task.dueDate || new Date(),
+          assignedTo: task.assignedTo ? (Array.isArray(task.assignedTo) ? task.assignedTo.map(t => t.name).join(', ') : task.assignedTo.name) : 'Unassigned',
+          completedDate: task.status === 'completed' ? task.updatedAt : null
+        }))
+
+        // Transform payment history - include advance payment and installments
+        const paymentHistory = []
+        
+        // Add advance payment if exists
+        if (advanceReceived > 0) {
+          paymentHistory.push({
+            id: 'advance',
+            _id: 'advance',
+            type: 'advance',
+            title: 'Advance Payment',
+            amount: advanceReceived,
+            date: project.createdAt || new Date(),
+            method: 'Advance',
+            status: 'completed',
+            transactionId: 'ADV-' + project._id,
+            description: 'Initial advance payment received'
+          })
+        }
+        
+        // Add paid installments
+        paidInstallments.forEach((installment, index) => {
+          paymentHistory.push({
+            id: `installment-${index}`,
+            _id: `installment-${index}`,
+            type: 'installment',
+            title: `Installment ${index + 1}`,
+            amount: installment.amount || 0,
+            date: installment.paidDate || installment.createdAt || new Date(),
+            method: 'Installment',
+            status: 'completed',
+            transactionId: `INST-${index + 1}`,
+            description: installment.notes || `Installment payment`,
+            dueDate: installment.dueDate
+          })
+        })
+        
+        // Add payment records
+        payments.forEach(payment => {
+          paymentHistory.push({
+            _id: payment._id,
+            id: payment._id,
+            type: 'payment',
+            title: payment.milestone ? payment.milestone.title : 'Payment',
+            amount: payment.amount || 0,
+            milestone: payment.milestone ? (payment.milestone.title || 'N/A') : 'N/A',
+            date: payment.paidAt || payment.createdAt || new Date(),
+            method: payment.paymentMethod || 'bank_transfer',
+            status: payment.status || 'pending',
+            transactionId: payment.transactionId || 'N/A',
+            description: payment.notes || `${payment.paymentType || 'Payment'} for ${payment.milestone ? payment.milestone.title : 'project'}`
+          })
+        })
+        
+        // Sort by date (most recent first)
+        paymentHistory.sort((a, b) => new Date(b.date) - new Date(a.date))
+        
+        const transformedPayments = paymentHistory
+
+        setProjectData({
+          project: transformedProject,
+          milestones: transformedMilestones,
+          tasks: transformedTasks,
+          paymentHistory: transformedPayments,
+          revisions: transformedProject.revisions
+        })
+      } catch (error) {
+        console.error('Error loading project data:', error)
+        toast.error(error.message || 'Failed to load project details', {
+          title: 'Error',
+          duration: 4000
+        })
+        if (error.status === 404 || error.message?.includes('not found')) {
+          setTimeout(() => navigate('/client-projects'), 2000)
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadProjectData()
+  }, [id, navigate, toast])
 
   // Countdown logic
   useEffect(() => {
@@ -373,24 +416,52 @@ const Client_project_detail = () => {
       setShowModificationDialog(true)
     } else if (milestone.isClickable) {
       // Navigate to milestone detail for active milestones
-      navigate(`/client-milestone-detail/${milestone.id}`)
+      navigate(`/client-milestone-detail/${milestone.id || milestone._id}`)
     }
   }
 
   const handleModificationSubmit = async () => {
-    if (!modificationRequest.trim()) return
+    if (!modificationRequest.trim() || !selectedMilestone || !projectData.project) return
     
-    setIsSubmittingModification(true)
-    
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmittingModification(false)
+    try {
+      setIsSubmittingModification(true)
+      
+      // Get project manager as recipient
+      const projectManager = projectData.project.projectManager
+      if (!projectManager || !projectManager._id) {
+        toast.error('Project manager not found', { title: 'Error', duration: 4000 })
+        return
+      }
+
+      // Create modification request
+      await clientRequestService.createRequest({
+        title: `Modification Request for ${selectedMilestone.title}`,
+        description: modificationRequest,
+        type: 'feedback',
+        priority: 'normal',
+        recipient: projectManager._id,
+        recipientModel: 'PM',
+        project: projectData.project._id || projectData.project.id,
+        category: 'milestone-modification'
+      })
+
+      toast.success('Modification request sent to Project Manager!', {
+        title: 'Request Sent',
+        duration: 3000
+      })
+
       setShowModificationDialog(false)
       setModificationRequest('')
       setSelectedMilestone(null)
-      // Here you would typically show a success message
-      alert('Modification request sent to Project Manager!')
-    }, 1000)
+    } catch (error) {
+      console.error('Error submitting modification request:', error)
+      toast.error(error.message || 'Failed to send modification request', {
+        title: 'Error',
+        duration: 4000
+      })
+    } finally {
+      setIsSubmittingModification(false)
+    }
   }
 
   const formatCurrency = (amount) => {
@@ -412,18 +483,132 @@ const Client_project_detail = () => {
   }
 
   const handlePaymentSubmit = async () => {
-    if (!paymentAmount || parseFloat(paymentAmount) <= 0) return
+    if (!paymentAmount || parseFloat(paymentAmount) <= 0 || !projectData.project) return
     
-    setIsProcessingPayment(true)
-    
-    // Simulate payment processing
-    setTimeout(() => {
-      setIsProcessingPayment(false)
+    try {
+      setIsProcessingPayment(true)
+      
+      // Get project manager as recipient for payment request
+      const projectManager = projectData.project.projectManager
+      if (!projectManager || !projectManager._id) {
+        toast.error('Project manager not found', { title: 'Error', duration: 4000 })
+        return
+      }
+
+      // Create payment request (clients request payments, they don't create them directly)
+      await clientRequestService.createRequest({
+        title: `Payment Request for ${projectData.project.name}`,
+        description: `Client requests to make a payment of ${formatCurrency(paymentAmount)} for project progress.`,
+        type: 'payment-recovery',
+        priority: 'normal',
+        recipient: projectManager._id,
+        recipientModel: 'PM',
+        project: projectData.project._id || projectData.project.id,
+        amount: parseFloat(paymentAmount),
+        category: 'payment-request'
+      })
+
+      toast.success(`Payment request of ${formatCurrency(paymentAmount)} submitted successfully!`, {
+        title: 'Payment Request Sent',
+        duration: 3000
+      })
+
       setShowPaymentDialog(false)
       setPaymentAmount('')
-      // Here you would typically show a success message
-      alert(`Payment of ${formatCurrency(paymentAmount)} processed successfully!`)
-    }, 2000)
+      
+      // Reload project data to refresh payment info
+      const [projectResponse, paymentsResponse] = await Promise.all([
+        clientProjectService.getProjectById(id),
+        clientPaymentService.getProjectPayments(id)
+      ])
+      
+      const project = projectResponse.data || projectResponse
+      const payments = paymentsResponse.data || paymentsResponse || []
+      
+      // Recalculate financial details
+      const totalCost = project.budget || project.financialDetails?.totalCost || 0
+      const advanceReceived = project.financialDetails?.advanceReceived || 0
+      const installmentPlan = project.installmentPlan || []
+      const paidInstallments = installmentPlan.filter(inst => inst.status === 'paid')
+      const installmentPaidAmount = paidInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0)
+      const paymentRecordsPaid = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0)
+      const totalPaidAmount = advanceReceived + installmentPaidAmount + paymentRecordsPaid
+      const remainingAmount = Math.max(0, totalCost - totalPaidAmount)
+      const nextPendingInstallment = installmentPlan.find(inst => inst.status === 'pending')
+      const nextPendingPayment = payments.find(p => p.status === 'pending')
+      const nextPaymentDue = nextPendingInstallment?.amount || nextPendingPayment?.amount || 0
+      
+      // Rebuild payment history
+      const paymentHistory = []
+      if (advanceReceived > 0) {
+        paymentHistory.push({
+          id: 'advance',
+          _id: 'advance',
+          type: 'advance',
+          title: 'Advance Payment',
+          amount: advanceReceived,
+          date: project.createdAt || new Date(),
+          method: 'Advance',
+          status: 'completed',
+          transactionId: 'ADV-' + project._id,
+          description: 'Initial advance payment received'
+        })
+      }
+      paidInstallments.forEach((installment, index) => {
+        paymentHistory.push({
+          id: `installment-${index}`,
+          _id: `installment-${index}`,
+          type: 'installment',
+          title: `Installment ${index + 1}`,
+          amount: installment.amount || 0,
+          date: installment.paidDate || installment.createdAt || new Date(),
+          method: 'Installment',
+          status: 'completed',
+          transactionId: `INST-${index + 1}`,
+          description: installment.notes || `Installment payment`,
+          dueDate: installment.dueDate
+        })
+      })
+      payments.forEach(payment => {
+        paymentHistory.push({
+          _id: payment._id,
+          id: payment._id,
+          type: 'payment',
+          title: payment.milestone ? payment.milestone.title : 'Payment',
+          amount: payment.amount || 0,
+          milestone: payment.milestone ? (payment.milestone.title || 'N/A') : 'N/A',
+          date: payment.paidAt || payment.createdAt || new Date(),
+          method: payment.paymentMethod || 'bank_transfer',
+          status: payment.status || 'pending',
+          transactionId: payment.transactionId || 'N/A',
+          description: payment.notes || `${payment.paymentType || 'Payment'} for ${payment.milestone ? payment.milestone.title : 'project'}`
+        })
+      })
+      paymentHistory.sort((a, b) => new Date(b.date) - new Date(a.date))
+      
+      setProjectData(prev => ({
+        ...prev,
+        project: {
+          ...prev.project,
+          advanceReceived: advanceReceived,
+          installmentPlan: installmentPlan,
+          paidAmount: totalPaidAmount,
+          installmentPaidAmount: installmentPaidAmount,
+          paymentRecordsPaid: paymentRecordsPaid,
+          remainingAmount: remainingAmount,
+          nextPaymentDue: nextPaymentDue
+        },
+        paymentHistory: paymentHistory
+      }))
+    } catch (error) {
+      console.error('Error submitting payment request:', error)
+      toast.error(error.message || 'Failed to submit payment request', {
+        title: 'Error',
+        duration: 4000
+      })
+    } finally {
+      setIsProcessingPayment(false)
+    }
   }
 
 
@@ -436,7 +621,16 @@ const Client_project_detail = () => {
   }
 
 
-  const renderOverview = () => (
+  const renderOverview = () => {
+    if (!projectData.project) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500">No project data available</div>
+        </div>
+      )
+    }
+
+    return (
     <div className="space-y-4 sm:space-y-6">
       {/* Project Stats */}
       <div className="space-y-3 sm:space-y-4">
@@ -455,7 +649,7 @@ const Client_project_detail = () => {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-xl font-bold text-teal-600">{projectData.project.progress}%</div>
+                <div className="text-xl font-bold text-teal-600">{projectData.project.progress || 0}%</div>
                 <div className="text-xs text-gray-500">Complete</div>
               </div>
             </div>
@@ -463,12 +657,12 @@ const Client_project_detail = () => {
             <div className="mb-3">
               <div className="flex justify-between text-xs mb-1">
                 <span className="text-gray-600">Project Progress</span>
-                <span className="text-gray-900 font-medium">{projectData.project.progress}%</span>
+                <span className="text-gray-900 font-medium">{projectData.project.progress || 0}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${projectData.project.progress}%` }}
+                  style={{ width: `${projectData.project.progress || 0}%` }}
                 ></div>
               </div>
             </div>
@@ -487,7 +681,7 @@ const Client_project_detail = () => {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-teal-600">{projectData.project.progress}%</div>
+                <div className="text-3xl font-bold text-teal-600">{projectData.project.progress || 0}%</div>
                 <div className="text-xs text-gray-500">Complete</div>
               </div>
             </div>
@@ -495,12 +689,12 @@ const Client_project_detail = () => {
             <div className="mb-4">
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-gray-600">Project Progress</span>
-                <span className="text-gray-900 font-medium">{projectData.project.progress}%</span>
+                <span className="text-gray-900 font-medium">{projectData.project.progress || 0}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div 
                   className="bg-gradient-to-r from-teal-500 to-teal-600 h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${projectData.project.progress}%` }}
+                  style={{ width: `${projectData.project.progress || 0}%` }}
                 ></div>
               </div>
             </div>
@@ -515,12 +709,12 @@ const Client_project_detail = () => {
                 <FiCheckSquare className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
               </div>
               <div>
-                <div className="text-lg sm:text-2xl font-bold text-gray-900">{projectData.project.totalTasks}</div>
+                <div className="text-lg sm:text-2xl font-bold text-gray-900">{projectData.project.totalTasks || 0}</div>
                 <div className="text-xs text-gray-500">Total Tasks</div>
               </div>
             </div>
             <div className="text-xs text-gray-600">
-              {projectData.project.completedTasks} completed
+              {projectData.project.completedTasks || 0} completed
             </div>
           </div>
 
@@ -530,7 +724,7 @@ const Client_project_detail = () => {
                 <FiUsers className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
               </div>
               <div>
-                <div className="text-lg sm:text-2xl font-bold text-gray-900">{projectData.project.assignedTeam.length}</div>
+                <div className="text-lg sm:text-2xl font-bold text-gray-900">{projectData.project.assignedTeam?.length || 0}</div>
                 <div className="text-xs text-gray-500">Team Members</div>
               </div>
             </div>
@@ -555,7 +749,7 @@ const Client_project_detail = () => {
                   {timeLeft}
                 </div>
                 <div className="text-xs text-gray-500">
-                  {new Date(projectData.project.dueDate).toLocaleDateString()}
+                  {projectData.project.dueDate ? new Date(projectData.project.dueDate).toLocaleDateString() : 'N/A'}
                 </div>
               </div>
             </div>
@@ -581,11 +775,11 @@ const Client_project_detail = () => {
               <div>
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Start Date</p>
                 <p className="text-xs sm:text-sm font-bold text-gray-900">
-                  {new Date(projectData.project.startDate).toLocaleDateString('en-US', { 
+                  {projectData.project.startDate ? new Date(projectData.project.startDate).toLocaleDateString('en-US', { 
                     year: 'numeric', 
                     month: 'short', 
                     day: 'numeric' 
-                  })}
+                  }) : 'N/A'}
                 </p>
               </div>
             </div>
@@ -599,11 +793,11 @@ const Client_project_detail = () => {
               <div>
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Due Date</p>
                 <p className="text-xs sm:text-sm font-bold text-gray-900">
-                  {new Date(projectData.project.dueDate).toLocaleDateString('en-US', { 
+                  {projectData.project.dueDate ? new Date(projectData.project.dueDate).toLocaleDateString('en-US', { 
                     year: 'numeric', 
                     month: 'short', 
                     day: 'numeric' 
-                  })}
+                  }) : 'N/A'}
                 </p>
               </div>
             </div>
@@ -624,7 +818,7 @@ const Client_project_detail = () => {
         </div>
 
         <div className="space-y-3">
-          {projectData.revisions.map((revision, index) => (
+          {(projectData.revisions || []).length > 0 ? projectData.revisions.map((revision, index) => (
             <div
               key={revision.id}
               className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200"
@@ -661,18 +855,32 @@ const Client_project_detail = () => {
                 </span>
               </div>
             </div>
-          ))}
+          )) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No revisions available</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
-  const renderMilestones = () => (
+  const renderMilestones = () => {
+    if (!projectData.milestones || projectData.milestones.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500">No milestones available</div>
+        </div>
+      )
+    }
+
+    return (
     <div className="relative">
       {/* Milestone Flow Container */}
       <div className="space-y-4">
         {projectData.milestones.map((milestone, index) => (
-          <div key={milestone.id} className="relative">
+          <div key={milestone.id || milestone._id} className="relative">
             {/* Connection Line */}
             {index < projectData.milestones.length - 1 && (
               <div className="absolute left-6 top-16 w-0.5 h-8 bg-gray-300 z-0"></div>
@@ -872,9 +1080,25 @@ const Client_project_detail = () => {
         )}
       </AnimatePresence>
     </div>
-  )
+    )
+  }
 
-  const renderPayment = () => (
+  const renderPayment = () => {
+    if (!projectData.project) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500">No project data available</div>
+        </div>
+      )
+    }
+
+    const totalCost = projectData.project.totalCost || 0
+    const paidAmount = projectData.project.paidAmount || 0
+    const remainingAmount = projectData.project.remainingAmount || 0
+    const nextPaymentDue = projectData.project.nextPaymentDue || 0
+    const paymentProgress = totalCost > 0 ? Math.round((paidAmount / totalCost) * 100) : 0
+
+    return (
     <div className="space-y-4 sm:space-y-6">
       {/* Payment Overview - Container Card */}
       <motion.div
@@ -908,7 +1132,7 @@ const Client_project_detail = () => {
               <span className="text-xs text-gray-700 font-medium">Total Cost</span>
               <span className="text-blue-600 font-bold text-sm">₹</span>
             </div>
-            <p className="text-sm sm:text-base font-bold text-gray-900">{formatCurrency(projectData.project.totalCost)}</p>
+            <p className="text-sm sm:text-base font-bold text-gray-900">{formatCurrency(totalCost)}</p>
             <p className="text-xs text-gray-500 mt-1">Project Budget</p>
           </motion.div>
 
@@ -924,7 +1148,7 @@ const Client_project_detail = () => {
               <span className="text-xs text-gray-700 font-medium">Paid Amount</span>
               <FiCheckCircle className="h-3 w-3 text-green-600" />
             </div>
-            <p className="text-sm sm:text-base font-bold text-gray-900">{formatCurrency(projectData.project.paidAmount)}</p>
+            <p className="text-sm sm:text-base font-bold text-gray-900">{formatCurrency(paidAmount)}</p>
             <div className="flex items-center mt-1">
               <FiCheckCircle className="h-2 w-2 text-green-500 mr-1" />
               <p className="text-xs text-green-600">Paid</p>
@@ -943,7 +1167,7 @@ const Client_project_detail = () => {
               <span className="text-xs text-gray-700 font-medium">Remaining</span>
               <FiClock className="h-3 w-3 text-orange-600" />
             </div>
-            <p className="text-sm sm:text-base font-bold text-gray-900">{formatCurrency(projectData.project.remainingAmount)}</p>
+            <p className="text-sm sm:text-base font-bold text-gray-900">{formatCurrency(remainingAmount)}</p>
             <p className="text-xs text-gray-500 mt-1">Outstanding Balance</p>
           </motion.div>
 
@@ -959,7 +1183,7 @@ const Client_project_detail = () => {
               <span className="text-xs text-gray-700 font-medium">Next Due</span>
               <FiCreditCard className="h-3 w-3 text-purple-600" />
             </div>
-            <p className="text-sm sm:text-base font-bold text-gray-900">{formatCurrency(projectData.project.nextPaymentDue)}</p>
+            <p className="text-sm sm:text-base font-bold text-gray-900">{formatCurrency(nextPaymentDue)}</p>
             <p className="text-xs text-gray-500 mt-1">Upcoming Payment</p>
           </motion.div>
         </div>
@@ -978,50 +1202,110 @@ const Client_project_detail = () => {
           <div className="flex justify-between text-sm mb-2">
             <span className="text-gray-600">Payment Progress</span>
             <span className="text-teal-600 font-semibold">
-              {Math.round((projectData.project.paidAmount / projectData.project.totalCost) * 100)}%
+              {paymentProgress}%
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
             <div 
               className="bg-gradient-to-r from-teal-500 to-teal-600 h-3 rounded-full transition-all duration-500"
-              style={{ width: `${(projectData.project.paidAmount / projectData.project.totalCost) * 100}%` }}
+              style={{ width: `${paymentProgress}%` }}
             ></div>
           </div>
         </div>
 
-        <div className="text-xs text-gray-600">
-          {formatCurrency(projectData.project.paidAmount)} paid out of {formatCurrency(projectData.project.totalCost)} total
+        <div className="text-xs text-gray-600 mb-4">
+          {formatCurrency(paidAmount)} paid out of {formatCurrency(totalCost)} total
         </div>
+
+        {/* Payment Breakdown */}
+        {(projectData.project.advanceReceived > 0 || projectData.project.installmentPaidAmount > 0 || projectData.project.paymentRecordsPaid > 0) && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Payment Breakdown</h4>
+            <div className="space-y-2">
+              {projectData.project.advanceReceived > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-blue-600 font-bold text-sm">₹</span>
+                    <span className="text-gray-600">Advance Payment</span>
+                  </div>
+                  <span className="font-medium text-gray-900">{formatCurrency(projectData.project.advanceReceived)}</span>
+                </div>
+              )}
+              {projectData.project.installmentPaidAmount > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-2">
+                    <FiCreditCard className="h-3 w-3 text-purple-600" />
+                    <span className="text-gray-600">Installments Paid</span>
+                  </div>
+                  <span className="font-medium text-gray-900">{formatCurrency(projectData.project.installmentPaidAmount)}</span>
+                </div>
+              )}
+              {projectData.project.paymentRecordsPaid > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-2">
+                    <FiCheckCircle className="h-3 w-3 text-teal-600" />
+                    <span className="text-gray-600">Payment Records</span>
+                  </div>
+                  <span className="font-medium text-gray-900">{formatCurrency(projectData.project.paymentRecordsPaid)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Payment Schedule */}
-      <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="p-2 bg-teal-100 rounded-lg">
-            <FiFile className="h-4 w-4 text-teal-600" />
-          </div>
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Payment Schedule</h3>
-        </div>
-        
-        <div className="space-y-3">
-          {projectData.project.paymentSchedule.map((payment, index) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-teal-300 transition-all duration-200">
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-medium text-gray-900">{payment.milestone}</h4>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPaymentStatusColor(payment.status)}`}>
-                    {payment.status === 'paid' ? 'Paid' : payment.status === 'due' ? 'Due' : 'Pending'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-gray-600">
-                  <span>{formatCurrency(payment.amount)}</span>
-                  <span>{payment.date ? new Date(payment.date).toLocaleDateString() : `Due: ${new Date(payment.dueDate).toLocaleDateString()}`}</span>
-                </div>
-              </div>
+      {/* Payment Schedule / Installment Plan */}
+      {projectData.project.installmentPlan && projectData.project.installmentPlan.length > 0 && (
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="p-2 bg-teal-100 rounded-lg">
+              <FiFile className="h-4 w-4 text-teal-600" />
             </div>
-          ))}
+            <div>
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900">Payment Schedule</h3>
+              <p className="text-xs sm:text-sm text-gray-600">Installment plan details</p>
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            {projectData.project.installmentPlan.map((installment, index) => {
+              const isOverdue = installment.status === 'pending' && new Date(installment.dueDate) < new Date()
+              const statusColor = installment.status === 'paid' 
+                ? 'bg-green-100 text-green-800 border-green-200'
+                : isOverdue
+                ? 'bg-red-100 text-red-800 border-red-200'
+                : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+              
+              return (
+                <div key={index} className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-teal-300 transition-all duration-200">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Installment {index + 1}
+                        {installment.notes && (
+                          <span className="text-xs text-gray-500 ml-2">({installment.notes})</span>
+                        )}
+                      </h4>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${statusColor}`}>
+                        {installment.status === 'paid' ? 'Paid' : isOverdue ? 'Overdue' : 'Pending'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-600">
+                      <span>{formatCurrency(installment.amount || 0)}</span>
+                      <div className="flex items-center space-x-2">
+                        <span>Due: {new Date(installment.dueDate).toLocaleDateString()}</span>
+                        {installment.status === 'paid' && installment.paidDate && (
+                          <span className="text-green-600">• Paid: {new Date(installment.paidDate).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Transaction History */}
       <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
@@ -1039,23 +1323,56 @@ const Client_project_detail = () => {
         </div>
         
         <div className="space-y-3">
-          {projectData.paymentHistory.map((transaction) => (
-            <div key={transaction.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-teal-300 transition-all duration-200">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-teal-100 rounded-lg">
-                  <FiCheckCircle className="h-4 w-4 text-teal-600" />
+          {(projectData.paymentHistory || []).length > 0 ? projectData.paymentHistory.map((transaction) => {
+            const getTypeIcon = () => {
+              if (transaction.type === 'advance') {
+                return <span className="text-blue-600 font-bold">₹</span>
+              } else if (transaction.type === 'installment') {
+                return <FiCreditCard className="h-4 w-4 text-purple-600" />
+              } else {
+                return <FiCheckCircle className="h-4 w-4 text-teal-600" />
+              }
+            }
+            
+            const getTypeBg = () => {
+              if (transaction.type === 'advance') {
+                return 'bg-blue-100'
+              } else if (transaction.type === 'installment') {
+                return 'bg-purple-100'
+              } else {
+                return 'bg-teal-100'
+              }
+            }
+            
+            return (
+              <div key={transaction.id || transaction._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-teal-300 transition-all duration-200">
+                <div className="flex items-center space-x-3">
+                  <div className={`p-2 ${getTypeBg()} rounded-lg`}>
+                    {getTypeIcon()}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900">
+                      {transaction.title || transaction.milestone || 'Payment'}
+                    </h4>
+                    <p className="text-xs text-gray-600">
+                      {transaction.method || 'Payment'} • {transaction.transactionId || 'N/A'}
+                      {transaction.description && (
+                        <span className="ml-2">• {transaction.description}</span>
+                      )}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900">{transaction.milestone}</h4>
-                  <p className="text-xs text-gray-600">{transaction.method} • {transaction.transactionId}</p>
+                <div className="text-right">
+                  <div className="text-sm font-semibold text-gray-900">{formatCurrency(transaction.amount)}</div>
+                  <div className="text-xs text-gray-500">{new Date(transaction.date).toLocaleDateString()}</div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-sm font-semibold text-gray-900">{formatCurrency(transaction.amount)}</div>
-                <div className="text-xs text-gray-500">{new Date(transaction.date).toLocaleDateString()}</div>
-              </div>
+            )
+          }) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No payment history available</p>
             </div>
-          ))}
+          )}
         </div>
       </div>
 
@@ -1097,11 +1414,11 @@ const Client_project_detail = () => {
               <div className="mb-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
                   <div className="flex items-center space-x-2">
-                    <FiDollarSign className="h-4 w-4 text-blue-600" />
+                    <span className="text-blue-600 font-bold">₹</span>
                     <span className="text-sm text-blue-800 font-medium">Payment Information</span>
                   </div>
                   <p className="text-xs text-blue-700 mt-1">
-                    Next payment due: {formatCurrency(projectData.project.nextPaymentDue)}
+                    Next payment due: {formatCurrency(projectData.project.nextPaymentDue || 0)}
                   </p>
                 </div>
 
@@ -1147,9 +1464,19 @@ const Client_project_detail = () => {
         )}
       </AnimatePresence>
     </div>
-  )
+    )
+  }
 
-  const renderTasks = () => (
+  const renderTasks = () => {
+    if (!projectData.tasks || projectData.tasks.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500">No tasks available</div>
+        </div>
+      )
+    }
+
+    return (
     <div className="space-y-2 sm:space-y-3">
       {projectData.tasks.map((task) => (
         <div 
@@ -1210,7 +1537,8 @@ const Client_project_detail = () => {
         </div>
       ))}
     </div>
-  )
+    )
+  }
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -1228,6 +1556,47 @@ const Client_project_detail = () => {
     { key: 'payment', label: 'Payment', icon: FiCreditCard },
     { key: 'tasks', label: 'Tasks', icon: FiCheckSquare }
   ]
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
+        <Client_navbar />
+        <main className="pt-16 lg:pt-16 pb-16 lg:pb-8">
+          <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading project details...</p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (!projectData.project) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
+        <Client_navbar />
+        <main className="pt-16 lg:pt-16 pb-16 lg:pb-8">
+          <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <p className="text-gray-600 mb-4">Project not found</p>
+                <button
+                  onClick={() => navigate('/client-projects')}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                >
+                  Back to Projects
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
@@ -1251,7 +1620,7 @@ const Client_project_detail = () => {
             {/* Mobile Layout */}
             <div className="md:hidden">
               <div className="mb-4">
-                <h1 className="text-xl font-bold text-gray-900 mb-3 leading-tight">{projectData.project.name}</h1>
+                <h1 className="text-xl font-bold text-gray-900 mb-3 leading-tight">{projectData.project.name || 'Untitled Project'}</h1>
                 <div className="flex flex-wrap gap-2 mb-4">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(projectData.project.status)}`}>
                     {formatStatus(projectData.project.status)}
@@ -1267,18 +1636,18 @@ const Client_project_detail = () => {
                         {timeLeft}
                       </div>
                       <div className="text-xs text-gray-500">
-                        Due: {new Date(projectData.project.dueDate).toLocaleDateString()}
+                        Due: {projectData.project.dueDate ? new Date(projectData.project.dueDate).toLocaleDateString() : 'N/A'}
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-gray-500">Progress</div>
-                      <div className="text-sm font-bold text-gray-900">{projectData.project.progress}%</div>
+                      <div className="text-sm font-bold text-gray-900">{projectData.project.progress || 0}%</div>
                     </div>
                   </div>
                 </div>
               </div>
               <div className="mb-4">
-                <p className="text-sm text-gray-600 leading-relaxed">{projectData.project.description}</p>
+                <p className="text-sm text-gray-600 leading-relaxed">{projectData.project.description || 'No description available'}</p>
               </div>
             </div>
 
@@ -1287,7 +1656,7 @@ const Client_project_detail = () => {
               <div className="flex items-start justify-between mb-6">
                 <div className="flex-1">
                   <div className="flex items-center space-x-4 mb-4">
-                    <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">{projectData.project.name}</h1>
+                    <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">{projectData.project.name || 'Untitled Project'}</h1>
                     <div className="flex items-center space-x-2">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${getStatusColor(projectData.project.status)}`}>
                         {formatStatus(projectData.project.status)}
@@ -1303,13 +1672,13 @@ const Client_project_detail = () => {
                     {timeLeft}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    Due: {new Date(projectData.project.dueDate).toLocaleDateString()}
+                    Due: {projectData.project.dueDate ? new Date(projectData.project.dueDate).toLocaleDateString() : 'N/A'}
                   </div>
                 </div>
               </div>
               
               <div className="mb-6">
-                <p className="text-lg text-gray-600 leading-relaxed">{projectData.project.description}</p>
+                <p className="text-lg text-gray-600 leading-relaxed">{projectData.project.description || 'No description available'}</p>
               </div>
             </div>
           </div>
@@ -1444,3 +1813,4 @@ const Client_project_detail = () => {
 }
 
 export default Client_project_detail
+

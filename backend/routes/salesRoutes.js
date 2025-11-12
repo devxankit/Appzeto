@@ -86,6 +86,8 @@ router.get('/accounts', require('../controllers/salesController').getAccounts);
 router.get('/payment-recovery', require('../controllers/salesController').getPaymentRecovery);
 router.get('/payment-recovery/stats', require('../controllers/salesController').getPaymentRecoveryStats);
 router.post('/payment-recovery/:projectId/receipts', require('../controllers/salesController').createPaymentReceipt);
+router.get('/payment-recovery/:projectId/installments', require('../controllers/salesController').getProjectInstallments);
+router.post('/payment-recovery/:projectId/installments/:installmentId/request-payment', require('../controllers/salesController').requestInstallmentPayment);
 
 // Demo Requests
 router.get('/demo-requests', require('../controllers/salesController').getDemoRequests);

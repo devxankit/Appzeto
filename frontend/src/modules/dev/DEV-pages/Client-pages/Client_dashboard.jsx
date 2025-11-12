@@ -135,25 +135,33 @@ const Client_dashboard = () => {
       }
       
       // Transform the data to match the expected format
-      const transformedProjects = recentProjects.map(project => ({
-        id: project._id,
-        name: project.name,
-        description: project.description,
-        status: project.status,
-        priority: project.priority,
-        progress: project.progress || 0,
-        dueDate: project.dueDate,
-        assignedTeam: project.assignedTeam?.map(member => `${member.name} (${member.position})`) || [],
-        totalTasks: project.taskCount || 0,
-        completedTasks: project.completedTaskCount || 0,
-        awaitingClientFeedback: 0, // This would need to be calculated based on actual data
-        lastUpdate: project.updatedAt,
-        milestones: {
-          total: project.milestoneCount || 0,
-          completed: 0, // This would need to be calculated
-          progress: project.progress || 0
+      const transformedProjects = recentProjects.map(project => {
+        // Ensure progress is consistent - use backend calculated progress
+        // Backend calculates progress as completedMilestones / totalMilestones * 100
+        const projectProgress = project.status === 'completed' 
+          ? 100 
+          : (project.progress !== undefined ? project.progress : 0)
+        
+        return {
+          id: project._id,
+          name: project.name,
+          description: project.description,
+          status: project.status,
+          priority: project.priority,
+          progress: projectProgress,
+          dueDate: project.dueDate,
+          assignedTeam: project.assignedTeam?.map(member => `${member.name} (${member.position})`) || [],
+          totalTasks: project.totalTasks || 0, // Backend now provides this
+          completedTasks: project.completedTasks || 0, // Backend now provides this
+          awaitingClientFeedback: project.awaitingClientFeedback || 0, // Backend now provides this
+          lastUpdate: project.updatedAt,
+          milestones: {
+            total: project.milestoneCount || 0,
+            completed: 0, // This would need to be calculated
+            progress: projectProgress
+          }
         }
-      }))
+      })
 
       setDashboardData(prevData => ({
         ...prevData,

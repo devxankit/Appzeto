@@ -77,12 +77,14 @@ import QuickActionButton from '../admin-components/QuickActionButton'
 
 // Import dashboard service
 import adminDashboardService from '../admin-services/adminDashboardService'
+import { adminFinanceService } from '../admin-services/adminFinanceService'
 
 const Admin_dashboard = () => {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('overview')
   const [timeRange, setTimeRange] = useState('7d')
   const [notifications, setNotifications] = useState([])
+  const [recentActivities, setRecentActivities] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -125,6 +127,7 @@ const Admin_dashboard = () => {
     // Financial Statistics
     finance: {
       totalRevenue: 0,
+      monthlyRevenue: 0,
       outstandingPayments: 0,
       expenses: 0,
       profit: 0,
@@ -143,7 +146,8 @@ const Admin_dashboard = () => {
       earningsGrowth: 0,
       expensesGrowth: 0,
       salesGrowth: 0,
-      profitGrowth: 0
+      profitGrowth: 0,
+      lossGrowth: 0
     },
 
     // System Health
@@ -204,6 +208,64 @@ const Admin_dashboard = () => {
     }
   ]
 
+  // Fetch recent activities
+  const fetchRecentActivities = async () => {
+    try {
+      const response = await adminDashboardService.getRecentActivities(3)
+      if (response.success && response.data) {
+        // Sort by time and take only top 3
+        const sortedActivities = response.data
+          .sort((a, b) => new Date(b.time) - new Date(a.time))
+          .slice(0, 3)
+        setRecentActivities(sortedActivities)
+      }
+    } catch (err) {
+      console.error('Error fetching recent activities:', err)
+      // Keep existing activities on error
+    }
+  }
+
+  // Helper function to get icon component based on icon name
+  const getActivityIcon = (iconName, color) => {
+    const colorClasses = {
+      green: 'text-emerald-600',
+      red: 'text-red-600',
+      blue: 'text-blue-600',
+      purple: 'text-purple-600',
+      orange: 'text-orange-600'
+    }
+    const iconClass = `h-3 w-3 ${colorClasses[color] || 'text-gray-600'}`
+    
+    switch (iconName) {
+      case 'trending-up':
+        return <TrendingUp className={iconClass} />
+      case 'trending-down':
+        return <TrendingDown className={iconClass} />
+      case 'folder':
+        return <FolderOpen className={iconClass} />
+      case 'dollar':
+        return <DollarSign className={iconClass} />
+      case 'target':
+        return <Target className={iconClass} />
+      default:
+        return <Activity className={iconClass} />
+    }
+  }
+
+  // Helper function to format time ago
+  const formatTimeAgo = (dateString) => {
+    if (!dateString) return 'Just now'
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInSeconds = Math.floor((now - date) / 1000)
+    
+    if (diffInSeconds < 60) return 'Just now'
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`
+    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} days ago`
+    return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+  }
+
   useEffect(() => {
     // Load dashboard data from API
     const loadDashboardData = async () => {
@@ -211,10 +273,54 @@ const Admin_dashboard = () => {
         setIsLoading(true)
         setError(null)
         
-        const response = await adminDashboardService.getDashboardStats()
+        // Fetch dashboard stats and finance statistics in parallel
+        // Fetch both all-time and monthly finance statistics
+        const [dashboardResponse, financeResponseAll, financeResponseMonth] = await Promise.all([
+          adminDashboardService.getDashboardStats(),
+          adminFinanceService.getFinanceStatistics('all').catch(err => {
+            console.error('Error fetching finance statistics (all):', err)
+            return null
+          }),
+          adminFinanceService.getFinanceStatistics('month').catch(err => {
+            console.error('Error fetching finance statistics (month):', err)
+            return null
+          })
+        ])
         
-        if (response.success && response.data) {
-          setDashboardData(response.data)
+        if (dashboardResponse.success && dashboardResponse.data) {
+          let dashboardData = { ...dashboardResponse.data }
+          
+          // Override financial data with comprehensive finance statistics if available
+          const financeData = financeResponseAll?.success && financeResponseAll?.data ? financeResponseAll.data : null
+          const financeDataMonth = financeResponseMonth?.success && financeResponseMonth?.data ? financeResponseMonth.data : null
+          
+          if (financeData) {
+            // Update finance section with comprehensive data
+            dashboardData.finance = {
+              totalRevenue: financeData.totalRevenue || 0,
+              monthlyRevenue: financeDataMonth?.totalRevenue || financeData.totalRevenue || 0, // Use monthly data if available
+              outstandingPayments: financeData.pendingAmounts?.totalPendingReceivables || 0,
+              expenses: financeData.totalExpenses || 0,
+              profit: financeData.netProfit || 0,
+              profitMargin: parseFloat(financeData.profitMargin || 0),
+              growth: parseFloat(financeDataMonth?.revenueChange || financeData.revenueChange || 0)
+            }
+            
+            // Update today's financial metrics with accurate data
+            dashboardData.today = {
+              ...dashboardData.today,
+              earnings: financeData.todayEarnings || dashboardData.today.earnings || 0,
+              expenses: financeData.todayExpenses || dashboardData.today.expenses || 0,
+              sales: financeData.todayEarnings || dashboardData.today.sales || 0, // Today sales = today earnings
+              pendingAmount: financeData.pendingAmounts?.totalPendingReceivables || dashboardData.today.pendingAmount || 0,
+              profit: financeData.todayProfit || dashboardData.today.profit || 0,
+              loss: (financeData.todayExpenses || 0) > (financeData.todayEarnings || 0) 
+                ? (financeData.todayExpenses - financeData.todayEarnings) 
+                : 0
+            }
+          }
+          
+          setDashboardData(dashboardData)
           
           // Update notifications with real data
           const updatedNotifications = [
@@ -222,7 +328,7 @@ const Admin_dashboard = () => {
               id: 1,
               type: 'warning',
               title: 'Payment Overdue',
-              message: `${response.data.projects.overdue || 0} projects have overdue payments`,
+              message: `${dashboardData.projects.overdue || 0} projects have overdue payments`,
               time: 'Just now',
               icon: AlertTriangle
             },
@@ -230,7 +336,7 @@ const Admin_dashboard = () => {
               id: 2,
               type: 'success',
               title: 'Project Completed',
-              message: `${response.data.projects.completed || 0} projects completed successfully`,
+              message: `${dashboardData.projects.completed || 0} projects completed successfully`,
               time: 'Just now',
               icon: CheckCircle
             },
@@ -238,7 +344,7 @@ const Admin_dashboard = () => {
               id: 3,
               type: 'info',
               title: 'New User Registration',
-              message: `${response.data.users.newThisMonth || 0} new users registered this month`,
+              message: `${dashboardData.users.newThisMonth || 0} new users registered this month`,
               time: 'Just now',
               icon: Users
             },
@@ -246,7 +352,7 @@ const Admin_dashboard = () => {
               id: 4,
               type: 'error',
               title: 'System Alert',
-              message: `Server load: ${response.data.system.serverLoad || 0}%`,
+              message: `Server load: ${dashboardData.system.serverLoad || 0}%`,
               time: 'Just now',
               icon: Server
             }
@@ -255,6 +361,9 @@ const Admin_dashboard = () => {
         } else {
           throw new Error('Failed to load dashboard data')
         }
+        
+        // Fetch recent activities separately
+        await fetchRecentActivities()
       } catch (err) {
         console.error('Error loading dashboard data:', err)
         setError(err.message || 'Failed to load dashboard data')
@@ -266,6 +375,13 @@ const Admin_dashboard = () => {
     }
 
     loadDashboardData()
+    
+    // Set up interval to refresh activities every 30 seconds
+    const activityInterval = setInterval(() => {
+      fetchRecentActivities()
+    }, 30000)
+    
+    return () => clearInterval(activityInterval)
   }, [])
 
   const handleQuickAction = (action) => {
@@ -335,10 +451,54 @@ const Admin_dashboard = () => {
                   setIsLoading(true)
                   setError(null)
                   try {
-                    const response = await adminDashboardService.getDashboardStats()
-                    if (response.success && response.data) {
-                      setDashboardData(response.data)
+                    // Fetch dashboard stats and finance statistics in parallel
+                    const [dashboardResponse, financeResponseAll, financeResponseMonth] = await Promise.all([
+                      adminDashboardService.getDashboardStats(),
+                      adminFinanceService.getFinanceStatistics('all').catch(err => {
+                        console.error('Error fetching finance statistics (all):', err)
+                        return null
+                      }),
+                      adminFinanceService.getFinanceStatistics('month').catch(err => {
+                        console.error('Error fetching finance statistics (month):', err)
+                        return null
+                      })
+                    ])
+                    
+                    if (dashboardResponse.success && dashboardResponse.data) {
+                      let dashboardData = { ...dashboardResponse.data }
+                      
+                      const financeData = financeResponseAll?.success && financeResponseAll?.data ? financeResponseAll.data : null
+                      const financeDataMonth = financeResponseMonth?.success && financeResponseMonth?.data ? financeResponseMonth.data : null
+                      
+                      if (financeData) {
+                        dashboardData.finance = {
+                          totalRevenue: financeData.totalRevenue || 0,
+                          monthlyRevenue: financeDataMonth?.totalRevenue || financeData.totalRevenue || 0,
+                          outstandingPayments: financeData.pendingAmounts?.totalPendingReceivables || 0,
+                          expenses: financeData.totalExpenses || 0,
+                          profit: financeData.netProfit || 0,
+                          profitMargin: parseFloat(financeData.profitMargin || 0),
+                          growth: parseFloat(financeDataMonth?.revenueChange || financeData.revenueChange || 0)
+                        }
+                        
+                        dashboardData.today = {
+                          ...dashboardData.today,
+                          earnings: financeData.todayEarnings || dashboardData.today.earnings || 0,
+                          expenses: financeData.todayExpenses || dashboardData.today.expenses || 0,
+                          sales: financeData.todayEarnings || dashboardData.today.sales || 0,
+                          pendingAmount: financeData.pendingAmounts?.totalPendingReceivables || dashboardData.today.pendingAmount || 0,
+                          profit: financeData.todayProfit || dashboardData.today.profit || 0,
+                          loss: (financeData.todayExpenses || 0) > (financeData.todayEarnings || 0) 
+                            ? (financeData.todayExpenses - financeData.todayEarnings) 
+                            : 0
+                        }
+                      }
+                      
+                      setDashboardData(dashboardData)
                     }
+                    
+                    // Fetch recent activities
+                    await fetchRecentActivities()
                   } catch (err) {
                     setError(err.message || 'Failed to load dashboard data')
                   } finally {
@@ -391,10 +551,56 @@ const Admin_dashboard = () => {
                 onClick={async () => {
                   setIsLoading(true)
                   try {
-                    const response = await adminDashboardService.getDashboardStats()
-                    if (response.success && response.data) {
-                      setDashboardData(response.data)
+                    // Fetch dashboard stats and finance statistics in parallel
+                    // Fetch both all-time and monthly finance statistics
+                    const [dashboardResponse, financeResponseAll, financeResponseMonth] = await Promise.all([
+                      adminDashboardService.getDashboardStats(),
+                      adminFinanceService.getFinanceStatistics('all').catch(err => {
+                        console.error('Error fetching finance statistics (all):', err)
+                        return null
+                      }),
+                      adminFinanceService.getFinanceStatistics('month').catch(err => {
+                        console.error('Error fetching finance statistics (month):', err)
+                        return null
+                      })
+                    ])
+                    
+                    if (dashboardResponse.success && dashboardResponse.data) {
+                      let dashboardData = { ...dashboardResponse.data }
+                      
+                      // Override financial data with comprehensive finance statistics if available
+                      const financeData = financeResponseAll?.success && financeResponseAll?.data ? financeResponseAll.data : null
+                      const financeDataMonth = financeResponseMonth?.success && financeResponseMonth?.data ? financeResponseMonth.data : null
+                      
+                      if (financeData) {
+                        dashboardData.finance = {
+                          totalRevenue: financeData.totalRevenue || 0,
+                          monthlyRevenue: financeDataMonth?.totalRevenue || financeData.totalRevenue || 0,
+                          outstandingPayments: financeData.pendingAmounts?.totalPendingReceivables || 0,
+                          expenses: financeData.totalExpenses || 0,
+                          profit: financeData.netProfit || 0,
+                          profitMargin: parseFloat(financeData.profitMargin || 0),
+                          growth: parseFloat(financeDataMonth?.revenueChange || financeData.revenueChange || 0)
+                        }
+                        
+                        dashboardData.today = {
+                          ...dashboardData.today,
+                          earnings: financeData.todayEarnings || dashboardData.today.earnings || 0,
+                          expenses: financeData.todayExpenses || dashboardData.today.expenses || 0,
+                          sales: financeData.todayEarnings || dashboardData.today.sales || 0,
+                          pendingAmount: financeData.pendingAmounts?.totalPendingReceivables || dashboardData.today.pendingAmount || 0,
+                          profit: financeData.todayProfit || dashboardData.today.profit || 0,
+                          loss: (financeData.todayExpenses || 0) > (financeData.todayEarnings || 0) 
+                            ? (financeData.todayExpenses - financeData.todayEarnings) 
+                            : 0
+                        }
+                      }
+                      
+                      setDashboardData(dashboardData)
                     }
+                    
+                    // Refresh recent activities
+                    await fetchRecentActivities()
                   } catch (err) {
                     console.error('Error refreshing dashboard:', err)
                     setError(err.message || 'Failed to refresh dashboard')
@@ -494,12 +700,17 @@ const Admin_dashboard = () => {
                   <div className="p-2 rounded-lg bg-orange-500/10">
                     <CreditCard className="h-4 w-4 text-orange-600" />
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-orange-700">
-                      {dashboardData.today.pendingAmount > 0 ? 'Yes' : 'No'}
-                    </p>
-                    <p className="text-xs text-orange-600">pending</p>
-                  </div>
+                  {dashboardData.today.pendingAmount > 0 && (
+                    <div className="text-right">
+                      <p className="text-xs font-medium text-orange-700">Yes</p>
+                      <p className="text-xs text-orange-600">pending</p>
+                    </div>
+                  )}
+                  {dashboardData.today.pendingAmount === 0 && (
+                    <div className="text-right">
+                      <p className="text-xs font-medium text-orange-700">No pending</p>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs font-medium text-orange-700 mb-1">Pending Amount</p>
@@ -540,7 +751,9 @@ const Admin_dashboard = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-medium text-rose-700">
-                      {dashboardData.today.loss > 0 ? `-${((dashboardData.today.loss / dashboardData.today.expenses) * 100).toFixed(1)}%` : '0%'}
+                      {dashboardData.today.lossGrowth !== undefined 
+                        ? `${dashboardData.today.lossGrowth >= 0 ? '+' : ''}${dashboardData.today.lossGrowth?.toFixed(1) || 0}%`
+                        : '0%'}
                     </p>
                     <p className="text-xs text-rose-600">vs yesterday</p>
                   </div>
@@ -575,7 +788,7 @@ const Admin_dashboard = () => {
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-600 mb-1">Monthly Revenue</p>
-                <p className="text-lg font-bold text-emerald-700">{formatCurrency(dashboardData.finance.totalRevenue)}</p>
+                <p className="text-lg font-bold text-emerald-700">{formatCurrency(dashboardData.finance.monthlyRevenue || dashboardData.finance.totalRevenue)}</p>
                 <p className="text-xs text-gray-500 mt-1">Total earnings</p>
               </div>
             </div>
@@ -877,37 +1090,42 @@ const Admin_dashboard = () => {
                 </div>
               </div>
               <div className="space-y-3 flex-1">
-                {notifications.slice(0, 3).map((notification, index) => {
-                  const Icon = notification.icon
-                  return (
-                    <motion.div
-                      key={notification.id}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.5 + index * 0.1 }}
-                      className="flex items-start space-x-3 p-3 rounded-xl bg-gray-50/50 hover:bg-gray-100/50 transition-colors"
-                    >
-                      <div className={`p-1.5 rounded-lg ${
-                        notification.type === 'success' ? 'bg-emerald-100' :
-                        notification.type === 'warning' ? 'bg-amber-100' :
-                        notification.type === 'error' ? 'bg-red-100' :
-                        'bg-blue-100'
-                      }`}>
-                        <Icon className={`h-3 w-3 ${
-                          notification.type === 'success' ? 'text-emerald-600' :
-                          notification.type === 'warning' ? 'text-amber-600' :
-                          notification.type === 'error' ? 'text-red-600' :
-                          'text-blue-600'
-                        }`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-semibold text-gray-900">{notification.title}</h4>
-                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{notification.message}</p>
-                        <p className="text-xs text-gray-500 mt-1">{notification.time}</p>
-                      </div>
-                    </motion.div>
-                  )
-                })}
+                {recentActivities.length > 0 ? (
+                  recentActivities.map((activity, index) => {
+                    const iconColor = activity.color || 'blue'
+                    return (
+                      <motion.div
+                        key={activity.id || `activity-${index}`}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.5 + index * 0.1 }}
+                        className="flex items-start space-x-3 p-3 rounded-xl bg-gray-50/50 hover:bg-gray-100/50 transition-colors"
+                      >
+                        <div className={`p-1.5 rounded-lg ${
+                          iconColor === 'green' ? 'bg-emerald-100' :
+                          iconColor === 'red' ? 'bg-red-100' :
+                          iconColor === 'blue' ? 'bg-blue-100' :
+                          iconColor === 'purple' ? 'bg-purple-100' :
+                          'bg-gray-100'
+                        }`}>
+                          {getActivityIcon(activity.icon || 'activity', iconColor)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-semibold text-gray-900">{activity.title}</h4>
+                          <p className="text-xs text-gray-600 mt-1 line-clamp-2">{activity.message}</p>
+                          <p className="text-xs text-gray-500 mt-1">{formatTimeAgo(activity.time)}</p>
+                        </div>
+                      </motion.div>
+                    )
+                  })
+                ) : (
+                  <div className="flex items-center justify-center py-8 text-gray-500">
+                    <div className="text-center">
+                      <Activity className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                      <p className="text-sm">No recent activities</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>

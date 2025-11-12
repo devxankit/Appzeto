@@ -147,16 +147,26 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
     .filter(t => t.transactionType === 'outgoing')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
+  const yesterdayProfit = yesterdayEarnings - yesterdayExpenses;
+  const yesterdayLoss = yesterdayExpenses > yesterdayEarnings ? yesterdayExpenses - yesterdayEarnings : 0;
+
   // Calculate percentage changes
+  // Handle division by zero: if yesterday was 0 and today > 0, calculate growth as if yesterday was 0.01
   const earningsGrowth = yesterdayEarnings > 0 
     ? ((todayEarnings - yesterdayEarnings) / yesterdayEarnings) * 100 
-    : 0;
+    : (todayEarnings > 0 ? ((todayEarnings - 0.01) / 0.01) * 100 : 0);
   const expensesGrowth = yesterdayExpenses > 0 
     ? ((todayExpenses - yesterdayExpenses) / yesterdayExpenses) * 100 
-    : 0;
+    : (todayExpenses > 0 ? ((todayExpenses - 0.01) / 0.01) * 100 : 0);
   const salesGrowthToday = yesterdayEarnings > 0 
     ? ((todaySales - yesterdayEarnings) / yesterdayEarnings) * 100 
-    : 0;
+    : (todaySales > 0 ? ((todaySales - 0.01) / 0.01) * 100 : 0);
+  const profitGrowth = Math.abs(yesterdayProfit) > 0.01
+    ? ((todayProfit - yesterdayProfit) / Math.abs(yesterdayProfit)) * 100
+    : (todayProfit > 0.01 ? ((todayProfit - 0.01) / 0.01) * 100 : (todayProfit < -0.01 ? ((todayProfit + 0.01) / 0.01) * 100 : 0));
+  const lossGrowth = yesterdayLoss > 0
+    ? ((todayLoss - yesterdayLoss) / yesterdayLoss) * 100
+    : (todayLoss > 0 ? ((todayLoss - 0.01) / 0.01) * 100 : 0);
 
   // Pending payments (from Payment model)
   const pendingPayments = await Payment.find({ status: 'pending' });
@@ -200,7 +210,7 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
 
   const financeGrowth = revenueLastMonth > 0 
     ? ((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100 
-    : 0;
+    : (revenueThisMonth > 0 ? 0 : 0);
 
   // Get revenue trend data (last 7 months)
   const revenueTrendData = [];
@@ -347,6 +357,7 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
     },
     finance: {
       totalRevenue: totalRevenue,
+      monthlyRevenue: revenueThisMonth,
       outstandingPayments: outstandingPayments,
       expenses: totalExpenses,
       profit: profit,
@@ -364,9 +375,8 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
       earningsGrowth: parseFloat(earningsGrowth.toFixed(2)),
       expensesGrowth: parseFloat(expensesGrowth.toFixed(2)),
       salesGrowth: parseFloat(salesGrowthToday.toFixed(2)),
-      profitGrowth: yesterdayEarnings > 0 && yesterdayExpenses > 0
-        ? parseFloat((((todayProfit - (yesterdayEarnings - yesterdayExpenses)) / (yesterdayEarnings - yesterdayExpenses)) * 100).toFixed(2))
-        : 0
+      profitGrowth: parseFloat(profitGrowth.toFixed(2)),
+      lossGrowth: parseFloat(lossGrowth.toFixed(2))
     },
     system: systemHealth,
     revenueTrend: revenueTrendData,
@@ -896,8 +906,110 @@ const getAdminLeaderboard = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get recent activities for admin dashboard
+// @route   GET /api/admin/analytics/recent-activities
+// @access  Admin only
+const getRecentActivities = asyncHandler(async (req, res, next) => {
+  const { limit = 3 } = req.query;
+  const fetchLimit = Math.max(parseInt(limit), 5); // Fetch more items from each source to get better mix
+  
+  const activities = [];
+  
+  // Get recent transactions (fetch more to get better mix)
+  const recentTransactions = await AdminFinance.find({
+    recordType: 'transaction'
+  })
+    .sort({ createdAt: -1 })
+    .limit(fetchLimit)
+    .lean();
+  
+  recentTransactions.forEach(transaction => {
+    activities.push({
+      id: `transaction-${transaction._id.toString()}`,
+      type: 'transaction',
+      title: transaction.transactionType === 'incoming' ? 'New Transaction' : 'Expense Recorded',
+      message: `${transaction.transactionType === 'incoming' ? 'Received' : 'Paid'} ₹${transaction.amount?.toLocaleString('en-IN') || 0} - ${transaction.category || 'Transaction'}`,
+      time: transaction.createdAt,
+      icon: transaction.transactionType === 'incoming' ? 'trending-up' : 'trending-down',
+      color: transaction.transactionType === 'incoming' ? 'green' : 'red'
+    });
+  });
+  
+  // Get recent projects
+  const recentProjects = await Project.find()
+    .sort({ createdAt: -1 })
+    .limit(fetchLimit)
+    .populate('client', 'name companyName')
+    .lean();
+  
+  recentProjects.forEach(project => {
+    activities.push({
+      id: `project-${project._id.toString()}`,
+      type: 'project',
+      title: 'New Project Created',
+      message: `Project "${project.name}" created${project.client ? ` for ${project.client.companyName || project.client.name}` : ''}`,
+      time: project.createdAt,
+      icon: 'folder',
+      color: 'blue'
+    });
+  });
+  
+  // Get recent payments
+  const recentPayments = await Payment.find({
+    status: 'completed'
+  })
+    .sort({ paidAt: -1 })
+    .limit(fetchLimit)
+    .populate('project', 'name')
+    .populate('client', 'name companyName')
+    .lean();
+  
+  recentPayments.forEach(payment => {
+    activities.push({
+      id: `payment-${payment._id.toString()}`,
+      type: 'payment',
+      title: 'Payment Received',
+      message: `Received ₹${payment.amount?.toLocaleString('en-IN') || 0}${payment.project ? ` for ${payment.project.name}` : ''}${payment.client ? ` from ${payment.client.companyName || payment.client.name}` : ''}`,
+      time: payment.paidAt || payment.createdAt,
+      icon: 'dollar',
+      color: 'green'
+    });
+  });
+  
+  // Get recent leads converted
+  const recentLeads = await Lead.find({
+    status: 'converted'
+  })
+    .sort({ updatedAt: -1 })
+    .limit(fetchLimit)
+    .populate('assignedTo', 'name')
+    .lean();
+  
+  recentLeads.forEach(lead => {
+    activities.push({
+      id: `lead-${lead._id.toString()}`,
+      type: 'lead',
+      title: 'Lead Converted',
+      message: `Lead "${lead.companyName || lead.name || 'Unnamed'}" converted to client${lead.assignedTo ? ` by ${lead.assignedTo.name}` : ''}`,
+      time: lead.updatedAt,
+      icon: 'target',
+      color: 'purple'
+    });
+  });
+  
+  // Sort all activities by time (most recent first) and take top N
+  activities.sort((a, b) => new Date(b.time) - new Date(a.time));
+  const topActivities = activities.slice(0, parseInt(limit));
+  
+  res.json({
+    success: true,
+    data: topActivities
+  });
+});
+
 module.exports = {
   getAdminDashboardStats,
   getSystemAnalytics,
-  getAdminLeaderboard
+  getAdminLeaderboard,
+  getRecentActivities
 };

@@ -33,6 +33,22 @@ export const salesPaymentsService = {
       })
     })
     return res.data
+  },
+
+  async getInstallments(projectId) {
+    const res = await apiRequest(`/sales/payment-recovery/${projectId}/installments`, { method: 'GET' })
+    return res.data || []
+  },
+
+  async requestInstallmentPayment(projectId, installmentId, payload) {
+    const res = await apiRequest(`/sales/payment-recovery/${projectId}/installments/${installmentId}/request-payment`, {
+      method: 'POST',
+      body: JSON.stringify({
+        paidDate: payload.paidDate,
+        notes: payload.notes
+      })
+    })
+    return res.data
   }
 }
 

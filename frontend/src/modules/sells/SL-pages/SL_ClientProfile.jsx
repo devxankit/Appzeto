@@ -68,6 +68,29 @@ const SL_ClientProfile = () => {
     }
   }, [id])
 
+  // Refresh client profile when component becomes visible (handles back navigation)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && id) {
+        fetchClientProfile()
+      }
+    }
+    
+    const handleFocus = () => {
+      if (id) {
+        fetchClientProfile()
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [id])
+
   const fetchClientProfile = async () => {
     setIsLoading(true)
     setError(null)
@@ -368,18 +391,54 @@ const SL_ClientProfile = () => {
                   </div>
                 </div>
                 
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-teal-700 text-sm">Total Cost</span>
-                    <span className="text-teal-800 font-semibold">₹{(financial?.totalCost || 0).toLocaleString()}</span>
+                <div className="space-y-3">
+                  {/* Total Cost */}
+                  <div className="flex justify-between items-center pb-2 border-b border-teal-200">
+                    <span className="text-teal-700 text-sm font-medium">Total Cost</span>
+                    <span className="text-teal-800 font-bold text-base">₹{(financial?.totalCost || 0).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-teal-700 text-sm">Advance Received</span>
-                    <span className="text-teal-800 font-semibold">₹{(financial?.advanceReceived || 0).toLocaleString()}</span>
+                  
+                  {/* Payment Breakdown */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-xs text-teal-600 font-semibold mb-1.5">Payment Breakdown:</div>
+                    
+                    {/* Initial Advance */}
+                    {(financial?.breakdown?.initialAdvance || 0) > 0 && (
+                      <div className="flex justify-between items-center pl-3">
+                        <span className="text-teal-600 text-xs">Initial Advance</span>
+                        <span className="text-teal-700 font-semibold text-xs">₹{(financial?.breakdown?.initialAdvance || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    
+                    {/* From Receipts */}
+                    {(financial?.breakdown?.fromReceipts || 0) > 0 && (
+                      <div className="flex justify-between items-center pl-3">
+                        <span className="text-teal-600 text-xs">From Receipts</span>
+                        <span className="text-teal-700 font-semibold text-xs">₹{(financial?.breakdown?.fromReceipts || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    
+                    {/* From Installments */}
+                    {(financial?.breakdown?.fromInstallments || 0) > 0 && (
+                      <div className="flex justify-between items-center pl-3">
+                        <span className="text-teal-600 text-xs">From Installments</span>
+                        <span className="text-teal-700 font-semibold text-xs">₹{(financial?.breakdown?.fromInstallments || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    
+                    {/* Total Paid */}
+                    <div className="flex justify-between items-center pt-1.5 mt-1.5 border-t border-teal-200">
+                      <span className="text-teal-700 text-sm font-semibold">Total Paid</span>
+                      <span className="text-teal-800 font-bold text-sm">₹{(financial?.breakdown?.totalPaid || financial?.advanceReceived || 0).toLocaleString()}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-teal-700 text-sm">Pending</span>
-                    <span className="text-teal-800 font-semibold">₹{(financial?.pending || 0).toLocaleString()}</span>
+                  
+                  {/* Pending Amount */}
+                  <div className="flex justify-between items-center pt-2 border-t border-teal-300">
+                    <span className="text-teal-700 text-sm font-semibold">Pending</span>
+                    <span className={`font-bold text-base ${(financial?.pending || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      ₹{(financial?.pending || 0).toLocaleString()}
+                    </span>
                   </div>
                 </div>
               </div>

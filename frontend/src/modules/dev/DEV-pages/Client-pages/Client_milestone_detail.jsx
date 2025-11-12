@@ -19,85 +19,88 @@ import {
   FiAlertTriangle,
   FiSend
 } from 'react-icons/fi'
+import { clientMilestoneService } from '../../DEV-services/clientMilestoneService'
+import { useToast } from '../../../../contexts/ToastContext'
 
 const Client_milestone_detail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const toast = useToast()
   const [timeLeft, setTimeLeft] = useState('')
   const [showUploadForm, setShowUploadForm] = useState(false)
   const [newComment, setNewComment] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [milestoneData, setMilestoneData] = useState({
-    milestone: {
-      id: parseInt(id),
-      title: "Phase 2: Design & Prototyping",
-      description: "Create wireframes, mockups, and design system for the platform. This milestone focuses on establishing the visual foundation and user experience patterns for the entire application.",
-      status: "active",
-      progress: 75,
-      dueDate: "2024-01-25",
-      createdDate: "2024-01-01",
-      assignee: { fullName: "Mike Wilson" },
-      project: { name: "E-commerce Website" },
-      attachments: [
-        {
-          id: 1,
-          name: "wireframes.pdf",
-          type: "pdf",
-          size: "2.4 MB",
-          uploadedBy: "Mike Wilson",
-          uploadedDate: "2024-01-15"
-        },
-        {
-          id: 2,
-          name: "design-system.fig",
-          type: "fig",
-          size: "5.1 MB",
-          uploadedBy: "Mike Wilson",
-          uploadedDate: "2024-01-18"
-        }
-      ],
-      comments: [
-        {
-          id: 1,
-          message: "Initial wireframes are ready for review. Please provide feedback on the user flow.",
-          user: { fullName: "Mike Wilson" },
-          timestamp: "2024-01-15T10:30:00Z"
-        },
-        {
-          id: 2,
-          message: "Design system components are complete. Ready for development handoff.",
-          user: { fullName: "Mike Wilson" },
-          timestamp: "2024-01-20T14:15:00Z"
-        }
-      ]
-    },
-    tasks: [
-      {
-        id: 1,
-        title: "Create homepage wireframes",
-        description: "Design wireframes for the main homepage layout",
-        status: "completed",
-        assignedTo: "Mike Wilson",
-        dueDate: "2024-01-10"
-      },
-      {
-        id: 2,
-        title: "Design product catalog page",
-        description: "Create wireframes for product listing and filtering",
-        status: "completed",
-        assignedTo: "Mike Wilson",
-        dueDate: "2024-01-15"
-      },
-      {
-        id: 3,
-        title: "Develop design system",
-        description: "Create reusable UI components and style guide",
-        status: "in-progress",
-        assignedTo: "Mike Wilson",
-        dueDate: "2024-01-25"
-      }
-    ]
+    milestone: null,
+    tasks: []
   })
+
+  // Load milestone data
+  useEffect(() => {
+    const loadMilestoneData = async () => {
+      if (!id) return
+      
+      try {
+        setLoading(true)
+        const response = await clientMilestoneService.getMilestoneById(id)
+        const milestone = response.data || response
+        
+        // Transform milestone data
+        const transformedMilestone = {
+          _id: milestone._id,
+          id: milestone._id,
+          title: milestone.title || '',
+          description: milestone.description || '',
+          status: milestone.status || 'pending',
+          progress: milestone.progress || 0,
+          dueDate: milestone.dueDate || new Date(),
+          createdAt: milestone.createdAt || new Date(),
+          assignedTo: milestone.assignedTo ? (Array.isArray(milestone.assignedTo) ? milestone.assignedTo.map(a => a.name).join(', ') : milestone.assignedTo.name) : 'Unassigned',
+          assignee: milestone.assignedTo ? (Array.isArray(milestone.assignedTo) ? { fullName: milestone.assignedTo[0]?.name || 'Team' } : { fullName: milestone.assignedTo.name }) : { fullName: 'Unassigned' },
+          project: milestone.project ? { name: milestone.project.name || 'Unknown Project' } : { name: 'Unknown Project' },
+          attachments: (milestone.attachments || []).map((att, index) => ({
+            id: att._id || index,
+            _id: att._id,
+            name: att.originalName || att.original_filename || 'attachment',
+            type: att.format || 'file',
+            size: att.size ? `${(att.size / 1024 / 1024).toFixed(1)} MB` : 'N/A',
+            secure_url: att.secure_url,
+            uploadedDate: att.uploadedAt || milestone.createdAt || new Date()
+          })),
+          comments: milestone.comments || []
+        }
+        
+        // Transform tasks
+        const transformedTasks = (milestone.tasks || []).map(task => ({
+          id: task._id,
+          _id: task._id,
+          title: task.title || '',
+          description: task.description || '',
+          status: task.status || 'pending',
+          assignedTo: task.assignedTo ? (Array.isArray(task.assignedTo) ? task.assignedTo.map(a => a.name).join(', ') : task.assignedTo.name) : 'Unassigned',
+          dueDate: task.dueDate || new Date()
+        }))
+        
+        setMilestoneData({
+          milestone: transformedMilestone,
+          tasks: transformedTasks
+        })
+      } catch (error) {
+        console.error('Error loading milestone data:', error)
+        toast.error(error.message || 'Failed to load milestone details', {
+          title: 'Error',
+          duration: 4000
+        })
+        if (error.status === 404 || error.message?.includes('not found')) {
+          setTimeout(() => navigate('/client-projects'), 2000)
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadMilestoneData()
+  }, [id, navigate, toast])
 
   // Calculate time left until due date
   useEffect(() => {
@@ -186,14 +189,23 @@ const Client_milestone_detail = () => {
   }
 
   const getFileIcon = (type) => {
-    switch (type) {
+    const typeLower = (type || '').toLowerCase()
+    switch (typeLower) {
       case 'pdf': return '📄'
-      case 'docx': return '📝'
+      case 'docx':
+      case 'doc': return '📝'
       case 'fig': return '🎨'
-      case 'png': return '🖼️'
-      case 'jpg': return '🖼️'
-      case 'jpeg': return '🖼️'
-      case 'zip': return '📦'
+      case 'png': 
+      case 'jpg': 
+      case 'jpeg':
+      case 'gif':
+      case 'svg': return '🖼️'
+      case 'zip':
+      case 'rar': return '📦'
+      case 'xlsx':
+      case 'xls': return '📊'
+      case 'pptx':
+      case 'ppt': return '📑'
       default: return '📎'
     }
   }
@@ -215,26 +227,83 @@ const Client_milestone_detail = () => {
     }
   }
 
-  const handleCommentSubmit = () => {
-    if (!newComment.trim()) return
+  const handleCommentSubmit = async () => {
+    if (!newComment.trim() || !milestoneData.milestone) return
     
-    // Simulate API call
-    const newCommentObj = {
-      id: Date.now(),
-      message: newComment.trim(),
-      user: { fullName: "Client" },
-      timestamp: new Date().toISOString()
-    }
-    
-    setMilestoneData(prevData => ({
-      ...prevData,
-      milestone: {
-        ...prevData.milestone,
-        comments: [...(prevData.milestone.comments || []), newCommentObj]
+    try {
+      // For now, add comment locally since there's no client milestone comment API yet
+      // TODO: Add backend API endpoint for client milestone comments
+      const newCommentObj = {
+        _id: Date.now().toString(),
+        id: Date.now(),
+        message: newComment.trim(),
+        user: { name: 'Client', fullName: 'Client' },
+        userType: 'client',
+        createdAt: new Date().toISOString(),
+        timestamp: new Date().toISOString()
       }
-    }))
-    
-    setNewComment('')
+      
+      setMilestoneData(prevData => ({
+        ...prevData,
+        milestone: {
+          ...prevData.milestone,
+          comments: [...(prevData.milestone.comments || []), newCommentObj]
+        }
+      }))
+      
+      setNewComment('')
+      toast.success('Comment added successfully!', {
+        title: 'Success',
+        duration: 3000
+      })
+    } catch (error) {
+      console.error('Error adding comment:', error)
+      toast.error('Failed to add comment', {
+        title: 'Error',
+        duration: 4000
+      })
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
+        <Client_navbar />
+        <main className="pt-16 lg:pt-16 pb-16 lg:pb-8">
+          <div className="px-4 md:max-w-4xl md:mx-auto md:px-6 lg:px-8">
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading milestone details...</p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (!milestoneData.milestone) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
+        <Client_navbar />
+        <main className="pt-16 lg:pt-16 pb-16 lg:pb-8">
+          <div className="px-4 md:max-w-4xl md:mx-auto md:px-6 lg:px-8">
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <p className="text-gray-600 mb-4">Milestone not found</p>
+                <button
+                  onClick={() => navigate('/client-projects')}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                >
+                  Back to Projects
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   const StatusIcon = getStatusIcon(milestoneData.milestone.status)
@@ -373,7 +442,7 @@ const Client_milestone_detail = () => {
                 <FiClock className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500" />
                 <div>
                   <p className="text-xs text-gray-500">Created</p>
-                  <p className="text-sm font-medium text-gray-900">{formatDate(milestoneData.milestone.createdDate)}</p>
+                  <p className="text-sm font-medium text-gray-900">{formatDate(milestoneData.milestone.createdAt)}</p>
                 </div>
               </div>
             </div>
@@ -473,16 +542,31 @@ const Client_milestone_detail = () => {
                       <div>
                         <p className="text-sm font-medium text-gray-900">{attachment.name}</p>
                         <p className="text-xs text-gray-500">{attachment.size}</p>
-                        <p className="text-xs text-gray-400">by {attachment.uploadedBy} • {formatDate(attachment.uploadedDate)}</p>
+                        <p className="text-xs text-gray-400">Uploaded • {formatDate(attachment.uploadedDate)}</p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <button className="p-2 text-gray-400 hover:text-teal-600 hover:bg-white rounded-lg transition-colors" title="Preview">
-                        <FiEye className="h-4 w-4" />
-                      </button>
-                      <button className="p-2 text-gray-400 hover:text-teal-600 hover:bg-white rounded-lg transition-colors" title="Download">
-                        <FiDownload className="h-4 w-4" />
-                      </button>
+                      {attachment.secure_url && (
+                        <>
+                          <a 
+                            href={attachment.secure_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="p-2 text-gray-400 hover:text-teal-600 hover:bg-white rounded-lg transition-colors" 
+                            title="Preview"
+                          >
+                            <FiEye className="h-4 w-4" />
+                          </a>
+                          <a 
+                            href={attachment.secure_url} 
+                            download
+                            className="p-2 text-gray-400 hover:text-teal-600 hover:bg-white rounded-lg transition-colors" 
+                            title="Download"
+                          >
+                            <FiDownload className="h-4 w-4" />
+                          </a>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -518,10 +602,10 @@ const Client_milestone_detail = () => {
                           <FiUser className="h-3 w-3 text-teal-600" />
                         </div>
                         <span className="text-sm font-medium text-gray-900">
-                          {comment.user?.fullName || 'Unknown User'}
+                          {comment.user?.fullName || comment.user?.name || 'Unknown User'}
                         </span>
                         <span className="text-xs text-gray-500">
-                          {formatDate(comment.timestamp)}
+                          {formatDate(comment.timestamp || comment.createdAt)}
                         </span>
                       </div>
                     </div>

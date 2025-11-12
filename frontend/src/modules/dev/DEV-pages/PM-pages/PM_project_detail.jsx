@@ -100,7 +100,7 @@ const PM_project_detail = () => {
         description: response.data?.description || response.description,
         status: response.data?.status || response.status,
         priority: response.data?.priority || response.priority,
-        progress: response.data?.progress || response.progress || 0,
+        progress: response.data?.progress || response.progress || 0, // Will be recalculated after milestones load
         dueDate: response.data?.dueDate || response.dueDate,
         startDate: response.data?.startDate || response.startDate,
         assignedTeam: response.data?.assignedTeam || response.assignedTeam || [],
@@ -112,11 +112,24 @@ const PM_project_detail = () => {
       
       setProject(projectData)
       
-      // Load related data
-      await Promise.all([
-        loadMilestones(),
-        loadTasks()
-      ])
+      // Load related data - milestones first so we can calculate progress
+      const milestonesResponse = await milestoneService.getMilestonesByProject(id)
+      const loadedMilestones = milestonesResponse.data || milestonesResponse || []
+      
+      // Calculate progress based on completed milestones vs total milestones
+      if (loadedMilestones.length > 0) {
+        const totalMilestones = loadedMilestones.length
+        const completedMilestones = loadedMilestones.filter(m => m.status === 'completed').length
+        projectData.progress = totalMilestones > 0 
+          ? Math.round((completedMilestones / totalMilestones) * 100) 
+          : (projectData.progress || 0)
+        setProject(projectData)
+      }
+      
+      setMilestones(loadedMilestones)
+      
+      // Load tasks
+      await loadTasks()
       
     } catch (error) {
       console.error('Error loading project:', error)
@@ -139,7 +152,22 @@ const PM_project_detail = () => {
   const loadMilestones = async () => {
     try {
       const response = await milestoneService.getMilestonesByProject(id)
-      setMilestones(response.data || response || [])
+      const loadedMilestones = response.data || response || []
+      setMilestones(loadedMilestones)
+      
+      // Update project progress based on completed milestones
+      if (loadedMilestones.length > 0 && project) {
+        const totalMilestones = loadedMilestones.length
+        const completedMilestones = loadedMilestones.filter(m => m.status === 'completed').length
+        const calculatedProgress = totalMilestones > 0 
+          ? Math.round((completedMilestones / totalMilestones) * 100) 
+          : (project.progress || 0)
+        
+        setProject(prev => ({
+          ...prev,
+          progress: calculatedProgress
+        }))
+      }
     } catch (error) {
       console.error('Error loading milestones:', error)
     }

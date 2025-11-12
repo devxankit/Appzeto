@@ -3,7 +3,9 @@ const {
   getClientProjects,
   getClientProjectById,
   getClientProjectMilestones,
-  getClientProjectStatistics
+  getClientProjectTasks,
+  getClientProjectStatistics,
+  getClientMilestoneById
 } = require('../controllers/clientProjectController');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -18,5 +20,6 @@ router.get('/', getClientProjects);
 router.get('/statistics', getClientProjectStatistics);
 router.get('/:id', getClientProjectById);
 router.get('/:id/milestones', getClientProjectMilestones);
+router.get('/:id/tasks', getClientProjectTasks);
 
 module.exports = router;

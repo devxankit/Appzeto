@@ -28,11 +28,49 @@ const getClientProjects = asyncHandler(async (req, res, next) => {
 
   const total = await Project.countDocuments(filter);
 
+  // Calculate progress for each project based on completed milestones
+  const Milestone = require('../models/Milestone');
+  const projectsWithProgress = await Promise.all(
+    projects.map(async (project) => {
+      const projectObj = project.toObject();
+      
+      // Calculate progress based on completed milestones vs total milestones
+      const milestones = await Milestone.find({ project: project._id });
+      const totalMilestones = milestones.length;
+      const completedMilestones = milestones.filter(m => m.status === 'completed').length;
+      
+      // For completed projects, always set progress to 100%
+      if (project.status === 'completed') {
+        projectObj.progress = 100;
+      } else {
+        // Calculate progress as percentage of completed milestones
+        projectObj.progress = totalMilestones > 0 
+          ? Math.round((completedMilestones / totalMilestones) * 100) 
+          : (project.progress || 0);
+      }
+      
+      // Calculate task counts for the project
+      const projectTasks = await Task.find({ project: project._id });
+      const totalTasks = projectTasks.length;
+      const completedTasks = projectTasks.filter(t => t.status === 'completed').length;
+      // Tasks awaiting client feedback: pending or in-progress tasks (active tasks that may need client input)
+      const awaitingClientFeedback = projectTasks.filter(t => 
+        t.status === 'pending' || t.status === 'in-progress' || t.status === 'testing'
+      ).length;
+      
+      projectObj.totalTasks = totalTasks;
+      projectObj.completedTasks = completedTasks;
+      projectObj.awaitingClientFeedback = awaitingClientFeedback;
+      
+      return projectObj;
+    })
+  );
+
   res.json({
     success: true,
-    count: projects.length,
+    count: projectsWithProgress.length,
     total,
-    data: projects,
+    data: projectsWithProgress,
     pagination: {
       current: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
@@ -65,9 +103,27 @@ const getClientProjectById = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Project not found or you do not have access to this project', 404));
   }
 
+  // Calculate progress based on completed milestones vs total milestones
+  const Milestone = require('../models/Milestone');
+  const milestones = await Milestone.find({ project: project._id });
+  const totalMilestones = milestones.length;
+  const completedMilestones = milestones.filter(m => m.status === 'completed').length;
+  
+  const projectObj = project.toObject();
+  
+  // For completed projects, always set progress to 100%
+  if (project.status === 'completed') {
+    projectObj.progress = 100;
+  } else {
+    // Calculate progress as percentage of completed milestones
+    projectObj.progress = totalMilestones > 0 
+      ? Math.round((completedMilestones / totalMilestones) * 100) 
+      : (project.progress || 0);
+  }
+
   res.json({
     success: true,
-    data: project
+    data: projectObj
   });
 });
 
@@ -101,6 +157,67 @@ const getClientProjectMilestones = asyncHandler(async (req, res, next) => {
   res.json({
     success: true,
     data: milestones
+  });
+});
+
+// @desc    Get milestone by ID (Client view - only their projects)
+// @route   GET /api/client/milestones/:id
+// @access  Client only
+const getClientMilestoneById = asyncHandler(async (req, res, next) => {
+  const clientId = req.user.id;
+  const Milestone = require('../models/Milestone');
+  
+  const milestone = await Milestone.findById(req.params.id)
+    .populate('project', 'name status client projectManager assignedTeam')
+    .populate('assignedTo', 'name email position department')
+    .populate({
+      path: 'tasks',
+      populate: {
+        path: 'assignedTo',
+        select: 'name email position'
+      }
+    });
+
+  if (!milestone) {
+    return next(new ErrorResponse('Milestone not found', 404));
+  }
+
+  // Verify client owns the project
+  if (!milestone.project.client.equals(clientId)) {
+    return next(new ErrorResponse('Not authorized to access this milestone', 403));
+  }
+
+  res.json({
+    success: true,
+    data: milestone
+  });
+});
+
+// @desc    Get project tasks (Client view - only their projects)
+// @route   GET /api/client/projects/:id/tasks
+// @access  Client only
+const getClientProjectTasks = asyncHandler(async (req, res, next) => {
+  const clientId = req.user.id;
+  
+  // First verify client owns the project
+  const project = await Project.findOne({
+    _id: req.params.id,
+    client: clientId
+  });
+
+  if (!project) {
+    return next(new ErrorResponse('Project not found or you do not have access to this project', 404));
+  }
+
+  const tasks = await Task.find({ project: req.params.id })
+    .populate('assignedTo', 'name email department position')
+    .populate('milestone', 'title sequence')
+    .select('title description status priority dueDate progress assignedTo milestone createdAt updatedAt')
+    .sort({ createdAt: -1 });
+
+  res.json({
+    success: true,
+    data: tasks
   });
 });
 
@@ -174,5 +291,7 @@ module.exports = {
   getClientProjects,
   getClientProjectById,
   getClientProjectMilestones,
+  getClientMilestoneById,
+  getClientProjectTasks,
   getClientProjectStatistics
 };

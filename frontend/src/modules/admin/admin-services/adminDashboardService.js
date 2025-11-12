@@ -55,6 +55,17 @@ class AdminDashboardService {
       throw error;
     }
   }
+
+  // Get recent activities
+  async getRecentActivities(limit = 3) {
+    try {
+      const response = await apiRequest(`/admin/analytics/recent-activities?limit=${limit}`, { method: 'GET' });
+      return response;
+    } catch (error) {
+      console.error('Error fetching recent activities:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

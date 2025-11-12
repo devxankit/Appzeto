@@ -57,7 +57,8 @@ import {
   Package,
   ClipboardList,
   FileCheck,
-  UserX
+  UserX,
+  Award
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
@@ -128,9 +129,21 @@ const Admin_hr_management = () => {
     pendingEmployees: 0,
     totalAmount: 0,
     paidAmount: 0,
-    pendingAmount: 0
+    pendingAmount: 0,
+    totalIncentiveAmount: 0,
+    paidIncentiveAmount: 0,
+    pendingIncentiveAmount: 0,
+    totalRewardAmount: 0,
+    paidRewardAmount: 0,
+    pendingRewardAmount: 0
   })
+  const [showIncentiveModal, setShowIncentiveModal] = useState(false)
+  const [showRewardModal, setShowRewardModal] = useState(false)
+  const [selectedIncentiveRecord, setSelectedIncentiveRecord] = useState(null)
+  const [selectedRewardRecord, setSelectedRewardRecord] = useState(null)
   const [showSalaryModal, setShowSalaryModal] = useState(false)
+  const [showSalaryDetailsModal, setShowSalaryDetailsModal] = useState(false)
+  const [selectedSalaryDetails, setSelectedSalaryDetails] = useState(null)
   const [selectedSalaryRecord, setSelectedSalaryRecord] = useState(null)
   const [showEditSalaryModal, setShowEditSalaryModal] = useState(false)
   const [showAddEmployeeSalaryModal, setShowAddEmployeeSalaryModal] = useState(false)
@@ -1868,7 +1881,14 @@ const Admin_hr_management = () => {
         status: record.status,
         paidDate: record.paidDate ? new Date(record.paidDate) : null,
         paymentMethod: record.paymentMethod,
-        remarks: record.remarks || ''
+        remarks: record.remarks || '',
+        incentiveAmount: record.incentiveAmount || 0,
+        incentiveStatus: record.incentiveStatus || 'pending',
+        incentivePaidDate: record.incentivePaidDate ? new Date(record.incentivePaidDate) : null,
+        rewardAmount: record.rewardAmount || 0,
+        rewardStatus: record.rewardStatus || 'pending',
+        rewardPaidDate: record.rewardPaidDate ? new Date(record.rewardPaidDate) : null,
+        employeeModel: record.employeeModel
       }))
 
       setSalaryData(transformedData)
@@ -1881,7 +1901,13 @@ const Admin_hr_management = () => {
           pendingEmployees: res.stats.pendingEmployees || 0,
           totalAmount: res.stats.totalAmount || 0,
           paidAmount: res.stats.paidAmount || 0,
-          pendingAmount: res.stats.pendingAmount || 0
+          pendingAmount: res.stats.pendingAmount || 0,
+          totalIncentiveAmount: res.stats.totalIncentiveAmount || 0,
+          paidIncentiveAmount: res.stats.paidIncentiveAmount || 0,
+          pendingIncentiveAmount: res.stats.pendingIncentiveAmount || 0,
+          totalRewardAmount: res.stats.totalRewardAmount || 0,
+          paidRewardAmount: res.stats.paidRewardAmount || 0,
+          pendingRewardAmount: res.stats.pendingRewardAmount || 0
         })
       }
     } catch (error) {
@@ -1894,7 +1920,13 @@ const Admin_hr_management = () => {
         pendingEmployees: 0,
         totalAmount: 0,
         paidAmount: 0,
-        pendingAmount: 0
+        pendingAmount: 0,
+        totalIncentiveAmount: 0,
+        paidIncentiveAmount: 0,
+        pendingIncentiveAmount: 0,
+        totalRewardAmount: 0,
+        paidRewardAmount: 0,
+        pendingRewardAmount: 0
       })
     }
   }
@@ -2074,6 +2106,58 @@ const Admin_hr_management = () => {
     } catch (error) {
       console.error('Error updating salary:', error)
       addToast({ type: 'error', message: error?.message || 'Failed to update salary record' })
+    }
+  }
+
+  const handleMarkIncentivePaid = (record) => {
+    setSelectedIncentiveRecord(record)
+    setShowIncentiveModal(true)
+  }
+
+  const confirmIncentivePayment = async (paymentData) => {
+    if (!selectedIncentiveRecord) return
+    
+    try {
+      await adminSalaryService.updateIncentivePayment(selectedIncentiveRecord.id, {
+        incentiveStatus: 'paid',
+        paymentMethod: paymentData.paymentMethod,
+        remarks: paymentData.remarks
+      })
+      
+      addToast({ type: 'success', message: 'Incentive marked as paid successfully!' })
+      setShowIncentiveModal(false)
+      setSelectedIncentiveRecord(null)
+      // Reload salary data
+      await loadSalaryData(selectedSalaryMonth)
+    } catch (error) {
+      console.error('Error updating incentive:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to update incentive payment' })
+    }
+  }
+
+  const handleMarkRewardPaid = (record) => {
+    setSelectedRewardRecord(record)
+    setShowRewardModal(true)
+  }
+
+  const confirmRewardPayment = async (paymentData) => {
+    if (!selectedRewardRecord) return
+    
+    try {
+      await adminSalaryService.updateRewardPayment(selectedRewardRecord.id, {
+        rewardStatus: 'paid',
+        paymentMethod: paymentData.paymentMethod,
+        remarks: paymentData.remarks
+      })
+      
+      addToast({ type: 'success', message: 'Reward marked as paid successfully!' })
+      setShowRewardModal(false)
+      setSelectedRewardRecord(null)
+      // Reload salary data
+      await loadSalaryData(selectedSalaryMonth)
+    } catch (error) {
+      console.error('Error updating reward:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to update reward payment' })
     }
   }
 
@@ -2271,38 +2355,81 @@ const Admin_hr_management = () => {
       const currentDate = new Date()
       const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
       
-      // Transform and filter data for display
-      const transformedHistory = (history.data || [])
-        .map(item => ({
-          id: item._id || item.id,
-          month: item.month,
-          amount: item.fixedSalary || 0,
-          status: item.status,
-          paymentDate: item.paymentDate ? new Date(item.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
-          paidDate: item.paidDate ? new Date(item.paidDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
-          paymentMethod: item.paymentMethod || null,
-          remarks: item.remarks || ''
-        }))
-        .filter(item => {
-          // Only show paid records
-          if (item.status !== 'paid') return false
-          
-          // Only show current month and previous months (not future months)
-          if (item.month > currentMonth) return false
-          
-          // If joining date is available, only show records from joining date onwards
-          if (joiningDate) {
-            const itemMonth = new Date(item.month + '-01')
-            const joiningMonth = new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1)
-            if (itemMonth < joiningMonth) return false
-          }
-          
-          return true
-        })
-        .sort((a, b) => {
-          // Sort by month (newest first)
-          return b.month.localeCompare(a.month)
-        })
+      // Transform salary records into separate entries for salary, incentive, and reward payments
+      const allHistoryEntries = []
+      
+      history.data?.forEach(item => {
+        const itemMonth = item.month
+        const itemMonthDate = new Date(itemMonth + '-01')
+        
+        // Filter: Only show current month and previous months (not future months)
+        if (itemMonth > currentMonth) return
+        
+        // Filter: If joining date is available, only show records from joining date onwards
+        if (joiningDate) {
+          const joiningMonth = new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1)
+          if (itemMonthDate < joiningMonth) return
+        }
+        
+        // Add Salary Payment Entry (if paid)
+        if (item.status === 'paid' && item.fixedSalary > 0) {
+          allHistoryEntries.push({
+            id: `${item._id || item.id}-salary`,
+            paymentType: 'salary',
+            month: itemMonth,
+            amount: item.fixedSalary || 0,
+            status: item.status,
+            paymentDate: item.paymentDate ? new Date(item.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+            paidDate: item.paidDate ? (item.paidDate instanceof Date ? item.paidDate : new Date(item.paidDate)).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+            paymentMethod: item.paymentMethod || null,
+            remarks: item.remarks || '',
+            paidDateRaw: item.paidDate ? (item.paidDate instanceof Date ? item.paidDate : new Date(item.paidDate)) : null
+          })
+        }
+        
+        // Add Incentive Payment Entry (if paid - show even if amount is 0 for historical records)
+        if (item.incentiveStatus === 'paid' && item.incentivePaidDate) {
+          allHistoryEntries.push({
+            id: `${item._id || item.id}-incentive`,
+            paymentType: 'incentive',
+            month: itemMonth,
+            amount: item.incentiveAmount || 0,
+            status: item.incentiveStatus,
+            paymentDate: item.paymentDate ? new Date(item.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+            paidDate: item.incentivePaidDate ? (item.incentivePaidDate instanceof Date ? item.incentivePaidDate : new Date(item.incentivePaidDate)).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+            paymentMethod: item.paymentMethod || null,
+            remarks: item.remarks || '',
+            paidDateRaw: item.incentivePaidDate ? (item.incentivePaidDate instanceof Date ? item.incentivePaidDate : new Date(item.incentivePaidDate)) : null
+          })
+        }
+        
+        // Add Reward Payment Entry (if paid - show even if amount is 0 for historical records)
+        if (item.rewardStatus === 'paid' && item.rewardPaidDate) {
+          allHistoryEntries.push({
+            id: `${item._id || item.id}-reward`,
+            paymentType: 'reward',
+            month: itemMonth,
+            amount: item.rewardAmount || 0,
+            status: item.rewardStatus,
+            paymentDate: item.paymentDate ? new Date(item.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+            paidDate: item.rewardPaidDate ? (item.rewardPaidDate instanceof Date ? item.rewardPaidDate : new Date(item.rewardPaidDate)).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+            paymentMethod: item.paymentMethod || null,
+            remarks: item.remarks || '',
+            paidDateRaw: item.rewardPaidDate ? (item.rewardPaidDate instanceof Date ? item.rewardPaidDate : new Date(item.rewardPaidDate)) : null
+          })
+        }
+      })
+      
+      // Sort by paid date (newest first), then by payment type
+      const transformedHistory = allHistoryEntries.sort((a, b) => {
+        if (a.paidDateRaw && b.paidDateRaw) {
+          return b.paidDateRaw - a.paidDateRaw
+        }
+        if (a.paidDateRaw) return -1
+        if (b.paidDateRaw) return 1
+        // If no paid date, sort by month
+        return b.month.localeCompare(a.month)
+      })
       
       setSalaryHistory(transformedHistory)
       setShowSalaryHistoryModal(true)
@@ -2900,79 +3027,182 @@ const Admin_hr_management = () => {
                 </div>
               </div>
 
-              {/* Salary Statistics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                  <CardContent className="p-6">
+              {/* Compact Statistics Cards - Essential Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+                {/* Total Employees */}
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-blue-600 text-sm font-medium">Total Employees</p>
+                      <div className="flex-1">
+                        <p className="text-blue-600 text-xs font-semibold uppercase tracking-wide mb-1">Total Employees</p>
                         <p className="text-2xl font-bold text-blue-900">{salaryStats.totalEmployees}</p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="text-xs text-green-600 font-medium">{salaryStats.paidEmployees} paid</span>
+                          <span className="text-xs text-gray-400">•</span>
+                          <span className="text-xs text-orange-600 font-medium">{salaryStats.pendingEmployees} pending</span>
+                        </div>
                       </div>
-                      <Users className="h-8 w-8 text-blue-600" />
+                      <div className="p-2.5 bg-blue-500/10 rounded-lg">
+                        <Users className="h-5 w-5 text-blue-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                  <CardContent className="p-6">
+                {/* Total Payable Amount */}
+                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-l-purple-500 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-green-600 text-sm font-medium">Paid Employees</p>
-                        <p className="text-2xl font-bold text-green-900">{salaryStats.paidEmployees}</p>
+                      <div className="flex-1">
+                        <p className="text-purple-600 text-xs font-semibold uppercase tracking-wide mb-1">Total Payable</p>
+                        <p className="text-2xl font-bold text-purple-900">
+                          {formatCurrency(
+                            salaryStats.totalAmount + 
+                            salaryStats.totalIncentiveAmount + 
+                            salaryStats.totalRewardAmount
+                          )}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="text-xs text-gray-600">
+                            Salary: {formatCurrency(salaryStats.totalAmount)}
+                          </span>
+                          {(salaryStats.totalIncentiveAmount > 0 || salaryStats.totalRewardAmount > 0) && (
+                            <>
+                              <span className="text-xs text-gray-400">•</span>
+                              <span className="text-xs text-gray-600">
+                                +{formatCurrency(salaryStats.totalIncentiveAmount + salaryStats.totalRewardAmount)}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <CheckCircle2 className="h-8 w-8 text-green-600" />
+                      <div className="p-2.5 bg-purple-500/10 rounded-lg">
+                        <Calculator className="h-5 w-5 text-purple-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
-                  <CardContent className="p-6">
+                {/* Paid Amount */}
+                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-yellow-600 text-sm font-medium">Pending Payments</p>
-                        <p className="text-2xl font-bold text-yellow-900">{salaryStats.pendingEmployees}</p>
+                      <div className="flex-1">
+                        <p className="text-green-600 text-xs font-semibold uppercase tracking-wide mb-1">Paid Amount</p>
+                        <p className="text-2xl font-bold text-green-900">
+                          {formatCurrency(
+                            salaryStats.paidAmount + 
+                            salaryStats.paidIncentiveAmount + 
+                            salaryStats.paidRewardAmount
+                          )}
+                        </p>
+                        {salaryStats.totalAmount + salaryStats.totalIncentiveAmount + salaryStats.totalRewardAmount > 0 && (
+                          <div className="mt-1.5">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-green-500 rounded-full transition-all"
+                                  style={{
+                                    width: `${Math.min(100, ((salaryStats.paidAmount + salaryStats.paidIncentiveAmount + salaryStats.paidRewardAmount) / (salaryStats.totalAmount + salaryStats.totalIncentiveAmount + salaryStats.totalRewardAmount)) * 100)}%`
+                                  }}
+                                />
+                              </div>
+                              <span className="text-xs font-semibold text-green-700">
+                                {Math.round(((salaryStats.paidAmount + salaryStats.paidIncentiveAmount + salaryStats.paidRewardAmount) / (salaryStats.totalAmount + salaryStats.totalIncentiveAmount + salaryStats.totalRewardAmount)) * 100)}%
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <Clock className="h-8 w-8 text-yellow-600" />
+                      <div className="p-2.5 bg-green-500/10 rounded-lg">
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
-              </div>
 
-              {/* Financial Summary */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                  <CardContent className="p-6">
+                {/* Pending Amount */}
+                <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-purple-600 text-sm font-medium">Total Amount</p>
-                        <p className="text-xl font-bold text-purple-900">{formatCurrency(salaryStats.totalAmount)}</p>
+                      <div className="flex-1">
+                        <p className="text-orange-600 text-xs font-semibold uppercase tracking-wide mb-1">Pending Amount</p>
+                        <p className="text-2xl font-bold text-orange-900">
+                          {formatCurrency(
+                            salaryStats.pendingAmount + 
+                            salaryStats.pendingIncentiveAmount + 
+                            salaryStats.pendingRewardAmount
+                          )}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="text-xs text-orange-600 font-medium">
+                            {salaryStats.pendingEmployees} employees
+                          </span>
+                          {(salaryStats.pendingIncentiveAmount > 0 || salaryStats.pendingRewardAmount > 0) && (
+                            <>
+                              <span className="text-xs text-gray-400">•</span>
+                              <span className="text-xs text-orange-600">
+                                +{formatCurrency(salaryStats.pendingIncentiveAmount + salaryStats.pendingRewardAmount)} bonus
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <Calculator className="h-8 w-8 text-purple-600" />
+                      <div className="p-2.5 bg-orange-500/10 rounded-lg">
+                        <Clock className="h-5 w-5 text-orange-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
-                  <CardContent className="p-6">
+                {/* Incentive Amount */}
+                <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 border-l-4 border-l-cyan-500 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-emerald-600 text-sm font-medium">Paid Amount</p>
-                        <p className="text-xl font-bold text-emerald-900">{formatCurrency(salaryStats.paidAmount)}</p>
+                      <div className="flex-1">
+                        <p className="text-cyan-600 text-xs font-semibold uppercase tracking-wide mb-1">Incentive Amount</p>
+                        <p className="text-2xl font-bold text-cyan-900">
+                          {formatCurrency(salaryStats.totalIncentiveAmount)}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="text-xs text-green-600 font-medium">
+                            Paid: {formatCurrency(salaryStats.paidIncentiveAmount)}
+                          </span>
+                          <span className="text-xs text-gray-400">•</span>
+                          <span className="text-xs text-orange-600 font-medium">
+                            Pending: {formatCurrency(salaryStats.pendingIncentiveAmount)}
+                          </span>
+                        </div>
                       </div>
-                      <Banknote className="h-8 w-8 text-emerald-600" />
+                      <div className="p-2.5 bg-cyan-500/10 rounded-lg">
+                        <TrendingUp className="h-5 w-5 text-cyan-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-                  <CardContent className="p-6">
+                {/* Reward Amount */}
+                <Card className="bg-gradient-to-br from-pink-50 to-pink-100 border-l-4 border-l-pink-500 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-orange-600 text-sm font-medium">Pending Amount</p>
-                        <p className="text-xl font-bold text-orange-900">{formatCurrency(salaryStats.pendingAmount)}</p>
+                      <div className="flex-1">
+                        <p className="text-pink-600 text-xs font-semibold uppercase tracking-wide mb-1">Reward Amount</p>
+                        <p className="text-2xl font-bold text-pink-900">
+                          {formatCurrency(salaryStats.totalRewardAmount)}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="text-xs text-green-600 font-medium">
+                            Paid: {formatCurrency(salaryStats.paidRewardAmount)}
+                          </span>
+                          <span className="text-xs text-gray-400">•</span>
+                          <span className="text-xs text-orange-600 font-medium">
+                            Pending: {formatCurrency(salaryStats.pendingRewardAmount)}
+                          </span>
+                        </div>
                       </div>
-                      <Wallet className="h-8 w-8 text-orange-600" />
+                      <div className="p-2.5 bg-pink-500/10 rounded-lg">
+                        <Award className="h-5 w-5 text-pink-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -2990,7 +3220,7 @@ const Admin_hr_management = () => {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {getFilteredSalaryData().map((record, index) => {
                     const paymentDate = new Date(record.paymentDate || record.createdAt)
                     const currentDate = new Date()
@@ -2998,125 +3228,175 @@ const Admin_hr_management = () => {
                     const isOverdue = daysUntilPayment < 0 && record.status !== 'paid'
                     const isDueSoon = daysUntilPayment <= 3 && daysUntilPayment >= 0 && record.status !== 'paid'
                     
-                    // Calculate payment week for display
-                    const paymentWeek = getWeekOfMonth(paymentDate)
+                    const totalAmount = (record.fixedSalary || 0) + (record.incentiveAmount || 0) + (record.rewardAmount || 0)
                     
                     return (
-                      <Card key={index} className={`hover:shadow-lg transition-all duration-200 border-l-4 ${
-                        isOverdue ? 'border-l-red-500 bg-red-50' : 
-                        isDueSoon ? 'border-l-yellow-500 bg-yellow-50' : 
-                        record.status === 'paid' ? 'border-l-green-500 bg-green-50' : 
-                        'border-l-blue-500'
+                      <Card key={index} className={`hover:shadow-md transition-all duration-200 border-l-4 ${
+                        isOverdue ? 'border-l-red-500 bg-red-50/30' : 
+                        isDueSoon ? 'border-l-yellow-500 bg-yellow-50/30' : 
+                        record.status === 'paid' ? 'border-l-green-500 bg-green-50/30' : 
+                        'border-l-gray-300 bg-white'
                       }`}>
                         <CardContent className="p-4">
                           {/* Employee Header */}
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                                {record.employeeName.charAt(0)}
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                              <div className="w-11 h-11 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                                {record.employeeName.charAt(0).toUpperCase()}
                               </div>
-                              <div>
-                                <h4 className="font-bold text-gray-900 text-sm">{record.employeeName}</h4>
-                                <p className="text-xs text-gray-500">{record.department}</p>
+                              <div className="min-w-0 flex-1">
+                                <h4 className="font-bold text-gray-900 text-sm leading-tight truncate">{record.employeeName}</h4>
+                                <p className="text-xs text-gray-500 mt-0.5">{record.department || 'unknown'}</p>
                               </div>
                             </div>
-                            <div className="text-right">
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
                               <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSalaryStatusColor(record.status)}`}>
                                 {getSalaryStatusIcon(record.status)}
-                                {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                                {record.status === 'paid' ? 'Paid' : 'Pending'}
                               </span>
-                              {paymentWeek && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  Week {paymentWeek}
-                                </div>
+                              {record.status !== 'paid' && (
+                                <span className={`text-xs font-semibold ${
+                                  isOverdue ? 'text-red-600' : 
+                                  isDueSoon ? 'text-yellow-600' : 
+                                  'text-gray-500'
+                                }`}>
+                                  {isOverdue ? `${Math.abs(daysUntilPayment)}d overdue` : 
+                                   `${daysUntilPayment}d left`}
+                                </span>
                               )}
                             </div>
                           </div>
 
-                          {/* Payment Date Info */}
-                          <div className="mb-3 p-2 bg-gray-100 rounded-lg">
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="text-gray-600">Payment Date:</span>
-                              <span className="font-medium">
-                                {paymentDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                              </span>
+                          {/* Payment Date */}
+                          <div className="mb-3 px-2 py-1.5 bg-gray-50 rounded-md">
+                            <span className="text-xs text-gray-600">Due: </span>
+                            <span className="text-xs font-semibold text-gray-900">{paymentDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                          </div>
+
+                          {/* Amounts Summary */}
+                          <div className="space-y-2 mb-3">
+                            {/* Salary */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-600">Salary:</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-gray-900">{formatCurrency(record.fixedSalary || 0)}</span>
+                                {record.status !== 'paid' ? (
+                                  <Button
+                                    onClick={() => handleMarkSalaryPaid(record)}
+                                    size="sm"
+                                    className={`h-6 px-3 text-xs font-medium ${
+                                      isOverdue ? 'bg-red-500 hover:bg-red-600' : 
+                                      'bg-green-500 hover:bg-green-600'
+                                    } text-white`}
+                                  >
+                                    Pay
+                                  </Button>
+                                ) : (
+                                  <span className="h-6 px-3 text-xs font-medium bg-gray-200 text-gray-500 rounded flex items-center cursor-not-allowed">
+                                    Pay
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            {record.status !== 'paid' && (
-                              <div className="flex justify-between items-center text-xs mt-1">
-                                <span className="text-gray-600">Days:</span>
-                                <span className={`font-medium ${
-                                  isOverdue ? 'text-red-600' : 
-                                  isDueSoon ? 'text-yellow-600' : 
-                                  'text-gray-600'
-                                }`}>
-                                  {isOverdue ? `${Math.abs(daysUntilPayment)} overdue` : 
-                                   isDueSoon ? `${daysUntilPayment} days` : 
-                                   `${daysUntilPayment} days`}
-                                </span>
+
+                            {/* Incentive - Sales Only */}
+                            {record.employeeModel === 'Sales' && record.department === 'sales' && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-600">Incentive:</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold text-blue-700">{formatCurrency(record.incentiveAmount || 0)}</span>
+                                  {record.incentiveStatus !== 'paid' && record.incentiveAmount > 0 ? (
+                                    <Button
+                                      onClick={() => handleMarkIncentivePaid(record)}
+                                      size="sm"
+                                      className="h-6 px-3 text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white"
+                                    >
+                                      Pay
+                                    </Button>
+                                  ) : (
+                                    <span className="h-6 px-3 text-xs font-medium bg-gray-200 text-gray-500 rounded flex items-center cursor-not-allowed">
+                                      Pay
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Reward - Sales & Dev */}
+                            {(record.department === 'sales' || ['nodejs', 'flutter', 'web', 'full-stack', 'app'].includes(record.department)) && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-600">Reward:</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold text-purple-700">{formatCurrency(record.rewardAmount || 0)}</span>
+                                  {record.rewardStatus !== 'paid' && record.rewardAmount > 0 ? (
+                                    <Button
+                                      onClick={() => handleMarkRewardPaid(record)}
+                                      size="sm"
+                                      className="h-6 px-3 text-xs font-medium bg-purple-500 hover:bg-purple-600 text-white"
+                                    >
+                                      Pay
+                                    </Button>
+                                  ) : (
+                                    <span className="h-6 px-3 text-xs font-medium bg-gray-200 text-gray-500 rounded flex items-center cursor-not-allowed">
+                                      Pay
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
 
-                          {/* Salary Amount */}
-                          <div className="mb-3 p-3 bg-gray-50 rounded-lg">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600">Salary</span>
-                              <span className="text-lg font-bold text-green-600">{formatCurrency(record.fixedSalary || record.basicSalary || 0)}</span>
+                          {/* Total */}
+                          <div className="mb-3 px-3 py-2 bg-gradient-to-r from-green-50 to-emerald-50 rounded-md border border-green-200">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-bold text-gray-900">Total:</span>
+                              <span className="text-lg font-bold text-green-700">{formatCurrency(totalAmount)}</span>
                             </div>
                           </div>
 
                           {/* Action Buttons */}
-                          <div className="space-y-2">
-                            {/* Primary Actions Row */}
-                            <div className="flex gap-2">
-                              {record.status !== 'paid' && (
-                                <Button
-                                  onClick={() => handleMarkSalaryPaid(record)}
-                                  size="sm"
-                                  className={`flex-1 text-xs py-1 h-8 ${
-                                    isOverdue ? 'bg-red-600 hover:bg-red-700' : 
-                                    isDueSoon ? 'bg-yellow-600 hover:bg-yellow-700' : 
-                                    'bg-green-600 hover:bg-green-700'
-                                  } text-white`}
-                                >
-                                  <CreditCard className="h-3 w-3 mr-1" />
-                                  {isOverdue ? 'Pay Now' : isDueSoon ? 'Due Soon' : 'Pay'}
-                                </Button>
-                              )}
-                              <Button
-                                onClick={() => viewSalaryHistory(record)}
-                                size="sm"
-                                variant="outline"
-                                className={`text-xs py-1 h-8 ${record.status === 'paid' ? 'flex-1' : ''}`}
-                                title="View salary history"
-                              >
-                                <Clock className="h-3 w-3 mr-1" />
-                                History
-                              </Button>
-                            </div>
-                            {/* Secondary Actions Row */}
-                            <div className="flex gap-2">
-                              <Button
-                                onClick={() => handleEditSalary(record)}
-                                size="sm"
-                                variant="outline"
-                                className="flex-1 text-xs py-1 h-8 text-blue-600 border-blue-200 hover:bg-blue-50"
-                                title="Edit salary record"
-                              >
-                                <Edit3 className="h-3 w-3 mr-1" />
-                                Edit
-                              </Button>
-                              <Button
-                                onClick={() => handleDeleteSalary(record)}
-                                size="sm"
-                                variant="outline"
-                                className="flex-1 text-xs py-1 h-8 text-red-600 border-red-200 hover:bg-red-50"
-                                title="Delete salary record"
-                              >
-                                <Trash2 className="h-3 w-3 mr-1" />
-                                Delete
-                              </Button>
-                            </div>
+                          <div className="flex gap-2 pt-2 border-t border-gray-200">
+                            <Button
+                              onClick={() => {
+                                setSelectedSalaryDetails(record)
+                                setShowSalaryDetailsModal(true)
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 text-xs h-8 text-gray-600 border-gray-300 hover:bg-gray-50"
+                              title="View details"
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" />
+                              View
+                            </Button>
+                            <Button
+                              onClick={() => viewSalaryHistory(record)}
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 text-xs h-8 text-gray-600 border-gray-300 hover:bg-gray-50"
+                              title="History"
+                            >
+                              <Clock className="h-3.5 w-3.5 mr-1" />
+                              History
+                            </Button>
+                            <Button
+                              onClick={() => handleEditSalary(record)}
+                              size="sm"
+                              variant="outline"
+                              className="px-2.5 text-xs h-8 text-blue-600 border-blue-300 hover:bg-blue-50"
+                              title="Edit"
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              onClick={() => handleDeleteSalary(record)}
+                              size="sm"
+                              variant="outline"
+                              className="px-2.5 text-xs h-8 text-red-600 border-red-300 hover:bg-red-50"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </CardContent>
                       </Card>
@@ -4249,6 +4529,522 @@ const Admin_hr_management = () => {
                     >
                       Confirm
                     </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Incentive Payment Modal */}
+            {showIncentiveModal && selectedIncentiveRecord && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
+                onClick={() => setShowIncentiveModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white rounded-xl p-4 max-w-sm w-full mx-4"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-900">Mark Incentive as Paid</h3>
+                    <button
+                      onClick={() => setShowIncentiveModal(false)}
+                      className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-700">Employee:</span>
+                          <span className="text-sm font-bold text-gray-900">{selectedIncentiveRecord.employeeName}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-700">Department:</span>
+                          <span className="text-sm text-gray-600">{selectedIncentiveRecord.department || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-blue-200">
+                          <span className="text-base font-semibold text-gray-900">Incentive Amount:</span>
+                          <span className="text-xl font-bold text-blue-600">{formatCurrency(selectedIncentiveRecord.incentiveAmount || 0)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Payment Method</label>
+                      <select
+                        className="w-full h-8 px-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                        id="incentivePaymentMethod"
+                      >
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="upi">UPI</option>
+                        <option value="cheque">Cheque</option>
+                        <option value="cash">Cash</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Remarks (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="Add any remarks..."
+                        className="w-full h-8 px-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                        id="incentiveRemarks"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-2 pt-4 border-t border-gray-200 mt-4">
+                    <button
+                      onClick={() => setShowIncentiveModal(false)}
+                      className="px-3 py-1 text-sm text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        const paymentMethod = document.getElementById('incentivePaymentMethod').value
+                        const remarks = document.getElementById('incentiveRemarks').value || 'Incentive paid'
+                        
+                        if (!paymentMethod) {
+                          addToast({ type: 'error', message: 'Please select a payment method' })
+                          return
+                        }
+                        
+                        confirmIncentivePayment({
+                          paymentMethod,
+                          remarks
+                        })
+                      }}
+                      className="px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors font-semibold text-sm"
+                    >
+                      Confirm
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Reward Payment Modal */}
+            {showRewardModal && selectedRewardRecord && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
+                onClick={() => setShowRewardModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white rounded-xl p-4 max-w-sm w-full mx-4"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-900">Mark Reward as Paid</h3>
+                    <button
+                      onClick={() => setShowRewardModal(false)}
+                      className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-200">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-700">Employee:</span>
+                          <span className="text-sm font-bold text-gray-900">{selectedRewardRecord.employeeName}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-700">Department:</span>
+                          <span className="text-sm text-gray-600">{selectedRewardRecord.department || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-purple-200">
+                          <span className="text-base font-semibold text-gray-900">Reward Amount:</span>
+                          <span className="text-xl font-bold text-purple-600">{formatCurrency(selectedRewardRecord.rewardAmount || 0)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Payment Method</label>
+                      <select
+                        className="w-full h-8 px-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                        id="rewardPaymentMethod"
+                      >
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="upi">UPI</option>
+                        <option value="cheque">Cheque</option>
+                        <option value="cash">Cash</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Remarks (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="Add any remarks..."
+                        className="w-full h-8 px-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                        id="rewardRemarks"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-2 pt-4 border-t border-gray-200 mt-4">
+                    <button
+                      onClick={() => setShowRewardModal(false)}
+                      className="px-3 py-1 text-sm text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        const paymentMethod = document.getElementById('rewardPaymentMethod').value
+                        const remarks = document.getElementById('rewardRemarks').value || 'Reward paid'
+                        
+                        if (!paymentMethod) {
+                          addToast({ type: 'error', message: 'Please select a payment method' })
+                          return
+                        }
+                        
+                        confirmRewardPayment({
+                          paymentMethod,
+                          remarks
+                        })
+                      }}
+                      className="px-4 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors font-semibold text-sm"
+                    >
+                      Confirm
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Salary Details Modal */}
+            {showSalaryDetailsModal && selectedSalaryDetails && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
+                onClick={() => setShowSalaryDetailsModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">Salary Details</h3>
+                      <p className="text-sm text-gray-500 mt-1">{selectedSalaryDetails.employeeName} - {selectedSalaryDetails.month}</p>
+                    </div>
+                    <button
+                      onClick={() => setShowSalaryDetailsModal(false)}
+                      className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Employee Info */}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Employee Information</h4>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-600">Name:</span>
+                          <span className="ml-2 font-medium text-gray-900">{selectedSalaryDetails.employeeName}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Department:</span>
+                          <span className="ml-2 font-medium text-gray-900">{selectedSalaryDetails.department}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Role:</span>
+                          <span className="ml-2 font-medium text-gray-900">{selectedSalaryDetails.role}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Month:</span>
+                          <span className="ml-2 font-medium text-gray-900">{selectedSalaryDetails.month}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payment Details */}
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Payment Schedule</h4>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-600">Payment Date:</span>
+                          <span className="ml-2 font-medium text-gray-900">
+                            {new Date(selectedSalaryDetails.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
+                        {selectedSalaryDetails.paidDate && (
+                          <div>
+                            <span className="text-gray-600">Paid Date:</span>
+                            <span className="ml-2 font-medium text-gray-900">
+                              {selectedSalaryDetails.paidDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                          </div>
+                        )}
+                        {selectedSalaryDetails.paymentMethod && (
+                          <div>
+                            <span className="text-gray-600">Payment Method:</span>
+                            <span className="ml-2 font-medium text-gray-900 capitalize">
+                              {selectedSalaryDetails.paymentMethod.replace('_', ' ')}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-gray-600">Status:</span>
+                          <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${getSalaryStatusColor(selectedSalaryDetails.status)}`}>
+                            {selectedSalaryDetails.status.charAt(0).toUpperCase() + selectedSalaryDetails.status.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Amount Breakdown with Payment Buttons */}
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-4">Amount Breakdown</h4>
+                      <div className="space-y-3">
+                        {/* Salary Payment Section */}
+                        <div className="bg-white rounded-lg p-3 border border-gray-200">
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-2">
+                              <Banknote className="h-4 w-4 text-gray-600" />
+                              <span className="text-sm font-semibold text-gray-700">Salary</span>
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              selectedSalaryDetails.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {selectedSalaryDetails.status === 'paid' ? 'Paid' : 'Pending'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-lg font-bold text-gray-900">{formatCurrency(selectedSalaryDetails.fixedSalary || 0)}</span>
+                            {selectedSalaryDetails.status !== 'paid' ? (
+                              <Button
+                                onClick={() => {
+                                  setShowSalaryDetailsModal(false)
+                                  handleMarkSalaryPaid(selectedSalaryDetails)
+                                }}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4"
+                              >
+                                <CreditCard className="h-4 w-4 mr-2" />
+                                Pay Salary
+                              </Button>
+                            ) : (
+                              <div className="text-xs text-gray-500">
+                                Paid on {selectedSalaryDetails.paidDate ? (selectedSalaryDetails.paidDate instanceof Date ? selectedSalaryDetails.paidDate : new Date(selectedSalaryDetails.paidDate)).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Incentive Payment Section - Sales Only */}
+                        {selectedSalaryDetails.employeeModel === 'Sales' && selectedSalaryDetails.department === 'sales' && (
+                          <div className="bg-white rounded-lg p-3 border border-blue-200">
+                            <div className="flex justify-between items-center mb-2">
+                              <div className="flex items-center gap-2">
+                                <TrendingUp className="h-4 w-4 text-blue-600" />
+                                <span className="text-sm font-semibold text-gray-700">Incentive</span>
+                              </div>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                selectedSalaryDetails.incentiveStatus === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {selectedSalaryDetails.incentiveStatus === 'paid' ? 'Paid' : 'Pending'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-lg font-bold text-blue-700">{formatCurrency(selectedSalaryDetails.incentiveAmount || 0)}</span>
+                              {selectedSalaryDetails.incentiveStatus !== 'paid' && selectedSalaryDetails.incentiveAmount > 0 ? (
+                                <Button
+                                  onClick={() => {
+                                    setShowSalaryDetailsModal(false)
+                                    handleMarkIncentivePaid(selectedSalaryDetails)
+                                  }}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white px-4"
+                                >
+                                  <TrendingUp className="h-4 w-4 mr-2" />
+                                  Pay Incentive
+                                </Button>
+                              ) : selectedSalaryDetails.incentiveStatus === 'paid' ? (
+                                <div className="text-xs text-gray-500">
+                                  Paid on {selectedSalaryDetails.incentivePaidDate ? (selectedSalaryDetails.incentivePaidDate instanceof Date ? selectedSalaryDetails.incentivePaidDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date(selectedSalaryDetails.incentivePaidDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })) : 'N/A'}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-gray-400">No incentive amount</div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Reward Payment Section - Sales & Dev */}
+                        {(selectedSalaryDetails.department === 'sales' || ['nodejs', 'flutter', 'web', 'full-stack', 'app'].includes(selectedSalaryDetails.department)) && (
+                          <div className="bg-white rounded-lg p-3 border border-purple-200">
+                            <div className="flex justify-between items-center mb-2">
+                              <div className="flex items-center gap-2">
+                                <Award className="h-4 w-4 text-purple-600" />
+                                <span className="text-sm font-semibold text-gray-700">Reward</span>
+                              </div>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                selectedSalaryDetails.rewardStatus === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {selectedSalaryDetails.rewardStatus === 'paid' ? 'Paid' : 'Pending'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-lg font-bold text-purple-700">{formatCurrency(selectedSalaryDetails.rewardAmount || 0)}</span>
+                              {selectedSalaryDetails.rewardStatus !== 'paid' && selectedSalaryDetails.rewardAmount > 0 ? (
+                                <Button
+                                  onClick={() => {
+                                    setShowSalaryDetailsModal(false)
+                                    handleMarkRewardPaid(selectedSalaryDetails)
+                                  }}
+                                  className="bg-purple-600 hover:bg-purple-700 text-white px-4"
+                                >
+                                  <Award className="h-4 w-4 mr-2" />
+                                  Pay Reward
+                                </Button>
+                              ) : selectedSalaryDetails.rewardStatus === 'paid' ? (
+                                <div className="text-xs text-gray-500">
+                                  Paid on {selectedSalaryDetails.rewardPaidDate ? (selectedSalaryDetails.rewardPaidDate instanceof Date ? selectedSalaryDetails.rewardPaidDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date(selectedSalaryDetails.rewardPaidDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })) : 'N/A'}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-gray-400">No reward amount</div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Total */}
+                        <div className="pt-3 border-t-2 border-green-300 flex justify-between items-center">
+                          <span className="text-base font-bold text-gray-900">Total Amount:</span>
+                          <span className="text-2xl font-bold text-green-700">
+                            {formatCurrency(
+                              (selectedSalaryDetails.fixedSalary || 0) + 
+                              (selectedSalaryDetails.incentiveAmount || 0) + 
+                              (selectedSalaryDetails.rewardAmount || 0)
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payment Records Section */}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Payment Records</h4>
+                      <div className="space-y-2 text-sm">
+                        {/* Salary Payment Record */}
+                        <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                          <div>
+                            <span className="font-medium text-gray-700">Salary Payment:</span>
+                            {selectedSalaryDetails.status === 'paid' && selectedSalaryDetails.paidDate && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Paid on {(selectedSalaryDetails.paidDate instanceof Date ? selectedSalaryDetails.paidDate : new Date(selectedSalaryDetails.paidDate)).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                {selectedSalaryDetails.paymentMethod && ` via ${selectedSalaryDetails.paymentMethod.replace('_', ' ')}`}
+                              </div>
+                            )}
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            selectedSalaryDetails.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {selectedSalaryDetails.status === 'paid' ? 'Paid' : 'Pending'}
+                          </span>
+                        </div>
+
+                        {/* Incentive Payment Record - Sales Only */}
+                        {selectedSalaryDetails.employeeModel === 'Sales' && selectedSalaryDetails.department === 'sales' && (
+                          <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                            <div>
+                              <span className="font-medium text-gray-700">Incentive Payment:</span>
+                              {selectedSalaryDetails.incentiveStatus === 'paid' && selectedSalaryDetails.incentivePaidDate && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Paid on {(selectedSalaryDetails.incentivePaidDate instanceof Date ? selectedSalaryDetails.incentivePaidDate : new Date(selectedSalaryDetails.incentivePaidDate)).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </div>
+                              )}
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              selectedSalaryDetails.incentiveStatus === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {selectedSalaryDetails.incentiveStatus === 'paid' ? 'Paid' : 'Pending'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Reward Payment Record - Sales & Dev */}
+                        {(selectedSalaryDetails.department === 'sales' || ['nodejs', 'flutter', 'web', 'full-stack', 'app'].includes(selectedSalaryDetails.department)) && (
+                          <div className="flex justify-between items-center py-2">
+                            <div>
+                              <span className="font-medium text-gray-700">Reward Payment:</span>
+                              {selectedSalaryDetails.rewardStatus === 'paid' && selectedSalaryDetails.rewardPaidDate && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Paid on {(selectedSalaryDetails.rewardPaidDate instanceof Date ? selectedSalaryDetails.rewardPaidDate : new Date(selectedSalaryDetails.rewardPaidDate)).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </div>
+                              )}
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              selectedSalaryDetails.rewardStatus === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {selectedSalaryDetails.rewardStatus === 'paid' ? 'Paid' : 'Pending'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Remarks */}
+                    {selectedSalaryDetails.remarks && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Remarks</h4>
+                        <p className="text-sm text-gray-600">{selectedSalaryDetails.remarks}</p>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 pt-4 border-t border-gray-200">
+                      <Button
+                        onClick={() => {
+                          setShowSalaryDetailsModal(false)
+                          handleEditSalary(selectedSalaryDetails)
+                        }}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        <Edit3 className="h-4 w-4 mr-2" />
+                        Edit Record
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setShowSalaryDetailsModal(false)
+                          viewSalaryHistory(selectedSalaryDetails)
+                        }}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        <Clock className="h-4 w-4 mr-2" />
+                        View History
+                      </Button>
+                    </div>
                   </div>
                 </motion.div>
               </motion.div>
@@ -5516,9 +6312,12 @@ const Admin_hr_management = () => {
                   <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-bold mb-1">Salary History</h3>
+                        <h3 className="text-xl font-bold mb-1">Payment History</h3>
                         <p className="text-blue-100 text-sm">
                           {selectedHistoryEmployee.name} - {selectedHistoryEmployee.department}
+                        </p>
+                        <p className="text-blue-200 text-xs mt-1">
+                          Salary, Incentive & Reward Records
                         </p>
                       </div>
                       <button
@@ -5540,14 +6339,14 @@ const Admin_hr_management = () => {
                       <div className="flex items-center justify-center py-12">
                         <div className="flex flex-col items-center gap-3">
                           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                          <p className="text-gray-600 text-sm">Loading salary history...</p>
+                          <p className="text-gray-600 text-sm">Loading payment history...</p>
                         </div>
                       </div>
                     ) : salaryHistory.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-12">
                         <Clock className="h-12 w-12 text-gray-400 mb-4" />
-                        <h4 className="text-lg font-semibold text-gray-700 mb-2">No Salary History</h4>
-                        <p className="text-gray-500 text-sm">No salary records found for this employee</p>
+                        <h4 className="text-lg font-semibold text-gray-700 mb-2">No Payment History</h4>
+                        <p className="text-gray-500 text-sm">No payment records found for this employee</p>
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
@@ -5555,6 +6354,7 @@ const Admin_hr_management = () => {
                           <thead>
                             <tr className="border-b-2 border-gray-200 bg-gray-50">
                               <th className="text-left py-3 px-4 font-semibold text-gray-700">Month</th>
+                              <th className="text-left py-3 px-4 font-semibold text-gray-700">Payment Type</th>
                               <th className="text-right py-3 px-4 font-semibold text-gray-700">Amount</th>
                               <th className="text-center py-3 px-4 font-semibold text-gray-700">Status</th>
                               <th className="text-center py-3 px-4 font-semibold text-gray-700">Payment Date</th>
@@ -5563,44 +6363,74 @@ const Admin_hr_management = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {salaryHistory.map((item, idx) => (
-                              <tr
-                                key={item.id || idx}
-                                className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                              >
-                                <td className="py-3 px-4">
-                                  <div className="font-medium text-gray-900">
-                                    {new Date(item.month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
-                                  </div>
-                                </td>
-                                <td className="py-3 px-4 text-right">
-                                  <span className="font-semibold text-green-600">
-                                    {formatCurrency(item.amount)}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSalaryStatusColor(item.status)}`}>
-                                    {getSalaryStatusIcon(item.status)}
-                                    {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-4 text-center text-gray-600 text-xs">
-                                  {item.paymentDate || '-'}
-                                </td>
-                                <td className="py-3 px-4 text-center text-gray-600 text-xs">
-                                  {item.paidDate || '-'}
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                  {item.paymentMethod ? (
-                                    <span className="text-xs text-gray-600 capitalize">
-                                      {item.paymentMethod.replace('_', ' ')}
+                            {salaryHistory.map((item, idx) => {
+                              const getPaymentTypeColor = (type) => {
+                                switch(type) {
+                                  case 'salary': return 'bg-blue-100 text-blue-800'
+                                  case 'incentive': return 'bg-cyan-100 text-cyan-800'
+                                  case 'reward': return 'bg-pink-100 text-pink-800'
+                                  default: return 'bg-gray-100 text-gray-800'
+                                }
+                              }
+                              
+                              const getPaymentTypeIcon = (type) => {
+                                switch(type) {
+                                  case 'salary': return <Banknote className="h-3 w-3" />
+                                  case 'incentive': return <TrendingUp className="h-3 w-3" />
+                                  case 'reward': return <Award className="h-3 w-3" />
+                                  default: return null
+                                }
+                              }
+                              
+                              return (
+                                <tr
+                                  key={item.id || idx}
+                                  className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                                >
+                                  <td className="py-3 px-4">
+                                    <div className="font-medium text-gray-900">
+                                      {new Date(item.month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold capitalize ${getPaymentTypeColor(item.paymentType)}`}>
+                                      {getPaymentTypeIcon(item.paymentType)}
+                                      {item.paymentType}
                                     </span>
-                                  ) : (
-                                    <span className="text-xs text-gray-400">-</span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
+                                  </td>
+                                  <td className="py-3 px-4 text-right">
+                                    <span className={`font-semibold ${
+                                      item.paymentType === 'salary' ? 'text-blue-600' :
+                                      item.paymentType === 'incentive' ? 'text-cyan-600' :
+                                      'text-pink-600'
+                                    }`}>
+                                      {formatCurrency(item.amount)}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSalaryStatusColor(item.status)}`}>
+                                      {getSalaryStatusIcon(item.status)}
+                                      {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-center text-gray-600 text-xs">
+                                    {item.paymentDate || '-'}
+                                  </td>
+                                  <td className="py-3 px-4 text-center text-gray-600 text-xs">
+                                    {item.paidDate || '-'}
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    {item.paymentMethod ? (
+                                      <span className="text-xs text-gray-600 capitalize">
+                                        {item.paymentMethod.replace('_', ' ')}
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-gray-400">-</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -5610,14 +6440,34 @@ const Admin_hr_management = () => {
                   {/* Footer Summary */}
                   {salaryHistory.length > 0 && (
                     <div className="border-t border-gray-200 bg-gray-50 p-4">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
-                          <span className="text-gray-600">Total Paid Records:</span>
-                          <span className="ml-2 font-semibold text-green-600">{salaryHistory.length}</span>
+                          <span className="text-gray-600">Total Records:</span>
+                          <span className="ml-2 font-semibold text-gray-900">{salaryHistory.length}</span>
                         </div>
                         <div>
-                          <span className="text-gray-600">Total Amount Paid:</span>
+                          <span className="text-gray-600">Salary Paid:</span>
                           <span className="ml-2 font-semibold text-blue-600">
+                            {formatCurrency(salaryHistory.filter(h => h.paymentType === 'salary').reduce((sum, h) => sum + h.amount, 0))}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Incentive Paid:</span>
+                          <span className="ml-2 font-semibold text-cyan-600">
+                            {formatCurrency(salaryHistory.filter(h => h.paymentType === 'incentive').reduce((sum, h) => sum + h.amount, 0))}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Reward Paid:</span>
+                          <span className="ml-2 font-semibold text-pink-600">
+                            {formatCurrency(salaryHistory.filter(h => h.paymentType === 'reward').reduce((sum, h) => sum + h.amount, 0))}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-700 font-semibold">Grand Total:</span>
+                          <span className="text-lg font-bold text-green-600">
                             {formatCurrency(salaryHistory.reduce((sum, h) => sum + h.amount, 0))}
                           </span>
                         </div>

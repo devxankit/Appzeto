@@ -1350,7 +1350,7 @@ const Admin_sales_management = () => {
   // Handle incentive editing
   const handleEditIncentive = (member) => {
     setSelectedItem(member)
-    setIncentiveAmount((member.currentIncentive || 0).toString())
+    setIncentiveAmount((member.incentivePerClient || 0).toString())
     setShowIncentiveModal(true)
   }
 
@@ -1369,15 +1369,10 @@ const Admin_sales_management = () => {
     try {
       setLoadingIncentive(true)
       const memberId = selectedItem._id || selectedItem.id
-      const response = await adminSalesService.setIncentive(
-        memberId, 
-        newIncentive, 
-        'Performance incentive', 
-        'Incentive awarded for meeting sales targets'
-      )
+      const response = await adminSalesService.setIncentive(memberId, newIncentive)
       
       if (response.success) {
-        toast.success('Incentive set successfully')
+        toast.success('Per-conversion incentive amount set successfully')
         await loadSalesTeam()
         await loadStatistics()
         setShowIncentiveModal(false)
@@ -2178,10 +2173,16 @@ const Admin_sales_management = () => {
                         </div>
                       </div>
 
-                      {/* Incentive Metric */}
-                      <div className="bg-green-50 rounded-lg p-2 mb-3">
-                        <div className="text-xs text-green-600 font-medium mb-1">Incentive</div>
+                      {/* Incentive Metrics */}
+                      <div className="bg-green-50 rounded-lg p-2 mb-2">
+                        <div className="text-xs text-green-600 font-medium mb-1">Per Conversion</div>
                         <div className="text-xs font-bold text-green-800">
+                          {formatCurrency(member?.incentivePerClient || 0)}
+                        </div>
+                      </div>
+                      <div className="bg-blue-50 rounded-lg p-2 mb-3">
+                        <div className="text-xs text-blue-600 font-medium mb-1">Total Earned</div>
+                        <div className="text-xs font-bold text-blue-800">
                           {formatCurrency(member?.currentIncentive || 0)}
                         </div>
                       </div>
@@ -3057,9 +3058,15 @@ const Admin_sales_management = () => {
                         </div>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-3 text-center">
-                        <div className="text-xs text-gray-600 font-medium mb-1">Incentive</div>
+                        <div className="text-xs text-gray-600 font-medium mb-1">Per Conversion Rate</div>
                         <div className="text-lg font-bold text-gray-900">
-                          {formatCurrency(selectedItem?.incentive ?? selectedItem?.performance?.incentive ?? 0)}
+                          {formatCurrency(selectedItem?.incentivePerClient ?? 0)}
+                        </div>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-3 text-center">
+                        <div className="text-xs text-green-600 font-medium mb-1">Total Earned</div>
+                        <div className="text-lg font-bold text-green-800">
+                          {formatCurrency(selectedItem?.currentIncentive ?? 0)}
                         </div>
                       </div>
                     </div>
@@ -3810,8 +3817,8 @@ const Admin_sales_management = () => {
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900">Set Incentive</h3>
-                  <p className="text-gray-600 text-sm mt-1">Set incentive amount for {selectedItem.name}</p>
+                  <h3 className="text-xl font-bold text-gray-900">Set Per-Conversion Incentive</h3>
+                  <p className="text-gray-600 text-sm mt-1">Set the incentive amount earned per lead conversion for {selectedItem.name}</p>
                 </div>
                 <button
                   onClick={closeModals}
@@ -3830,8 +3837,13 @@ const Admin_sales_management = () => {
                   <div className="flex-1">
                     <h4 className="font-semibold text-gray-900">{selectedItem.name}</h4>
                     <p className="text-sm text-gray-600">{selectedItem.position}</p>
-                    <div className="text-sm text-green-700 font-medium">
-                      Current Incentive: {formatCurrency(selectedItem.currentIncentive || 0)}
+                    <div className="mt-2 space-y-1">
+                      <div className="text-sm text-green-700 font-medium">
+                        Per-Conversion Rate: {formatCurrency(selectedItem.incentivePerClient || 0)}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        Total Earned: {formatCurrency(selectedItem.currentIncentive || 0)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3839,18 +3851,24 @@ const Admin_sales_management = () => {
 
               {/* Incentive Input */}
               <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">New Incentive Amount</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Per-Conversion Incentive Amount</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
                   <input
                     type="number"
                     value={incentiveAmount}
                     onChange={(e) => setIncentiveAmount(e.target.value)}
-                    placeholder="Enter incentive amount"
+                    placeholder="Enter amount per conversion"
                     className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg font-semibold"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Enter the incentive amount for this sales team member</p>
+                <p className="text-xs text-gray-500 mt-2">
+                  This amount will be earned each time {selectedItem.name} converts a lead to a client. 
+                  The amount will be split 50% current balance and 50% pending balance.
+                </p>
+                <p className="text-xs text-amber-600 mt-1 font-medium">
+                  Note: This only applies to future conversions, existing conversions are not affected.
+                </p>
               </div>
 
               {/* Action Buttons */}

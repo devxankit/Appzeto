@@ -1116,26 +1116,44 @@ function getFinancialSummary(project) {
 
   const totals = getInstallmentTotals(project)
   const totalCost = Number(project.financialDetails?.totalCost ?? project.budget ?? 0)
-  const advance = Number(project.financialDetails?.advanceReceived ?? 0)
+  
+  // Calculate paid installments
   const installmentCollected = Number(totals.paid ?? 0)
-  const totalCollected = advance + installmentCollected
+  
+  // Get total received (which includes advance + receipts + installments)
+  const totalReceived = Number(project.financialDetails?.advanceReceived ?? 0)
+  
+  // Calculate approved PaymentReceipts (if available in project data)
+  // Note: We need to subtract paid installments from totalReceived to get advance + receipts
+  // But we can't distinguish between advance and receipts without querying PaymentReceipts
+  // For display purposes, we'll show:
+  // - Advance: totalReceived - installmentCollected (this includes initial advance + receipts)
+  // - Installment Collected: paid installments
+  // - Total Collected: totalReceived (which is already correct)
+  
+  // The stored advanceReceived includes: initial advance + approved receipts + paid installments
+  // So initial advance + receipts = totalReceived - installmentCollected
+  const advanceAndReceipts = Math.max(0, totalReceived - installmentCollected)
+  
+  // For the summary cards, we'll show:
+  // - Advance Received: advanceAndReceipts (includes initial advance + any approved receipts)
+  // - Installment Collected: installmentCollected
+  // - Total Collected: totalReceived (which equals advanceAndReceipts + installmentCollected)
+  
+  const totalCollected = totalReceived // This is already the sum of all payments
 
   const storedRemaining = Number(project.financialDetails?.remainingAmount)
   let outstanding = 0
   if (Number.isFinite(storedRemaining)) {
-    outstanding = storedRemaining
+    outstanding = Math.max(0, storedRemaining)
   } else {
     const computedRemaining = totalCost - totalCollected
-    outstanding = Number.isFinite(computedRemaining) ? computedRemaining : 0
-  }
-
-  if (outstanding < 0) {
-    outstanding = 0
+    outstanding = Number.isFinite(computedRemaining) ? Math.max(0, computedRemaining) : 0
   }
 
   return {
     totalCost: Number.isFinite(totalCost) ? totalCost : 0,
-    advance: Number.isFinite(advance) ? advance : 0,
+    advance: Number.isFinite(advanceAndReceipts) ? advanceAndReceipts : 0,
     installmentCollected,
     totalCollected,
     scheduled: Number(totals.total ?? 0),

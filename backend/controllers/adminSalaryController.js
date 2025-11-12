@@ -2,6 +2,7 @@ const Salary = require('../models/Salary');
 const Employee = require('../models/Employee');
 const Sales = require('../models/Sales');
 const PM = require('../models/PM');
+const Incentive = require('../models/Incentive');
 const mongoose = require('mongoose');
 const asyncHandler = require('../middlewares/asyncHandler');
 
@@ -96,6 +97,20 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
   for (const month of months) {
     const paymentDate = calculatePaymentDate(joiningDate, month);
     
+    // Calculate incentiveAmount for sales team
+    let incentiveAmount = 0;
+    if (employeeModel === 'Sales') {
+      try {
+        const incentives = await Incentive.find({
+          salesEmployee: employee._id,
+          currentBalance: { $gt: 0 }
+        });
+        incentiveAmount = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
+      } catch (error) {
+        console.error(`Error calculating incentive for employee ${employee._id}:`, error);
+      }
+    }
+
     await Salary.findOneAndUpdate(
       {
         employeeId: employee._id,
@@ -113,6 +128,10 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
         paymentDate,
         paymentDay,
         status: 'pending',
+        incentiveAmount,
+        incentiveStatus: 'pending',
+        rewardAmount: 0,
+        rewardStatus: 'pending',
         createdBy: req.admin.id
       },
       {
@@ -160,19 +179,60 @@ exports.getSalaryRecords = asyncHandler(async (req, res) => {
     filter.employeeName = { $regex: search, $options: 'i' };
   }
 
-  const salaries = await Salary.find(filter)
+  let salaries = await Salary.find(filter)
     .populate('createdBy', 'name email')
     .populate('updatedBy', 'name email')
     .sort({ paymentDate: 1, employeeName: 1 });
 
-  // Calculate statistics
+  // Calculate incentiveAmount for sales team employees from Incentive model's currentBalance
+  // IMPORTANT: Only update incentiveAmount if status is 'pending' - preserve paid amounts for history
+  for (const salary of salaries) {
+    if (salary.employeeModel === 'Sales' && salary.department === 'sales') {
+      try {
+        // Only recalculate if incentive is still pending
+        // If already paid, preserve the original amount for historical records
+        if (salary.incentiveStatus === 'pending') {
+          // Sum all currentBalance values from Incentive records for this sales employee
+          const incentives = await Incentive.find({
+            salesEmployee: salary.employeeId,
+            currentBalance: { $gt: 0 }
+          });
+          
+          const totalIncentive = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
+          
+          // Update incentiveAmount if it's different
+          if (Math.abs((salary.incentiveAmount || 0) - totalIncentive) > 0.01) {
+            salary.incentiveAmount = totalIncentive;
+            await salary.save();
+          }
+        }
+      } catch (error) {
+        console.error(`Error calculating incentive for salary ${salary._id}:`, error);
+        // Continue with default 0 if error occurs
+      }
+    }
+  }
+
+  // Re-fetch salaries to get updated incentiveAmount values
+  salaries = await Salary.find(filter)
+    .populate('createdBy', 'name email')
+    .populate('updatedBy', 'name email')
+    .sort({ paymentDate: 1, employeeName: 1 });
+
+  // Calculate statistics including incentive and reward amounts
   const stats = {
     totalEmployees: salaries.length,
     paidEmployees: salaries.filter(s => s.status === 'paid').length,
     pendingEmployees: salaries.filter(s => s.status === 'pending').length,
     totalAmount: salaries.reduce((sum, s) => sum + s.fixedSalary, 0),
     paidAmount: salaries.filter(s => s.status === 'paid').reduce((sum, s) => sum + s.fixedSalary, 0),
-    pendingAmount: salaries.filter(s => s.status === 'pending').reduce((sum, s) => sum + s.fixedSalary, 0)
+    pendingAmount: salaries.filter(s => s.status === 'pending').reduce((sum, s) => sum + s.fixedSalary, 0),
+    totalIncentiveAmount: salaries.reduce((sum, s) => sum + (s.incentiveAmount || 0), 0),
+    paidIncentiveAmount: salaries.filter(s => s.incentiveStatus === 'paid').reduce((sum, s) => sum + (s.incentiveAmount || 0), 0),
+    pendingIncentiveAmount: salaries.filter(s => s.incentiveStatus === 'pending').reduce((sum, s) => sum + (s.incentiveAmount || 0), 0),
+    totalRewardAmount: salaries.reduce((sum, s) => sum + (s.rewardAmount || 0), 0),
+    paidRewardAmount: salaries.filter(s => s.rewardStatus === 'paid').reduce((sum, s) => sum + (s.rewardAmount || 0), 0),
+    pendingRewardAmount: salaries.filter(s => s.rewardStatus === 'pending').reduce((sum, s) => sum + (s.rewardAmount || 0), 0)
   };
 
   res.json({
@@ -208,7 +268,7 @@ exports.getSalaryRecord = asyncHandler(async (req, res) => {
 // @route   PUT /api/admin/salary/:id
 // @access  Private (Admin/HR)
 exports.updateSalaryRecord = asyncHandler(async (req, res) => {
-  const { status, paymentMethod, remarks, fixedSalary } = req.body;
+  const { status, paymentMethod, remarks, fixedSalary, incentiveStatus, rewardStatus } = req.body;
 
   const salary = await Salary.findById(req.params.id);
   if (!salary) {
@@ -358,6 +418,123 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
     salary.remarks = remarks;
   }
 
+  // Handle separate incentive status update
+  if (incentiveStatus !== undefined) {
+    if (!['pending', 'paid'].includes(incentiveStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid incentiveStatus. Must be "pending" or "paid"'
+      });
+    }
+    
+    // Only allow incentive updates for sales team
+    if (salary.employeeModel === 'Sales' && salary.department === 'sales') {
+      const previousIncentiveStatus = salary.incentiveStatus;
+      salary.incentiveStatus = incentiveStatus;
+      
+      if (incentiveStatus === 'paid') {
+        salary.incentivePaidDate = new Date();
+        
+        // Find all Incentive records for this sales employee with currentBalance > 0
+        const incentives = await Incentive.find({
+          salesEmployee: salary.employeeId,
+          currentBalance: { $gt: 0 }
+        });
+
+        // Calculate total incentive amount BEFORE clearing currentBalance
+        // This preserves the amount that was paid for historical records
+        const totalIncentiveAmount = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
+        
+        // Store the incentive amount before clearing balances
+        if (totalIncentiveAmount > 0) {
+          salary.incentiveAmount = totalIncentiveAmount;
+        }
+
+        // Set currentBalance to 0 for all incentive records
+        for (const incentive of incentives) {
+          incentive.currentBalance = 0;
+          if (!incentive.paidAt) {
+            incentive.paidAt = new Date();
+          }
+          await incentive.save();
+        }
+
+        // Create finance transaction for incentive payment
+        try {
+          const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
+          const { mapSalaryPaymentMethodToFinance } = require('../utils/paymentMethodMapper');
+          
+          if (previousIncentiveStatus !== 'paid' && salary.incentiveAmount > 0) {
+            await createOutgoingTransaction({
+              amount: salary.incentiveAmount,
+              category: 'Incentive Payment',
+              transactionDate: salary.incentivePaidDate || new Date(),
+              createdBy: req.admin.id,
+              employee: salary.employeeId,
+              paymentMethod: paymentMethod ? mapSalaryPaymentMethodToFinance(paymentMethod) : 'Bank Transfer',
+              description: `Incentive payment for ${salary.employeeName} - ${salary.month}`,
+              metadata: {
+                sourceType: 'incentive',
+                sourceId: salary._id.toString(),
+                month: salary.month
+              },
+              checkDuplicate: true
+            });
+          }
+        } catch (error) {
+          console.error('Error creating finance transaction for incentive:', error);
+        }
+      } else {
+        salary.incentivePaidDate = null;
+      }
+    }
+  }
+
+  // Handle separate reward status update
+  if (rewardStatus !== undefined) {
+    if (!['pending', 'paid'].includes(rewardStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid rewardStatus. Must be "pending" or "paid"'
+      });
+    }
+    
+    const previousRewardStatus = salary.rewardStatus;
+    salary.rewardStatus = rewardStatus;
+    
+    if (rewardStatus === 'paid') {
+      salary.rewardPaidDate = new Date();
+      
+      // Create finance transaction for reward payment
+      try {
+        const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
+        const { mapSalaryPaymentMethodToFinance } = require('../utils/paymentMethodMapper');
+        
+        if (previousRewardStatus !== 'paid' && salary.rewardAmount > 0) {
+          await createOutgoingTransaction({
+            amount: salary.rewardAmount,
+            category: 'Reward Payment',
+            transactionDate: salary.rewardPaidDate || new Date(),
+            createdBy: req.admin.id,
+            employee: salary.employeeId,
+            paymentMethod: paymentMethod ? mapSalaryPaymentMethodToFinance(paymentMethod) : 'Bank Transfer',
+            description: `Reward payment for ${salary.employeeName} - ${salary.month}`,
+            metadata: {
+              sourceType: 'reward',
+              sourceId: salary._id.toString(),
+              month: salary.month
+            },
+            checkDuplicate: true
+          });
+        }
+      } catch (error) {
+        console.error('Error creating finance transaction for reward:', error);
+      }
+    } else {
+      salary.rewardPaidDate = null;
+    }
+  }
+
   salary.updatedBy = req.admin.id;
   await salary.save();
 
@@ -406,12 +583,36 @@ exports.generateMonthlySalaries = asyncHandler(async (req, res) => {
       month
     });
 
+    // Calculate incentiveAmount for sales team
+    let incentiveAmount = 0;
+    if (emp.modelType === 'Sales') {
+      try {
+        const incentives = await Incentive.find({
+          salesEmployee: emp._id,
+          currentBalance: { $gt: 0 }
+        });
+        incentiveAmount = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
+      } catch (error) {
+        console.error(`Error calculating incentive for employee ${emp._id}:`, error);
+      }
+    }
+
     if (existing) {
       // Update existing record if salary changed
       if (existing.fixedSalary !== emp.fixedSalary) {
         existing.fixedSalary = emp.fixedSalary;
         existing.paymentDate = paymentDate;
         existing.paymentDay = paymentDay;
+        // Update incentiveAmount if it's a sales employee
+        if (emp.modelType === 'Sales') {
+          existing.incentiveAmount = incentiveAmount;
+        }
+        existing.updatedBy = req.admin.id;
+        await existing.save();
+        updated++;
+      } else if (emp.modelType === 'Sales' && Math.abs((existing.incentiveAmount || 0) - incentiveAmount) > 0.01) {
+        // Update incentiveAmount even if salary hasn't changed
+        existing.incentiveAmount = incentiveAmount;
         existing.updatedBy = req.admin.id;
         await existing.save();
         updated++;
@@ -429,6 +630,10 @@ exports.generateMonthlySalaries = asyncHandler(async (req, res) => {
         paymentDate,
         paymentDay,
         status: 'pending',
+        incentiveAmount,
+        incentiveStatus: 'pending',
+        rewardAmount: 0,
+        rewardStatus: 'pending',
         createdBy: req.admin.id
       });
       generated++;
@@ -512,6 +717,217 @@ exports.deleteSalaryRecord = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: 'Salary record deleted successfully'
+  });
+});
+
+// @desc    Update incentive payment status
+// @route   PUT /api/admin/salary/:id/incentive
+// @access  Private (Admin/HR)
+exports.updateIncentivePayment = asyncHandler(async (req, res) => {
+  const { incentiveStatus, paymentMethod, remarks } = req.body;
+
+  if (!incentiveStatus || !['pending', 'paid'].includes(incentiveStatus)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Valid incentiveStatus (pending or paid) is required'
+    });
+  }
+
+  const salary = await Salary.findById(req.params.id);
+  if (!salary) {
+    return res.status(404).json({
+      success: false,
+      message: 'Salary record not found'
+    });
+  }
+
+  // Only allow incentive updates for sales team
+  if (salary.employeeModel !== 'Sales' || salary.department !== 'sales') {
+    return res.status(400).json({
+      success: false,
+      message: 'Incentive payment is only available for sales team employees'
+    });
+  }
+
+  const previousStatus = salary.incentiveStatus;
+
+  // Update incentive status
+  salary.incentiveStatus = incentiveStatus;
+
+  if (incentiveStatus === 'paid') {
+    salary.incentivePaidDate = new Date();
+    
+    // Find all Incentive records for this sales employee with currentBalance > 0
+    const incentives = await Incentive.find({
+      salesEmployee: salary.employeeId,
+      currentBalance: { $gt: 0 }
+    });
+
+    // Calculate total incentive amount BEFORE clearing currentBalance
+    // This preserves the amount that was paid for historical records
+    const totalIncentiveAmount = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
+    
+    // Store the incentive amount before clearing balances
+    if (totalIncentiveAmount > 0) {
+      salary.incentiveAmount = totalIncentiveAmount;
+    }
+
+    // Set currentBalance to 0 for all incentive records
+    for (const incentive of incentives) {
+      incentive.currentBalance = 0;
+      if (!incentive.paidAt) {
+        incentive.paidAt = new Date();
+      }
+      await incentive.save();
+    }
+
+    // Create finance transaction for incentive payment
+    try {
+      const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
+      const { mapSalaryPaymentMethodToFinance } = require('../utils/paymentMethodMapper');
+      
+      if (previousStatus !== 'paid' && salary.incentiveAmount > 0) {
+        await createOutgoingTransaction({
+          amount: salary.incentiveAmount,
+          category: 'Incentive Payment',
+          transactionDate: salary.incentivePaidDate || new Date(),
+          createdBy: req.admin.id,
+          employee: salary.employeeId,
+          paymentMethod: paymentMethod ? mapSalaryPaymentMethodToFinance(paymentMethod) : 'Bank Transfer',
+          description: `Incentive payment for ${salary.employeeName} - ${salary.month}`,
+          metadata: {
+            sourceType: 'incentive',
+            sourceId: salary._id.toString(),
+            month: salary.month
+          },
+          checkDuplicate: true
+        });
+      }
+    } catch (error) {
+      console.error('Error creating finance transaction for incentive:', error);
+    }
+  } else {
+    salary.incentivePaidDate = null;
+    
+    // Cancel transaction if status changed back to pending
+    try {
+      const { cancelTransactionForSource } = require('../utils/financeTransactionHelper');
+      await cancelTransactionForSource({
+        sourceType: 'incentive',
+        sourceId: salary._id.toString()
+      }, 'cancel');
+    } catch (error) {
+      console.error('Error canceling finance transaction for incentive:', error);
+    }
+  }
+
+  if (paymentMethod && salary.incentiveStatus === 'paid') {
+    // Store payment method in remarks or create a separate field if needed
+    if (remarks) {
+      salary.remarks = (salary.remarks || '') + ` [Incentive Payment: ${paymentMethod}]`;
+    }
+  }
+
+  if (remarks && salary.incentiveStatus === 'paid') {
+    salary.remarks = (salary.remarks || '') + ` [Incentive: ${remarks}]`;
+  }
+
+  salary.updatedBy = req.admin.id;
+  await salary.save();
+
+  res.json({
+    success: true,
+    message: 'Incentive payment status updated successfully',
+    data: salary
+  });
+});
+
+// @desc    Update reward payment status
+// @route   PUT /api/admin/salary/:id/reward
+// @access  Private (Admin/HR)
+exports.updateRewardPayment = asyncHandler(async (req, res) => {
+  const { rewardStatus, paymentMethod, remarks } = req.body;
+
+  if (!rewardStatus || !['pending', 'paid'].includes(rewardStatus)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Valid rewardStatus (pending or paid) is required'
+    });
+  }
+
+  const salary = await Salary.findById(req.params.id);
+  if (!salary) {
+    return res.status(404).json({
+      success: false,
+      message: 'Salary record not found'
+    });
+  }
+
+  const previousStatus = salary.rewardStatus;
+
+  // Update reward status
+  salary.rewardStatus = rewardStatus;
+
+  if (rewardStatus === 'paid') {
+    salary.rewardPaidDate = new Date();
+    
+    // Create finance transaction for reward payment
+    try {
+      const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
+      const { mapSalaryPaymentMethodToFinance } = require('../utils/paymentMethodMapper');
+      
+      if (previousStatus !== 'paid' && salary.rewardAmount > 0) {
+        await createOutgoingTransaction({
+          amount: salary.rewardAmount,
+          category: 'Reward Payment',
+          transactionDate: salary.rewardPaidDate || new Date(),
+          createdBy: req.admin.id,
+          employee: salary.employeeId,
+          paymentMethod: paymentMethod ? mapSalaryPaymentMethodToFinance(paymentMethod) : 'Bank Transfer',
+          description: `Reward payment for ${salary.employeeName} - ${salary.month}`,
+          metadata: {
+            sourceType: 'reward',
+            sourceId: salary._id.toString(),
+            month: salary.month
+          },
+          checkDuplicate: true
+        });
+      }
+    } catch (error) {
+      console.error('Error creating finance transaction for reward:', error);
+    }
+  } else {
+    salary.rewardPaidDate = null;
+    
+    // Cancel transaction if status changed back to pending
+    try {
+      const { cancelTransactionForSource } = require('../utils/financeTransactionHelper');
+      await cancelTransactionForSource({
+        sourceType: 'reward',
+        sourceId: salary._id.toString()
+      }, 'cancel');
+    } catch (error) {
+      console.error('Error canceling finance transaction for reward:', error);
+    }
+  }
+
+  if (paymentMethod && salary.rewardStatus === 'paid') {
+    if (remarks) {
+      salary.remarks = (salary.remarks || '') + ` [Reward Payment: ${paymentMethod}]`;
+    }
+  }
+
+  if (remarks && salary.rewardStatus === 'paid') {
+    salary.remarks = (salary.remarks || '') + ` [Reward: ${remarks}]`;
+  }
+
+  salary.updatedBy = req.admin.id;
+  await salary.save();
+
+  res.json({
+    success: true,
+    message: 'Reward payment status updated successfully',
+    data: salary
   });
 });
 

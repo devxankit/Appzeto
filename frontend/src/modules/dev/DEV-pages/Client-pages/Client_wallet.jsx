@@ -23,6 +23,7 @@ const Client_wallet = () => {
   const [projects, setProjects] = useState([])
   const [transactions, setTransactions] = useState([])
   const [upcomingPayments, setUpcomingPayments] = useState([])
+  const [allInstallments, setAllInstallments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -38,7 +39,8 @@ const Client_wallet = () => {
       ])
 
       setSummary(summaryResponse?.summary || null)
-      setProjects(summaryResponse?.projects || [])
+      const projectsList = summaryResponse?.projects || []
+      setProjects(projectsList)
 
       const transactionList = Array.isArray(transactionsResponse?.data)
         ? transactionsResponse.data
@@ -53,6 +55,29 @@ const Client_wallet = () => {
           ? upcomingResponse
           : []
       setUpcomingPayments(upcomingList)
+
+      // Collect all installments from all projects
+      const collectedInstallments = []
+      projectsList.forEach((project) => {
+        if (project.installmentPlan && Array.isArray(project.installmentPlan)) {
+          project.installmentPlan.forEach((installment, index) => {
+            collectedInstallments.push({
+              id: installment._id || `installment-${project.id}-${index}`,
+              projectId: project.id,
+              projectName: project.name,
+              amount: installment.amount || 0,
+              dueDate: installment.dueDate,
+              status: installment.status || 'pending',
+              paidDate: installment.paidDate,
+              notes: installment.notes,
+              createdAt: installment.createdAt || installment.updatedAt,
+              type: 'installment',
+              sequence: installment.sequence || index + 1
+            })
+          })
+        }
+      })
+      setAllInstallments(collectedInstallments)
     } catch (err) {
       console.error('Failed to load wallet data:', err)
       setError(err.message || 'Failed to load wallet data. Please try again.')
@@ -176,16 +201,115 @@ const Client_wallet = () => {
     }
   }, [summary, projects, upcomingPayments])
 
+  // Combine transactions with paid installments for payment history
+  const combinedTransactions = useMemo(() => {
+    const paidInstallments = allInstallments
+      .filter(inst => inst.status === 'paid')
+      .map(inst => ({
+        id: inst.id,
+        amount: inst.amount,
+        currency: summary?.currency || 'INR',
+        status: 'completed',
+        paymentType: 'installment',
+        transactionId: `INST-${inst.sequence}`,
+        paidAt: inst.paidDate || inst.createdAt,
+        createdAt: inst.createdAt,
+        project: {
+          id: inst.projectId,
+          name: inst.projectName,
+          status: 'active'
+        },
+        milestone: null,
+        notes: inst.notes || `Installment ${inst.sequence} - ${inst.projectName}`,
+        type: 'installment'
+      }))
+    
+    return [...transactions, ...paidInstallments].sort((a, b) => {
+      const dateA = new Date(a.paidAt || a.createdAt || 0)
+      const dateB = new Date(b.paidAt || b.createdAt || 0)
+      return dateB - dateA
+    })
+  }, [transactions, allInstallments, summary])
+
   const filteredTransactions = useMemo(() => {
-    if (selectedFilter === 'all') return transactions
+    if (selectedFilter === 'all') return combinedTransactions
     if (selectedFilter === 'payment') {
-      return transactions.filter((transaction) => transaction.status !== 'refunded')
+      return combinedTransactions.filter((transaction) => transaction.status !== 'refunded')
     }
     if (selectedFilter === 'refund') {
-      return transactions.filter((transaction) => transaction.status === 'refunded')
+      return combinedTransactions.filter((transaction) => transaction.status === 'refunded')
     }
-    return transactions
-  }, [transactions, selectedFilter])
+    return combinedTransactions
+  }, [combinedTransactions, selectedFilter])
+
+  // Calculate installment statistics
+  const installmentStats = useMemo(() => {
+    const total = allInstallments.length
+    const paid = allInstallments.filter(inst => inst.status === 'paid').length
+    const pending = allInstallments.filter(inst => inst.status === 'pending').length
+    const overdue = allInstallments.filter(inst => 
+      inst.status === 'overdue' || 
+      (inst.status !== 'paid' && inst.dueDate && new Date(inst.dueDate) < new Date())
+    ).length
+    const scheduled = total - paid
+
+    return {
+      total,
+      paid,
+      pending,
+      overdue,
+      scheduled
+    }
+  }, [allInstallments])
+
+  // Categorize installments by status
+  const categorizedInstallments = useMemo(() => {
+    const now = new Date()
+    
+    const overdue = allInstallments.filter(inst => {
+      if (inst.status === 'paid') return false
+      if (inst.status === 'overdue') return true
+      if (inst.dueDate && new Date(inst.dueDate) < now) return true
+      return false
+    }).sort((a, b) => {
+      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0
+      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0
+      return dateA - dateB
+    })
+
+    const upcoming = allInstallments.filter(inst => {
+      if (inst.status === 'paid') return false
+      if (inst.status === 'overdue') return false
+      if (inst.dueDate && new Date(inst.dueDate) >= now) return true
+      if (!inst.dueDate && inst.status === 'pending') return true
+      return false
+    }).sort((a, b) => {
+      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity
+      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity
+      return dateA - dateB
+    })
+
+    const scheduled = allInstallments.filter(inst => inst.status === 'pending' && inst.dueDate && new Date(inst.dueDate) >= now)
+      .sort((a, b) => {
+        const dateA = new Date(a.dueDate).getTime()
+        const dateB = new Date(b.dueDate).getTime()
+        return dateA - dateB
+      })
+
+    const paid = allInstallments.filter(inst => inst.status === 'paid')
+      .sort((a, b) => {
+        const dateA = a.paidDate ? new Date(a.paidDate).getTime() : 0
+        const dateB = b.paidDate ? new Date(b.paidDate).getTime() : 0
+        return dateB - dateA
+      })
+
+    return {
+      overdue,
+      upcoming,
+      scheduled,
+      paid
+    }
+  }, [allInstallments])
 
   const resolveTransactionType = useCallback((transaction) => {
     if (!transaction) return 'payment'
@@ -230,6 +354,14 @@ const Client_wallet = () => {
 
   const getTransactionDescription = useCallback((transaction) => {
     if (!transaction) return 'Payment'
+    
+    // Handle installment payments
+    if (transaction.type === 'installment' || transaction.paymentType === 'installment') {
+      const projectName = transaction.project?.name || 'Project'
+      const installmentNum = transaction.transactionId?.replace('INST-', '') || ''
+      return `${projectName} • Installment ${installmentNum}${transaction.notes ? ` - ${transaction.notes}` : ''}`
+    }
+    
     if (transaction.notes) return transaction.notes
     const projectName = transaction.project?.name
     if (projectName && transaction.paymentType) {
@@ -567,6 +699,51 @@ const Client_wallet = () => {
                    <p className="text-blue-600 text-xs font-semibold mt-1">Next 30 days</p>
                  </motion.div>
                </div>
+
+               {/* Installment Statistics */}
+               {installmentStats.total > 0 && (
+                 <motion.div
+                   initial={{ opacity: 0, y: 20 }}
+                   animate={{ opacity: 1, y: 0 }}
+                   transition={{ duration: 0.6, ease: "easeOut", delay: 0.7 }}
+                   className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-6 shadow-xl border border-purple-100 mb-6"
+                 >
+                   <div className="flex items-center justify-between mb-4">
+                     <div className="flex items-center space-x-3">
+                       <div className="bg-purple-100 p-3 rounded-xl">
+                         <FiCalendar className="text-purple-600 text-xl" />
+                       </div>
+                       <div>
+                         <h3 className="text-lg font-bold text-gray-900">Installment Plan</h3>
+                         <p className="text-sm text-gray-600">Payment schedule overview</p>
+                       </div>
+                     </div>
+                   </div>
+                   
+                   <div className="grid grid-cols-4 gap-4">
+                     <div className="bg-white rounded-lg p-4 border border-purple-100">
+                       <p className="text-xs text-gray-500 mb-1">Total Scheduled</p>
+                       <p className="text-2xl font-bold text-gray-900">{installmentStats.total}</p>
+                       <p className="text-xs text-purple-600 mt-1">Installments</p>
+                     </div>
+                     <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                       <p className="text-xs text-gray-600 mb-1">Paid</p>
+                       <p className="text-2xl font-bold text-green-600">{installmentStats.paid}</p>
+                       <p className="text-xs text-green-600 mt-1">{installmentStats.total > 0 ? Math.round((installmentStats.paid / installmentStats.total) * 100) : 0}% Complete</p>
+                     </div>
+                     <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                       <p className="text-xs text-gray-600 mb-1">Pending</p>
+                       <p className="text-2xl font-bold text-yellow-600">{installmentStats.pending}</p>
+                       <p className="text-xs text-yellow-600 mt-1">Upcoming</p>
+                     </div>
+                     <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                       <p className="text-xs text-gray-600 mb-1">Overdue</p>
+                       <p className="text-2xl font-bold text-red-600">{installmentStats.overdue}</p>
+                       <p className="text-xs text-red-600 mt-1">Action Required</p>
+                     </div>
+                   </div>
+                 </motion.div>
+               )}
               
               {/* Transactions Section */}
               <motion.div
@@ -577,8 +754,8 @@ const Client_wallet = () => {
               >
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900">Recent Transactions</h3>
-                    <p className="text-sm text-gray-600 mt-1">Latest {transactions.length} transactions</p>
+                    <h3 className="text-xl font-bold text-gray-900">Payment History</h3>
+                    <p className="text-sm text-gray-600 mt-1">Latest {combinedTransactions.length} transactions including installments</p>
                   </div>
                   <div className="flex items-center space-x-2">
                     <button
@@ -678,10 +855,13 @@ const Client_wallet = () => {
                 
                 <div className="space-y-4">
                   {projects.map((project) => {
+                    // Use backend-calculated values (includes advance + installments + payment records)
                     const paidAmount = project.paidAmount || 0
                     const totalCost = project.totalCost || 0
-                    const remainingAmount =
-                      project.remainingAmount ?? Math.max(totalCost - paidAmount, 0)
+                    // Backend now correctly calculates remainingAmount including all payment sources
+                    const remainingAmount = project.remainingAmount !== undefined 
+                      ? project.remainingAmount 
+                      : Math.max(totalCost - paidAmount, 0)
                     const progress =
                       totalCost > 0 ? Math.min((paidAmount / totalCost) * 100, 100) : 0
 
@@ -707,16 +887,38 @@ const Client_wallet = () => {
                           <span>Remaining: {formatCurrency(remainingAmount)}</span>
                           <span>Progress: {Math.round(progress)}%</span>
                         </div>
-                        {project.installmentSummary?.nextInstallment && (
-                          <div className="mt-2 text-xs text-gray-600">
-                            Next installment:&nbsp;
-                            <span className="font-semibold text-gray-800">
-                              {formatCurrency(project.installmentSummary.nextInstallment.amount || 0)}
-                            </span>
-                            {project.installmentSummary.nextInstallment.dueDate && (
-                              <span className="ml-1">
-                                due {formatDate(project.installmentSummary.nextInstallment.dueDate)}
+                        {project.installmentSummary && project.installmentSummary.totalInstallments > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-semibold text-gray-700">Installments</span>
+                              <span className="text-xs text-gray-600">
+                                {project.installmentSummary.paidInstallments}/{project.installmentSummary.totalInstallments} Paid
                               </span>
+                            </div>
+                            <div className="flex items-center space-x-2 mb-2">
+                              <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                                <div 
+                                  className="bg-gradient-to-r from-green-500 to-green-600 h-1.5 rounded-full transition-all duration-500"
+                                  style={{ width: `${project.installmentSummary.totalInstallments > 0 ? (project.installmentSummary.paidInstallments / project.installmentSummary.totalInstallments) * 100 : 0}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                            {project.installmentSummary.nextInstallment && (
+                              <div className="text-xs text-gray-600">
+                                Next: <span className="font-semibold text-gray-800">
+                                  {formatCurrency(project.installmentSummary.nextInstallment.amount || 0)}
+                                </span>
+                                {project.installmentSummary.nextInstallment.dueDate && (
+                                  <span className="ml-1">
+                                    due {formatDate(project.installmentSummary.nextInstallment.dueDate)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {project.installmentSummary.overdueInstallments > 0 && (
+                              <div className="mt-1 text-xs text-red-600 font-semibold">
+                                ⚠️ {project.installmentSummary.overdueInstallments} overdue
+                              </div>
                             )}
                           </div>
                         )}
@@ -731,25 +933,157 @@ const Client_wallet = () => {
                 </div>
               </motion.div>
 
-              {/* Upcoming Payments */}
+              {/* Installment Records */}
+              {(categorizedInstallments.overdue.length > 0 || 
+                categorizedInstallments.upcoming.length > 0 || 
+                categorizedInstallments.scheduled.length > 0) && (
+                <motion.div
+                  initial={{ opacity: 0, x: 30 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.8, ease: "easeOut", delay: 1.2 }}
+                  className="bg-white rounded-2xl p-6 shadow-xl border border-gray-100"
+                >
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Installment Records</h3>
+                  
+                  <div className="space-y-6">
+                    {/* Overdue Installments */}
+                    {categorizedInstallments.overdue.length > 0 && (
+                      <div>
+                        <div className="flex items-center space-x-2 mb-3">
+                          <FiAlertCircle className="text-red-600 text-lg" />
+                          <h4 className="text-sm font-bold text-red-600">Overdue ({categorizedInstallments.overdue.length})</h4>
+                        </div>
+                        <div className="space-y-2">
+                          {categorizedInstallments.overdue.map((inst) => (
+                            <div key={inst.id} className="p-3 bg-red-50 rounded-lg border border-red-200">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1">
+                                  <p className="font-semibold text-gray-900 text-sm">{inst.projectName}</p>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    Installment {inst.sequence}
+                                    {inst.notes && <span className="text-gray-400"> • {inst.notes}</span>}
+                                  </p>
+                                </div>
+                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                  Overdue
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs text-red-600">
+                                  Due: {inst.dueDate ? formatDate(inst.dueDate) : 'N/A'}
+                                </div>
+                                <div className="font-semibold text-sm text-red-600">
+                                  {formatCurrency(inst.amount)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Upcoming Installments */}
+                    {categorizedInstallments.upcoming.length > 0 && (
+                      <div>
+                        <div className="flex items-center space-x-2 mb-3">
+                          <FiClock className="text-blue-600 text-lg" />
+                          <h4 className="text-sm font-bold text-blue-600">Upcoming ({categorizedInstallments.upcoming.length})</h4>
+                        </div>
+                        <div className="space-y-2">
+                          {categorizedInstallments.upcoming.slice(0, 5).map((inst) => (
+                            <div key={inst.id} className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1">
+                                  <p className="font-semibold text-gray-900 text-sm">{inst.projectName}</p>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    Installment {inst.sequence}
+                                    {inst.notes && <span className="text-gray-400"> • {inst.notes}</span>}
+                                  </p>
+                                </div>
+                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                                  Upcoming
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs text-blue-600">
+                                  Due: {inst.dueDate ? formatDate(inst.dueDate) : 'N/A'}
+                                </div>
+                                <div className="font-semibold text-sm text-blue-600">
+                                  {formatCurrency(inst.amount)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {categorizedInstallments.upcoming.length > 5 && (
+                            <p className="text-xs text-gray-500 text-center mt-2">
+                              +{categorizedInstallments.upcoming.length - 5} more upcoming
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Scheduled Installments */}
+                    {categorizedInstallments.scheduled.length > 0 && (
+                      <div>
+                        <div className="flex items-center space-x-2 mb-3">
+                          <FiCalendar className="text-purple-600 text-lg" />
+                          <h4 className="text-sm font-bold text-purple-600">Scheduled ({categorizedInstallments.scheduled.length})</h4>
+                        </div>
+                        <div className="space-y-2">
+                          {categorizedInstallments.scheduled.slice(0, 5).map((inst) => (
+                            <div key={inst.id} className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1">
+                                  <p className="font-semibold text-gray-900 text-sm">{inst.projectName}</p>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    Installment {inst.sequence}
+                                    {inst.notes && <span className="text-gray-400"> • {inst.notes}</span>}
+                                  </p>
+                                </div>
+                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                                  Scheduled
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs text-purple-600">
+                                  Due: {inst.dueDate ? formatDate(inst.dueDate) : 'N/A'}
+                                </div>
+                                <div className="font-semibold text-sm text-purple-600">
+                                  {formatCurrency(inst.amount)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {categorizedInstallments.scheduled.length > 5 && (
+                            <p className="text-xs text-gray-500 text-center mt-2">
+                              +{categorizedInstallments.scheduled.length - 5} more scheduled
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Upcoming Payments (Milestone Payments) */}
               <motion.div
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, ease: "easeOut", delay: 1.2 }}
+                transition={{ duration: 0.8, ease: "easeOut", delay: 1.3 }}
                 className="bg-white rounded-2xl p-6 shadow-xl border border-gray-100"
               >
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Upcoming Payments</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Upcoming Milestone Payments</h3>
                 
                 <div className="space-y-3">
-                  {upcomingPayments.map((payment) => {
+                  {upcomingPayments.filter(p => p.type !== 'installment').map((payment) => {
                     const status = payment.status || 'pending'
                     const statusLabel = status.charAt(0).toUpperCase() + status.slice(1)
                     const badgeClass = getStatusColor(status)
-                    const typeLabel = payment.type === 'installment'
-                      ? 'Installment Payment'
-                      : payment.milestone?.title || payment.paymentType || 'Milestone payment'
+                    const typeLabel = payment.milestone?.title || payment.paymentType || 'Milestone payment'
                     const dueDateLabel = payment.dueDate ? formatDate(payment.dueDate) : 'N/A'
-                    const amountClass = payment.type === 'installment' && status === 'overdue'
+                    const amountClass = status === 'overdue'
                       ? 'text-red-600'
                       : 'text-gray-900'
 
@@ -762,7 +1096,7 @@ const Client_wallet = () => {
                             </p>
                             <p className="text-xs text-gray-600 mt-1">
                               {typeLabel}
-                              {payment.type === 'installment' && payment.notes && (
+                              {payment.notes && (
                                 <span className="text-gray-400"> • {payment.notes}</span>
                               )}
                             </p>
@@ -782,9 +1116,9 @@ const Client_wallet = () => {
                       </div>
                     )
                   })}
-                  {upcomingPayments.length === 0 && (
+                  {upcomingPayments.filter(p => p.type !== 'installment').length === 0 && (
                     <div className="text-center text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg py-6">
-                      No pending payments right now.
+                      No pending milestone payments right now.
                     </div>
                   )}
                 </div>

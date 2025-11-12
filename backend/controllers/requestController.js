@@ -311,6 +311,84 @@ const respondToRequest = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Request has already been responded to', 400));
   }
 
+  // Handle installment payment approval - update installment status if approved
+  if (request.type === 'approval' && request.module === 'sales' && request.metadata?.installmentId) {
+    if (responseType === 'approve') {
+      // Update installment status to paid
+      const project = await Project.findById(request.metadata.projectId);
+      if (!project) {
+        return next(new ErrorResponse('Project not found', 404));
+      }
+
+      const installment = project.installmentPlan?.id(request.metadata.installmentId);
+      if (!installment) {
+        return next(new ErrorResponse('Installment not found', 404));
+      }
+
+      // Check if already paid
+      if (installment.status === 'paid') {
+        return next(new ErrorResponse('Installment is already marked as paid', 400));
+      }
+
+      // Mark installment as paid
+      const previousStatus = installment.status;
+      installment.status = 'paid';
+      installment.paidDate = request.metadata.paidDate ? new Date(request.metadata.paidDate) : new Date();
+      if (request.metadata.notes) {
+        installment.notes = request.metadata.notes;
+      }
+
+      // Create incoming transaction when installment is marked as paid
+      if (previousStatus !== 'paid') {
+        try {
+          const { createIncomingTransaction } = require('../utils/financeTransactionHelper');
+          const Admin = require('../models/Admin');
+          
+          let adminId = user.id;
+          if (!adminId) {
+            const admin = await Admin.findOne({ isActive: true }).select('_id');
+            adminId = admin ? admin._id : null;
+          }
+
+          if (adminId) {
+            await createIncomingTransaction({
+              amount: installment.amount,
+              category: 'Project Installment Payment',
+              transactionDate: installment.paidDate,
+              createdBy: adminId,
+              client: project.client,
+              project: project._id,
+              description: `Installment payment for project "${project.name}" - ₹${installment.amount}`,
+              metadata: {
+                sourceType: 'projectInstallment',
+                sourceId: installment._id.toString(),
+                projectId: project._id.toString(),
+                installmentId: installment._id.toString()
+              },
+              checkDuplicate: true
+            });
+          }
+        } catch (error) {
+          console.error('Error creating finance transaction for installment:', error);
+          // Don't fail the request approval if transaction creation fails
+        }
+      }
+
+      // Recalculate project financials
+      try {
+        const { calculateInstallmentTotals, recalculateProjectFinancials, refreshInstallmentStatuses } = require('../utils/projectFinancialHelper');
+        project.markModified('installmentPlan');
+        refreshInstallmentStatuses(project);
+        const totals = calculateInstallmentTotals(project.installmentPlan);
+        await recalculateProjectFinancials(project, totals);
+        await project.save();
+      } catch (error) {
+        console.error('Error recalculating project financials:', error);
+        // Don't fail the request approval if recalculation fails
+      }
+    }
+  }
+
   // Respond to request
   await request.respond(user.id, user.model, responseType, message || '');
 

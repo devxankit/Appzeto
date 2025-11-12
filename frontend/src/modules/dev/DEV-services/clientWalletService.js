@@ -40,6 +40,11 @@ const clientWalletService = {
     const query = buildQueryString(params);
     const response = await apiRequest(`${BASE_URL}/upcoming${query}`);
     return response.data;
+  },
+
+  async getOverdueInstallmentsCount() {
+    const response = await apiRequest(`${BASE_URL}/overdue-count`);
+    return response.data || { count: 0, totalAmount: 0, hasOverdue: false };
   }
 };
 

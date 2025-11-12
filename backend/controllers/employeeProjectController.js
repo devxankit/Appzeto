@@ -61,11 +61,20 @@ const getEmployeeProjects = asyncHandler(async (req, res, next) => {
       ? Math.round((employeeCompletedTasks / employeeTasksCount) * 100) 
       : 0;
     
+    // Calculate project progress based on completed milestones vs total milestones
+    const milestones = await Milestone.find({ project: project._id });
+    const totalMilestones = milestones.length;
+    const completedMilestones = milestones.filter(m => m.status === 'completed').length;
+    const projectProgress = totalMilestones > 0 
+      ? Math.round((completedMilestones / totalMilestones) * 100) 
+      : (project.progress || 0);
+    
     return {
       ...project.toObject(),
       employeeTasks: employeeTasksCount,
       employeeCompletedTasks,
-      employeeProgress
+      employeeProgress,
+      progress: projectProgress // Override with milestone-based progress
     };
   }));
 

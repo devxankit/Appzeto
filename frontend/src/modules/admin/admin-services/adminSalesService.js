@@ -354,13 +354,11 @@ class AdminSalesService {
 
   // ==================== INCENTIVE METHODS ====================
 
-  // Set incentive for sales member
-  async setIncentive(memberId, amount, reason, description = '') {
+  // Set per-conversion incentive amount for sales member
+  async setIncentive(memberId, amount) {
     try {
       const requestData = {
-        amount,
-        reason,
-        description
+        amount
       };
 
       const response = await apiRequest(`/admin/sales/team/${memberId}/incentive`, {
@@ -372,7 +370,7 @@ class AdminSalesService {
       });
       return response;
     } catch (error) {
-      console.error('Error setting incentive:', error);
+      console.error('Error setting per-conversion incentive:', error);
       throw error;
     }
   }

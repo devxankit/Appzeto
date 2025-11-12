@@ -64,6 +64,24 @@ const deleteSalaryRecord = async (id) => {
   return res
 }
 
+// Update incentive payment status
+const updateIncentivePayment = async (id, data) => {
+  const res = await apiRequest(`/admin/users/salary/${id}/incentive`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  })
+  return res
+}
+
+// Update reward payment status
+const updateRewardPayment = async (id, data) => {
+  const res = await apiRequest(`/admin/users/salary/${id}/reward`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  })
+  return res
+}
+
 export const adminSalaryService = {
   setEmployeeSalary,
   getSalaryRecords,
@@ -71,7 +89,9 @@ export const adminSalaryService = {
   updateSalaryRecord,
   generateMonthlySalaries,
   getEmployeeSalaryHistory,
-  deleteSalaryRecord
+  deleteSalaryRecord,
+  updateIncentivePayment,
+  updateRewardPayment
 }
 
 export default adminSalaryService

@@ -5,9 +5,11 @@ const Employee = require('../models/Employee');
 const Client = require('../models/Client');
 const PM = require('../models/PM');
 const Payment = require('../models/Payment');
+const Admin = require('../models/Admin');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const socketService = require('../services/socketService');
+const { createIncomingTransaction } = require('../utils/financeTransactionHelper');
 
 const populateProjectForAdmin = async (projectId) => {
   if (!projectId) return null;
@@ -37,7 +39,7 @@ const calculateInstallmentTotals = (installments = []) => {
   );
 };
 
-const recalculateProjectFinancials = (project, totals) => {
+const recalculateProjectFinancials = async (project, totals) => {
   if (!project) return;
 
   if (!project.financialDetails) {
@@ -50,11 +52,61 @@ const recalculateProjectFinancials = (project, totals) => {
   }
 
   const totalCost = Number(project.financialDetails.totalCost || project.budget || 0);
-  const advanceReceived = Number(project.financialDetails.advanceReceived || 0);
+  
+  // Get initial advanceReceived (set during conversion)
+  const initialAdvanceReceived = Number(project.financialDetails.advanceReceived || 0);
+  
+  // Calculate paid installments
   const installmentTotals = totals || calculateInstallmentTotals(project.installmentPlan);
   const collectedFromInstallments = Number(installmentTotals.paid || 0);
-
-  const remainingRaw = totalCost - (advanceReceived + collectedFromInstallments);
+  
+  // Calculate approved PaymentReceipts
+  const PaymentReceipt = require('../models/PaymentReceipt');
+  const approvedReceipts = await PaymentReceipt.find({
+    project: project._id,
+    status: 'approved'
+  }).select('amount');
+  const totalApprovedPayments = approvedReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
+  
+  // Calculate total received from all sources:
+  // 1. Initial advanceReceived (set during conversion, stored in project.financialDetails.advanceReceived)
+  // 2. Approved PaymentReceipts (created by sales team)
+  // 3. Paid installments (from installmentPlan)
+  //
+  // Strategy: Always recalculate from actual data sources to ensure accuracy
+  // The stored advanceReceived might have been updated by PaymentReceipt hook,
+  // but we need to ensure it includes all sources correctly
+  
+  const totalFromReceiptsAndInstallments = totalApprovedPayments + collectedFromInstallments;
+  const storedAdvance = Number(project.financialDetails.advanceReceived || 0);
+  
+  // Calculate total received correctly:
+  // - If stored >= receipts+installments: stored already includes everything (correct)
+  // - If receipts+installments > stored AND stored > 0: stored is initial advance, add them
+  // - Otherwise: use receipts+installments (no initial advance or already included)
+  //
+  // This handles:
+  // - initial=5000, receipts=15000, installments=0 -> total=20000 ✓
+  // - stored=20000 (includes all), receipts=15000, installments=5000 -> total=20000 ✓
+  // - stored=0, receipts=15000, installments=5000 -> total=20000 ✓
+  
+  let totalReceived;
+  if (storedAdvance >= totalFromReceiptsAndInstallments) {
+    // Stored advance already includes everything
+    totalReceived = storedAdvance;
+  } else if (storedAdvance > 0 && totalFromReceiptsAndInstallments > storedAdvance) {
+    // Stored is initial advance, receipts+installments are additional
+    totalReceived = storedAdvance + totalFromReceiptsAndInstallments;
+  } else {
+    // No initial advance or already included - use receipts+installments
+    totalReceived = totalFromReceiptsAndInstallments;
+  }
+  
+  // Update advanceReceived to reflect total received
+  project.financialDetails.advanceReceived = totalReceived;
+  
+  // Calculate remaining amount
+  const remainingRaw = totalCost - totalReceived;
   const remainingAmount = Number.isFinite(remainingRaw) ? Math.max(remainingRaw, 0) : 0;
 
   project.financialDetails.remainingAmount = remainingAmount;
@@ -859,7 +911,7 @@ const updateProjectCost = asyncHandler(async (req, res, next) => {
   // Update budget to match total cost
   project.budget = newCostValue;
 
-  recalculateProjectFinancials(project, installmentTotals);
+  await recalculateProjectFinancials(project, installmentTotals);
   await project.save();
 
   // Populate the updated project
@@ -961,7 +1013,7 @@ const addProjectInstallments = asyncHandler(async (req, res, next) => {
   project.markModified('installmentPlan');
   refreshInstallmentStatuses(project);
   const totalsAfterAdd = calculateInstallmentTotals(project.installmentPlan);
-  recalculateProjectFinancials(project, totalsAfterAdd);
+  await recalculateProjectFinancials(project, totalsAfterAdd);
   await project.save();
 
   const populatedProject = await populateProjectForAdmin(project._id);
@@ -1023,10 +1075,53 @@ const updateProjectInstallment = asyncHandler(async (req, res, next) => {
     if (!allowedStatuses.includes(status)) {
       return next(new ErrorResponse('Invalid installment status', 400));
     }
+    
+    const previousStatus = installment.status;
     installment.status = status;
+    
     if (status === 'paid') {
       const paidDateValue = paidDate ? new Date(paidDate) : new Date();
       installment.paidDate = Number.isNaN(paidDateValue.getTime()) ? new Date() : paidDateValue;
+      
+      // Create incoming transaction when installment is marked as paid
+      // Only create transaction if status changed from non-paid to paid
+      if (previousStatus !== 'paid') {
+        try {
+          // Get Admin ID for createdBy
+          let adminId = null;
+          if (req.admin && req.admin.id) {
+            adminId = req.admin.id;
+          } else if (req.user && req.user.role === 'admin') {
+            adminId = req.user.id;
+          } else {
+            // Find first active admin as fallback
+            const admin = await Admin.findOne({ isActive: true }).select('_id');
+            adminId = admin ? admin._id : null;
+          }
+
+          if (adminId) {
+            await createIncomingTransaction({
+              amount: installment.amount,
+              category: 'Project Installment Payment',
+              transactionDate: installment.paidDate,
+              createdBy: adminId,
+              client: project.client,
+              project: project._id,
+              description: `Installment payment for project "${project.name}" - ₹${installment.amount}`,
+              metadata: {
+                sourceType: 'projectInstallment',
+                sourceId: installment._id.toString(),
+                projectId: project._id.toString(),
+                installmentId: installment._id.toString()
+              },
+              checkDuplicate: true
+            });
+          }
+        } catch (error) {
+          // Log error but don't fail the installment update
+          console.error('Error creating finance transaction for installment:', error);
+        }
+      }
     } else {
       installment.paidDate = null;
     }
@@ -1069,7 +1164,7 @@ const updateProjectInstallment = asyncHandler(async (req, res, next) => {
   project.markModified('installmentPlan');
   refreshInstallmentStatuses(project);
   const totalsPostUpdate = calculateInstallmentTotals(project.installmentPlan);
-  recalculateProjectFinancials(project, totalsPostUpdate);
+  await recalculateProjectFinancials(project, totalsPostUpdate);
   await project.save();
 
   const populatedProject = await populateProjectForAdmin(project._id);
@@ -1102,7 +1197,7 @@ const deleteProjectInstallment = asyncHandler(async (req, res, next) => {
   project.markModified('installmentPlan');
   refreshInstallmentStatuses(project);
   const totalsAfterDelete = calculateInstallmentTotals(project.installmentPlan);
-  recalculateProjectFinancials(project, totalsAfterDelete);
+  await recalculateProjectFinancials(project, totalsAfterDelete);
   await project.save();
 
   const populatedProject = await populateProjectForAdmin(project._id);

@@ -64,6 +64,38 @@ const getClientPaymentById = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get project payments (Client view - only their projects)
+// @route   GET /api/client/payments/project/:projectId
+// @access  Client only
+const getClientProjectPayments = asyncHandler(async (req, res, next) => {
+  const clientId = req.user.id;
+  const projectId = req.params.projectId;
+
+  // First verify client owns the project
+  const Project = require('../models/Project');
+  const project = await Project.findOne({
+    _id: projectId,
+    client: clientId
+  });
+
+  if (!project) {
+    return next(new ErrorResponse('Project not found or you do not have access to this project', 404));
+  }
+
+  const payments = await Payment.find({ 
+    project: projectId,
+    client: clientId
+  })
+    .populate('milestone', 'title sequence status')
+    .populate('project', 'name status')
+    .sort({ createdAt: -1 });
+
+  res.json({
+    success: true,
+    data: payments
+  });
+});
+
 // @desc    Get payment statistics (Client view - only their payments)
 // @route   GET /api/client/payments/statistics
 // @access  Client only
@@ -156,5 +188,6 @@ const getClientPaymentStatistics = asyncHandler(async (req, res, next) => {
 module.exports = {
   getClientPayments,
   getClientPaymentById,
+  getClientProjectPayments,
   getClientPaymentStatistics
 };

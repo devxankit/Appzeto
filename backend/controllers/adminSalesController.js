@@ -601,6 +601,16 @@ const getSalesTeamMember = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Sales team member not found', 404));
   }
 
+  // Recalculate currentIncentive from conversion-based incentives
+  try {
+    await member.updateCurrentIncentive();
+    // Reload member to get updated currentIncentive
+    await member.save();
+  } catch (error) {
+    console.error('Error updating currentIncentive:', error);
+    // Continue even if update fails
+  }
+
   // Get detailed lead breakdown
   const leadBreakdown = await Lead.aggregate([
     { $match: { assignedTo: member._id } },
@@ -642,10 +652,14 @@ const getSalesTeamMember = asyncHandler(async (req, res, next) => {
     }
   ]);
 
-  // Get incentive history
-  const incentiveHistory = await Incentive.find({ salesEmployee: member._id })
-    .populate('createdBy', 'name')
-    .populate('approvedBy', 'name')
+  // Get conversion-based incentive history only
+  const incentiveHistory = await Incentive.find({ 
+    salesEmployee: member._id,
+    isConversionBased: true
+  })
+    .populate('clientId', 'name')
+    .populate('projectId', 'name status financialDetails')
+    .populate('leadId', 'phone')
     .sort({ dateAwarded: -1 })
     .limit(10);
 
@@ -828,18 +842,14 @@ const getLeadsByCategory = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Set incentive for sales member
+// @desc    Set per-conversion incentive amount for sales member
 // @route   POST /api/admin/sales/team/:id/incentive
 // @access  Private (Admin/HR only)
 const setIncentive = asyncHandler(async (req, res, next) => {
-  const { amount, reason, description } = req.body;
+  const { amount } = req.body;
 
   if (!amount || amount <= 0) {
     return next(new ErrorResponse('Valid incentive amount is required', 400));
-  }
-
-  if (!reason) {
-    return next(new ErrorResponse('Reason is required', 400));
   }
 
   const member = await Sales.findById(req.params.id);
@@ -848,26 +858,21 @@ const setIncentive = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Sales team member not found', 404));
   }
 
-  const incentive = await Incentive.create({
-    salesEmployee: member._id,
-    amount,
-    reason,
-    description,
-    createdBy: req.admin.id
-  });
+  // Update the per-conversion incentive amount (applies to future conversions only)
+  const updatedMember = await Sales.findByIdAndUpdate(
+    req.params.id,
+    { incentivePerClient: amount },
+    { new: true, runValidators: true }
+  ).select('name email incentivePerClient');
 
-  // Update the sales member's current incentive
-  await Sales.findByIdAndUpdate(req.params.id, {
-    currentIncentive: amount,
-    $push: { incentiveHistory: incentive._id }
-  });
-
-  await incentive.populate('createdBy', 'name');
-
-  res.status(201).json({
+  res.status(200).json({
     success: true,
-    message: 'Incentive set successfully',
-    data: incentive
+    message: 'Per-conversion incentive amount set successfully',
+    data: {
+      member: updatedMember,
+      incentivePerClient: amount,
+      note: 'This amount will be applied to future lead conversions only'
+    }
   });
 });
 

@@ -22,6 +22,7 @@ const SL_wallet = () => {
   const [error, setError] = useState(null)
   const [wallet, setWallet] = useState({
     currentBalance: 0,
+    pendingIncentive: 0,
     monthlyEarning: 0,
     totalEarning: 0,
     monthlySalary: 0,
@@ -41,6 +42,7 @@ const SL_wallet = () => {
 
         setWallet({
           currentBalance: current,
+          pendingIncentive: pending,
           monthlyEarning: monthly,
           totalEarning: allTime,
           monthlySalary: fixedSalary,
@@ -209,7 +211,7 @@ const SL_wallet = () => {
                   <span className="text-yellow-800 text-xs font-semibold">Pending Incentive</span>
                   <FiCalendar className="text-yellow-600 text-xs" />
                 </div>
-                <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet.monthlyEarning)}</p>
+                <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet.pendingIncentive)}</p>
                 <p className="text-yellow-600 text-xs">Awaiting Recovery</p>
                 
                 {/* Hover Tooltip */}

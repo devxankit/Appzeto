@@ -124,7 +124,7 @@ incentiveSchema.methods.markAsPaid = function() {
 };
 
 // Method to move pending balance to current balance (for conversion-based incentives)
-incentiveSchema.methods.movePendingToCurrent = function(amount) {
+incentiveSchema.methods.movePendingToCurrent = async function(amount) {
   if (!this.isConversionBased) {
     throw new Error('This method is only for conversion-based incentives');
   }
@@ -146,7 +146,21 @@ incentiveSchema.methods.movePendingToCurrent = function(amount) {
     this.status = 'conversion-current';
   }
   
-  return this.save();
+  await this.save();
+  
+  // Update Sales model's currentIncentive field
+  try {
+    const Sales = mongoose.model('Sales');
+    const salesEmployee = await Sales.findById(this.salesEmployee);
+    if (salesEmployee) {
+      await salesEmployee.updateCurrentIncentive();
+    }
+  } catch (error) {
+    console.error('Error updating Sales currentIncentive after moving pending:', error);
+    // Don't throw - the incentive update succeeded
+  }
+  
+  return this;
 };
 
 // Static method to get incentives by sales employee
@@ -256,7 +270,22 @@ incentiveSchema.statics.getMonthlySummary = function(year, month) {
 
 // Pre-save middleware to update sales employee's current incentive
 incentiveSchema.pre('save', async function(next) {
-  // Only update for admin-awarded incentives, not conversion-based ones
+  // For conversion-based incentives, recalculate total incentive from all conversion-based incentives
+  if (this.isConversionBased) {
+    try {
+      const Sales = mongoose.model('Sales');
+      const salesEmployee = await Sales.findById(this.salesEmployee);
+      if (salesEmployee) {
+        // Recalculate currentIncentive as sum of all conversion-based incentives
+        await salesEmployee.updateCurrentIncentive();
+      }
+    } catch (error) {
+      console.error('Error updating Sales currentIncentive in pre-save hook:', error);
+      // Don't fail the save operation
+    }
+  }
+  // Note: Manual incentives are no longer supported, but keeping this for backward compatibility
+  // if any old manual incentives exist
   if (this.isNew && this.status === 'approved' && !this.isConversionBased) {
     const Sales = mongoose.model('Sales');
     await Sales.findByIdAndUpdate(this.salesEmployee, {
@@ -268,7 +297,20 @@ incentiveSchema.pre('save', async function(next) {
 
 // Pre-remove middleware to update sales employee's current incentive
 incentiveSchema.pre('deleteOne', { document: true, query: false }, async function() {
-  if (this.status === 'approved') {
+  // For conversion-based incentives, recalculate total incentive
+  if (this.isConversionBased) {
+    try {
+      const Sales = mongoose.model('Sales');
+      const salesEmployee = await Sales.findById(this.salesEmployee);
+      if (salesEmployee) {
+        await salesEmployee.updateCurrentIncentive();
+      }
+    } catch (error) {
+      console.error('Error updating Sales currentIncentive in pre-remove hook:', error);
+    }
+  }
+  // Handle old manual incentives for backward compatibility
+  if (this.status === 'approved' && !this.isConversionBased) {
     const Sales = mongoose.model('Sales');
     await Sales.findByIdAndUpdate(this.salesEmployee, {
       $inc: { currentIncentive: -this.amount }

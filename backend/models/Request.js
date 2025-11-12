@@ -90,6 +90,11 @@ const requestSchema = new mongoose.Schema({
     type: Number,
     min: 0
   },
+  // Metadata for storing additional request-specific data (e.g., installmentId, paidDate)
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
   // Request status
   status: {
     type: String,

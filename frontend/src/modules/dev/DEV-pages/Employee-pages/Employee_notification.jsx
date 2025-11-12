@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { 
   FiBell, 
@@ -11,80 +11,151 @@ import {
   FiInfo,
   FiAward,
   FiCheckSquare,
-  FiTrendingUp
+  FiTrendingUp,
+  FiMessageSquare,
+  FiSend,
+  FiLoader
 } from 'react-icons/fi'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
+import { employeeNotificationService } from '../../DEV-services'
 
 const Employee_notification = () => {
-  // Mock notification data for Employee
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: 'task',
-      title: 'New Task Assigned',
-      message: 'You have been assigned a new task: "Design Landing Page" with high priority',
-      time: '1 hour ago',
-      isRead: false,
-      icon: FiCheckSquare,
-      iconColor: 'text-blue-600',
-      iconBg: 'bg-blue-100'
-    },
-    {
-      id: 2,
-      type: 'reward',
-      title: 'Performance Reward',
-      message: 'You earned ₹3,000 reward for completing tasks ahead of schedule',
-      time: '3 hours ago',
-      isRead: false,
-      icon: FiAward,
-      iconColor: 'text-yellow-600',
-      iconBg: 'bg-yellow-100'
-    },
-    {
-      id: 3,
-      type: 'urgent',
-      title: 'Urgent Task Alert',
-      message: 'Critical security vulnerability task needs immediate attention',
-      time: '5 hours ago',
-      isRead: false,
-      icon: FiAlertCircle,
-      iconColor: 'text-red-600',
-      iconBg: 'bg-red-100'
-    },
-    {
-      id: 4,
-      type: 'salary',
-      title: 'Salary Credited',
-      message: 'Your monthly salary of ₹25,000 has been credited to your account',
-      time: '1 day ago',
-      isRead: true,
-      icon: FiDollarSign,
-      iconColor: 'text-green-600',
-      iconBg: 'bg-green-100'
-    },
-    {
-      id: 5,
-      type: 'team',
-      title: 'Team Collaboration',
-      message: 'You have been added to the Mobile App project team',
-      time: '2 days ago',
-      isRead: true,
-      icon: FiUser,
-      iconColor: 'text-purple-600',
-      iconBg: 'bg-purple-100'
-    },
-    {
-      id: 6,
-      type: 'milestone',
-      title: 'Milestone Completed',
-      message: 'Congratulations! You completed the "UI/UX Design" milestone',
-      time: '3 days ago',
-      isRead: true,
-      icon: FiTrendingUp,
-      iconColor: 'text-green-600',
-      iconBg: 'bg-green-100'
+  const [notifications, setNotifications] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  const formatRelativeTime = useCallback((dateString) => {
+    if (!dateString) return 'Just now'
+    const eventDate = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - eventDate.getTime()
+    const diffMinutes = Math.floor(diffMs / (1000 * 60))
+
+    if (diffMinutes < 1) return 'Just now'
+    if (diffMinutes < 60) return `${diffMinutes} min ago`
+
+    const diffHours = Math.floor(diffMinutes / 60)
+    if (diffHours < 24) return `${diffHours} hr${diffHours === 1 ? '' : 's'} ago`
+
+    const diffDays = Math.floor(diffHours / 24)
+    if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
+
+    return eventDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  }, [])
+
+  const buildNotificationStyle = useCallback((notification) => {
+    if (notification.type === 'request') {
+      const incoming = notification.direction === 'incoming'
+      return {
+        icon: incoming ? FiMessageSquare : FiSend,
+        iconColor: incoming ? 'text-blue-600' : 'text-purple-600',
+        iconBg: incoming ? 'bg-blue-100' : 'bg-purple-100'
+      }
     }
-  ])
+
+    if (notification.type === 'task') {
+      const isUrgent = notification.task?.priority === 'urgent' || notification.task?.priority === 'high'
+      return {
+        icon: isUrgent ? FiAlertCircle : FiCheckSquare,
+        iconColor: isUrgent ? 'text-red-600' : 'text-blue-600',
+        iconBg: isUrgent ? 'bg-red-100' : 'bg-blue-100'
+      }
+    }
+
+    if (notification.type === 'activity') {
+      if (notification.scope === 'milestone') {
+        return {
+          icon: FiTrendingUp,
+          iconColor: 'text-green-600',
+          iconBg: 'bg-green-100'
+        }
+      }
+      if (notification.scope === 'task') {
+        return {
+          icon: FiCheckSquare,
+          iconColor: 'text-blue-600',
+          iconBg: 'bg-blue-100'
+        }
+      }
+      return {
+        icon: FiTrendingUp,
+        iconColor: 'text-blue-600',
+        iconBg: 'bg-blue-100'
+      }
+    }
+
+    return {
+      icon: FiInfo,
+      iconColor: 'text-teal-600',
+      iconBg: 'bg-teal-100'
+    }
+  }, [])
+
+  const decorateNotification = useCallback(
+    (notification) => {
+      const style = buildNotificationStyle(notification)
+      const timestamp = notification.updatedAt || notification.createdAt
+
+      // Build title based on notification type
+      let title = notification.title
+      if (!title) {
+        if (notification.type === 'task') {
+          title = 'New Task Assigned'
+        } else if (notification.type === 'activity') {
+          title = notification.scope === 'milestone' 
+            ? 'Milestone Update' 
+            : notification.scope === 'task'
+            ? 'Task Update'
+            : 'Project Update'
+        } else if (notification.type === 'request') {
+          title = notification.direction === 'incoming' 
+            ? 'New Request' 
+            : 'Request Update'
+        } else {
+          title = 'Notification'
+        }
+      }
+
+      return {
+        id: notification.id || notification._id,
+        type: notification.type,
+        title,
+        message: notification.message,
+        time: formatRelativeTime(timestamp),
+        isRead: notification.read ?? false,
+        icon: style.icon,
+        iconColor: style.iconColor,
+        iconBg: style.iconBg,
+        metadata: notification
+      }
+    },
+    [buildNotificationStyle, formatRelativeTime]
+  )
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const response = await employeeNotificationService.getNotifications({ limit: 50 })
+      const items = Array.isArray(response) ? response : response?.data || []
+      const decorated = items.map(decorateNotification)
+      setNotifications(decorated)
+    } catch (err) {
+      console.error('Failed to load notifications:', err)
+      setError(err.message || 'Unable to load notifications right now.')
+    } finally {
+      setLoading(false)
+    }
+  }, [decorateNotification])
+
+  useEffect(() => {
+    loadNotifications()
+  }, [loadNotifications])
 
   const markAsRead = (id) => {
     setNotifications(prev => 
@@ -94,18 +165,21 @@ const Employee_notification = () => {
           : notification
       )
     )
+    // TODO: Call API to mark as read when backend supports it
   }
 
   const markAllAsRead = () => {
     setNotifications(prev => 
       prev.map(notification => ({ ...notification, isRead: true }))
     )
+    // TODO: Call API to mark all as read when backend supports it
   }
 
   const deleteNotification = (id) => {
     setNotifications(prev => 
       prev.filter(notification => notification.id !== id)
     )
+    // TODO: Call API to delete when backend supports it
   }
 
   const unreadCount = notifications.filter(n => !n.isRead).length
@@ -127,10 +201,10 @@ const Employee_notification = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
               <p className="text-sm text-gray-600 mt-1">
-                {unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up!'}
+                {loading ? 'Loading...' : unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up!'}
               </p>
             </div>
-            {unreadCount > 0 && (
+            {unreadCount > 0 && !loading && (
               <button
                 onClick={markAllAsRead}
                 className="px-3 py-1.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-dark transition-colors"
@@ -141,14 +215,46 @@ const Employee_notification = () => {
           </div>
         </motion.div>
 
+        {/* Error State */}
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mx-4 mb-4 bg-red-50 border border-red-200 rounded-xl p-4"
+          >
+            <div className="flex items-center">
+              <FiAlertCircle className="w-5 h-5 text-red-600 mr-2" />
+              <p className="text-sm text-red-600">{error}</p>
+              <button 
+                onClick={loadNotifications}
+                className="ml-auto text-red-400 hover:text-red-600"
+              >
+                <FiLoader className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mx-4 flex items-center justify-center py-12"
+          >
+            <FiLoader className="w-8 h-8 animate-spin text-primary" />
+          </motion.div>
+        )}
+
         {/* Notifications List */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="mx-4 space-y-3"
-        >
-          {notifications.length === 0 ? (
+        {!loading && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="mx-4 space-y-3"
+          >
+            {notifications.length === 0 ? (
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -233,7 +339,8 @@ const Employee_notification = () => {
               )
             })
           )}
-        </motion.div>
+          </motion.div>
+        )}
 
       </main>
     </div>
