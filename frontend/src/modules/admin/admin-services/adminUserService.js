@@ -2,6 +2,24 @@ import { apiRequest } from './baseApiService';
 import { uploadToCloudinary } from '../../../services/cloudinaryService';
 
 class AdminUserService {
+  mapUserTypeForApi(userType) {
+    switch (userType) {
+      case 'project-manager':
+        return 'pm';
+      case 'sales':
+        return 'sales';
+      case 'employee':
+        return 'employee';
+      case 'client':
+        return 'client';
+      case 'hr':
+        return 'admin';
+      case 'admin':
+      default:
+        return userType;
+    }
+  }
+
   // Get all users with filtering and pagination
   async getAllUsers(params = {}) {
     try {
@@ -27,7 +45,8 @@ class AdminUserService {
   // Get single user by ID and type
   async getUser(userType, id) {
     try {
-      const response = await apiRequest(`/admin/users/${userType}/${id}`, { method: 'GET' });
+      const normalizedType = this.mapUserTypeForApi(userType);
+      const response = await apiRequest(`/admin/users/${normalizedType}/${id}`, { method: 'GET' });
       return response;
     } catch (error) {
       console.error('Error fetching user:', error);
@@ -48,11 +67,26 @@ class AdminUserService {
         }
       }
 
+      // Helper function to format date without timezone conversion
+      const formatDateForAPI = (dateString) => {
+        if (!dateString) return undefined;
+        // If date is in YYYY-MM-DD format (from HTML date input), send it as-is
+        // The backend will parse it correctly as a date-only value
+        if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          return dateString;
+        }
+        // If it's already a full ISO string, extract just the date part
+        if (dateString.match(/^\d{4}-\d{2}-\d{2}T/)) {
+          return dateString.split('T')[0];
+        }
+        return dateString;
+      };
+
       // Prepare user data for API
       const requestData = {
         ...userData,
-        dateOfBirth: userData.dateOfBirth ? new Date(userData.dateOfBirth).toISOString() : undefined,
-        joiningDate: userData.joiningDate ? new Date(userData.joiningDate).toISOString() : undefined
+        dateOfBirth: formatDateForAPI(userData.dateOfBirth),
+        joiningDate: formatDateForAPI(userData.joiningDate)
       };
 
       const response = await apiRequest(`/admin/users`, {
@@ -72,6 +106,7 @@ class AdminUserService {
   // Update user
   async updateUser(userType, id, userData) {
     try {
+      const normalizedType = this.mapUserTypeForApi(userType);
       // Handle document upload to Cloudinary if present
       if (userData.document && userData.document instanceof File) {
         const uploadResult = await uploadToCloudinary(userData.document, 'appzeto/users/documents');
@@ -82,14 +117,29 @@ class AdminUserService {
         }
       }
 
+      // Helper function to format date without timezone conversion
+      const formatDateForAPI = (dateString) => {
+        if (!dateString) return undefined;
+        // If date is in YYYY-MM-DD format (from HTML date input), send it as-is
+        // The backend will parse it correctly as a date-only value
+        if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          return dateString;
+        }
+        // If it's already a full ISO string, extract just the date part
+        if (dateString.match(/^\d{4}-\d{2}-\d{2}T/)) {
+          return dateString.split('T')[0];
+        }
+        return dateString;
+      };
+
       // Prepare user data for API
       const requestData = {
         ...userData,
-        dateOfBirth: userData.dateOfBirth ? new Date(userData.dateOfBirth).toISOString() : undefined,
-        joiningDate: userData.joiningDate ? new Date(userData.joiningDate).toISOString() : undefined
+        dateOfBirth: formatDateForAPI(userData.dateOfBirth),
+        joiningDate: formatDateForAPI(userData.joiningDate)
       };
 
-      const response = await apiRequest(`/admin/users/${userType}/${id}`, {
+      const response = await apiRequest(`/admin/users/${normalizedType}/${id}`, {
         method: 'PUT',
         body: JSON.stringify(requestData),
         headers: {
@@ -106,7 +156,8 @@ class AdminUserService {
   // Delete user
   async deleteUser(userType, id) {
     try {
-      const response = await apiRequest(`/admin/users/${userType}/${id}`, { method: 'DELETE' });
+      const normalizedType = this.mapUserTypeForApi(userType);
+      const response = await apiRequest(`/admin/users/${normalizedType}/${id}`, { method: 'DELETE' });
       return response;
     } catch (error) {
       console.error('Error deleting user:', error);

@@ -117,7 +117,17 @@ const SL_converted = () => {
     window.open(`https://wa.me/91${phone}?text=${message}`, '_blank')
   }
 
-  const handleProfile = (clientId) => {
+  const handleProfile = (client) => {
+    const clientId =
+      client?.convertedClientId ||
+      client?.convertedClient?.id ||
+      client?.project?.client
+
+    if (!clientId) {
+      toast.error('Client profile is not available yet. Please try again after conversion completes.')
+      return
+    }
+
     navigate(`/client-profile/${clientId}`)
   }
 
@@ -204,7 +214,7 @@ const SL_converted = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(client._id)
+              handleProfile(client)
             }}
             className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
             title="Profile"
@@ -232,14 +242,14 @@ const SL_converted = () => {
                   className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-200 z-50"
                 >
                   <div className="py-1">
-                    <button
-                      onClick={() => handleStatusChange(client._id, 'follow_up')}
+                  <button
+                    onClick={() => handleStatusChange(client._id, 'follow_up')}
                       className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
                     >
                       Follow Up
                     </button>
-                    <button
-                      onClick={() => handleStatusChange(client._id, 'support')}
+                  <button
+                    onClick={() => handleStatusChange(client._id, 'support')}
                       className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
                     >
                       Support
@@ -331,7 +341,7 @@ const SL_converted = () => {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleProfile(client._id)
+              handleProfile(client)
             }}
             className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200 flex items-center space-x-1"
           >

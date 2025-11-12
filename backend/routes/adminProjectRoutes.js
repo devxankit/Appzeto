@@ -4,6 +4,10 @@ const {
   getProjectById,
   createProject,
   updateProject,
+  updateProjectCost,
+  addProjectInstallments,
+  updateProjectInstallment,
+  deleteProjectInstallment,
   deleteProject,
   getProjectStatistics,
   getProjectManagementStatistics,
@@ -29,6 +33,10 @@ router.get('/:id', getProjectById);
 router.post('/', createProject);
 router.post('/pending/:id/assign-pm', assignPMToPendingProject);
 router.put('/:id', updateProject);
+router.put('/:id/cost', updateProjectCost);
+router.post('/:id/installments', addProjectInstallments);
+router.put('/:id/installments/:installmentId', updateProjectInstallment);
+router.delete('/:id/installments/:installmentId', deleteProjectInstallment);
 router.delete('/:id', deleteProject);
 
 module.exports = router;

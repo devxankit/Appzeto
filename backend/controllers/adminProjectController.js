@@ -9,6 +9,88 @@ const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const socketService = require('../services/socketService');
 
+const populateProjectForAdmin = async (projectId) => {
+  if (!projectId) return null;
+  return Project.findById(projectId)
+    .populate('client', 'name email company')
+    .populate('projectManager', 'name email')
+    .populate('assignedTeam', 'name email department position')
+    .populate('costHistory.changedBy', 'name email')
+    .populate('installmentPlan.createdBy', 'name email')
+    .populate('installmentPlan.updatedBy', 'name email');
+};
+
+const calculateInstallmentTotals = (installments = []) => {
+  return installments.reduce(
+    (acc, installment) => {
+      if (!installment) return acc;
+      const amount = Number(installment.amount) || 0;
+      acc.total += amount;
+      if (installment.status === 'paid') {
+        acc.paid += amount;
+      } else {
+        acc.pending += amount;
+      }
+      return acc;
+    },
+    { total: 0, paid: 0, pending: 0 }
+  );
+};
+
+const recalculateProjectFinancials = (project, totals) => {
+  if (!project) return;
+
+  if (!project.financialDetails) {
+    project.financialDetails = {
+      totalCost: 0,
+      advanceReceived: 0,
+      includeGST: false,
+      remainingAmount: 0
+    };
+  }
+
+  const totalCost = Number(project.financialDetails.totalCost || project.budget || 0);
+  const advanceReceived = Number(project.financialDetails.advanceReceived || 0);
+  const installmentTotals = totals || calculateInstallmentTotals(project.installmentPlan);
+  const collectedFromInstallments = Number(installmentTotals.paid || 0);
+
+  const remainingRaw = totalCost - (advanceReceived + collectedFromInstallments);
+  const remainingAmount = Number.isFinite(remainingRaw) ? Math.max(remainingRaw, 0) : 0;
+
+  project.financialDetails.remainingAmount = remainingAmount;
+};
+
+const refreshInstallmentStatuses = (project) => {
+  if (!project?.installmentPlan?.length) return;
+  const now = new Date();
+  project.installmentPlan.forEach((installment) => {
+    if (!installment) return;
+    const dueDate = installment.dueDate ? new Date(installment.dueDate) : null;
+
+    if (installment.status === 'paid') {
+      if (!installment.paidDate) {
+        installment.paidDate = new Date();
+      }
+      return;
+    }
+
+    if (dueDate) {
+      if (dueDate < now) {
+        if (installment.status !== 'overdue') {
+          installment.status = 'overdue';
+          installment.updatedAt = new Date();
+        }
+      } else if (installment.status === 'overdue') {
+        installment.status = 'pending';
+        installment.updatedAt = new Date();
+      } else if (installment.status !== 'pending') {
+        installment.status = 'pending';
+        installment.updatedAt = new Date();
+      }
+    }
+  });
+};
+
 // @desc    Get all projects (Admin view - all projects)
 // @route   GET /api/admin/projects
 // @access  Admin only
@@ -42,6 +124,9 @@ const getAllProjects = asyncHandler(async (req, res, next) => {
     .populate('projectManager', 'name email')
     .populate('assignedTeam', 'name email department position')
     .populate('submittedBy', 'name email')
+    .populate('costHistory.changedBy', 'name email')
+    .populate('installmentPlan.createdBy', 'name email')
+    .populate('installmentPlan.updatedBy', 'name email')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(parseInt(limit));
@@ -131,7 +216,10 @@ const getProjectById = asyncHandler(async (req, res, next) => {
     .populate('client', 'name email company phoneNumber')
     .populate('projectManager', 'name email phone')
     .populate('assignedTeam', 'name email department position')
-    .populate('milestones');
+    .populate('milestones')
+    .populate('costHistory.changedBy', 'name email')
+    .populate('installmentPlan.createdBy', 'name email')
+    .populate('installmentPlan.updatedBy', 'name email');
 
   if (!project) {
     return next(new ErrorResponse('Project not found', 404));
@@ -149,10 +237,7 @@ const getProjectById = asyncHandler(async (req, res, next) => {
 const createProject = asyncHandler(async (req, res, next) => {
   const project = await Project.create(req.body);
 
-  const populatedProject = await Project.findById(project._id)
-    .populate('client', 'name email company')
-    .populate('projectManager', 'name email')
-    .populate('assignedTeam', 'name email department position');
+  const populatedProject = await populateProjectForAdmin(project._id);
 
   // Emit WebSocket event
   socketService.emitToProject(project._id, 'project_created', {
@@ -174,24 +259,23 @@ const updateProject = asyncHandler(async (req, res, next) => {
     req.params.id,
     req.body,
     { new: true, runValidators: true }
-  )
-    .populate('client', 'name email company')
-    .populate('projectManager', 'name email')
-    .populate('assignedTeam', 'name email department position');
+  );
 
   if (!project) {
     return next(new ErrorResponse('Project not found', 404));
   }
 
+  const populatedProject = await populateProjectForAdmin(project._id);
+
   // Emit WebSocket event
   socketService.emitToProject(project._id, 'project_updated', {
-    project,
+    project: populatedProject,
     updatedBy: req.user.name
   });
 
   res.json({
     success: true,
-    data: project
+    data: populatedProject
   });
 });
 
@@ -679,11 +763,366 @@ const getPMsForAssignment = asyncHandler(async (req, res, next) => {
   }
 });
 
+// @desc    Update project cost with history tracking
+// @route   PUT /api/admin/projects/:id/cost
+// @access  Admin only
+const updateProjectCost = asyncHandler(async (req, res, next) => {
+  const { newCost, reason } = req.body;
+  const projectId = req.params.id;
+
+  if (!newCost || newCost < 0) {
+    return next(new ErrorResponse('Valid cost amount is required', 400));
+  }
+
+  if (!reason || reason.trim().length === 0) {
+    return next(new ErrorResponse('Reason for cost change is required', 400));
+  }
+
+  // Find the project
+  const project = await Project.findById(projectId);
+  if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
+
+  // Get current cost (from financialDetails.totalCost or budget)
+  const currentCost = project.financialDetails?.totalCost || project.budget || 0;
+  const newCostValue = Number(newCost);
+
+  // If cost hasn't changed, return success without creating history
+  if (currentCost === newCostValue) {
+    const totals = calculateInstallmentTotals(project.installmentPlan);
+    if (totals.total > newCostValue) {
+      return next(
+        new ErrorResponse(
+          `Current installments total ${totals.total.toFixed(
+            2
+          )}, which exceeds the new cost. Adjust installments before lowering cost.`,
+          400
+        )
+      );
+    }
+
+    const populatedProject = await populateProjectForAdmin(projectId);
+    return res.json({
+      success: true,
+      data: populatedProject,
+      message: 'Cost unchanged'
+    });
+  }
+
+  // Add cost change to history
+  const costHistoryEntry = {
+    previousCost: currentCost,
+    newCost: newCostValue,
+    reason: reason.trim(),
+    changedBy: req.user.id,
+    changedByModel: 'Admin',
+    changedAt: new Date()
+  };
+
+  // Initialize costHistory array if it doesn't exist
+  if (!project.costHistory) {
+    project.costHistory = [];
+  }
+
+  // Add history entry
+  project.costHistory.push(costHistoryEntry);
+
+  // Update project cost
+  if (!project.financialDetails) {
+    project.financialDetails = {
+      totalCost: newCostValue,
+      advanceReceived: 0,
+      includeGST: false,
+      remainingAmount: newCostValue
+    };
+  } else {
+    const advanceReceived = project.financialDetails.advanceReceived || 0;
+    project.financialDetails.totalCost = newCostValue;
+    project.financialDetails.remainingAmount = newCostValue - advanceReceived;
+  }
+
+  const installmentTotals = calculateInstallmentTotals(project.installmentPlan);
+  if (installmentTotals.total > newCostValue) {
+    return next(
+      new ErrorResponse(
+        `Installment total ${installmentTotals.total.toFixed(
+          2
+        )} exceeds the new project cost ${newCostValue.toFixed(
+          2
+        )}. Adjust installments before saving.`,
+        400
+      )
+    );
+  }
+
+  // Update budget to match total cost
+  project.budget = newCostValue;
+
+  recalculateProjectFinancials(project, installmentTotals);
+  await project.save();
+
+  // Populate the updated project
+  const populatedProject = await populateProjectForAdmin(projectId);
+
+  // Emit WebSocket event
+  socketService.emitToProject(projectId, 'project_cost_updated', {
+    project: populatedProject,
+    costChange: costHistoryEntry,
+    updatedBy: req.user.name
+  });
+
+  res.json({
+    success: true,
+    data: populatedProject,
+    message: 'Project cost updated successfully',
+    costHistory: costHistoryEntry
+  });
+});
+
+// @desc    Add installments to a project
+// @route   POST /api/admin/projects/:id/installments
+// @access  Admin only
+const addProjectInstallments = asyncHandler(async (req, res, next) => {
+  const { installments } = req.body;
+  const projectId = req.params.id;
+
+  if (!Array.isArray(installments) || installments.length === 0) {
+    return next(new ErrorResponse('Provide at least one installment to add', 400));
+  }
+
+  const project = await Project.findById(projectId);
+  if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
+
+  if (!project.installmentPlan) {
+    project.installmentPlan = [];
+  }
+
+  const adminId = req.user?.id || null;
+  const newInstallments = [];
+  for (let i = 0; i < installments.length; i += 1) {
+    const installment = installments[i];
+    const amount = Number(installment.amount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return next(new ErrorResponse(`Installment #${i + 1} must have a valid amount greater than 0`, 400));
+    }
+
+    const dueDate = installment.dueDate ? new Date(installment.dueDate) : null;
+    if (!dueDate || Number.isNaN(dueDate.getTime())) {
+      return next(new ErrorResponse(`Installment #${i + 1} must have a valid due date`, 400));
+    }
+
+    const notes = installment.notes ? String(installment.notes).trim() : undefined;
+
+    newInstallments.push({
+      amount,
+      dueDate,
+      status: 'pending',
+      notes,
+      createdBy: adminId,
+      updatedBy: adminId,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+  }
+
+  const existingTotals = calculateInstallmentTotals(project.installmentPlan);
+  const newTotalAmount = newInstallments.reduce(
+    (sum, inst) => sum + (Number(inst.amount) || 0),
+    0
+  );
+
+  const totalsAfterAmount = existingTotals.total + newTotalAmount;
+  const totalCost = project.financialDetails?.totalCost || 0;
+  if (totalCost <= 0) {
+    return next(
+      new ErrorResponse(
+        'Define a total project cost before adding installments.',
+        400
+      )
+    );
+  }
+  if (totalCost > 0 && totalsAfterAmount > totalCost + 0.0001) {
+    return next(
+      new ErrorResponse(
+        `Installment total ${totalsAfterAmount.toFixed(
+          2
+        )} exceeds project total cost ${totalCost.toFixed(2)}.`,
+        400
+      )
+    );
+  }
+
+  newInstallments.forEach((inst) => project.installmentPlan.push(inst));
+
+  project.markModified('installmentPlan');
+  refreshInstallmentStatuses(project);
+  const totalsAfterAdd = calculateInstallmentTotals(project.installmentPlan);
+  recalculateProjectFinancials(project, totalsAfterAdd);
+  await project.save();
+
+  const populatedProject = await populateProjectForAdmin(project._id);
+
+  res.status(201).json({
+    success: true,
+    data: populatedProject,
+    message: 'Installments added successfully'
+  });
+});
+
+// @desc    Update a specific installment
+// @route   PUT /api/admin/projects/:id/installments/:installmentId
+// @access  Admin only
+const updateProjectInstallment = asyncHandler(async (req, res, next) => {
+  const { id: projectId, installmentId } = req.params;
+  const { amount, dueDate, notes, status, paidDate } = req.body;
+
+  const project = await Project.findById(projectId);
+  if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
+
+  const installment = project.installmentPlan?.id(installmentId);
+  if (!installment) {
+    return next(new ErrorResponse('Installment not found', 404));
+  }
+
+  const originalInstallment = {
+    amount: installment.amount,
+    dueDate: installment.dueDate,
+    notes: installment.notes,
+    status: installment.status,
+    paidDate: installment.paidDate
+  };
+
+  if (amount !== undefined) {
+    const amountValue = Number(amount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      return next(new ErrorResponse('Installment amount must be greater than 0', 400));
+    }
+    installment.amount = amountValue;
+  }
+
+  if (dueDate !== undefined) {
+    const dueDateValue = dueDate ? new Date(dueDate) : null;
+    if (!dueDateValue || Number.isNaN(dueDateValue.getTime())) {
+      return next(new ErrorResponse('Provide a valid due date', 400));
+    }
+    installment.dueDate = dueDateValue;
+  }
+
+  if (notes !== undefined) {
+    installment.notes = notes ? String(notes).trim() : undefined;
+  }
+
+  if (status !== undefined) {
+    const allowedStatuses = ['pending', 'paid', 'overdue'];
+    if (!allowedStatuses.includes(status)) {
+      return next(new ErrorResponse('Invalid installment status', 400));
+    }
+    installment.status = status;
+    if (status === 'paid') {
+      const paidDateValue = paidDate ? new Date(paidDate) : new Date();
+      installment.paidDate = Number.isNaN(paidDateValue.getTime()) ? new Date() : paidDateValue;
+    } else {
+      installment.paidDate = null;
+    }
+  }
+
+  const totalsAfterUpdate = calculateInstallmentTotals(project.installmentPlan);
+  const totalCost = project.financialDetails?.totalCost || 0;
+  if (totalCost <= 0) {
+    installment.amount = originalInstallment.amount;
+    installment.dueDate = originalInstallment.dueDate;
+    installment.notes = originalInstallment.notes;
+    installment.status = originalInstallment.status;
+    installment.paidDate = originalInstallment.paidDate;
+    return next(
+      new ErrorResponse(
+        'Define a total project cost before managing installments.',
+        400
+      )
+    );
+  }
+  if (totalsAfterUpdate.total > totalCost + 0.0001) {
+    installment.amount = originalInstallment.amount;
+    installment.dueDate = originalInstallment.dueDate;
+    installment.notes = originalInstallment.notes;
+    installment.status = originalInstallment.status;
+    installment.paidDate = originalInstallment.paidDate;
+    return next(
+      new ErrorResponse(
+        `Installment total ${totalsAfterUpdate.total.toFixed(
+          2
+        )} exceeds project total cost ${totalCost.toFixed(2)}.`,
+        400
+      )
+    );
+  }
+
+  installment.updatedAt = new Date();
+  installment.updatedBy = req.user?.id || installment.updatedBy;
+
+  project.markModified('installmentPlan');
+  refreshInstallmentStatuses(project);
+  const totalsPostUpdate = calculateInstallmentTotals(project.installmentPlan);
+  recalculateProjectFinancials(project, totalsPostUpdate);
+  await project.save();
+
+  const populatedProject = await populateProjectForAdmin(project._id);
+
+  res.json({
+    success: true,
+    data: populatedProject,
+    message: 'Installment updated successfully'
+  });
+});
+
+// @desc    Delete a specific installment
+// @route   DELETE /api/admin/projects/:id/installments/:installmentId
+// @access  Admin only
+const deleteProjectInstallment = asyncHandler(async (req, res, next) => {
+  const { id: projectId, installmentId } = req.params;
+
+  const project = await Project.findById(projectId);
+  if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
+
+  const installment = project.installmentPlan?.id(installmentId);
+  if (!installment) {
+    return next(new ErrorResponse('Installment not found', 404));
+  }
+
+  project.installmentPlan.pull({ _id: installmentId });
+
+  project.markModified('installmentPlan');
+  refreshInstallmentStatuses(project);
+  const totalsAfterDelete = calculateInstallmentTotals(project.installmentPlan);
+  recalculateProjectFinancials(project, totalsAfterDelete);
+  await project.save();
+
+  const populatedProject = await populateProjectForAdmin(project._id);
+
+  res.json({
+    success: true,
+    data: populatedProject,
+    message: 'Installment removed successfully'
+  });
+});
+
 module.exports = {
   getAllProjects,
   getProjectById,
   createProject,
   updateProject,
+  updateProjectCost,
+  addProjectInstallments,
+  updateProjectInstallment,
+  deleteProjectInstallment,
   deleteProject,
   getProjectStatistics,
   getProjectManagementStatistics,

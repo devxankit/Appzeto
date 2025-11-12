@@ -110,31 +110,6 @@ exports.createAllowance = asyncHandler(async (req, res) => {
     createdBy: req.admin.id
   });
 
-  // Create finance transaction when allowance is created with active status
-  try {
-    if ((status || 'active') === 'active') {
-      const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
-      
-      await createOutgoingTransaction({
-        amount: value,
-        category: 'Employee Allowance',
-        transactionDate: issueDate || new Date(),
-        createdBy: req.admin.id,
-        employee: employee._id,
-        description: `Allowance: ${itemName} (${itemType}) for ${employee.name}`,
-        metadata: {
-          sourceType: 'allowance',
-          sourceId: allowance._id.toString(),
-          itemType: itemType
-        },
-        checkDuplicate: true
-      });
-    }
-  } catch (error) {
-    // Log error but don't fail the allowance creation
-    console.error('Error creating finance transaction for allowance:', error);
-  }
-
   res.status(201).json({
     success: true,
     message: 'Allowance created successfully',

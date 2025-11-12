@@ -76,7 +76,7 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
   // Fetch projects for the client with minimal fields
   const projects = await Project.find({ client: clientObjectId })
     .select(
-      'name status dueDate progress financialDetails.totalCost financialDetails.remainingAmount financialDetails.advanceReceived'
+      'name status dueDate progress financialDetails.totalCost financialDetails.remainingAmount financialDetails.advanceReceived installmentPlan'
     )
     .lean();
 
@@ -103,6 +103,50 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
       project.financialDetails?.remainingAmount ??
       Math.max(totalCost - stats.paidAmount, 0);
 
+    const installments = Array.isArray(project.installmentPlan)
+      ? project.installmentPlan
+      : [];
+
+    const now = new Date();
+    let totalInstallmentAmount = 0;
+    let paidInstallmentAmount = 0;
+    let pendingInstallmentAmount = 0;
+    const pendingInstallments = [];
+
+    installments.forEach((installment) => {
+      const amount = Number(installment.amount) || 0;
+      totalInstallmentAmount += amount;
+      if (installment.status === 'paid') {
+        paidInstallmentAmount += amount;
+        return;
+      }
+
+      pendingInstallmentAmount += amount;
+
+      const dueDate = installment.dueDate ? new Date(installment.dueDate) : null;
+      const status =
+        installment.status === 'paid'
+          ? 'paid'
+          : dueDate && dueDate < now
+          ? 'overdue'
+          : 'pending';
+
+      pendingInstallments.push({
+        ...installment,
+        status
+      });
+    });
+
+    pendingInstallments.sort((a, b) => {
+      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      return dateA - dateB;
+    });
+
+    const nextInstallment = pendingInstallments.length
+      ? pendingInstallments[0]
+      : null;
+
     return {
       id: project._id,
       name: project.name,
@@ -113,7 +157,27 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
       paidAmount: stats.paidAmount,
       pendingAmount: stats.pendingAmount,
       refundedAmount: stats.refundedAmount,
-      remainingAmount
+      remainingAmount,
+      installmentSummary: {
+        totalInstallments: installments.length,
+        pendingInstallments: installments.filter(
+          (installment) => installment.status !== 'paid'
+        ).length,
+        paidInstallments: installments.filter(
+          (installment) => installment.status === 'paid'
+        ).length,
+        totalAmount: totalInstallmentAmount,
+        pendingAmount: pendingInstallmentAmount,
+        paidAmount: paidInstallmentAmount,
+        nextInstallment: nextInstallment
+          ? {
+              id: nextInstallment._id,
+              amount: nextInstallment.amount,
+              dueDate: nextInstallment.dueDate,
+              status: nextInstallment.status
+            }
+          : null
+      }
     };
   });
 
@@ -240,7 +304,7 @@ const getUpcomingPayments = asyncHandler(async (req, res, next) => {
     .limit(parsedLimit)
     .lean();
 
-  const upcoming = pendingPayments.map((payment) => ({
+  const upcomingPayments = pendingPayments.map((payment) => ({
     id: payment._id,
     project: payment.project
       ? { id: payment.project._id, name: payment.project.name, status: payment.project.status }
@@ -257,12 +321,76 @@ const getUpcomingPayments = asyncHandler(async (req, res, next) => {
     currency: payment.currency,
     paymentType: payment.paymentType,
     createdAt: payment.createdAt,
-    dueDate: payment.milestone?.dueDate || null
+    dueDate: payment.milestone?.dueDate || null,
+    status: payment.status,
+    type: 'payment',
+    notes: payment.notes || null
   }));
+
+  const projectsWithInstallments = await Project.find({
+    client: clientObjectId,
+    'installmentPlan.0': { $exists: true }
+  })
+    .select('name status installmentPlan')
+    .lean();
+
+  const now = new Date();
+  const installmentEntries = [];
+
+  projectsWithInstallments.forEach((project) => {
+    const installments = Array.isArray(project.installmentPlan)
+      ? project.installmentPlan
+      : [];
+
+    installments.forEach((installment) => {
+      const amount = Number(installment.amount) || 0;
+      if (amount <= 0) {
+        return;
+      }
+
+      const dueDate = installment.dueDate ? new Date(installment.dueDate) : null;
+      const status =
+        installment.status === 'paid'
+          ? 'paid'
+          : dueDate && dueDate < now
+          ? 'overdue'
+          : 'pending';
+
+      if (status === 'paid') {
+        return;
+      }
+
+      installmentEntries.push({
+        id: installment._id,
+        project: {
+          id: project._id,
+          name: project.name,
+          status: project.status
+        },
+        milestone: null,
+        amount,
+        currency: 'INR',
+        paymentType: 'installment',
+        createdAt: installment.createdAt || installment.updatedAt || null,
+        dueDate: installment.dueDate || null,
+        status,
+        type: 'installment',
+        notes: installment.notes || null
+      });
+    });
+  });
+
+  const combinedUpcoming = [...upcomingPayments, ...installmentEntries]
+    .sort((a, b) => {
+      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : new Date(a.createdAt || Date.now()).getTime();
+      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : new Date(b.createdAt || Date.now()).getTime();
+      return dateA - dateB;
+    })
+    .slice(0, parsedLimit);
 
   res.status(200).json({
     success: true,
-    data: upcoming
+    data: combinedUpcoming
   });
 });
 

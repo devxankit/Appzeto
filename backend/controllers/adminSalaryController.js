@@ -208,7 +208,7 @@ exports.getSalaryRecord = asyncHandler(async (req, res) => {
 // @route   PUT /api/admin/salary/:id
 // @access  Private (Admin/HR)
 exports.updateSalaryRecord = asyncHandler(async (req, res) => {
-  const { status, paymentMethod, remarks } = req.body;
+  const { status, paymentMethod, remarks, fixedSalary } = req.body;
 
   const salary = await Salary.findById(req.params.id);
   if (!salary) {
@@ -231,8 +231,19 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
     });
   }
 
-  // Store previous status for transaction creation
+  // Store previous status for transaction creation and next month creation
   const previousStatus = salary.status;
+
+  // Update fixedSalary if provided
+  if (fixedSalary !== undefined) {
+    if (fixedSalary < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Fixed salary must be greater than or equal to 0'
+      });
+    }
+    salary.fixedSalary = fixedSalary;
+  }
 
   // Update fields
   if (status) {
@@ -272,6 +283,55 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
       } catch (error) {
         // Log error but don't fail the salary update
         console.error('Error creating finance transaction for salary:', error);
+      }
+
+      // Auto-create next month's salary record when marking as paid
+      if (previousStatus !== 'paid') {
+        try {
+          // Calculate next month
+          const [year, monthStr] = salary.month.split('-');
+          const month = parseInt(monthStr, 10) - 1; // Convert to 0-indexed (0-11)
+          const nextMonthDate = new Date(parseInt(year), month + 1, 1); // Add 1 to get next month
+          const nextMonth = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
+
+          // Get employee to get joining date
+          const employeeModel = getEmployeeModelType(salary.role === 'project-manager' ? 'pm' : 
+                                                      salary.employeeModel === 'Sales' ? 'sales' : 'employee');
+          const employee = await getEmployee(salary.employeeId, employeeModel);
+
+          if (employee) {
+            const joiningDate = employee.joiningDate || salary.paymentDate;
+            const paymentDate = calculatePaymentDate(joiningDate, nextMonth);
+            const paymentDay = new Date(joiningDate).getDate();
+
+            // Check if next month's salary already exists
+            const existingNextMonth = await Salary.findOne({
+              employeeId: salary.employeeId,
+              employeeModel: salary.employeeModel,
+              month: nextMonth
+            });
+
+            // Only create if it doesn't exist
+            if (!existingNextMonth) {
+              await Salary.create({
+                employeeId: salary.employeeId,
+                employeeModel: salary.employeeModel,
+                employeeName: salary.employeeName,
+                department: salary.department,
+                role: salary.role,
+                month: nextMonth,
+                fixedSalary: salary.fixedSalary, // Use same salary amount
+                paymentDate: paymentDate,
+                paymentDay: paymentDay,
+                status: 'pending',
+                createdBy: req.admin.id
+              });
+            }
+          }
+        } catch (error) {
+          // Log error but don't fail the salary update
+          console.error('Error creating next month salary record:', error);
+        }
       }
     } else {
       salary.paidDate = null;

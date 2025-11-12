@@ -28,7 +28,8 @@ import {
   Plus,
   RefreshCw,
   Upload,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
@@ -237,6 +238,27 @@ const Admin_user_management = () => {
     setShowCreateModal(true)
   }
 
+  // Helper function to format date for date input (YYYY-MM-DD format)
+  const formatDateForInput = (date) => {
+    if (!date) return '';
+    // If already in YYYY-MM-DD format, return as-is
+    if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return date;
+    }
+    // If it's an ISO string or Date object, extract the date part
+    try {
+      const dateObj = new Date(date);
+      if (isNaN(dateObj.getTime())) return '';
+      // Get year, month, day in local timezone
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch (e) {
+      return '';
+    }
+  }
+
   const handleEditUser = (user) => {
     setFormData({
       name: user.name,
@@ -246,8 +268,8 @@ const Admin_user_management = () => {
       team: user.team || '',
       department: user.department || '',
       status: user.status,
-      dateOfBirth: user.dateOfBirth || '',
-      joiningDate: user.joiningDate || '',
+      dateOfBirth: formatDateForInput(user.dateOfBirth),
+      joiningDate: formatDateForInput(user.joiningDate),
       document: user.document || null,
       password: '',
       confirmPassword: ''
@@ -1326,30 +1348,57 @@ const Admin_user_management = () => {
                       </div>
                     </div>
                     {selectedUser.document && (
-                      <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                        <FileText className="h-4 w-4 text-gray-500" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-700">Document</p>
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center space-x-2">
-                            {selectedUser.document.secure_url && selectedUser.document.secure_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                              <img
-                                src={selectedUser.document.secure_url}
-                                alt="User Document"
-                                className="w-12 h-12 object-cover rounded-lg border border-gray-200"
-                              />
-                            ) : (
-                              <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                                <FileText className="h-6 w-6 text-gray-500" />
-                              </div>
-                            )}
-                            <div>
-                              <p className="text-sm text-gray-900 font-medium">
-                                {selectedUser.document.originalName || selectedUser.document.original_filename || 'Document'}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {selectedUser.document.size ? `${Math.round(selectedUser.document.size / 1024)} KB` : 'Document'}
-                              </p>
+                            <FileText className="h-4 w-4 text-gray-500" />
+                            <p className="text-sm font-medium text-gray-700">Document</p>
+                          </div>
+                          {selectedUser.document.secure_url && (
+                            <button
+                              onClick={() => window.open(selectedUser.document.secure_url, '_blank')}
+                              className="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                            >
+                              <Eye className="h-3 w-3" />
+                              <span>View</span>
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          {selectedUser.document.secure_url && selectedUser.document.secure_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                            <img
+                              src={selectedUser.document.secure_url}
+                              alt="User Document"
+                              className="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer"
+                              onClick={() => window.open(selectedUser.document.secure_url, '_blank')}
+                            />
+                          ) : (
+                            <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
+                              <FileText className="h-6 w-6 text-gray-500" />
                             </div>
+                          )}
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-900 font-medium">
+                              {selectedUser.document.originalName || selectedUser.document.original_filename || 'Document'}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {selectedUser.document.size ? `${Math.round(selectedUser.document.size / 1024)} KB` : 'Document'}
+                            </p>
+                            {selectedUser.document.secure_url && (
+                              <button
+                                onClick={() => {
+                                  const link = document.createElement('a');
+                                  link.href = selectedUser.document.secure_url;
+                                  link.download = selectedUser.document.originalName || selectedUser.document.original_filename || 'document';
+                                  link.target = '_blank';
+                                  link.click();
+                                }}
+                                className="mt-1 flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-700"
+                              >
+                                <Download className="h-3 w-3" />
+                                <span>Download</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>

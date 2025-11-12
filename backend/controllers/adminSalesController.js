@@ -185,6 +185,7 @@ const getAllLeads = asyncHandler(async (req, res, next) => {
     .populate('category', 'name color icon')
     .populate('assignedTo', 'name email')
     .populate('createdBy', 'name')
+    .populate('leadProfile', 'name businessName email conversionData estimatedCost')
     .sort(sortOptions)
     .skip(skip)
     .limit(limitNum);
@@ -768,6 +769,7 @@ const getLeadsForMember = asyncHandler(async (req, res, next) => {
 
   const leads = await Lead.find(filter)
     .populate('category', 'name color icon')
+    .populate('leadProfile', 'name businessName email conversionData estimatedCost')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limitNum);
@@ -809,6 +811,7 @@ const getLeadsByCategory = asyncHandler(async (req, res, next) => {
 
   const leads = await Lead.find(filter)
     .populate('category', 'name color icon')
+    .populate('leadProfile', 'name businessName email conversionData estimatedCost')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limitNum);

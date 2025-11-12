@@ -277,13 +277,26 @@ const createUser = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Please select a department for developer employees', 400));
   }
 
+  // Helper function to parse date string correctly (preserves calendar date)
+  const parseDate = (dateString) => {
+    if (!dateString) return null;
+    // If date is in YYYY-MM-DD format, parse it to ensure correct date
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // Parse components and create date at UTC midnight to preserve calendar date
+      const [year, month, day] = dateString.split('-').map(Number);
+      return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    }
+    // Otherwise, parse as normal date
+    return new Date(dateString);
+  };
+
   let user;
   let userData = {
     name,
     email,
     phone: role === 'client' ? phone : phone,
-    dateOfBirth: new Date(dateOfBirth),
-    joiningDate: new Date(joiningDate),
+    dateOfBirth: parseDate(dateOfBirth),
+    joiningDate: parseDate(joiningDate),
     isActive: status === 'active'
   };
 
@@ -372,6 +385,19 @@ const updateUser = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('User not found', 404));
   }
 
+  // Helper function to parse date string correctly (preserves calendar date)
+  const parseDate = (dateString) => {
+    if (!dateString) return null;
+    // If date is in YYYY-MM-DD format, parse it to ensure correct date
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // Parse components and create date at UTC midnight to preserve calendar date
+      const [year, month, day] = dateString.split('-').map(Number);
+      return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    }
+    // Otherwise, parse as normal date
+    return new Date(dateString);
+  };
+
   // Update fields
   if (name) user.name = name;
   if (email) user.email = email;
@@ -382,8 +408,8 @@ const updateUser = asyncHandler(async (req, res, next) => {
       user.phone = phone;
     }
   }
-  if (dateOfBirth) user.dateOfBirth = new Date(dateOfBirth);
-  if (joiningDate) user.joiningDate = new Date(joiningDate);
+  if (dateOfBirth) user.dateOfBirth = parseDate(dateOfBirth);
+  if (joiningDate) user.joiningDate = parseDate(joiningDate);
   if (status !== undefined) user.isActive = status === 'active';
   if (team) user.team = team;
   if (department) user.department = department;

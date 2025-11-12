@@ -63,6 +63,7 @@ import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Combobox } from '../../../components/ui/combobox'
 import Loading from '../../../components/ui/loading'
+import CloudinaryUpload from '../../../components/ui/cloudinary-upload'
 import adminAttendanceService from '../admin-services/adminAttendanceService'
 import { useToast } from '../../../contexts/ToastContext'
 import { adminUserService } from '../admin-services'
@@ -188,6 +189,8 @@ const Admin_hr_management = () => {
   const [expenseEntries, setExpenseEntries] = useState([])
   const [expenseEntriesLoading, setExpenseEntriesLoading] = useState(false)
   const [showMarkPaidModal, setShowMarkPaidModal] = useState(false)
+  const [showDeleteExpenseModal, setShowDeleteExpenseModal] = useState(false)
+  const [expenseToDelete, setExpenseToDelete] = useState(null)
   const [selectedEntry, setSelectedEntry] = useState(null)
   const [paymentFormData, setPaymentFormData] = useState({
     paymentMethod: 'bank_transfer',
@@ -205,7 +208,8 @@ const Admin_hr_management = () => {
     status: 'active',
     description: '',
     vendor: '',
-    paymentMethod: 'bank_transfer'
+    paymentMethod: 'bank_transfer',
+    autoPay: false
   })
   const [expenseStats, setExpenseStats] = useState({
     totalExpenses: 0,
@@ -286,7 +290,10 @@ const Admin_hr_management = () => {
         department: u.department || u.team || 'General',
         status: u.status,
         joinDate: u.joiningDate,
+        joiningDate: u.joiningDate,
         birthday: u.dateOfBirth,
+        dateOfBirth: u.dateOfBirth,
+        document: u.document,
         avatar: u.avatar || (u.name ? u.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'U'),
         team: u.team
       }))
@@ -300,7 +307,10 @@ const Admin_hr_management = () => {
         department: 'Management',
         status: u.status,
         joinDate: u.joiningDate,
+        joiningDate: u.joiningDate,
         birthday: u.dateOfBirth,
+        dateOfBirth: u.dateOfBirth,
+        document: u.document,
         avatar: u.avatar || (u.name ? u.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'P')
       }))
 
@@ -786,6 +796,7 @@ const Admin_hr_management = () => {
         description: expense.description || '',
         vendor: expense.vendor || '',
         paymentMethod: expense.paymentMethod || 'bank_transfer',
+        autoPay: expense.autoPay || false,
         lastPaidDate: expense.lastPaidDate ? new Date(expense.lastPaidDate).toISOString().split('T')[0] : null,
         nextDueDate: expense.nextDueDate ? new Date(expense.nextDueDate).toISOString().split('T')[0] : null,
         dayOfMonth: expense.dayOfMonth || 1
@@ -887,7 +898,8 @@ const Admin_hr_management = () => {
       status: expense.status,
       description: expense.description,
       vendor: expense.vendor,
-      paymentMethod: expense.paymentMethod
+      paymentMethod: expense.paymentMethod,
+      autoPay: expense.autoPay || false
     })
     setShowEditExpenseModal(true)
   }
@@ -917,7 +929,8 @@ const Admin_hr_management = () => {
         description: expenseData.description || '',
         vendor: expenseData.vendor || '',
         paymentMethod: expenseData.paymentMethod || 'bank_transfer',
-        dayOfMonth: new Date(expenseData.startDate).getDate()
+        dayOfMonth: new Date(expenseData.startDate).getDate(),
+        autoPay: expenseData.autoPay || false
       }
 
       const res = await adminRecurringExpenseService.createRecurringExpense(expensePayload)
@@ -964,7 +977,8 @@ const Admin_hr_management = () => {
         description: expenseData.description || '',
         vendor: expenseData.vendor || '',
         paymentMethod: expenseData.paymentMethod || 'bank_transfer',
-        dayOfMonth: new Date(expenseData.startDate).getDate()
+        dayOfMonth: new Date(expenseData.startDate).getDate(),
+        autoPay: expenseData.autoPay || false
       }
 
       await adminRecurringExpenseService.updateRecurringExpense(selectedExpense.id, updates)
@@ -982,14 +996,19 @@ const Admin_hr_management = () => {
     }
   }
 
-  const handleDeleteExpense = async (expense) => {
-    if (!window.confirm(`Are you sure you want to delete "${expense.name}"? This will also delete all associated expense entries.`)) {
-      return
-    }
+  const handleDeleteExpense = (expense) => {
+    setExpenseToDelete(expense)
+    setShowDeleteExpenseModal(true)
+  }
 
+  const confirmDeleteExpense = async () => {
+    if (!expenseToDelete) return
+    
     try {
-      await adminRecurringExpenseService.deleteRecurringExpense(expense.id)
+      await adminRecurringExpenseService.deleteRecurringExpense(expenseToDelete.id)
       addToast({ type: 'success', message: 'Recurring expense deleted successfully' })
+      setShowDeleteExpenseModal(false)
+      setExpenseToDelete(null)
       await loadRecurringExpenses()
     } catch (error) {
       console.error('Error deleting recurring expense:', error)
@@ -1074,7 +1093,8 @@ const Admin_hr_management = () => {
       status: 'active',
       description: '',
       vendor: '',
-      paymentMethod: 'bank_transfer'
+      paymentMethod: 'bank_transfer',
+      autoPay: false
     })
   }
 
@@ -1390,6 +1410,27 @@ const Admin_hr_management = () => {
     setShowCreateModal(true)
   }
 
+  // Helper function to format date for date input (YYYY-MM-DD format)
+  const formatDateForInput = (date) => {
+    if (!date) return '';
+    // If already in YYYY-MM-DD format, return as-is
+    if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return date;
+    }
+    // If it's an ISO string or Date object, extract the date part
+    try {
+      const dateObj = new Date(date);
+      if (isNaN(dateObj.getTime())) return '';
+      // Get year, month, day in local timezone
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch (e) {
+      return '';
+    }
+  }
+
   const handleEditUser = (user) => {
     setFormData({
       name: user.name,
@@ -1399,8 +1440,8 @@ const Admin_hr_management = () => {
       team: user.team || '',
       department: user.department || '',
       status: user.status,
-      dateOfBirth: user.dateOfBirth || user.birthday || '',
-      joiningDate: user.joiningDate || user.joinDate || '',
+      dateOfBirth: formatDateForInput(user.dateOfBirth || user.birthday),
+      joiningDate: formatDateForInput(user.joiningDate || user.joinDate),
       document: user.document || null,
       password: '',
       confirmPassword: ''
@@ -1541,11 +1582,32 @@ const Admin_hr_management = () => {
     }
   }
 
-  const confirmDelete = () => {
-    // Simulate API call
-    console.log('Deleting user:', selectedUser)
-    setShowDeleteModal(false)
-    setSelectedUser(null)
+  const confirmDelete = async () => {
+    if (!selectedUser) return
+    
+    try {
+      // Determine user type based on role
+      // Check if it's a Project Manager (can be 'Project Manager' or 'project-manager')
+      let userType = 'employee' // default
+      
+      if (selectedUser.role === 'Project Manager' || 
+          selectedUser.role === 'project-manager' ||
+          selectedUser.role?.toLowerCase().includes('project manager')) {
+        userType = 'project-manager'
+      } else {
+        userType = 'employee'
+      }
+      
+      await adminUserService.deleteUser(userType, selectedUser.id)
+      addToast({ type: 'success', message: 'User deleted successfully' })
+      setShowDeleteModal(false)
+      setSelectedUser(null)
+      // Reload data to refresh the user list
+      await loadData()
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      addToast({ type: 'error', message: error?.response?.data?.message || error?.message || 'Failed to delete user' })
+    }
   }
 
   // Close modals
@@ -1565,10 +1627,12 @@ const Admin_hr_management = () => {
     setShowEditAllowanceModal(false)
     setShowExpenseModal(false)
     setShowEditExpenseModal(false)
+    setShowDeleteExpenseModal(false)
     setSelectedUser(null)
     setSelectedSalaryRecord(null)
     setSelectedExpense(null)
     setSelectedAllowance(null)
+    setExpenseToDelete(null)
     setEditSalaryData({ 
       basicSalary: ''
     })
@@ -1882,6 +1946,49 @@ const Admin_hr_management = () => {
     setShowSalaryModal(true)
   }
 
+  const handleEditSalary = (record) => {
+    setSelectedSalaryRecord(record)
+    setEditSalaryData({
+      basicSalary: record.fixedSalary || record.basicSalary || ''
+    })
+    setShowEditSalaryModal(true)
+  }
+
+  const handleSaveSalaryEdit = async () => {
+    if (!selectedSalaryRecord || !editSalaryData.basicSalary) {
+      addToast({ type: 'error', message: 'Please enter a valid salary amount' })
+      return
+    }
+
+    const fixedSalary = parseFloat(editSalaryData.basicSalary) || 0
+    if (fixedSalary <= 0) {
+      addToast({ type: 'error', message: 'Salary amount must be greater than 0' })
+      return
+    }
+
+    try {
+      // Determine user type from record
+      const userType = selectedSalaryRecord.role === 'project-manager' ? 'pm' : 
+                      selectedSalaryRecord.department === 'sales' ? 'sales' : 'employee'
+      const employeeId = selectedSalaryRecord.employeeId
+
+      // Update the salary record
+      await adminSalaryService.updateSalaryRecord(selectedSalaryRecord.id, {
+        fixedSalary: fixedSalary
+      })
+
+      addToast({ type: 'success', message: 'Salary updated successfully!' })
+      setShowEditSalaryModal(false)
+      setSelectedSalaryRecord(null)
+      setEditSalaryData({ basicSalary: '' })
+      // Reload salary data
+      await loadSalaryData(selectedSalaryMonth)
+    } catch (error) {
+      console.error('Error updating salary:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to update salary' })
+    }
+  }
+
   const handleDeleteSalary = (record) => {
     setSalaryToDelete(record)
     setShowDeleteSalaryModal(true)
@@ -1915,6 +2022,52 @@ const Admin_hr_management = () => {
       
       addToast({ type: 'success', message: 'Salary marked as paid successfully!' })
       setShowSalaryModal(false)
+      
+      // Reload history if history modal is open
+      if (showSalaryHistoryModal && selectedHistoryEmployee) {
+        const userType = selectedHistoryEmployee.role === 'project-manager' ? 'pm' : 
+                        selectedHistoryEmployee.department === 'sales' ? 'sales' : 'employee'
+        const history = await adminSalaryService.getEmployeeSalaryHistory(userType, selectedHistoryEmployee.employeeId)
+        
+        // Get current month for filtering
+        const currentDate = new Date()
+        const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
+        const joiningDate = selectedHistoryEmployee.joiningDate ? new Date(selectedHistoryEmployee.joiningDate) : null
+        
+        const transformedHistory = (history.data || [])
+          .map(item => ({
+            id: item._id || item.id,
+            month: item.month,
+            amount: item.fixedSalary || 0,
+            status: item.status,
+            paymentDate: item.paymentDate ? new Date(item.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+            paidDate: item.paidDate ? new Date(item.paidDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+            paymentMethod: item.paymentMethod || null,
+            remarks: item.remarks || ''
+          }))
+          .filter(item => {
+            // Only show paid records
+            if (item.status !== 'paid') return false
+            
+            // Only show current month and previous months (not future months)
+            if (item.month > currentMonth) return false
+            
+            // If joining date is available, only show records from joining date onwards
+            if (joiningDate) {
+              const itemMonth = new Date(item.month + '-01')
+              const joiningMonth = new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1)
+              if (itemMonth < joiningMonth) return false
+            }
+            
+            return true
+          })
+          .sort((a, b) => {
+            return b.month.localeCompare(a.month)
+          })
+        
+        setSalaryHistory(transformedHistory)
+      }
+      
       setSelectedSalaryRecord(null)
       // Reload salary data
       await loadSalaryData(selectedSalaryMonth)
@@ -2059,37 +2212,97 @@ const Admin_hr_management = () => {
     }))
   }
 
+  // Handle pay salary from history
+  const handlePayFromHistory = async (historyItem) => {
+    if (!historyItem.id) {
+      addToast({ type: 'error', message: 'Salary record ID not found' })
+      return
+    }
+
+    // Create a record object that matches the expected format for handleMarkSalaryPaid
+    const salaryRecord = {
+      id: historyItem.id,
+      employeeName: selectedHistoryEmployee?.name || 'Employee',
+      employeeId: selectedHistoryEmployee?.employeeId,
+      department: selectedHistoryEmployee?.department,
+      role: selectedHistoryEmployee?.role,
+      month: historyItem.month,
+      fixedSalary: historyItem.amount,
+      status: historyItem.status,
+      paymentDate: historyItem.paymentDate
+    }
+
+    // Use the existing payment modal
+    setSelectedSalaryRecord(salaryRecord)
+    setShowSalaryModal(true)
+  }
+
   // Get employee salary history (read-only)
   const viewSalaryHistory = async (record) => {
     try {
       setLoadingHistory(true)
-      setSelectedHistoryEmployee({
-        name: record.employeeName,
-        department: record.department,
-        employeeId: record.employeeId,
-        role: record.role
-      })
       
       // Determine user type from record
       const userType = record.role === 'project-manager' ? 'pm' : 
                       record.department === 'sales' ? 'sales' : 'employee'
       
+      // Fetch employee details to get joining date
+      let joiningDate = null
+      try {
+        const employeeDetails = await adminUserService.getUser(userType, record.employeeId)
+        if (employeeDetails?.data?.joiningDate) {
+          joiningDate = new Date(employeeDetails.data.joiningDate)
+        }
+      } catch (error) {
+        console.error('Error fetching employee details:', error)
+      }
+      
+      setSelectedHistoryEmployee({
+        name: record.employeeName,
+        department: record.department,
+        employeeId: record.employeeId,
+        role: record.role,
+        joiningDate: joiningDate
+      })
+      
       const history = await adminSalaryService.getEmployeeSalaryHistory(userType, record.employeeId)
       
-      // Transform data for display
-      const transformedHistory = (history.data || []).map(item => ({
-        id: item._id || item.id,
-        month: item.month,
-        amount: item.fixedSalary || 0,
-        status: item.status,
-        paymentDate: item.paymentDate ? new Date(item.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
-        paidDate: item.paidDate ? new Date(item.paidDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
-        paymentMethod: item.paymentMethod || null,
-        remarks: item.remarks || ''
-      })).sort((a, b) => {
-        // Sort by month (newest first)
-        return b.month.localeCompare(a.month)
-      })
+      // Get current month for filtering
+      const currentDate = new Date()
+      const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
+      
+      // Transform and filter data for display
+      const transformedHistory = (history.data || [])
+        .map(item => ({
+          id: item._id || item.id,
+          month: item.month,
+          amount: item.fixedSalary || 0,
+          status: item.status,
+          paymentDate: item.paymentDate ? new Date(item.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+          paidDate: item.paidDate ? new Date(item.paidDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+          paymentMethod: item.paymentMethod || null,
+          remarks: item.remarks || ''
+        }))
+        .filter(item => {
+          // Only show paid records
+          if (item.status !== 'paid') return false
+          
+          // Only show current month and previous months (not future months)
+          if (item.month > currentMonth) return false
+          
+          // If joining date is available, only show records from joining date onwards
+          if (joiningDate) {
+            const itemMonth = new Date(item.month + '-01')
+            const joiningMonth = new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1)
+            if (itemMonth < joiningMonth) return false
+          }
+          
+          return true
+        })
+        .sort((a, b) => {
+          // Sort by month (newest first)
+          return b.month.localeCompare(a.month)
+        })
       
       setSalaryHistory(transformedHistory)
       setShowSalaryHistoryModal(true)
@@ -2853,42 +3066,57 @@ const Admin_hr_management = () => {
                           </div>
 
                           {/* Action Buttons */}
-                          <div className="flex gap-2">
-                            {record.status !== 'paid' && (
+                          <div className="space-y-2">
+                            {/* Primary Actions Row */}
+                            <div className="flex gap-2">
+                              {record.status !== 'paid' && (
+                                <Button
+                                  onClick={() => handleMarkSalaryPaid(record)}
+                                  size="sm"
+                                  className={`flex-1 text-xs py-1 h-8 ${
+                                    isOverdue ? 'bg-red-600 hover:bg-red-700' : 
+                                    isDueSoon ? 'bg-yellow-600 hover:bg-yellow-700' : 
+                                    'bg-green-600 hover:bg-green-700'
+                                  } text-white`}
+                                >
+                                  <CreditCard className="h-3 w-3 mr-1" />
+                                  {isOverdue ? 'Pay Now' : isDueSoon ? 'Due Soon' : 'Pay'}
+                                </Button>
+                              )}
                               <Button
-                                onClick={() => handleMarkSalaryPaid(record)}
+                                onClick={() => viewSalaryHistory(record)}
                                 size="sm"
-                                className={`flex-1 text-xs py-1 h-8 ${
-                                  isOverdue ? 'bg-red-600 hover:bg-red-700' : 
-                                  isDueSoon ? 'bg-yellow-600 hover:bg-yellow-700' : 
-                                  'bg-green-600 hover:bg-green-700'
-                                } text-white`}
+                                variant="outline"
+                                className={`text-xs py-1 h-8 ${record.status === 'paid' ? 'flex-1' : ''}`}
+                                title="View salary history"
                               >
-                                <CreditCard className="h-3 w-3 mr-1" />
-                                {isOverdue ? 'Pay Now' : isDueSoon ? 'Due Soon' : 'Pay'}
+                                <Clock className="h-3 w-3 mr-1" />
+                                History
                               </Button>
-                            )}
-                            <Button
-                              onClick={() => viewSalaryHistory(record)}
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 text-xs py-1 h-8"
-                              title="View salary history"
-                            >
-                              <Clock className="h-3 w-3 mr-1" />
-                              History
-                            </Button>
-                            {record.status === 'pending' && new Date(record.month + '-01') >= new Date(new Date().getFullYear(), new Date().getMonth(), 1) && (
+                            </div>
+                            {/* Secondary Actions Row */}
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => handleEditSalary(record)}
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 text-xs py-1 h-8 text-blue-600 border-blue-200 hover:bg-blue-50"
+                                title="Edit salary record"
+                              >
+                                <Edit3 className="h-3 w-3 mr-1" />
+                                Edit
+                              </Button>
                               <Button
                                 onClick={() => handleDeleteSalary(record)}
                                 size="sm"
                                 variant="outline"
-                                className="text-xs py-1 h-8 px-2 text-red-600 border-red-200 hover:bg-red-50"
+                                className="flex-1 text-xs py-1 h-8 text-red-600 border-red-200 hover:bg-red-50"
                                 title="Delete salary record"
                               >
-                                <Trash2 className="h-3 w-3" />
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Delete
                               </Button>
-                            )}
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -3380,6 +3608,12 @@ const Admin_hr_management = () => {
                               <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getExpenseStatusColor(expense.status)}`}>
                                 {expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}
                               </span>
+                              {expense.autoPay && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                                  <RefreshCw className="h-3 w-3 mr-1" />
+                                  Auto Pay
+                                </span>
+                              )}
                               {expense.paymentStatus && (
                                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                                   expense.paymentStatus === 'paid' 
@@ -3714,23 +3948,25 @@ const Admin_hr_management = () => {
                   <label className="text-sm font-semibold text-gray-700 flex items-center">
                     Document <span className="text-red-500 ml-1">*</span>
                   </label>
-                  <div className="relative">
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                      onChange={(e) => setFormData({...formData, document: e.target.files[0]})}
-                      className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                    />
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                      <Upload className="h-4 w-4 text-gray-400" />
-                    </div>
-                  </div>
-                  {formData.document && (
-                    <div className="flex items-center space-x-2 p-2 bg-green-50 rounded-lg border border-green-200">
-                      <FileText className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-700 font-medium">{formData.document.name}</span>
-                    </div>
-                  )}
+                  <CloudinaryUpload
+                    onUploadSuccess={(uploadData) => {
+                      setFormData({...formData, document: uploadData});
+                    }}
+                    onUploadError={(error) => {
+                      console.error('Upload error:', error);
+                      addToast({ type: 'error', message: 'Document upload failed' });
+                    }}
+                    onRemoveExisting={() => {
+                      setFormData({...formData, document: null});
+                    }}
+                    folder="appzeto/users/documents"
+                    maxSize={10 * 1024 * 1024} // 10MB
+                    allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    placeholder="Click to upload document or drag and drop"
+                    showPreview={true}
+                    existingDocument={formData.document}
+                  />
                   <p className="text-xs text-gray-500">Supported formats: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 10MB)</p>
                 </motion.div>
 
@@ -3912,7 +4148,7 @@ const Admin_hr_management = () => {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
                 onClick={() => setShowSalaryModal(false)}
               >
                 <motion.div
@@ -4732,6 +4968,27 @@ const Admin_hr_management = () => {
                       </div>
                     </div>
 
+                    {/* Auto Pay Toggle */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <label className="block text-sm font-semibold text-gray-900 mb-1">Auto Pay (Auto Debit)</label>
+                          <p className="text-xs text-gray-600">
+                            When enabled, expenses will be automatically marked as paid on their due date and registered as finance transactions. No manual action required.
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer ml-4">
+                          <input
+                            type="checkbox"
+                            checked={expenseData.autoPay}
+                            onChange={(e) => setExpenseData({...expenseData, autoPay: e.target.checked})}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
                       <textarea
@@ -4900,6 +5157,27 @@ const Admin_hr_management = () => {
                       </div>
                     </div>
 
+                    {/* Auto Pay Toggle */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <label className="block text-sm font-semibold text-gray-900 mb-1">Auto Pay (Auto Debit)</label>
+                          <p className="text-xs text-gray-600">
+                            When enabled, expenses will be automatically marked as paid on their due date and registered as finance transactions. No manual action required.
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer ml-4">
+                          <input
+                            type="checkbox"
+                            checked={expenseData.autoPay}
+                            onChange={(e) => setExpenseData({...expenseData, autoPay: e.target.checked})}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
                       <textarea
@@ -4926,6 +5204,89 @@ const Admin_hr_management = () => {
                       </button>
                     </div>
                   </form>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Delete Expense Confirmation Modal */}
+            {showDeleteExpenseModal && expenseToDelete && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={() => setShowDeleteExpenseModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white rounded-2xl shadow-xl max-w-md w-full"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-red-600 to-red-700 p-6 text-white rounded-t-2xl">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold mb-1">Delete Recurring Expense</h3>
+                        <p className="text-red-100 text-sm">Confirm deletion</p>
+                      </div>
+                      <button
+                        onClick={() => setShowDeleteExpenseModal(false)}
+                        className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-6">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Receipt className="h-6 w-6 text-red-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 text-lg">{expenseToDelete.name}</h4>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {expenseToDelete.category && expenseToDelete.category.charAt(0).toUpperCase() + expenseToDelete.category.slice(1)} • {expenseToDelete.frequency && expenseToDelete.frequency.charAt(0).toUpperCase() + expenseToDelete.frequency.slice(1)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Warning Message */}
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <h5 className="font-semibold text-red-800 mb-1">Warning</h5>
+                          <p className="text-sm text-red-700">
+                            This will permanently delete the recurring expense "{expenseToDelete.name}" and all associated expense entries. This action cannot be undone.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowDeleteExpenseModal(false)}
+                        className="flex-1 h-12 rounded-lg border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={confirmDeleteExpense}
+                        className="flex-1 h-12 rounded-lg bg-gradient-to-r from-red-600 to-red-700 text-white hover:shadow-lg transition-all duration-200"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Expense
+                      </Button>
+                    </div>
+                  </div>
                 </motion.div>
               </motion.div>
             )}
@@ -5249,19 +5610,13 @@ const Admin_hr_management = () => {
                   {/* Footer Summary */}
                   {salaryHistory.length > 0 && (
                     <div className="border-t border-gray-200 bg-gray-50 p-4">
-                      <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
-                          <span className="text-gray-600">Total Records:</span>
-                          <span className="ml-2 font-semibold text-gray-900">{salaryHistory.length}</span>
+                          <span className="text-gray-600">Total Paid Records:</span>
+                          <span className="ml-2 font-semibold text-green-600">{salaryHistory.length}</span>
                         </div>
                         <div>
-                          <span className="text-gray-600">Paid Records:</span>
-                          <span className="ml-2 font-semibold text-green-600">
-                            {salaryHistory.filter(h => h.status === 'paid').length}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Total Amount:</span>
+                          <span className="text-gray-600">Total Amount Paid:</span>
                           <span className="ml-2 font-semibold text-blue-600">
                             {formatCurrency(salaryHistory.reduce((sum, h) => sum + h.amount, 0))}
                           </span>
@@ -5570,6 +5925,303 @@ const Admin_hr_management = () => {
                 </motion.div>
               </motion.div>
             )}
+
+        {/* View User Modal */}
+        {showViewModal && selectedUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header with gradient background */}
+              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-2xl font-bold mb-2">User Details</h3>
+                    <p className="text-indigo-100">View and manage user information</p>
+                  </div>
+                  <button
+                    onClick={closeModals}
+                    className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6 max-h-[calc(90vh-140px)] overflow-y-auto">
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="space-y-4"
+                >
+                  {/* User Avatar and Basic Info */}
+                  <div className="flex items-center space-x-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
+                    <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-500 text-white rounded-full flex items-center justify-center font-bold text-xl">
+                      {selectedUser.avatar || (selectedUser.name ? selectedUser.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'U')}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-xl font-bold text-gray-900">{selectedUser.name}</h4>
+                      <p className="text-sm text-gray-600">{selectedUser.email}</p>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          selectedUser.status === 'active' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {selectedUser.status === 'active' ? 'Active' : 'Inactive'}
+                        </span>
+                        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                          {selectedUser.role}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* User Details */}
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <Phone className="h-4 w-4 text-gray-500" />
+                      <div>
+                        <p className="text-xs text-gray-500">Phone</p>
+                        <p className="text-sm font-medium text-gray-900">{selectedUser.phone || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <Mail className="h-4 w-4 text-gray-500" />
+                      <div>
+                        <p className="text-xs text-gray-500">Email</p>
+                        <p className="text-sm font-medium text-gray-900">{selectedUser.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <Calendar className="h-4 w-4 text-gray-500" />
+                      <div>
+                        <p className="text-xs text-gray-500">Joining Date</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {selectedUser.joiningDate || selectedUser.joinDate 
+                            ? formatDate(selectedUser.joiningDate || selectedUser.joinDate) 
+                            : 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <Cake className="h-4 w-4 text-gray-500" />
+                      <div>
+                        <p className="text-xs text-gray-500">Date of Birth</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {selectedUser.dateOfBirth || selectedUser.birthday 
+                            ? formatDate(selectedUser.dateOfBirth || selectedUser.birthday) 
+                            : 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {selectedUser.department && (
+                      <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                        <Code className="h-4 w-4 text-gray-500" />
+                        <div>
+                          <p className="text-xs text-gray-500">Department</p>
+                          <p className="text-sm font-medium text-gray-900">{selectedUser.department}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedUser.team && (
+                      <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                        <Users className="h-4 w-4 text-gray-500" />
+                        <div>
+                          <p className="text-xs text-gray-500">Team</p>
+                          <p className="text-sm font-medium text-gray-900">{selectedUser.team}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Document Display */}
+                    {selectedUser.document && (
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="h-4 w-4 text-gray-500" />
+                            <p className="text-sm font-medium text-gray-700">Document</p>
+                          </div>
+                          {selectedUser.document.secure_url && (
+                            <button
+                              onClick={() => window.open(selectedUser.document.secure_url, '_blank')}
+                              className="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                            >
+                              <Eye className="h-3 w-3" />
+                              <span>View</span>
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          {selectedUser.document.secure_url && selectedUser.document.secure_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                            <img
+                              src={selectedUser.document.secure_url}
+                              alt="User Document"
+                              className="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer"
+                              onClick={() => window.open(selectedUser.document.secure_url, '_blank')}
+                            />
+                          ) : (
+                            <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
+                              <FileText className="h-6 w-6 text-gray-500" />
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-900 font-medium">
+                              {selectedUser.document.originalName || selectedUser.document.original_filename || 'Document'}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {selectedUser.document.size ? `${Math.round(selectedUser.document.size / 1024)} KB` : 'Document'}
+                            </p>
+                            {selectedUser.document.secure_url && (
+                              <button
+                                onClick={() => {
+                                  const link = document.createElement('a');
+                                  link.href = selectedUser.document.secure_url;
+                                  link.download = selectedUser.document.originalName || selectedUser.document.original_filename || 'document';
+                                  link.target = '_blank';
+                                  link.click();
+                                }}
+                                className="mt-1 flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-700"
+                              >
+                                <Download className="h-3 w-3" />
+                                <span>Download</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+
+                {/* Action Buttons */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-200"
+                >
+                  <Button
+                    variant="outline"
+                    onClick={closeModals}
+                    className="flex-1 h-12 rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      closeModals()
+                      handleEditUser(selectedUser)
+                    }}
+                    className="flex-1 h-12 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg transition-all duration-200 transform hover:scale-[1.02]"
+                  >
+                    Edit User
+                  </Button>
+                </motion.div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && selectedUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header with gradient background */}
+              <div className="bg-gradient-to-r from-red-500 to-red-600 p-6 text-white rounded-t-2xl">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                    <Trash2 className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Delete User</h3>
+                    <p className="text-red-100 text-sm">This action cannot be undone</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6">
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center space-x-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                    <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                      {selectedUser.avatar || (selectedUser.name ? selectedUser.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'U')}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{selectedUser.name}</p>
+                      <p className="text-sm text-gray-600">{selectedUser.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <div className="flex items-start space-x-3">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-800 mb-1">Warning</p>
+                        <p className="text-sm text-amber-700">
+                          Are you sure you want to delete <strong>{selectedUser.name}</strong>? This will permanently remove the user and all associated data from the system.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="flex flex-col sm:flex-row gap-3 pt-6"
+                >
+                  <Button
+                    variant="outline"
+                    onClick={closeModals}
+                    className="flex-1 h-12 rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={confirmDelete}
+                    className="flex-1 h-12 rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white hover:shadow-lg transition-all duration-200 transform hover:scale-[1.02]"
+                  >
+                    Delete User
+                  </Button>
+                </motion.div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   )

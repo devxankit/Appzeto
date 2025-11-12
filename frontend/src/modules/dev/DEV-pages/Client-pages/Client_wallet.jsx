@@ -117,6 +117,8 @@ const Client_wallet = () => {
         return 'bg-blue-100 text-blue-700'
       case 'failed':
         return 'bg-red-100 text-red-700'
+      case 'overdue':
+        return 'bg-red-100 text-red-700'
       case 'upcoming':
         return 'bg-blue-100 text-blue-800'
       default:
@@ -148,6 +150,8 @@ const Client_wallet = () => {
         return FiTrendingUp
       case 'upcoming':
         return FiCalendar
+      case 'overdue':
+        return FiAlertCircle
       default:
         return FiAlertCircle
     }
@@ -159,7 +163,7 @@ const Client_wallet = () => {
     const totalCost = summary?.totalCost || 0
     const projectsCount = summary?.totalProjects || projects.length || 0
     const upcomingAmount = upcomingPayments.reduce(
-      (sum, payment) => sum + (payment.amount || 0),
+      (sum, payment) => sum + (Number(payment.amount) || 0),
       0
     )
 
@@ -703,6 +707,19 @@ const Client_wallet = () => {
                           <span>Remaining: {formatCurrency(remainingAmount)}</span>
                           <span>Progress: {Math.round(progress)}%</span>
                         </div>
+                        {project.installmentSummary?.nextInstallment && (
+                          <div className="mt-2 text-xs text-gray-600">
+                            Next installment:&nbsp;
+                            <span className="font-semibold text-gray-800">
+                              {formatCurrency(project.installmentSummary.nextInstallment.amount || 0)}
+                            </span>
+                            {project.installmentSummary.nextInstallment.dueDate && (
+                              <span className="ml-1">
+                                due {formatDate(project.installmentSummary.nextInstallment.dueDate)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -724,27 +741,47 @@ const Client_wallet = () => {
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Upcoming Payments</h3>
                 
                 <div className="space-y-3">
-                  {upcomingPayments.map((payment) => (
-                    <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="font-medium text-gray-900 text-sm">
-                          {payment.project?.name || 'Project payment'}
-                        </p>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(payment.status || 'pending')}`}>
-                          {payment.status || 'pending'}
-                        </span>
+                  {upcomingPayments.map((payment) => {
+                    const status = payment.status || 'pending'
+                    const statusLabel = status.charAt(0).toUpperCase() + status.slice(1)
+                    const badgeClass = getStatusColor(status)
+                    const typeLabel = payment.type === 'installment'
+                      ? 'Installment Payment'
+                      : payment.milestone?.title || payment.paymentType || 'Milestone payment'
+                    const dueDateLabel = payment.dueDate ? formatDate(payment.dueDate) : 'N/A'
+                    const amountClass = payment.type === 'installment' && status === 'overdue'
+                      ? 'text-red-600'
+                      : 'text-gray-900'
+
+                    return (
+                      <div key={payment.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="font-semibold text-gray-900 text-sm">
+                              {payment.project?.name || 'Project payment'}
+                            </p>
+                            <p className="text-xs text-gray-600 mt-1">
+                              {typeLabel}
+                              {payment.type === 'installment' && payment.notes && (
+                                <span className="text-gray-400"> • {payment.notes}</span>
+                              )}
+                            </p>
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${badgeClass}`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-gray-500">
+                            Due {dueDateLabel}
+                          </div>
+                          <div className={`font-semibold text-sm ${amountClass}`}>
+                            {formatCurrency(payment.amount)}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs text-gray-600">
-                          {payment.milestone?.title || 'Milestone payment'}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-gray-900 text-sm">{formatCurrency(payment.amount)}</p>
-                        <p className="text-xs text-gray-500">{formatDate(payment.dueDate)}</p>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                   {upcomingPayments.length === 0 && (
                     <div className="text-center text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg py-6">
                       No pending payments right now.

@@ -1430,16 +1430,43 @@ const getLeadsByStatus = async (req, res) => {
 
     // For converted leads, populate associated project with financial details
     if (status === 'converted') {
-      const Project = require('../models/Project');
       const leadIds = leads.map(lead => lead._id);
       const projects = await Project.find({ originLead: { $in: leadIds } })
-        .select('originLead financialDetails budget projectType');
+        .select('originLead client financialDetails budget projectType status progress')
+        .lean();
+      const phoneNumbers = leads
+        .map((lead) => lead.phone)
+        .filter((phone) => typeof phone === 'string' && phone.length > 0);
+      const clientQueryOr = [];
+      if (leadIds.length > 0) {
+        clientQueryOr.push({ originLead: { $in: leadIds } });
+      }
+      if (phoneNumbers.length > 0) {
+        clientQueryOr.push({ phoneNumber: { $in: phoneNumbers } });
+      }
+      let clients = [];
+      if (clientQueryOr.length > 0) {
+        clients = await Client.find({ $or: clientQueryOr })
+          .select('_id originLead phoneNumber name companyName')
+          .lean();
+      }
       
       // Create a map of leadId -> project
       const projectMap = {};
       projects.forEach(project => {
         if (project.originLead) {
           projectMap[project.originLead.toString()] = project;
+        }
+      });
+
+      const clientMapByLead = new Map();
+      const clientMapByPhone = new Map();
+      clients.forEach((client) => {
+        if (client.originLead) {
+          clientMapByLead.set(client.originLead.toString(), client);
+        }
+        if (client.phoneNumber) {
+          clientMapByPhone.set(client.phoneNumber, client);
         }
       });
       
@@ -1449,6 +1476,26 @@ const getLeadsByStatus = async (req, res) => {
         const project = projectMap[lead._id.toString()];
         if (project) {
           leadObj.project = project;
+        }
+        const clientDoc =
+          clientMapByLead.get(lead._id.toString()) ||
+          (lead.phone ? clientMapByPhone.get(lead.phone) : null);
+
+        if (clientDoc) {
+          const clientIdStr =
+            typeof clientDoc._id === 'object' && clientDoc._id !== null && clientDoc._id.toString
+              ? clientDoc._id.toString()
+              : clientDoc._id;
+          leadObj.convertedClient = {
+            id: clientIdStr,
+            name: clientDoc.name,
+            phoneNumber: clientDoc.phoneNumber,
+            companyName: clientDoc.companyName
+          };
+          leadObj.convertedClientId = clientIdStr;
+        } else {
+          leadObj.convertedClient = null;
+          leadObj.convertedClientId = null;
         }
         return leadObj;
       });

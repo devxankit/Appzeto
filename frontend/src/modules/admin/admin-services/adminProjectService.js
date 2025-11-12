@@ -37,8 +37,10 @@ class AdminProjectService {
     try {
       const queryParams = new URLSearchParams();
       
-      // Always filter by active status for active projects tab
-      queryParams.append('status', 'active');
+      const statusFilter = params.status && params.status !== 'all' ? params.status : 'active';
+      if (statusFilter) {
+        queryParams.append('status', statusFilter);
+      }
       
       if (params.priority) queryParams.append('priority', params.priority);
       if (params.client) queryParams.append('client', params.client);
@@ -127,6 +129,61 @@ class AdminProjectService {
       return response;
     } catch (error) {
       console.error('Error updating project:', error);
+      throw error;
+    }
+  }
+
+  // Update project cost with history tracking
+  async updateProjectCost(projectId, newCost, reason) {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/cost`, {
+        method: 'PUT',
+        body: JSON.stringify({ newCost, reason })
+      });
+      return response;
+    } catch (error) {
+      console.error('Error updating project cost:', error);
+      throw error;
+    }
+  }
+
+  // Add project installments
+  async addProjectInstallments(projectId, installments) {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/installments`, {
+        method: 'POST',
+        body: JSON.stringify({ installments })
+      });
+      return response;
+    } catch (error) {
+      console.error('Error adding project installments:', error);
+      throw error;
+    }
+  }
+
+  // Update project installment
+  async updateProjectInstallment(projectId, installmentId, updateData) {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/installments/${installmentId}`, {
+        method: 'PUT',
+        body: JSON.stringify(updateData)
+      });
+      return response;
+    } catch (error) {
+      console.error('Error updating project installment:', error);
+      throw error;
+    }
+  }
+
+  // Delete project installment
+  async deleteProjectInstallment(projectId, installmentId) {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/installments/${installmentId}`, {
+        method: 'DELETE'
+      });
+      return response;
+    } catch (error) {
+      console.error('Error deleting project installment:', error);
       throw error;
     }
   }

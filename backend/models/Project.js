@@ -147,6 +147,47 @@ const projectSchema = new mongoose.Schema({
     type: Number,
     min: 0
   },
+  // Installment plan for client payments
+  installmentPlan: [{
+    amount: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    dueDate: {
+      type: Date,
+      required: true
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'paid', 'overdue'],
+      default: 'pending'
+    },
+    paidDate: {
+      type: Date
+    },
+    notes: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Notes cannot exceed 500 characters']
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Admin'
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Admin'
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   // Cost change history (embedded array for tracking cost increases)
   costHistory: [{
     previousCost: {

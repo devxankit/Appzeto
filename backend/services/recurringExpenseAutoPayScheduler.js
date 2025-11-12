@@ -92,31 +92,63 @@ const generateExpenseEntriesHelper = async (recurringExpense, upToDate = null) =
 
   // Update next due date
   if (recurringExpense.status === 'active') {
-    const lastEntry = await ExpenseEntry.findOne({
-      recurringExpenseId: recurringExpense._id
-    }).sort({ dueDate: -1 });
+    // Find the first unpaid/pending entry (next due)
+    const nextDueEntry = await ExpenseEntry.findOne({
+      recurringExpenseId: recurringExpense._id,
+      status: { $in: ['pending', 'overdue'] }
+    }).sort({ dueDate: 1 }); // Sort ascending to get the earliest unpaid entry
 
-    if (lastEntry) {
-      // Calculate next due from last entry
-      let nextDue = new Date(lastEntry.dueDate);
-      switch (recurringExpense.frequency) {
-        case 'monthly':
-          nextDue.setMonth(nextDue.getMonth() + 1);
-          break;
-        case 'quarterly':
-          nextDue.setMonth(nextDue.getMonth() + 3);
-          break;
-        case 'yearly':
-          nextDue.setFullYear(nextDue.getFullYear() + 1);
-          break;
+    if (nextDueEntry) {
+      // Use the due date of the first unpaid entry
+      recurringExpense.nextDueDate = nextDueEntry.dueDate;
+    } else {
+      // If all entries are paid, calculate next due from the last entry
+      const lastEntry = await ExpenseEntry.findOne({
+        recurringExpenseId: recurringExpense._id
+      }).sort({ dueDate: -1 });
+
+      if (lastEntry) {
+        // Calculate next due from last entry
+        let nextDue = new Date(lastEntry.dueDate);
+        switch (recurringExpense.frequency) {
+          case 'monthly':
+            nextDue.setMonth(nextDue.getMonth() + 1);
+            break;
+          case 'quarterly':
+            nextDue.setMonth(nextDue.getMonth() + 3);
+            break;
+          case 'yearly':
+            nextDue.setFullYear(nextDue.getFullYear() + 1);
+            break;
+        }
+        const dayOfMonth = recurringExpense.dayOfMonth || 1;
+        const lastDayOfNextMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+        nextDue.setDate(Math.min(dayOfMonth, lastDayOfNextMonth));
+        
+        recurringExpense.nextDueDate = nextDue;
+      } else {
+        // No entries yet, calculate from start date
+        let nextDue = new Date(recurringExpense.startDate);
+        switch (recurringExpense.frequency) {
+          case 'monthly':
+            nextDue.setMonth(nextDue.getMonth() + 1);
+            break;
+          case 'quarterly':
+            nextDue.setMonth(nextDue.getMonth() + 3);
+            break;
+          case 'yearly':
+            nextDue.setFullYear(nextDue.getFullYear() + 1);
+            break;
+        }
+        const dayOfMonth = recurringExpense.dayOfMonth || 1;
+        const lastDayOfNextMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+        nextDue.setDate(Math.min(dayOfMonth, lastDayOfNextMonth));
+        
+        recurringExpense.nextDueDate = nextDue;
       }
-      const dayOfMonth = recurringExpense.dayOfMonth || 1;
-      const lastDayOfNextMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
-      nextDue.setDate(Math.min(dayOfMonth, lastDayOfNextMonth));
-      
-      recurringExpense.nextDueDate = nextDue;
-      await recurringExpense.save();
     }
+    
+    await recurringExpense.save();
   }
 
   return { created, skipped };
@@ -245,8 +277,36 @@ const autoPayRecurringExpenses = async () => {
             
             // Update recurring expense last paid date
             recurringExpense.lastPaidDate = entry.paidDate;
-            const nextDue = recurringExpense.calculateNextDueDate();
-            recurringExpense.nextDueDate = nextDue;
+            
+            // Update next due date to the first unpaid entry
+            const nextDueEntry = await ExpenseEntry.findOne({
+              recurringExpenseId: recurringExpense._id,
+              status: { $in: ['pending', 'overdue'] }
+            }).sort({ dueDate: 1 });
+
+            if (nextDueEntry) {
+              recurringExpense.nextDueDate = nextDueEntry.dueDate;
+            } else {
+              // If all entries are paid, calculate next due from this entry
+              let nextDue = new Date(entry.dueDate);
+              switch (recurringExpense.frequency) {
+                case 'monthly':
+                  nextDue.setMonth(nextDue.getMonth() + 1);
+                  break;
+                case 'quarterly':
+                  nextDue.setMonth(nextDue.getMonth() + 3);
+                  break;
+                case 'yearly':
+                  nextDue.setFullYear(nextDue.getFullYear() + 1);
+                  break;
+              }
+              const dayOfMonth = recurringExpense.dayOfMonth || 1;
+              const lastDayOfNextMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+              nextDue.setDate(Math.min(dayOfMonth, lastDayOfNextMonth));
+              
+              recurringExpense.nextDueDate = nextDue;
+            }
+            
             await recurringExpense.save();
             
             // Create finance transaction

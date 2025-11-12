@@ -65,6 +65,22 @@ const Admin_project_management = () => {
   const [selectedPendingProject, setSelectedPendingProject] = useState(null)
   const [showPendingDetailsModal, setShowPendingDetailsModal] = useState(false)
   const [selectedPM, setSelectedPM] = useState('')
+  const [showCostEditModal, setShowCostEditModal] = useState(false)
+  const [showCostHistoryModal, setShowCostHistoryModal] = useState(false)
+  const [costEditData, setCostEditData] = useState({ newCost: '', reason: '' })
+  const [costEditError, setCostEditError] = useState('')
+  const [showInstallmentModal, setShowInstallmentModal] = useState(false)
+  const [installmentFormData, setInstallmentFormData] = useState({
+    amount: '',
+    dueDate: '',
+    notes: '',
+    status: 'pending'
+  })
+  const [installmentToEdit, setInstallmentToEdit] = useState(null)
+  const [installmentError, setInstallmentError] = useState('')
+  const [isSavingInstallment, setIsSavingInstallment] = useState(false)
+  const [showDeleteInstallmentModal, setShowDeleteInstallmentModal] = useState(false)
+  const [installmentToDelete, setInstallmentToDelete] = useState(null)
 
   // PM Options for Combobox
   const getPMOptions = () => {
@@ -689,7 +705,7 @@ const Admin_project_management = () => {
 
         case 'active-projects':
           const activeResponse = await adminProjectService.getActiveProjects({
-            priority: selectedFilter !== 'all' ? selectedFilter : undefined,
+            status: selectedFilter !== 'all' ? selectedFilter : undefined,
             search: searchTerm || undefined,
             page: currentPage,
             limit: itemsPerPage
@@ -762,6 +778,7 @@ const Admin_project_management = () => {
       case 'in-progress': return 'bg-blue-100 text-blue-800 border-blue-200'
       case 'completed': return 'bg-emerald-100 text-emerald-800 border-emerald-200'
       case 'on-hold': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      case 'untouched': return 'bg-amber-100 text-amber-800 border-amber-200'
       case 'overdue': return 'bg-red-100 text-red-800 border-red-200'
       case 'inactive': return 'bg-gray-100 text-gray-800 border-gray-200'
       case 'on-leave': return 'bg-orange-100 text-orange-800 border-orange-200'
@@ -780,11 +797,14 @@ const Admin_project_management = () => {
   }
 
   const formatCurrency = (amount) => {
-    if (!amount || amount === 0) return '₹0';
+    const numericValue = Number(amount || 0)
+    const safeValue = Number.isFinite(numericValue) ? Math.floor(numericValue) : 0
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'INR'
-    }).format(amount)
+      currency: 'INR',
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0
+    }).format(safeValue)
   }
 
   const formatDate = (dateString) => {
@@ -830,6 +850,11 @@ const Admin_project_management = () => {
   )
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage)
+
+const projectFinancialSummary =
+  modalType === 'project' && selectedItem
+    ? getFinancialSummary(selectedItem)
+    : null
 
   // Management Functions
   const handleCreate = async (type) => {
@@ -921,6 +946,10 @@ const Admin_project_management = () => {
     setShowDeleteModal(false)
     setShowPMAssignmentModal(false)
     setShowPendingDetailsModal(false)
+    setShowCostEditModal(false)
+    setShowCostHistoryModal(false)
+    setShowInstallmentModal(false)
+    setShowDeleteInstallmentModal(false)
     setSelectedItem(null)
     setSelectedPendingProject(null)
     setSelectedPM('')
@@ -929,6 +958,351 @@ const Admin_project_management = () => {
     setProjectFormErrors({})
     setCreateModalError(null)
     setIsSubmittingProject(false)
+    setCostEditData({ newCost: '', reason: '' })
+    setCostEditError('')
+    setInstallmentFormData({
+      amount: '',
+      dueDate: '',
+      notes: '',
+      status: 'pending'
+    })
+    setInstallmentToEdit(null)
+    setInstallmentToDelete(null)
+    setInstallmentError('')
+    setIsSavingInstallment(false)
+  }
+
+  // Handle cost edit
+  const handleEditCost = () => {
+    if (!selectedItem || modalType !== 'project') return
+    const currentCost = selectedItem.financialDetails?.totalCost || selectedItem.budget || 0
+    setCostEditData({ newCost: currentCost.toString(), reason: '' })
+    setCostEditError('')
+    setShowCostEditModal(true)
+  }
+
+  // Handle cost history view
+  const handleViewCostHistory = () => {
+    if (!selectedItem || modalType !== 'project') return
+    setShowCostHistoryModal(true)
+  }
+
+  // Submit cost update
+  const handleUpdateCost = async () => {
+    if (!selectedItem || modalType !== 'project') return
+
+    const newCostValue = Number(costEditData.newCost)
+    if (!costEditData.newCost || isNaN(newCostValue) || newCostValue < 0) {
+      setCostEditError('Please enter a valid cost amount')
+      return
+    }
+
+    if (!costEditData.reason || costEditData.reason.trim().length === 0) {
+      setCostEditError('Please provide a reason for the cost change')
+      return
+    }
+
+    try {
+      setCostEditError('')
+      const response = await adminProjectService.updateProjectCost(
+        selectedItem._id || selectedItem.id,
+        newCostValue,
+        costEditData.reason.trim()
+      )
+
+      if (response?.success) {
+        toast.success('Project cost updated successfully!')
+        setShowCostEditModal(false)
+        setCostEditData({ newCost: '', reason: '' })
+        
+        // Reload project data
+        await loadData(false)
+        
+        // Update selectedItem with new data
+        if (response.data) {
+          setSelectedItem(response.data)
+        }
+      } else {
+        setCostEditError(response?.message || 'Failed to update project cost')
+      }
+    } catch (error) {
+      console.error('Error updating project cost:', error)
+      setCostEditError(error?.response?.data?.message || error?.message || 'Failed to update project cost')
+    }
+  }
+
+  // Get base cost (first cost in history or initial cost)
+  const getBaseCost = (project) => {
+    if (!project) return 0
+    if (project.costHistory && project.costHistory.length > 0) {
+      // Base cost is the first entry's previousCost (the original cost)
+      return project.costHistory[0].previousCost
+    }
+    // If no history, use current cost as base
+    return project.financialDetails?.totalCost || project.budget || 0
+  }
+
+  const getInstallmentStatusMeta = (installment) => {
+    if (!installment) {
+      return {
+        label: 'Pending',
+        className: 'bg-gray-100 text-gray-700'
+      }
+    }
+
+    const status = installment.status || 'pending'
+    if (status === 'paid') {
+      return {
+        label: 'Paid',
+        className: 'bg-green-100 text-green-700'
+      }
+    }
+
+    const dueDate = installment.dueDate ? new Date(installment.dueDate) : null
+    const now = new Date()
+    if (dueDate && dueDate < now && status !== 'paid') {
+      return {
+        label: 'Overdue',
+        className: 'bg-red-100 text-red-700'
+      }
+    }
+
+    if (status === 'overdue') {
+      return {
+        label: 'Overdue',
+        className: 'bg-red-100 text-red-700'
+      }
+    }
+
+    return {
+      label: 'Pending',
+      className: 'bg-yellow-100 text-yellow-700'
+    }
+  }
+
+function getInstallmentTotals(project) {
+    if (!project?.installmentPlan?.length) {
+      return {
+        total: 0,
+        pending: 0,
+        paid: 0
+      }
+    }
+
+  return project.installmentPlan.reduce((acc, installment) => {
+    const amount = Number(installment.amount) || 0
+    acc.total += amount
+    if (installment.status === 'paid') {
+      acc.paid += amount
+    } else {
+      acc.pending += amount
+    }
+    return acc
+  }, { total: 0, pending: 0, paid: 0 })
+  }
+
+function getFinancialSummary(project) {
+  if (!project) {
+    return {
+      totalCost: 0,
+      advance: 0,
+      installmentCollected: 0,
+      totalCollected: 0,
+      scheduled: 0,
+      pendingInstallments: 0,
+      outstanding: 0
+    }
+  }
+
+  const totals = getInstallmentTotals(project)
+  const totalCost = Number(project.financialDetails?.totalCost ?? project.budget ?? 0)
+  const advance = Number(project.financialDetails?.advanceReceived ?? 0)
+  const installmentCollected = Number(totals.paid ?? 0)
+  const totalCollected = advance + installmentCollected
+
+  const storedRemaining = Number(project.financialDetails?.remainingAmount)
+  let outstanding = 0
+  if (Number.isFinite(storedRemaining)) {
+    outstanding = storedRemaining
+  } else {
+    const computedRemaining = totalCost - totalCollected
+    outstanding = Number.isFinite(computedRemaining) ? computedRemaining : 0
+  }
+
+  if (outstanding < 0) {
+    outstanding = 0
+  }
+
+  return {
+    totalCost: Number.isFinite(totalCost) ? totalCost : 0,
+    advance: Number.isFinite(advance) ? advance : 0,
+    installmentCollected,
+    totalCollected,
+    scheduled: Number(totals.total ?? 0),
+    pendingInstallments: Number(totals.pending ?? 0),
+    outstanding
+  }
+}
+
+  const getSortedInstallments = (project) => {
+    if (!project?.installmentPlan?.length) return []
+    return project.installmentPlan
+      .slice()
+      .sort((a, b) => {
+        const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0
+        const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0
+        return dateA - dateB
+      })
+  }
+
+  const handleAddInstallment = () => {
+    setInstallmentToEdit(null)
+    setInstallmentFormData({
+      amount: '',
+      dueDate: '',
+      notes: '',
+      status: 'pending'
+    })
+    setInstallmentError('')
+    setShowInstallmentModal(true)
+  }
+
+  const handleEditInstallment = (installment) => {
+    setInstallmentToEdit(installment)
+    setInstallmentFormData({
+      amount: installment.amount?.toString() || '',
+      dueDate: formatDateForInput(installment.dueDate),
+      notes: installment.notes || '',
+      status: installment.status || 'pending'
+    })
+    setInstallmentError('')
+    setShowInstallmentModal(true)
+  }
+
+  const handleSaveInstallment = async () => {
+    if (!selectedItem || modalType !== 'project') return
+
+    const amountValue = Number(installmentFormData.amount)
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      setInstallmentError('Please enter a valid installment amount greater than 0')
+      return
+    }
+
+    if (!installmentFormData.dueDate) {
+      setInstallmentError('Please select a due date for the installment')
+      return
+    }
+
+    const projectId = selectedItem._id || selectedItem.id
+    setIsSavingInstallment(true)
+
+    try {
+      let response
+      if (installmentToEdit) {
+        const installmentId = installmentToEdit._id || installmentToEdit.id
+        const updatePayload = {
+          amount: amountValue,
+          dueDate: installmentFormData.dueDate,
+          notes: installmentFormData.notes
+        }
+
+        if (installmentFormData.status) {
+          updatePayload.status = installmentFormData.status
+        }
+
+        response = await adminProjectService.updateProjectInstallment(
+          projectId,
+          installmentId,
+          updatePayload
+        )
+      } else {
+        response = await adminProjectService.addProjectInstallments(projectId, [
+          {
+            amount: amountValue,
+            dueDate: installmentFormData.dueDate,
+            notes: installmentFormData.notes
+          }
+        ])
+      }
+
+      if (response?.success) {
+        toast.success(installmentToEdit ? 'Installment updated successfully!' : 'Installment added successfully!')
+        await loadData(false)
+        if (response.data) {
+          setSelectedItem(response.data)
+        }
+        setShowInstallmentModal(false)
+        setInstallmentFormData({
+          amount: '',
+          dueDate: '',
+          notes: '',
+          status: 'pending'
+        })
+        setInstallmentToEdit(null)
+        setInstallmentError('')
+      } else {
+        setInstallmentError(response?.message || 'Failed to save installment')
+      }
+    } catch (error) {
+      console.error('Error saving installment:', error)
+      setInstallmentError(error?.response?.data?.message || error?.message || 'Failed to save installment')
+    } finally {
+      setIsSavingInstallment(false)
+    }
+  }
+
+  const handleDeleteInstallment = (installment) => {
+    if (!selectedItem || modalType !== 'project') return
+    setInstallmentToDelete(installment)
+    setShowDeleteInstallmentModal(true)
+  }
+
+  const confirmDeleteInstallment = async () => {
+    if (!selectedItem || modalType !== 'project' || !installmentToDelete) return
+    const projectId = selectedItem._id || selectedItem.id
+    const installmentId = installmentToDelete._id || installmentToDelete.id
+
+    try {
+      const response = await adminProjectService.deleteProjectInstallment(projectId, installmentId)
+      if (response?.success) {
+        toast.success('Installment removed successfully!')
+        await loadData(false)
+        if (response.data) {
+          setSelectedItem(response.data)
+        }
+        setShowDeleteInstallmentModal(false)
+        setInstallmentToDelete(null)
+      } else {
+        toast.error(response?.message || 'Failed to remove installment')
+      }
+    } catch (error) {
+      console.error('Error deleting installment:', error)
+      toast.error(error?.response?.data?.message || error?.message || 'Failed to remove installment')
+    }
+  }
+
+  const handleMarkInstallmentPaid = async (installment) => {
+    if (!selectedItem || modalType !== 'project') return
+    const projectId = selectedItem._id || selectedItem.id
+    const installmentId = installment._id || installment.id
+
+    try {
+      const response = await adminProjectService.updateProjectInstallment(projectId, installmentId, {
+        status: 'paid'
+      })
+      if (response?.success) {
+        toast.success('Installment marked as paid!')
+        await loadData(false)
+        if (response.data) {
+          setSelectedItem(response.data)
+        }
+      } else {
+        toast.error(response?.message || 'Failed to update installment')
+      }
+    } catch (error) {
+      console.error('Error marking installment paid:', error)
+      toast.error(error?.response?.data?.message || error?.message || 'Failed to update installment')
+    }
   }
 
   // PM Assignment Functions
@@ -1462,7 +1836,12 @@ const Admin_project_management = () => {
                 ].map((tab) => (
                   <button
                     key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
+                    onClick={() => {
+                      if (activeTab === tab.key) return
+                      setActiveTab(tab.key)
+                      setSelectedFilter('all')
+                      setCurrentPage(1)
+                    }}
                     className={`flex items-center space-x-1.5 py-2.5 px-3 border-b-2 font-medium text-xs transition-colors rounded-t-md ${
                       activeTab === tab.key
                         ? 'border-primary text-primary bg-primary/5'
@@ -1520,8 +1899,10 @@ const Admin_project_management = () => {
                   {/* Pending Projects Grid */}
                   {pendingProjects.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                      {pendingProjects.map((pendingProject) => (
-                        <div key={pendingProject.id} className="bg-white rounded-lg border border-orange-200 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 overflow-hidden">
+                      {pendingProjects.map((pendingProject, index) => {
+                        const pendingKey = pendingProject.id || pendingProject._id || pendingProject.projectId || `pending-${index}`
+                        return (
+                        <div key={pendingKey} className="bg-white rounded-lg border border-orange-200 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 overflow-hidden">
                           {/* Header with Priority Badge */}
                           <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-3 border-b border-orange-100">
                             <div className="flex items-start justify-between">
@@ -1607,7 +1988,7 @@ const Admin_project_management = () => {
                             </div>
                           </div>
                         </div>
-                      ))}
+                      )})}
                     </div>
                   ) : (
                     <div className="text-center py-16">
@@ -1658,6 +2039,7 @@ const Admin_project_management = () => {
                     >
                       <option value="all">All Status</option>
                       <option value="active">Active</option>
+                      <option value="untouched">Untouched</option>
                       <option value="in-progress">In Progress</option>
                       <option value="completed">Completed</option>
                       <option value="on-hold">On Hold</option>
@@ -1667,95 +2049,104 @@ const Admin_project_management = () => {
 
                   {/* Projects Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {paginatedData.map((project) => (
-                      <div key={project.id} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
-                        {/* Header Section */}
-                        <div className="mb-3">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-sm font-bold text-gray-900 truncate mb-1">{project.name}</h3>
-                              <p className="text-xs text-gray-600 font-medium mb-1">
-                                {typeof project.client === 'string' 
-                                  ? project.client 
-                                  : project.client?.name || 'Unknown Client'
-                                }
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                PM: {project.pm || (typeof project.projectManager === 'object' && project.projectManager?.name) || (typeof project.projectManager === 'string' && project.projectManager) || 'Unassigned'}
-                              </p>
-                            </div>
-                            <div className="flex flex-col space-y-1 ml-2">
-                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border ${getStatusColor(project.status)}`}>
-                                {project.status}
-                              </span>
-                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full ${getPriorityColor(project.priority)}`}>
-                                {project.priority}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Progress Section */}
-                        <div className="mb-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-semibold text-gray-700">Progress</span>
-                            <span className="text-sm font-bold text-primary">{(project.progress !== null && project.progress !== undefined) ? project.progress : (project.status === 'completed' ? 100 : 0)}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                            <div className="bg-gradient-to-r from-primary to-primary-dark h-1.5 rounded-full transition-all duration-500" style={{ width: `${(project.progress !== null && project.progress !== undefined) ? project.progress : (project.status === 'completed' ? 100 : 0)}%` }}></div>
-                          </div>
-                        </div>
-                        
-                        {/* Key Metrics */}
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          <div className="bg-blue-50 rounded-lg p-2">
-                            <div className="text-xs text-blue-600 font-medium mb-1">Due Date</div>
-                            <div className="text-xs font-bold text-blue-800">{formatDate(project.dueDate)}</div>
-                          </div>
-                          <div className="bg-purple-50 rounded-lg p-2">
-                            <div className="text-xs text-purple-600 font-medium mb-1">Team Size</div>
-                            <div className="text-xs font-bold text-purple-800">
-                              {project.teamSize !== null && project.teamSize !== undefined 
-                                ? project.teamSize 
-                                : project.assignedTeam?.length || 0}
+                    {paginatedData.map((project, index) => {
+                      const projectKey = project.id || project._id || project.projectId || `project-${index}`
+                      return (
+                        <div key={projectKey} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
+                          {/* Header Section */}
+                          <div className="mb-3">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-bold text-gray-900 truncate mb-1">{project.name}</h3>
+                                <p className="text-xs text-gray-600 font-medium mb-1">
+                                  {typeof project.client === 'string'
+                                    ? project.client
+                                    : project.client?.name || 'Unknown Client'}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  PM: {project.pm || (typeof project.projectManager === 'object' && project.projectManager?.name) || (typeof project.projectManager === 'string' && project.projectManager) || 'Unassigned'}
+                                </p>
+                              </div>
+                              <div className="flex flex-col space-y-1 ml-2">
+                                <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border ${getStatusColor(project.status)}`}>
+                                  {project.status}
+                                </span>
+                                <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full ${getPriorityColor(project.priority)}`}>
+                                  {project.priority}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        
-                        {/* Total Cost Highlight */}
-                        <div className="bg-green-50 rounded-lg p-2 mb-3">
-                          <div className="text-xs text-green-600 font-medium mb-1">Total Cost</div>
-                          <div className="text-sm font-bold text-green-700">{formatCurrency(project.financialDetails?.totalCost || project.budget || 0)}</div>
-                        </div>
 
-                        {/* Footer */}
-                        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                          <div className="flex items-center space-x-1">
-                            <button 
-                              onClick={() => handleView(project, 'project')}
-                              className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all duration-200 group-hover:text-primary"
-                            >
-                              <FiEye className="h-3 w-3" />
-                            </button>
-                            <button 
-                              onClick={() => handleEdit(project, 'project')}
-                              className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
-                            >
-                              <FiEdit3 className="h-3 w-3" />
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(project, 'project')}
-                              className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all duration-200 group-hover:text-red-600"
-                            >
-                              <FiTrash2 className="h-3 w-3" />
-                            </button>
+                          {/* Progress Section */}
+                          <div className="mb-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-semibold text-gray-700">Progress</span>
+                              <span className="text-sm font-bold text-primary">
+                                {(project.progress !== null && project.progress !== undefined)
+                                  ? project.progress
+                                  : (project.status === 'completed' ? 100 : 0)}%
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="bg-gradient-to-r from-primary to-primary-dark h-1.5 rounded-full transition-all duration-500"
+                                style={{ width: `${(project.progress !== null && project.progress !== undefined) ? project.progress : (project.status === 'completed' ? 100 : 0)}%` }}
+                              ></div>
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-400 font-medium">
-                            {formatDate(project.startDate)}
+
+                          {/* Key Metrics */}
+                          <div className="grid grid-cols-2 gap-2 mb-3">
+                            <div className="bg-blue-50 rounded-lg p-2">
+                              <div className="text-xs text-blue-600 font-medium mb-1">Due Date</div>
+                              <div className="text-xs font-bold text-blue-800">{formatDate(project.dueDate)}</div>
+                            </div>
+                            <div className="bg-purple-50 rounded-lg p-2">
+                              <div className="text-xs text-purple-600 font-medium mb-1">Team Size</div>
+                              <div className="text-xs font-bold text-purple-800">
+                                {project.teamSize !== null && project.teamSize !== undefined
+                                  ? project.teamSize
+                                  : project.assignedTeam?.length || 0}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Total Cost Highlight */}
+                          <div className="bg-green-50 rounded-lg p-2 mb-3">
+                            <div className="text-xs text-green-600 font-medium mb-1">Total Cost</div>
+                            <div className="text-sm font-bold text-green-700">{formatCurrency(project.financialDetails?.totalCost || project.budget || 0)}</div>
+                          </div>
+
+                          {/* Footer */}
+                          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                            <div className="flex items-center space-x-1">
+                              <button
+                                onClick={() => handleView(project, 'project')}
+                                className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all duration-200 group-hover:text-primary"
+                              >
+                                <FiEye className="h-3 w-3" />
+                              </button>
+                              <button
+                                onClick={() => handleEdit(project, 'project')}
+                                className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
+                              >
+                                <FiEdit3 className="h-3 w-3" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(project, 'project')}
+                                className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all duration-200 group-hover:text-red-600"
+                              >
+                                <FiTrash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                            <div className="text-xs text-gray-400 font-medium">
+                              {formatDate(project.startDate)}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
 
                   {/* Pagination */}
@@ -1837,8 +2228,10 @@ const Admin_project_management = () => {
 
                   {/* Completed Projects Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {paginatedData.map((project) => (
-                      <div key={project.id} className="bg-white rounded-lg border border-green-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
+                    {paginatedData.map((project, index) => {
+                      const completedKey = project.id || project._id || project.projectId || `completed-${index}`
+                      return (
+                      <div key={completedKey} className="bg-white rounded-lg border border-green-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
                         {/* Header Section */}
                         <div className="mb-3">
                           <div className="flex items-start justify-between mb-2">
@@ -1965,7 +2358,7 @@ const Admin_project_management = () => {
                           </div>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
 
                   {/* Pagination */}
@@ -2034,8 +2427,10 @@ const Admin_project_management = () => {
 
                   {/* Employees Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {paginatedData.map((employee) => (
-                      <div key={employee.id} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
+                    {paginatedData.map((employee, index) => {
+                      const employeeKey = employee.id || employee._id || employee.userId || `employee-${index}`
+                      return (
+                      <div key={employeeKey} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
                         {/* Header Section */}
                         <div className="flex items-center space-x-3 mb-3">
                           <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-dark text-white rounded-full flex items-center justify-center font-bold text-sm shadow-md">
@@ -2049,15 +2444,6 @@ const Admin_project_management = () => {
                             </span>
                           </div>
                         </div>
-                        
-                        {/* Performance Highlight */}
-                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-2 mb-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-green-700">Performance</span>
-                            <span className="text-lg font-bold text-green-600">{employee.performance}%</span>
-                          </div>
-                        </div>
-                        
                         {/* Key Metrics */}
                         <div className="grid grid-cols-2 gap-2 mb-3">
                           <div className="bg-blue-50 rounded-lg p-2">
@@ -2109,7 +2495,7 @@ const Admin_project_management = () => {
                           </a>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
 
                   {/* Pagination */}
@@ -2178,8 +2564,10 @@ const Admin_project_management = () => {
 
                   {/* Clients Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {paginatedData.map((client) => (
-                      <div key={client.id} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
+                    {paginatedData.map((client, index) => {
+                      const clientKey = client.id || client._id || client.userId || `client-${index}`
+                      return (
+                      <div key={clientKey} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
                         {/* Header Section */}
                         <div className="mb-3">
                           <div className="flex items-start justify-between mb-2">
@@ -2244,7 +2632,7 @@ const Admin_project_management = () => {
                           </div>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
 
                   {/* Pagination */}
@@ -2979,10 +3367,198 @@ const Admin_project_management = () => {
                         <div className="text-lg font-bold text-blue-800">{(selectedItem.progress !== null && selectedItem.progress !== undefined) ? selectedItem.progress : (selectedItem.status === 'completed' ? 100 : 0)}%</div>
                       </div>
                       <div className="bg-white rounded-lg p-3">
-                        <div className="text-sm text-green-600 font-medium mb-1">Total Cost</div>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="text-sm text-green-600 font-medium">Total Cost</div>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={handleEditCost}
+                              className="text-xs text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded"
+                              title="Edit Cost"
+                            >
+                              <FiEdit3 className="h-3 w-3" />
+                            </button>
+                            {(selectedItem.costHistory && selectedItem.costHistory.length > 0) && (
+                              <button
+                                onClick={handleViewCostHistory}
+                                className="text-xs text-purple-600 hover:text-purple-800 p-1 hover:bg-purple-50 rounded"
+                                title="View Cost History"
+                              >
+                                <FiActivity className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
                         <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem.financialDetails?.totalCost || selectedItem.budget || 0)}</div>
+                        {selectedItem.costHistory && selectedItem.costHistory.length > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Base: {formatCurrency(getBaseCost(selectedItem))}
+                          </div>
+                        )}
+                        {projectFinancialSummary && (
+                          <div className="text-xs text-gray-500 mt-2 space-y-1">
+                            <div>Advance received: {formatCurrency(projectFinancialSummary.advance)}</div>
+                            <div>Outstanding balance: {formatCurrency(projectFinancialSummary.outstanding)}</div>
+                          </div>
+                        )}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Payment Installments */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h5 className="text-lg font-semibold text-gray-900 flex items-center">
+                          <FiCalendar className="h-5 w-5 mr-2 text-emerald-600" />
+                          Payment Installments
+                        </h5>
+                        <p className="text-sm text-gray-500">
+                          Break down the project cost into scheduled payments for the client.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleAddInstallment}
+                        className="inline-flex items-center px-3 py-2 bg-emerald-500 text-white text-sm font-semibold rounded-lg hover:bg-emerald-600 transition-colors"
+                      >
+                        <FiPlus className="h-4 w-4 mr-1" />
+                        Add Installment
+                      </button>
+                    </div>
+                    {(() => {
+                      const financialSummary = projectFinancialSummary || getFinancialSummary(selectedItem)
+                      const summaryCards = [
+                        {
+                          title: 'Advance Received',
+                          value: financialSummary.advance,
+                          description: 'Upfront amount received',
+                          gradient: 'bg-gradient-to-br from-emerald-50 via-emerald-100 to-emerald-50',
+                          border: 'border-emerald-200',
+                          textValue: 'text-emerald-700',
+                          textLabel: 'text-emerald-600'
+                        },
+                        {
+                          title: 'Total Scheduled',
+                          value: financialSummary.scheduled,
+                          description: 'Sum of all installments',
+                          gradient: 'bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50',
+                          border: 'border-gray-200',
+                          textValue: 'text-gray-900',
+                          textLabel: 'text-gray-600'
+                        },
+                        {
+                          title: 'Collected',
+                          value: financialSummary.totalCollected,
+                          description: `Advance ${formatCurrency(financialSummary.advance)} + Installments ${formatCurrency(financialSummary.installmentCollected)}`,
+                          gradient: 'bg-gradient-to-br from-green-50 via-green-100 to-green-50',
+                          border: 'border-green-200',
+                          textValue: 'text-green-700',
+                          textLabel: 'text-green-600'
+                        },
+                        {
+                          title: 'Pending Installments',
+                          value: financialSummary.pendingInstallments,
+                          description: 'Remaining scheduled amount',
+                          gradient: 'bg-gradient-to-br from-amber-50 via-amber-100 to-amber-50',
+                          border: 'border-amber-200',
+                          textValue: 'text-amber-700',
+                          textLabel: 'text-amber-600'
+                        },
+                        {
+                          title: 'Outstanding Balance',
+                          value: financialSummary.outstanding,
+                          description: 'Total cost minus collected',
+                          gradient: 'bg-gradient-to-br from-orange-50 via-orange-100 to-orange-50',
+                          border: 'border-orange-200',
+                          textValue: 'text-orange-700',
+                          textLabel: 'text-orange-600'
+                        }
+                      ]
+
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-4">
+                          {summaryCards.map((card, idx) => (
+                            <div
+                              key={`financial-summary-${idx}`}
+                              className={`${card.gradient} border ${card.border} rounded-xl px-3 py-2.5 shadow-sm`}
+                            >
+                              <p className={`text-[10px] font-semibold uppercase tracking-wide ${card.textLabel} mb-1`}>
+                                {card.title}
+                              </p>
+                              <p className={`text-xl font-bold ${card.textValue}`}>
+                                {formatCurrency(card.value)}
+                              </p>
+                              <p className="text-[10px] text-gray-600 mt-0.5 leading-tight">
+                                {card.description}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                    {selectedItem.installmentPlan?.length > 0 ? (
+                      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-12">#</th>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Due Date</th>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Notes</th>
+                              <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-100">
+                            {getSortedInstallments(selectedItem).map((installment, index) => {
+                              const statusMeta = getInstallmentStatusMeta(installment)
+                              const installmentId = installment._id || installment.id || `installment-${index}`
+                              const isPaid = installment.status === 'paid'
+                              return (
+                                <tr key={installmentId}>
+                                  <td className="px-4 py-2 text-sm text-gray-500">{index + 1}</td>
+                                  <td className="px-4 py-2 text-sm font-semibold text-gray-900">{formatCurrency(installment.amount || 0)}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-700">{installment.dueDate ? formatDate(installment.dueDate) : 'N/A'}</td>
+                                  <td className="px-4 py-2 text-sm">
+                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${statusMeta.className}`}>
+                                      {statusMeta.label}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2 text-sm text-gray-600 max-w-xs truncate">{installment.notes || '-'}</td>
+                                  <td className="px-4 py-2 text-sm">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <button
+                                        onClick={() => handleEditInstallment(installment)}
+                                        className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md"
+                                      >
+                                        Edit
+                                      </button>
+                                      {!isPaid && (
+                                        <button
+                                          onClick={() => handleMarkInstallmentPaid(installment)}
+                                          className="px-2 py-1 text-xs font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded-md"
+                                        >
+                                          Mark Paid
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => handleDeleteInstallment(installment)}
+                                        className="px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md"
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg p-6 text-center text-sm text-gray-500">
+                        No installments defined yet. Click <span className="font-semibold text-gray-700">Add Installment</span> to create a payment schedule.
+                      </div>
+                    )}
                   </div>
 
                   {/* Project Information */}
@@ -3529,6 +4105,422 @@ const Admin_project_management = () => {
                   <FiUser className="h-4 w-4" />
                   <span>Assign PM</span>
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Cost Edit Modal */}
+        {showCostEditModal && selectedItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-md w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Edit Project Cost</h3>
+                  <p className="text-gray-600 text-sm mt-1">Update the project cost</p>
+                </div>
+                <button
+                  onClick={closeModals}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+
+              {costEditError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  {costEditError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Current Cost</label>
+                  <div className="bg-gray-50 rounded-lg p-3 text-lg font-bold text-gray-700">
+                    {formatCurrency(selectedItem.financialDetails?.totalCost || selectedItem.budget || 0)}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">New Cost (₹) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={costEditData.newCost}
+                    onChange={(e) => setCostEditData({ ...costEditData, newCost: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter new cost"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Reason for Change *</label>
+                  <textarea
+                    value={costEditData.reason}
+                    onChange={(e) => setCostEditData({ ...costEditData, reason: e.target.value })}
+                    rows={4}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                    placeholder="Explain why the cost is being changed..."
+                  />
+                </div>
+
+                <div className="flex items-center justify-end space-x-3 pt-4">
+                  <button
+                    onClick={closeModals}
+                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdateCost}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+                  >
+                    Update Cost
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Cost History Modal */}
+        {showCostHistoryModal && selectedItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Cost History</h3>
+                  <p className="text-gray-600 text-sm mt-1">Project: {selectedItem.name}</p>
+                </div>
+                <button
+                  onClick={closeModals}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Base Cost */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm text-blue-600 font-medium">Base Cost</div>
+                    <div className="text-2xl font-bold text-blue-800">{formatCurrency(getBaseCost(selectedItem))}</div>
+                    <div className="text-xs text-blue-600 mt-1">Initial cost when project was created</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-blue-600 font-medium">Current Cost</div>
+                    <div className="text-2xl font-bold text-blue-800">{formatCurrency(selectedItem.financialDetails?.totalCost || selectedItem.budget || 0)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cost History List */}
+              {selectedItem.costHistory && selectedItem.costHistory.length > 0 ? (
+                <div className="space-y-4">
+                  <h4 className="text-lg font-semibold text-gray-900">Cost Changes</h4>
+                  {selectedItem.costHistory.map((entry, index) => {
+                    const changeAmount = entry.newCost - entry.previousCost
+                    const isIncrease = changeAmount > 0
+                    const changedBy = typeof entry.changedBy === 'object' ? entry.changedBy?.name : 'Admin'
+                    
+                    return (
+                      <div key={index} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                isIncrease ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                              }`}>
+                                {isIncrease ? <FiArrowUp className="h-3 w-3 mr-1" /> : <FiArrowDown className="h-3 w-3 mr-1" />}
+                                {isIncrease ? 'Increase' : 'Decrease'}
+                              </span>
+                              <span className="text-xs text-gray-500">{formatDate(entry.changedAt)}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 mb-2">
+                              <div>
+                                <div className="text-xs text-gray-500">Previous Cost</div>
+                                <div className="text-sm font-semibold text-gray-700">{formatCurrency(entry.previousCost)}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500">New Cost</div>
+                                <div className="text-sm font-semibold text-gray-700">{formatCurrency(entry.newCost)}</div>
+                              </div>
+                            </div>
+                            <div className="mb-2">
+                              <div className="text-xs text-gray-500">Change Amount</div>
+                              <div className={`text-sm font-bold ${isIncrease ? 'text-red-600' : 'text-green-600'}`}>
+                                {isIncrease ? '+' : ''}{formatCurrency(Math.abs(changeAmount))}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">Reason</div>
+                              <div className="text-sm text-gray-700 bg-gray-50 rounded p-2">{entry.reason}</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500 pt-2 border-t border-gray-100">
+                          Changed by: {changedBy}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <FiActivity className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                  <p>No cost changes recorded yet</p>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Installment Modal */}
+        {showInstallmentModal && selectedItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-md w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {installmentToEdit ? 'Edit Installment' : 'Add Installment'}
+                  </h3>
+                  <p className="text-gray-600 text-sm mt-1">
+                    {installmentToEdit ? 'Update the installment details' : 'Create a new installment for this project'}
+                  </p>
+                </div>
+                <button
+                  onClick={closeModals}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+
+              {installmentError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  {installmentError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Amount (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={installmentFormData.amount}
+                    onChange={(e) =>
+                      setInstallmentFormData((prev) => ({
+                        ...prev,
+                        amount: e.target.value
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Enter installment amount"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Due Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={installmentFormData.dueDate}
+                    onChange={(e) =>
+                      setInstallmentFormData((prev) => ({
+                        ...prev,
+                        dueDate: e.target.value
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notes</label>
+                  <textarea
+                    value={installmentFormData.notes}
+                    onChange={(e) =>
+                      setInstallmentFormData((prev) => ({
+                        ...prev,
+                        notes: e.target.value
+                      }))
+                    }
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Optional notes about this installment"
+                  />
+                </div>
+
+                {installmentToEdit && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                    <select
+                      value={installmentFormData.status}
+                      onChange={(e) =>
+                        setInstallmentFormData((prev) => ({
+                          ...prev,
+                          status: e.target.value
+                        }))
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="paid">Paid</option>
+                      <option value="overdue">Overdue</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end space-x-3 pt-4">
+                  <button
+                    onClick={closeModals}
+                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    disabled={isSavingInstallment}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveInstallment}
+                    className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors font-semibold disabled:opacity-70"
+                    disabled={isSavingInstallment}
+                  >
+                    {isSavingInstallment ? 'Saving...' : installmentToEdit ? 'Update Installment' : 'Add Installment'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Delete Installment Confirmation Modal */}
+        {showDeleteInstallmentModal && selectedItem && installmentToDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowDeleteInstallmentModal(false)
+              setInstallmentToDelete(null)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-r from-red-600 to-red-700 p-6 text-white rounded-t-2xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold mb-1">Delete Installment</h3>
+                    <p className="text-red-100 text-sm">
+                      This will permanently remove the selected installment.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowDeleteInstallmentModal(false)
+                      setInstallmentToDelete(null)
+                    }}
+                    className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                  >
+                    <FiX className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-sm text-red-700">
+                    Are you sure you want to delete this installment of{' '}
+                    <span className="font-semibold text-red-900">
+                      {formatCurrency(installmentToDelete.amount || 0)}
+                    </span>{' '}
+                    due on{' '}
+                    <span className="font-semibold text-red-900">
+                      {installmentToDelete.dueDate ? formatDate(installmentToDelete.dueDate) : 'N/A'}
+                    </span>
+                    ?
+                  </p>
+                </div>
+
+                {installmentToDelete.notes && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Notes</p>
+                    <p className="text-sm text-gray-700">{installmentToDelete.notes}</p>
+                  </div>
+                )}
+
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <p className="text-xs text-gray-500 uppercase font-semibold mb-1">Reminder</p>
+                  <p className="text-sm text-gray-600">
+                    Removing this installment reduces the scheduled amount. Make sure your remaining
+                    installments still align with the project total cost.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setShowDeleteInstallmentModal(false)
+                      setInstallmentToDelete(null)
+                    }}
+                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDeleteInstallment}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+                  >
+                    Delete Installment
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

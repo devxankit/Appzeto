@@ -226,10 +226,29 @@ const Admin_sales_management = () => {
     try {
       setLoadingSalesTeam(true)
       const response = await adminSalesService.getAllSalesTeam()
-      
-      
       if (response.success) {
-        setSalesTeam(response.data)
+        const members = response.data || []
+        if (members.length > 0) {
+          const detailedMembers = await Promise.all(
+            members.map(async (member) => {
+              try {
+                const detailRes = await adminSalesService.getSalesTeamMember(member.id || member._id)
+                if (detailRes?.success && detailRes.data) {
+                  return {
+                    ...member,
+                    ...detailRes.data
+                  }
+                }
+              } catch (detailError) {
+                console.error('Error fetching sales team member details:', detailError)
+              }
+              return member
+            })
+          )
+          setSalesTeam(detailedMembers)
+        } else {
+          setSalesTeam([])
+        }
       }
     } catch (error) {
       console.error('Error loading sales team:', error)
@@ -484,6 +503,61 @@ const Admin_sales_management = () => {
     return `+91 ${phone}`
   }
 
+  const getLeadDisplayValue = (lead) => {
+    const candidates = [
+      lead?.value,
+      lead?.leadProfile?.conversionData?.totalCost,
+      lead?.leadProfile?.estimatedCost
+    ]
+    const numeric = candidates.find((val) => typeof val === 'number' && !Number.isNaN(val))
+    return numeric || 0
+  }
+
+  const pickFirstString = (...values) => {
+    for (const value of values) {
+      const rendered = safeRender(value, '').trim()
+      if (rendered) return rendered
+    }
+    return ''
+  }
+
+  const getLeadDisplayName = (lead) => {
+    return pickFirstString(
+      lead?.name,
+      lead?.leadProfile?.name,
+      lead?.client?.name,
+      lead?.contactName,
+      lead?.clientDetails?.name
+    ) || 'N/A'
+  }
+
+  const getLeadDisplayCompany = (lead) => {
+    return pickFirstString(
+      lead?.company,
+      lead?.leadProfile?.businessName,
+      lead?.client?.companyName,
+      lead?.clientDetails?.company
+    ) || 'N/A'
+  }
+
+  const getLeadDisplayEmail = (lead) => {
+    return pickFirstString(
+      lead?.email,
+      lead?.leadProfile?.email,
+      lead?.client?.email,
+      lead?.contactEmail
+    ) || 'N/A'
+  }
+
+  const getLeadDisplayPhone = (lead) => {
+    return pickFirstString(
+      lead?.phone,
+      lead?.leadProfile?.phone,
+      lead?.client?.phoneNumber,
+      lead?.client?.phone
+    )
+  }
+
   // Get current data based on active tab
   const getCurrentData = () => {
     switch (activeTab) {
@@ -641,21 +715,24 @@ const Admin_sales_management = () => {
         setLoadingMemberDetails(true)
         const memberId = item._id || item.id
         const response = await adminSalesService.getSalesTeamMember(memberId)
+        let memberLeads = []
+        try {
+          const leadsResponse = await adminSalesService.getLeadsForMember(memberId, { limit: 500 })
+          if (leadsResponse?.success && Array.isArray(leadsResponse.data)) {
+            memberLeads = leadsResponse.data
+          }
+        } catch (leadError) {
+          console.error('Error fetching member leads:', leadError)
+        }
         
         if (response && response.success && response.data) {
-          console.log('Member details fetched:', response.data)
-          console.log('Lead breakdown (raw):', response.data.leadBreakdown)
-          
-          // Transform leadBreakdown from array to object format
           const transformedLeadBreakdown = transformLeadBreakdown(response.data.leadBreakdown)
           
-          console.log('Lead breakdown (transformed):', transformedLeadBreakdown)
-          
-          // Merge the detailed data with the existing item data
           setSelectedItem({
             ...item,
             ...response.data,
-            leadBreakdown: transformedLeadBreakdown
+            leadBreakdown: transformedLeadBreakdown,
+            leads: memberLeads
           })
         }
       } catch (error) {
@@ -2069,17 +2146,6 @@ const Admin_sales_management = () => {
                         </div>
                       </div>
                       
-                      {/* Performance Highlight */}
-                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-2 mb-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-green-700">Performance</span>
-                          <span className="text-lg font-bold text-green-600">
-                            {typeof member?.performance === 'number' ? member.performance : 
-                             typeof member?.performance === 'object' ? (member.performance?.conversionRate || 0) : 0}%
-                          </span>
-                        </div>
-                      </div>
-                      
                       {/* Key Metrics */}
                       <div className="grid grid-cols-2 gap-2 mb-3">
                         <div className="bg-blue-50 rounded-lg p-2">
@@ -2447,7 +2513,7 @@ const Admin_sales_management = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
             onClick={closeModals}
           >
             <motion.div
@@ -2817,12 +2883,25 @@ const Admin_sales_management = () => {
                 
                 <div className="grid grid-cols-4 gap-2">
                   <div className="bg-white rounded-lg p-2 text-center">
-                    <div className="text-xs text-blue-600 font-medium">Performance</div>
-                    <div className="text-lg font-bold text-blue-800">{selectedItem?.performance?.conversionRate || 0}%</div>
+                        <div className="text-xs text-blue-600 font-medium">Performance</div>
+                        <div className="text-lg font-bold text-blue-800">
+                          {selectedItem?.performance?.conversionRate !== undefined
+                            ? `${Math.round(selectedItem.performance.conversionRate)}%`
+                            : selectedItem?.performance?.conversionRatePercent !== undefined
+                            ? `${Math.round(selectedItem.performance.conversionRatePercent)}%`
+                            : `${Math.round(selectedItem?.conversionRate || 0)}%`}
+                        </div>
                   </div>
                   <div className="bg-white rounded-lg p-2 text-center">
-                    <div className="text-xs text-green-600 font-medium">Revenue</div>
-                    <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem?.performance?.totalValue || 0)}</div>
+                        <div className="text-xs text-green-600 font-medium">Revenue</div>
+                        <div className="text-lg font-bold text-green-700">
+                          {formatCurrency(
+                            selectedItem?.performance?.totalValue ??
+                              selectedItem?.performance?.totalRevenue ??
+                              selectedItem?.totalRevenue ??
+                              0
+                          )}
+                        </div>
                   </div>
                   <div className="bg-white rounded-lg p-2 text-center">
                     <div className="text-xs text-purple-600 font-medium">Total Leads</div>
@@ -2847,12 +2926,16 @@ const Admin_sales_management = () => {
                     <div className="space-y-3">
                       {leadCategories.map((category) => {
                         // Calculate leads for this category assigned to this member
-                        const categoryLeads = leads.filter(lead => 
-                          lead.assignedTo === selectedItem.name && lead.category && (lead.category._id || lead.category.id) === (category._id || category.id)
+                        const memberLeads = selectedItem?.leads || []
+                        const categoryLeads = memberLeads.filter(lead =>
+                          lead.category && (lead.category._id || lead.category.id) === (category._id || category.id)
                         )
                         const categoryCount = categoryLeads.length
-                        const conversionRate = categoryCount > 0 ? 
-                          Math.round((categoryLeads.filter(lead => lead.status === 'converted').length / categoryCount) * 100) : 0
+                        const conversionRate = categoryCount > 0
+                          ? Math.round(
+                              (categoryLeads.filter(lead => lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed').length / categoryCount) * 100
+                            )
+                          : 0
                         
                         return (
                           <button
@@ -2889,13 +2972,13 @@ const Admin_sales_management = () => {
                                 <div className="bg-white rounded p-1">
                                   <div className="text-xs text-gray-600">Active</div>
                                   <div className="font-semibold text-blue-600 text-sm">
-                                    {categoryLeads.filter(lead => lead.status !== 'converted' && lead.status !== 'lost').length}
+                                    {categoryLeads.filter(lead => !['converted', 'client', 'closed', 'lost', 'notInterested'].includes(lead.status)).length}
                                   </div>
                                 </div>
                                 <div className="bg-white rounded p-1">
                                   <div className="text-xs text-gray-600">Converted</div>
                                   <div className="font-semibold text-green-600 text-sm">
-                                    {categoryLeads.filter(lead => lead.status === 'converted').length}
+                                    {categoryLeads.filter(lead => lead.status === 'converted' || lead.status === 'client' || lead.status === 'closed').length}
                                   </div>
                                 </div>
                                 <div className="bg-white rounded p-1">
@@ -2920,24 +3003,64 @@ const Admin_sales_management = () => {
                       <div className="bg-gray-50 rounded-lg p-3 text-center">
                         <div className="text-xs text-gray-600 font-medium mb-1">Conversion Rate</div>
                         <div className="text-lg font-bold text-gray-900">
-                          {selectedItem.leadsCount > 0 ? Math.round((selectedItem.convertedCount / selectedItem.leadsCount) * 100) : 0}%
+                          {(() => {
+                            if (selectedItem?.performance?.conversionRate !== undefined) {
+                              return `${Math.round(selectedItem.performance.conversionRate)}%`
+                            }
+                            if (selectedItem?.performance?.conversionRatePercent !== undefined) {
+                              return `${Math.round(selectedItem.performance.conversionRatePercent)}%`
+                            }
+                            if (selectedItem?.leadsCount > 0) {
+                              return `${Math.round((selectedItem.convertedCount / selectedItem.leadsCount) * 100)}%`
+                            }
+                            return '0%'
+                          })()}
                         </div>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-3 text-center">
                         <div className="text-xs text-gray-600 font-medium mb-1">Target Achievement</div>
                         <div className="text-lg font-bold text-gray-900">
-                          {selectedItem.target > 0 ? Math.round((selectedItem.revenue / selectedItem.target) * 100) : 0}%
+                          {(() => {
+                            const target =
+                              selectedItem?.target ??
+                              selectedItem?.performance?.target ??
+                              0
+                            const achieved =
+                              selectedItem?.performance?.achieved ??
+                              selectedItem?.performance?.achievedValue ??
+                              selectedItem?.revenue ??
+                              0
+                            if (target > 0) {
+                              return `${Math.round((achieved / target) * 100)}%`
+                            }
+                            return '0%'
+                          })()}
                         </div>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-3 text-center">
                         <div className="text-xs text-gray-600 font-medium mb-1">Avg Lead Value</div>
                         <div className="text-lg font-bold text-gray-900">
-                          {selectedItem.leadsCount > 0 ? formatCurrency(selectedItem.revenue / selectedItem.leadsCount) : '$0'}
+                          {(() => {
+                            const leadsCount =
+                              selectedItem?.performance?.totalLeads ??
+                              selectedItem?.leadsCount ??
+                              0
+                            const revenue =
+                              selectedItem?.performance?.totalRevenue ??
+                              selectedItem?.revenue ??
+                              0
+                            if (leadsCount > 0) {
+                              return formatCurrency(revenue / leadsCount)
+                            }
+                            return formatCurrency(0)
+                          })()}
                         </div>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-3 text-center">
                         <div className="text-xs text-gray-600 font-medium mb-1">Incentive</div>
-                        <div className="text-lg font-bold text-gray-900">{formatCurrency(selectedItem.incentive)}</div>
+                        <div className="text-lg font-bold text-gray-900">
+                          {formatCurrency(selectedItem?.incentive ?? selectedItem?.performance?.incentive ?? 0)}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -3051,47 +3174,9 @@ const Admin_sales_management = () => {
                           <div className="font-semibold text-gray-900 text-sm">{selectedItem.phone}</div>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg">
-                        <FiCalendar className="h-4 w-4 text-gray-400" />
-                        <div>
-                          <div className="text-xs text-gray-600">Last Activity</div>
-                          <div className="font-semibold text-gray-900 text-sm">{formatDate(selectedItem.lastActivity)}</div>
-                        </div>
-                      </div>
                     </div>
                   </div>
 
-                  {/* Revenue & Target Information */}
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                      <FiTarget className="h-5 w-5 mr-2 text-orange-600" />
-                      Revenue & Targets
-                    </h5>
-                    <div className="space-y-3">
-                      <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                        <div className="text-xs text-green-600 font-medium mb-1">Current Revenue</div>
-                        <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem.revenue)}</div>
-                      </div>
-                      <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
-                        <div className="text-xs text-orange-600 font-medium mb-1">Target Revenue</div>
-                        <div className="text-lg font-bold text-orange-700">{formatCurrency(selectedItem.target)}</div>
-                      </div>
-                      <div className="bg-gray-50 rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-gray-600 font-medium">Target Progress</span>
-                          <span className="text-xs font-semibold text-gray-900">
-                            {selectedItem.target > 0 ? Math.round((selectedItem.revenue / selectedItem.target) * 100) : 0}%
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-gradient-to-r from-orange-500 to-orange-600 h-2 rounded-full transition-all duration-500" 
-                            style={{ width: `${selectedItem.target > 0 ? Math.min((selectedItem.revenue / selectedItem.target) * 100, 100) : 0}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -3642,19 +3727,22 @@ const Admin_sales_management = () => {
                           {index + 1}
                         </td>
                         <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                          {lead.name || 'N/A'}
+                          {getLeadDisplayName(lead)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 font-mono">
-                          {formatPhoneNumber(lead.phone) || 'N/A'}
+                          {(() => {
+                            const phone = getLeadDisplayPhone(lead)
+                            return phone ? formatPhoneNumber(phone) : 'N/A'
+                          })()}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
-                          {lead.company || 'N/A'}
+                          {getLeadDisplayCompany(lead)}
                         </td>
                         <td className="px-4 py-3 text-sm font-semibold text-green-700">
-                          {formatCurrency(lead.value || 0)}
+                          {formatCurrency(getLeadDisplayValue(lead))}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
-                          {lead.email || 'N/A'}
+                          {getLeadDisplayEmail(lead)}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex px-2 py-1 text-xs font-bold rounded-full ${getStatusColor(lead.status || 'new')}`}>
@@ -4047,7 +4135,7 @@ const Admin_sales_management = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
             onClick={closeModals}
           >
             <motion.div
