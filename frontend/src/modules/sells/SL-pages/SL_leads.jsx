@@ -76,17 +76,6 @@ const LeadDashboard = () => {
     const token = localStorage.getItem('salesToken') || localStorage.getItem('token')
     if (token) {
       fetchCategories()
-    } else {
-      // Set default categories if not logged in
-      setCategories([
-        { _id: '1', name: 'Hot Leads', description: 'High priority leads', color: '#EF4444', icon: '🔥' },
-        { _id: '2', name: 'Cold Leads', description: 'Leads that need nurturing', color: '#3B82F6', icon: '❄️' },
-        { _id: '3', name: 'Warm Leads', description: 'Leads showing interest', color: '#F59E0B', icon: '🌡️' }
-      ])
-    }
-    
-    // Only try to fetch dashboard stats if we have a token
-    if (token) {
       fetchDashboardStats()
     }
   }, [])
@@ -175,29 +164,23 @@ const LeadDashboard = () => {
         setCategories(categoriesData)
       } else {
         console.error('API Error: No categories returned')
-        // Set default categories on API error
-        setCategories([
-          { _id: '1', name: 'Hot Leads', description: 'High priority leads', color: '#EF4444', icon: '🔥' },
-          { _id: '2', name: 'Cold Leads', description: 'Leads that need nurturing', color: '#3B82F6', icon: '❄️' },
-          { _id: '3', name: 'Warm Leads', description: 'Leads showing interest', color: '#F59E0B', icon: '🌡️' }
-        ])
+        // Set empty array if no categories are available
+        setCategories([])
       }
     } catch (error) {
       console.error('Error fetching categories:', error)
       
       // Handle different types of errors
       if (error.message === 'Network Error' || error.message === 'Failed to fetch' || error.code === 'ERR_NETWORK') {
-        console.log('Server not available, using default categories')
+        console.error('Server not available - cannot fetch categories')
+        toast.error('Cannot connect to server. Please check your connection.')
       } else {
         console.error('API Error:', error)
+        toast.error('Failed to load categories. Please try again.')
       }
       
-      // Set some default categories as fallback
-      setCategories([
-        { _id: '1', name: 'Hot Leads', description: 'High priority leads', color: '#EF4444', icon: '🔥' },
-        { _id: '2', name: 'Cold Leads', description: 'Leads that need nurturing', color: '#3B82F6', icon: '❄️' },
-        { _id: '3', name: 'Warm Leads', description: 'Leads showing interest', color: '#F59E0B', icon: '🌡️' }
-      ])
+      // Set empty array on error - no fallback categories
+      setCategories([])
     } finally {
       setIsLoadingCategories(false)
     }
@@ -205,7 +188,8 @@ const LeadDashboard = () => {
 
   // Helper function to get category info by ID
   const getCategoryInfo = (categoryId) => {
-    return categories.find(cat => cat._id === categoryId) || categories[0]
+    const category = categories.find(cat => cat._id === categoryId)
+    return category || { name: 'Unknown Category', color: '#6B7280' }
   }
 
   // Transform categories for combobox
@@ -236,10 +220,22 @@ const LeadDashboard = () => {
   
   // Form handlers
   const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
+    const { name, value } = e.target
+    
+    // For phone number, only allow digits and limit to 10 characters
+    if (name === 'phoneNumber') {
+      // Remove all non-digit characters and limit to 10 digits
+      const numericValue = value.replace(/\D/g, '').slice(0, 10)
+      setFormData({
+        ...formData,
+        [name]: numericValue
+      })
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      })
+    }
   }
 
   const handleCategoryChange = (categoryId) => {
@@ -443,9 +439,7 @@ const LeadDashboard = () => {
 
         {/* Desktop Layout - Hidden on mobile */}
         <div className="hidden lg:block mt-8">
-          <div className="grid grid-cols-12 gap-6">
-            {/* Main content takes 8 columns on desktop */}
-            <div className="col-span-8">
+          <div>
               {/* Add New Lead Button */}
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
@@ -583,46 +577,6 @@ const LeadDashboard = () => {
                   </button>
                 </Link>
               </motion.div>
-            </div>
-
-            {/* Sidebar takes 4 columns on desktop */}
-            <div className="col-span-4">
-              <motion.div 
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
-                className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-2xl p-6 shadow-xl border border-slate-200/50"
-                style={{
-                  boxShadow: '0 8px 25px -5px rgba(0, 0, 0, 0.12), 0 4px 12px -3px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
-                }}
-              >
-                <h3 className="text-xl font-bold text-slate-800 mb-6">Lead Statistics</h3>
-                <div className="space-y-4">
-                  {[
-                    { label: "Total Leads", value: "6,853", bgClass: "bg-emerald-50", textClass: "text-emerald-800", borderClass: "border-emerald-200/30" },
-                    { label: "Conversion Rate", value: "0.95%", bgClass: "bg-blue-50", textClass: "text-blue-800", borderClass: "border-blue-200/30" },
-                    { label: "Active Pipeline", value: "142", bgClass: "bg-purple-50", textClass: "text-purple-800", borderClass: "border-purple-200/30" }
-                  ].map((stat, index) => (
-                    <motion.div 
-                      key={stat.label}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.6, delay: 0.8 + (index * 0.1), ease: "easeOut" }}
-                      whileHover={{ scale: 1.02, y: -2 }}
-                      className={`${stat.bgClass} rounded-xl p-4 ${stat.textClass} transition-all duration-300 border ${stat.borderClass}`}
-                      style={{
-                        boxShadow: `0 8px 25px -6px rgba(0, 0, 0, 0.15), 0 4px 12px -3px rgba(0, 0, 0, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.12)`
-                      }}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold">{stat.label}</span>
-                        <span className="font-bold text-lg">{stat.value}</span>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            </div>
           </div>
         </div>
       </main>
@@ -681,6 +635,9 @@ const LeadDashboard = () => {
                       value={formData.phoneNumber}
                       onChange={handleInputChange}
                       placeholder="Enter 10-digit phone number"
+                      maxLength={10}
+                      inputMode="numeric"
+                      pattern="[0-9]{10}"
                       className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                       required
                     />
