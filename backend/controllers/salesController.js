@@ -1294,6 +1294,14 @@ const getSalesDashboardStats = async (req, res) => {
       }
     });
 
+    // Calculate connected count: all leads with leadProfile that are not converted/lost/not_interested
+    const connectedCount = await Lead.countDocuments({
+      assignedTo: new mongoose.Types.ObjectId(salesId),
+      leadProfile: { $exists: true, $ne: null },
+      status: { $nin: ['converted', 'lost', 'not_interested'] }
+    });
+    statusCounts.connected = connectedCount;
+
     // Calculate total leads
     const totalLeads = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
 
@@ -1501,10 +1509,22 @@ const getLeadsByStatus = async (req, res) => {
       // Fallback to string matching if casting fails (should not happen in normal flow)
       assignedToValue = salesId;
     }
-    let filter = { 
-      assignedTo: assignedToValue,
-      status: actualStatus 
-    };
+    
+    // Special handling for 'connected' status: show all leads with leadProfile that are not converted/lost/not_interested
+    let filter;
+    if (status === 'connected') {
+      filter = { 
+        assignedTo: assignedToValue,
+        leadProfile: { $exists: true, $ne: null },
+        status: { $nin: ['converted', 'lost', 'not_interested'] }
+      };
+    } else {
+      // For other statuses, use exact status match (allows leads to appear in both connected page and status-specific page)
+      filter = { 
+        assignedTo: assignedToValue,
+        status: actualStatus 
+      };
+    }
 
     if (category && category !== 'all') {
       filter.category = category;

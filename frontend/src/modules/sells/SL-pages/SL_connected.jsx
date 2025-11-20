@@ -196,6 +196,9 @@ const SL_connected = () => {
   // Mobile Lead Card Component
   const MobileLeadCard = ({ lead }) => {
     const categoryInfo = getCategoryInfo(lead.category)
+    const activities = salesLeadService.getLeadActivities(lead)
+    const statusColor = salesLeadService.getStatusColor(lead.status)
+    const statusDisplayName = salesLeadService.getStatusDisplayName(lead.status)
     
     return (
       <div className="flex items-center justify-between">
@@ -217,14 +220,24 @@ const SL_connected = () => {
               {lead.leadProfile?.name || lead.name || 'Unknown'}
             </h3>
             <p className="text-sm text-gray-600 truncate">{lead.phone}</p>
-            {/* Category Tag */}
-            <div className="flex items-center space-x-1 mt-1">
+            {/* Category Tag & Status Badge */}
+            <div className="flex items-center space-x-2 mt-1 flex-wrap gap-1">
               <span 
                 className="text-xs text-black"
                 style={{ color: categoryInfo.color }}
               >
                 {categoryInfo.icon} {categoryInfo.name}
               </span>
+              {/* Status Badge */}
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor}`}>
+                {statusDisplayName}
+              </span>
+              {/* Activity Indicators */}
+              {activities.map((activity, idx) => (
+                <span key={idx} className={`text-xs px-2 py-0.5 rounded-full font-medium ${activity.color}`}>
+                  {activity.label}
+                </span>
+              ))}
             </div>
           </div>
       </div>
@@ -326,6 +339,9 @@ const SL_connected = () => {
   // Desktop Lead Card Component
   const DesktopLeadCard = ({ lead }) => {
     const categoryInfo = getCategoryInfo(lead.category)
+    const activities = salesLeadService.getLeadActivities(lead)
+    const statusColor = salesLeadService.getStatusColor(lead.status)
+    const statusDisplayName = salesLeadService.getStatusDisplayName(lead.status)
     
     return (
       <div className="flex items-center justify-between">
@@ -347,14 +363,24 @@ const SL_connected = () => {
               {lead.leadProfile?.name || lead.name || 'Unknown'}
             </h3>
             <p className="text-gray-600">{lead.phone}</p>
-            {/* Category Tag */}
-            <div className="flex items-center space-x-2 mt-1">
+            {/* Category Tag, Status Badge & Activity Indicators */}
+            <div className="flex items-center space-x-2 mt-1 flex-wrap gap-1.5">
               <span 
                 className="text-xs text-black"
                 style={{ color: categoryInfo.color }}
               >
                 {categoryInfo.icon} {categoryInfo.name}
               </span>
+              {/* Status Badge */}
+              <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColor}`}>
+                {statusDisplayName}
+              </span>
+              {/* Activity Indicators */}
+              {activities.map((activity, idx) => (
+                <span key={idx} className={`text-xs px-2.5 py-1 rounded-full font-medium ${activity.color}`}>
+                  {activity.label}
+                </span>
+              ))}
             </div>
           </div>
       </div>

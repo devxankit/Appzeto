@@ -307,6 +307,31 @@ export const getValidStatusTransitions = (currentStatus) => {
   return transitions[currentStatus] || [];
 };
 
+// Get activity indicators for a lead (quotation sent, demo sent, follow-ups)
+export const getLeadActivities = (lead) => {
+  const activities = [];
+  
+  // Check quotation sent
+  if (lead.leadProfile?.quotationSent) {
+    activities.push({ type: 'quotation', label: 'Quotation Sent', color: 'bg-purple-100 text-purple-800' });
+  }
+  
+  // Check demo sent
+  if (lead.leadProfile?.demoSent) {
+    activities.push({ type: 'demo', label: 'Demo Sent', color: 'bg-teal-100 text-teal-800' });
+  }
+  
+  // Check follow-ups
+  if (lead.followUps && Array.isArray(lead.followUps) && lead.followUps.length > 0) {
+    const pendingFollowUps = lead.followUps.filter(fu => fu.status === 'pending');
+    if (pendingFollowUps.length > 0) {
+      activities.push({ type: 'followup', label: `${pendingFollowUps.length} Follow-up${pendingFollowUps.length > 1 ? 's' : ''}`, color: 'bg-amber-100 text-amber-800' });
+    }
+  }
+  
+  return activities;
+};
+
 // Get all sales team members
 export const getSalesTeam = async () => {
   try {
@@ -377,6 +402,7 @@ const salesLeadService = {
   getStatusDisplayName,
   getStatusColor,
   getValidStatusTransitions,
+  getLeadActivities,
   getSalesTeam,
   requestDemo,
   transferLead,

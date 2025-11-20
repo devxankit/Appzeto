@@ -196,14 +196,14 @@ const SL_dashboard = () => {
     <div className="min-h-screen bg-gray-50">
       <SL_navbar />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20 lg:pt-20 lg:pb-4">
-        {/* Mobile-first layout */}
-        <div className="space-y-6 lg:hidden">
+        {/* Responsive layout - works on both mobile and desktop */}
+        <div className="space-y-6">
           {/* Hero Dashboard Card */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
-              className="relative bg-gradient-to-br from-teal-50 via-teal-100 to-teal-200 rounded-2xl p-5 text-gray-900 shadow-2xl border border-teal-300/40 overflow-hidden"
+              className="relative bg-gradient-to-br from-teal-50 via-teal-100 to-teal-200 rounded-2xl p-5 lg:p-6 text-gray-900 shadow-2xl border border-teal-300/40 overflow-hidden"
               style={{
                 boxShadow: '0 25px 50px -12px rgba(20, 184, 166, 0.2), 0 0 0 1px rgba(20, 184, 166, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
               }}
@@ -490,7 +490,7 @@ const SL_dashboard = () => {
             initial={{ opacity: 0, y: 50 }}
             animate={tileCardsInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="grid grid-cols-2 gap-4"
+            className="grid grid-cols-2 lg:grid-cols-4 gap-4"
           >
             {/* Payment Recovery */}
             <Link to="/payments-recovery">
@@ -675,43 +675,45 @@ const SL_dashboard = () => {
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={chartInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 50, scale: 0.95 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 shadow-xl border border-gray-200/50"
+            className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 lg:p-8 shadow-xl border border-gray-200/50"
             style={{
               boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.05)'
             }}
           >
             {/* Header Section */}
             <div className="text-center mb-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Lead Conversion</h3>
-              <p className="text-gray-600 text-sm">Conversion funnel from connected to converted leads</p>
+              <h3 className="text-xl lg:text-2xl font-bold text-gray-900 mb-2">Lead Conversion</h3>
+              <p className="text-gray-600 text-sm lg:text-base">Conversion funnel from connected to converted leads</p>
             </div>
 
             {/* Modern Chart Container */}
             <div className="relative">
               {/* Chart */}
               <div className="flex justify-center mb-6">
-                <div className="relative">
-                  <PieChart width={240} height={240}>
-                    <Pie
-                      data={funnelData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {funnelData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
+                <div className="relative w-[240px] h-[240px] lg:w-[300px] lg:h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={funnelData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius="30%"
+                        outerRadius="50%"
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {funnelData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
                   
                   {/* Center Text */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-gray-900">{totalLeads}</p>
-                      <p className="text-xs text-gray-600">Total Leads</p>
+                      <p className="text-2xl lg:text-3xl font-bold text-gray-900">{totalLeads}</p>
+                      <p className="text-xs lg:text-sm text-gray-600">Total Leads</p>
                     </div>
                   </div>
                 </div>
@@ -729,17 +731,17 @@ const SL_dashboard = () => {
                   >
                     <div className="flex items-center space-x-3">
                       <div 
-                        className="w-4 h-4 rounded-full shadow-sm" 
+                        className="w-4 h-4 lg:w-5 lg:h-5 rounded-full shadow-sm" 
                         style={{ backgroundColor: item.color }}
                       ></div>
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">{item.name}</p>
-                        <p className="text-xs text-gray-600">{item.amount}</p>
+                        <p className="text-sm lg:text-base font-semibold text-gray-900">{item.name}</p>
+                        <p className="text-xs lg:text-sm text-gray-600">{item.amount}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-gray-900">{item.value}%</p>
-                      <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <p className="text-lg lg:text-xl font-bold text-gray-900">{item.value}%</p>
+                      <div className="w-16 lg:w-20 h-1.5 lg:h-2 bg-gray-200 rounded-full overflow-hidden">
                         <motion.div 
                           initial={{ width: 0 }}
                           animate={chartInView ? { width: `${item.value}%` } : { width: 0 }}
@@ -786,20 +788,20 @@ const SL_dashboard = () => {
              initial={{ opacity: 0, y: 30 }}
              animate={chartInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
              transition={{ duration: 0.8, delay: 0.8, ease: "easeOut" }}
-             className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 shadow-xl border border-gray-200/50"
+             className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 lg:p-8 shadow-xl border border-gray-200/50"
              style={{
                boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.05)'
              }}
            >
              {/* Header Section */}
              <div className="text-center mb-4">
-               <h3 className="text-lg font-bold text-gray-900">Monthly Conversions</h3>
-               <p className="text-gray-600 text-xs">Swipe to see past months</p>
+               <h3 className="text-lg lg:text-xl font-bold text-gray-900">Monthly Conversions</h3>
+               <p className="text-gray-600 text-xs lg:text-sm">Swipe to see past months</p>
              </div>
 
              {/* Scrollable Bar Chart Container */}
-             <div className="h-64 overflow-x-auto">
-               <div className="min-w-[600px] h-full">
+             <div className="h-64 lg:h-80 overflow-x-auto">
+               <div className="min-w-[600px] lg:min-w-full h-full">
                  <ResponsiveContainer width="100%" height="100%">
                    <BarChart
                      data={monthlyData}
@@ -867,266 +869,6 @@ const SL_dashboard = () => {
              </div>
            </motion.div>
          </div>
-
-        {/* Desktop Layout - Hidden on mobile */}
-        <div className="hidden lg:block mt-8">
-          <div className="grid grid-cols-12 gap-6">
-            {/* Main card takes 8 columns on desktop */}
-            <div className="col-span-8">
-              <div className="relative bg-gradient-to-br from-brand-400 via-brand-500 to-brand-600 rounded-xl p-6 text-white shadow-2xl border border-white/10 overflow-hidden">
-                {/* Sparkle Effects */}
-                <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                  <div className="absolute top-4 right-8 w-2 h-2 bg-white/30 rounded-full animate-pulse"></div>
-                  <div className="absolute top-12 right-16 w-1.5 h-1.5 bg-white/40 rounded-full animate-pulse delay-1000"></div>
-                  <div className="absolute top-20 right-12 w-1.5 h-1.5 bg-white/25 rounded-full animate-pulse delay-2000"></div>
-                  <div className="absolute bottom-16 left-8 w-1.5 h-1.5 bg-white/35 rounded-full animate-pulse delay-500"></div>
-                  <div className="absolute bottom-8 left-16 w-2 h-2 bg-white/20 rounded-full animate-pulse delay-1500"></div>
-                </div>
-
-                {/* Desktop version of main card with more spacing */}
-                <div className="flex items-center justify-between mb-6 relative z-10">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
-                      <FaUser className="text-white text-xl" />
-                    </div>
-                    <div>
-                      <h1 className="text-2xl font-bold mb-1">Hi, {heroStats.employeeName}</h1>
-                      <p className="text-white/80 text-sm">Welcome back!</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <FaTrophy className="text-yellow-300 text-lg" />
-                    <span className="text-yellow-300 font-semibold text-sm">Top Performer</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-6 mb-6">
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-white/80 text-xs font-medium">Monthly Sales</p>
-                      <FaChartLine className="text-white/60 text-sm" />
-                    </div>
-                    <p className="text-2xl font-bold mb-2">₹{heroStats.monthlySales.toLocaleString()}</p>
-                    <div className="h-8">
-                      <Sparklines data={salesTrendData} width={120} height={32} margin={0}>
-                        <SparklinesLine color="#ffffff" style={{ strokeWidth: 1.5 }} />
-                        <SparklinesSpots size={2} style={{ fill: "#ffffff" }} />
-                      </Sparklines>
-                    </div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-white/80 text-xs font-medium">Target</p>
-                      <FaStar className="text-yellow-300 text-sm" />
-                    </div>
-                    <p className="text-2xl font-bold mb-2">₹{heroStats.target.toLocaleString()}</p>
-                    <div className="h-8">
-                      <Sparklines data={targetTrendData} width={120} height={32} margin={0}>
-                        <SparklinesLine color="#fbbf24" style={{ strokeWidth: 1.5 }} />
-                        <SparklinesSpots size={2} style={{ fill: "#fbbf24" }} />
-                      </Sparklines>
-                    </div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-white/80 text-xs font-medium">Progress</p>
-                      <FaTrophy className="text-yellow-300 text-sm" />
-                    </div>
-                    <p className="text-2xl font-bold mb-2">{heroStats.progressToTarget}%</p>
-                    <div className="w-full bg-white/20 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-white to-yellow-200 h-2 rounded-full" style={{ width: `${heroStats.progressToTarget}%` }}></div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white/15 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/20 transition-all duration-300">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-white/80 text-xs font-medium">Today's Sales</p>
-                      <FaArrowUp className="text-green-300 text-sm" />
-                    </div>
-                    <p className="text-xl font-bold">{heroStats.todaysSales >= 1000 ? `${(heroStats.todaysSales / 1000).toFixed(heroStats.todaysSales % 1000 === 0 ? 0 : 1)}k` : heroStats.todaysSales.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-white/15 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/20 transition-all duration-300">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-white/80 text-xs font-medium">Today's Incentive</p>
-                      <FaChartLine className="text-blue-300 text-sm" />
-                    </div>
-                    <p className="text-xl font-bold">{heroStats.todaysIncentive.toLocaleString()}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Tiles take 4 columns on desktop */}
-            <div className="col-span-4 space-y-3">
-              <div className="bg-gradient-to-br from-brand-300 to-brand-400 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
-                    <FaRupeeSign className="text-xl text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm mb-1 leading-tight">Payment Recovery</h3>
-                    <div className="flex items-center space-x-2 mb-1">
-                      <div className="w-2 h-2 bg-white bg-opacity-60 rounded-full flex-shrink-0"></div>
-                      <p className="text-xs font-medium opacity-95 truncate">{tileStats.paymentRecovery.pending} Pendings</p>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      {tileStats.paymentRecovery.changeThisWeek >= 0 ? (
-                        <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
-                      ) : (
-                        <FaArrowDown className="text-xs opacity-70 flex-shrink-0" />
-                      )}
-                      <span className="text-xs opacity-75 font-medium">
-                        {tileStats.paymentRecovery.changeThisWeek >= 0 ? '+' : ''}{tileStats.paymentRecovery.changeThisWeek} this week
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <Link to="/new-leads">
-                <div className="bg-gradient-to-br from-amber-400 to-yellow-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
-                    <FaVideo className="text-xl text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm mb-1 leading-tight">Demo Requests</h3>
-                    <div className="flex items-center space-x-2 mb-1">
-                      <div className="w-2 h-2 bg-white rounded-full animate-pulse shadow-sm flex-shrink-0"></div>
-                      <p className="text-xs font-medium opacity-95 truncate">{tileStats.demoRequests.new} New</p>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      {tileStats.demoRequests.today > 0 && (
-                        <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
-                      )}
-                      <span className="text-xs opacity-75 font-medium">
-                        {tileStats.demoRequests.today > 0 ? '+' : ''}{tileStats.demoRequests.today} today
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Link>
-
-              <div className="bg-gradient-to-br from-violet-400 to-purple-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
-                    <FaCheckCircle className="text-xl text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm mb-1 leading-tight">Tasks</h3>
-                    <div className="flex items-center space-x-2 mb-1">
-                      <div className="w-2 h-2 bg-yellow-200 rounded-full shadow-sm flex-shrink-0"></div>
-                      <p className="text-xs font-medium opacity-95 truncate">{tileStats.tasks.pending} Pending</p>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      {tileStats.tasks.change >= 0 ? (
-                        <FaArrowUp className="text-xs opacity-70 flex-shrink-0" />
-                      ) : (
-                        <FaArrowDown className="text-xs opacity-70 flex-shrink-0" />
-                      )}
-                      <span className="text-xs opacity-75 font-medium">
-                        {tileStats.tasks.change >= 0 ? '+' : ''}{tileStats.tasks.change} completed
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-rose-400 to-pink-500 rounded-xl p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm flex-shrink-0">
-                    <FaUsers className="text-xl text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm mb-1 leading-tight">Meetings</h3>
-                    <div className="flex items-center space-x-2 mb-1">
-                      <div className="w-2 h-2 bg-green-200 rounded-full shadow-sm flex-shrink-0"></div>
-                      <p className="text-xs font-medium opacity-95 truncate">{tileStats.meetings.today} Today</p>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <FaClock className="text-xs opacity-70 flex-shrink-0" />
-                      <span className="text-xs opacity-75 font-medium">{tileStats.meetings.upcoming} upcoming</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Desktop Chart */}
-          <div className="mt-8 bg-white rounded-2xl p-8 shadow-lg border border-gray-200/50">
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Lead Conversion</h3>
-              <p className="text-gray-600">Conversion funnel from connected to converted leads</p>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              {/* Chart */}
-              <div className="flex-1 flex justify-center">
-                <div className="relative">
-                  <PieChart width={300} height={300}>
-                    <Pie
-                      data={funnelData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={80}
-                      outerRadius={130}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {funnelData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                  
-                  {/* Center Text */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <p className="text-3xl font-bold text-gray-900">{totalLeads}</p>
-                      <p className="text-sm text-gray-600">Total Leads</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Legend */}
-              <div className="flex-1 pl-8">
-                <div className="space-y-4">
-                  {funnelData.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200/50 hover:shadow-md transition-all duration-300">
-                      <div className="flex items-center space-x-4">
-                        <div 
-                          className="w-5 h-5 rounded-full shadow-sm" 
-                          style={{ backgroundColor: item.color }}
-                        ></div>
-                        <div>
-                          <p className="text-base font-semibold text-gray-900">{item.name}</p>
-                          <p className="text-sm text-gray-600">{item.amount}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xl font-bold text-gray-900">{item.value}%</p>
-                        <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full rounded-full transition-all duration-1000"
-                            style={{ 
-                              backgroundColor: item.color,
-                              width: `${item.value}%`
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
       </main>
     </div>

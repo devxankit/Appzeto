@@ -45,6 +45,8 @@ const Admin_user_management = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedDepartment, setSelectedDepartment] = useState('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(20)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
@@ -98,12 +100,15 @@ const Admin_user_management = () => {
     setLoading(true)
     try {
       // Load users and statistics
+      // Fetch all users by setting a very high limit
       const [usersResponse, statisticsResponse] = await Promise.all([
         adminUserService.getAllUsers({
           role: 'all',
           team: activeTab === 'employees' && selectedDepartment !== 'all' ? selectedDepartment : undefined,
           status: selectedFilter !== 'all' ? selectedFilter : undefined,
-          search: searchTerm || undefined
+          search: searchTerm || undefined,
+          limit: 10000, // Fetch all users
+          page: 1
         }),
         adminUserService.getUserStatistics()
       ])
@@ -113,6 +118,7 @@ const Admin_user_management = () => {
       
       setUsers(formattedUsers)
       setStatistics(statisticsResponse.data)
+      setCurrentPage(1) // Reset to first page when data loads
     } catch (error) {
       console.error('Error loading data:', error)
       addToast({ type: 'error', message: 'Failed to load user data' })
@@ -124,18 +130,21 @@ const Admin_user_management = () => {
   const loadUsersOnly = async () => {
     setUsersLoading(true)
     try {
-      // Load only users data
+      // Load only users data - Fetch all users by setting a very high limit
       const usersResponse = await adminUserService.getAllUsers({
         role: 'all',
         team: activeTab === 'employees' && selectedDepartment !== 'all' ? selectedDepartment : undefined,
         status: selectedFilter !== 'all' ? selectedFilter : undefined,
-        search: searchTerm || undefined
+        search: searchTerm || undefined,
+        limit: 10000, // Fetch all users
+        page: 1
       })
 
       // Format users for display
       const formattedUsers = usersResponse.data.map(user => adminUserService.formatUserForDisplay(user))
       
       setUsers(formattedUsers)
+      setCurrentPage(1) // Reset to first page when filters change
     } catch (error) {
       console.error('Error loading users:', error)
       addToast({ type: 'error', message: 'Failed to load user data' })
@@ -219,6 +228,16 @@ const Admin_user_management = () => {
 
     return filteredUsers
   }
+
+  // Get paginated users for display
+  const getPaginatedUsers = () => {
+    const filteredUsers = getCurrentUsers()
+    const startIndex = (currentPage - 1) * itemsPerPage
+    return filteredUsers.slice(startIndex, startIndex + itemsPerPage)
+  }
+
+  // Calculate total pages
+  const totalPages = Math.ceil(getCurrentUsers().length / itemsPerPage)
 
   const handleCreateUser = () => {
     setFormData({
@@ -377,6 +396,11 @@ const Admin_user_management = () => {
       setSelectedDepartment('all')
     }
   }, [activeTab])
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [activeTab, selectedFilter, selectedDepartment, searchTerm])
 
   const tabs = [
     { key: 'project-managers', label: 'Project Managers', icon: Shield, count: statistics.projectManagers || 0 },
@@ -803,8 +827,9 @@ const Admin_user_management = () => {
                         <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                        {getCurrentUsers().map((user) => (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                          {getPaginatedUsers().map((user) => (
                           <motion.div
                             key={user.id}
                             initial={{ opacity: 0, y: 20 }}
@@ -885,7 +910,164 @@ const Admin_user_management = () => {
                             </div>
                           </motion.div>
                         ))}
-                      </div>
+                        </div>
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                          <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-200">
+                            {/* Results Info */}
+                            <div className="text-sm text-gray-600">
+                              Showing <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold">{Math.min(currentPage * itemsPerPage, getCurrentUsers().length)}</span> of <span className="font-semibold">{getCurrentUsers().length}</span> users
+                            </div>
+
+                            {/* Items Per Page Selector */}
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm text-gray-600">Show:</span>
+                              <select
+                                value={itemsPerPage}
+                                onChange={(e) => {
+                                  setItemsPerPage(Number(e.target.value))
+                                  setCurrentPage(1)
+                                }}
+                                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                              </select>
+                              <span className="text-sm text-gray-500">per page</span>
+                            </div>
+
+                            {/* Pagination Controls */}
+                            <div className="flex items-center space-x-2">
+                              {/* First Page */}
+                              <button
+                                onClick={() => setCurrentPage(1)}
+                                disabled={currentPage === 1}
+                                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                title="First page"
+                              >
+                                <span className="text-sm font-medium">««</span>
+                              </button>
+                              {/* Previous Page */}
+                              <button
+                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                disabled={currentPage === 1}
+                                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                title="Previous page"
+                              >
+                                <span className="text-sm font-medium">‹</span>
+                              </button>
+                              {/* Page Numbers */}
+                              {(() => {
+                                const pages = []
+                                const maxVisiblePages = 5
+                                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
+                                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+
+                                if (endPage - startPage < maxVisiblePages - 1) {
+                                  startPage = Math.max(1, endPage - maxVisiblePages + 1)
+                                }
+
+                                // First page
+                                if (startPage > 1) {
+                                  pages.push(
+                                    <button
+                                      key={1}
+                                      onClick={() => setCurrentPage(1)}
+                                      className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+                                    >
+                                      1
+                                    </button>
+                                  )
+                                  if (startPage > 2) {
+                                    pages.push(
+                                      <span key="ellipsis1" className="px-2 text-gray-500">...</span>
+                                    )
+                                  }
+                                }
+
+                                // Visible page numbers
+                                for (let i = startPage; i <= endPage; i++) {
+                                  pages.push(
+                                    <button
+                                      key={i}
+                                      onClick={() => setCurrentPage(i)}
+                                      className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+                                        currentPage === i
+                                          ? 'bg-blue-600 text-white border-blue-600'
+                                          : 'border-gray-300 hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      {i}
+                                    </button>
+                                  )
+                                }
+
+                                // Last page
+                                if (endPage < totalPages) {
+                                  if (endPage < totalPages - 1) {
+                                    pages.push(
+                                      <span key="ellipsis2" className="px-2 text-gray-500">...</span>
+                                    )
+                                  }
+                                  pages.push(
+                                    <button
+                                      key={totalPages}
+                                      onClick={() => setCurrentPage(totalPages)}
+                                      className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+                                    >
+                                      {totalPages}
+                                    </button>
+                                  )
+                                }
+
+                                return pages
+                              })()}
+                              {/* Next Page */}
+                              <button
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                disabled={currentPage === totalPages}
+                                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                title="Next page"
+                              >
+                                <span className="text-sm font-medium">›</span>
+                              </button>
+                              {/* Last Page */}
+                              <button
+                                onClick={() => setCurrentPage(totalPages)}
+                                disabled={currentPage === totalPages}
+                                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                title="Last page"
+                              >
+                                <span className="text-sm font-medium">»»</span>
+                              </button>
+                            </div>
+
+                            {/* Jump to Page */}
+                            {totalPages > 10 && (
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm text-gray-600">Go to page:</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={totalPages}
+                                  value={currentPage}
+                                  onChange={(e) => {
+                                    const page = parseInt(e.target.value)
+                                    if (page >= 1 && page <= totalPages) {
+                                      setCurrentPage(page)
+                                    }
+                                  }}
+                                  className="w-16 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                                <span className="text-sm text-gray-600">of {totalPages}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
                     )}
                   </>
                 )}
