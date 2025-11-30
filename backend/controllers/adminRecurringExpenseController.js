@@ -28,21 +28,33 @@ const generateExpenseEntriesHelper = async (recurringExpense, upToDate = null) =
   const existingPeriods = new Set(existingEntries.map(e => e.period));
 
   while (currentDate <= endDate) {
-    if (expenseEndDate && currentDate > expenseEndDate) {
-      break;
+    // Check if we've passed the end date (use <= to include entries on endDate)
+    if (expenseEndDate) {
+      const currentDateStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+      const expenseEndDateStart = new Date(expenseEndDate.getFullYear(), expenseEndDate.getMonth(), expenseEndDate.getDate());
+      if (currentDateStart > expenseEndDateStart) {
+        break;
+      }
     }
 
     // Calculate period string based on frequency
     let period;
+    let periodStartDate = new Date(currentDate);
+    
     switch (recurringExpense.frequency) {
       case 'monthly':
         period = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
         break;
       case 'quarterly':
+        // For quarterly, use the first month of the quarter for period calculation
+        const quarterStartMonth = Math.floor(currentDate.getMonth() / 3) * 3;
+        periodStartDate = new Date(currentDate.getFullYear(), quarterStartMonth, 1);
         const quarter = Math.floor(currentDate.getMonth() / 3) + 1;
         period = `${currentDate.getFullYear()}-Q${quarter}`;
         break;
       case 'yearly':
+        // For yearly, use January 1st of the year for period calculation
+        periodStartDate = new Date(currentDate.getFullYear(), 0, 1);
         period = `${currentDate.getFullYear()}`;
         break;
     }
@@ -51,39 +63,113 @@ const generateExpenseEntriesHelper = async (recurringExpense, upToDate = null) =
     if (existingPeriods.has(period)) {
       skipped++;
     } else {
-      // Calculate due date
-      const dueDate = new Date(currentDate);
-      const dayOfMonth = recurringExpense.dayOfMonth || 1;
-      const lastDayOfMonth = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate();
-      dueDate.setDate(Math.min(dayOfMonth, lastDayOfMonth));
-
-      // Determine status based on due date
-      let status = 'pending';
-      if (dueDate < new Date()) {
-        status = 'overdue';
+      // Calculate due date based on frequency
+      // Use periodStartDate for quarterly/yearly to ensure consistency
+      let dueDate = new Date(periodStartDate);
+      const dayOfMonth = recurringExpense.dayOfMonth || new Date(recurringExpense.startDate).getDate();
+      
+      switch (recurringExpense.frequency) {
+        case 'monthly':
+          // For monthly, use the dayOfMonth in the current month
+          // Ensure period matches the month of the due date
+          const lastDayOfMonth = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate();
+          dueDate.setDate(Math.min(dayOfMonth, lastDayOfMonth));
+          // Update period to match due date month (in case dayOfMonth was adjusted)
+          period = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`;
+          // Re-check if this period already exists after adjustment
+          if (existingPeriods.has(period)) {
+            skipped++;
+            break;
+          }
+          break;
+        case 'quarterly':
+          // For quarterly, use the first month of the quarter and the dayOfMonth
+          // periodStartDate is already set to the first month of the quarter
+          const lastDayOfQuarterMonth = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate();
+          dueDate.setDate(Math.min(dayOfMonth, lastDayOfQuarterMonth));
+          break;
+        case 'yearly':
+          // For yearly, use the same month and day as start date
+          const startDate = new Date(recurringExpense.startDate);
+          dueDate = new Date(periodStartDate.getFullYear(), startDate.getMonth(), 1);
+          const lastDayOfYearMonth = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate();
+          dueDate.setDate(Math.min(startDate.getDate(), lastDayOfYearMonth));
+          break;
       }
 
-      await ExpenseEntry.create({
-        recurringExpenseId: recurringExpense._id,
-        period,
-        amount: recurringExpense.amount,
-        dueDate,
-        status,
-        createdBy: recurringExpense.createdBy
-      });
-      created++;
+      // Skip if period was adjusted and already exists (monthly case)
+      if (existingPeriods.has(period)) {
+        skipped++;
+      } else {
+        // Check if due date is after end date
+        if (expenseEndDate && dueDate > expenseEndDate) {
+          skipped++;
+        } else {
+          // Determine status based on due date
+          let status = 'pending';
+          const now = new Date();
+          // Set time to start of day for accurate comparison
+          const dueDateStart = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+          const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          
+          if (dueDateStart < nowStart) {
+            status = 'overdue';
+          }
+
+          try {
+            await ExpenseEntry.create({
+              recurringExpenseId: recurringExpense._id,
+              period,
+              amount: recurringExpense.amount,
+              dueDate,
+              status,
+              createdBy: recurringExpense.createdBy
+            });
+            // Add to existing periods to prevent duplicates in same batch
+            existingPeriods.add(period);
+            created++;
+          } catch (error) {
+            // Handle race condition: if entry was created by another process
+            if (error.code === 11000 || error.name === 'MongoServerError') {
+              // Duplicate key error - entry already exists
+              skipped++;
+              console.log(`Entry for period ${period} already exists, skipping`);
+            } else {
+              // Re-throw other errors
+              throw error;
+            }
+          }
+        }
+      }
     }
 
     // Move to next period
+    // Use safe date manipulation to avoid month overflow issues
     switch (recurringExpense.frequency) {
       case 'monthly':
-        currentDate.setMonth(currentDate.getMonth() + 1);
+        // Safe month increment: set to first day of next month to avoid overflow
+        const nextMonth = currentDate.getMonth() + 1;
+        if (nextMonth > 11) {
+          currentDate.setFullYear(currentDate.getFullYear() + 1);
+          currentDate.setMonth(0, 1);
+        } else {
+          currentDate.setMonth(nextMonth, 1);
+        }
         break;
       case 'quarterly':
-        currentDate.setMonth(currentDate.getMonth() + 3);
+        // Safe quarter increment: add 3 months, set to first day
+        const nextQuarterMonth = currentDate.getMonth() + 3;
+        if (nextQuarterMonth > 11) {
+          currentDate.setFullYear(currentDate.getFullYear() + 1);
+          currentDate.setMonth(nextQuarterMonth - 12, 1);
+        } else {
+          currentDate.setMonth(nextQuarterMonth, 1);
+        }
         break;
       case 'yearly':
+        // Safe year increment
         currentDate.setFullYear(currentDate.getFullYear() + 1);
+        currentDate.setMonth(0, 1); // Set to January 1st
         break;
     }
   }
@@ -108,39 +194,58 @@ const generateExpenseEntriesHelper = async (recurringExpense, upToDate = null) =
       if (lastEntry) {
         // Calculate next due from last entry
         let nextDue = new Date(lastEntry.dueDate);
+        const dayOfMonth = recurringExpense.dayOfMonth || new Date(recurringExpense.startDate).getDate();
+        
         switch (recurringExpense.frequency) {
           case 'monthly':
             nextDue.setMonth(nextDue.getMonth() + 1);
+            const lastDayOfNextMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+            nextDue.setDate(Math.min(dayOfMonth, lastDayOfNextMonth));
             break;
           case 'quarterly':
             nextDue.setMonth(nextDue.getMonth() + 3);
+            // Ensure it's the first month of the quarter
+            const quarterStartMonth = Math.floor(nextDue.getMonth() / 3) * 3;
+            nextDue = new Date(nextDue.getFullYear(), quarterStartMonth, 1);
+            const lastDayOfQuarterMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+            nextDue.setDate(Math.min(dayOfMonth, lastDayOfQuarterMonth));
             break;
           case 'yearly':
             nextDue.setFullYear(nextDue.getFullYear() + 1);
+            // Use the same month and day as start date
+            const startDate = new Date(recurringExpense.startDate);
+            nextDue = new Date(nextDue.getFullYear(), startDate.getMonth(), 1);
+            const lastDayOfYearMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+            nextDue.setDate(Math.min(startDate.getDate(), lastDayOfYearMonth));
             break;
         }
-        const dayOfMonth = recurringExpense.dayOfMonth || 1;
-        const lastDayOfNextMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
-        nextDue.setDate(Math.min(dayOfMonth, lastDayOfNextMonth));
         
         recurringExpense.nextDueDate = nextDue;
       } else {
         // No entries yet, calculate from start date
         let nextDue = new Date(recurringExpense.startDate);
+        const dayOfMonth = recurringExpense.dayOfMonth || new Date(recurringExpense.startDate).getDate();
+        
         switch (recurringExpense.frequency) {
           case 'monthly':
             nextDue.setMonth(nextDue.getMonth() + 1);
+            const lastDayOfNextMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+            nextDue.setDate(Math.min(dayOfMonth, lastDayOfNextMonth));
             break;
           case 'quarterly':
             nextDue.setMonth(nextDue.getMonth() + 3);
+            // Ensure it's the first month of the quarter
+            const quarterStartMonth = Math.floor(nextDue.getMonth() / 3) * 3;
+            nextDue = new Date(nextDue.getFullYear(), quarterStartMonth, 1);
+            const lastDayOfQuarterMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+            nextDue.setDate(Math.min(dayOfMonth, lastDayOfQuarterMonth));
             break;
           case 'yearly':
             nextDue.setFullYear(nextDue.getFullYear() + 1);
+            const lastDayOfYearMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+            nextDue.setDate(Math.min(dayOfMonth, lastDayOfYearMonth));
             break;
         }
-        const dayOfMonth = recurringExpense.dayOfMonth || 1;
-        const lastDayOfNextMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
-        nextDue.setDate(Math.min(dayOfMonth, lastDayOfNextMonth));
         
         recurringExpense.nextDueDate = nextDue;
       }
@@ -198,6 +303,50 @@ exports.createRecurringExpense = asyncHandler(async (req, res) => {
       success: false,
       message: 'Amount cannot be negative'
     });
+  }
+  
+  if (amount === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Amount must be greater than 0'
+    });
+  }
+
+  // Validate start date
+  const startDateObj = new Date(startDate);
+  const now = new Date();
+  if (isNaN(startDateObj.getTime())) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid start date'
+    });
+  }
+
+  // Validate end date if provided
+  if (endDate) {
+    const endDateObj = new Date(endDate);
+    if (isNaN(endDateObj.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid end date'
+      });
+    }
+    if (endDateObj < startDateObj) {
+      return res.status(400).json({
+        success: false,
+        message: 'End date cannot be before start date'
+      });
+    }
+  }
+
+  // Validate dayOfMonth if provided
+  if (dayOfMonth !== undefined) {
+    if (dayOfMonth < 1 || dayOfMonth > 31) {
+      return res.status(400).json({
+        success: false,
+        message: 'Day of month must be between 1 and 31'
+      });
+    }
   }
 
   // Create recurring expense
@@ -421,7 +570,29 @@ exports.updateRecurringExpense = asyncHandler(async (req, res) => {
         message: 'Amount cannot be negative'
       });
     }
+    if (amount === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount must be greater than 0'
+      });
+    }
+    const oldAmount = recurringExpense.amount;
     recurringExpense.amount = amount;
+    
+    // If amount changed, update all unpaid/pending expense entries with the new amount
+    // Note: We only update unpaid entries to maintain historical accuracy of paid entries
+    if (oldAmount !== amount) {
+      const updateResult = await ExpenseEntry.updateMany(
+        {
+          recurringExpenseId: recurringExpense._id,
+          status: { $in: ['pending', 'overdue'] }
+        },
+        {
+          $set: { amount: amount }
+        }
+      );
+      console.log(`Updated ${updateResult.modifiedCount} unpaid expense entries with new amount`);
+    }
   }
   if (frequency !== undefined) {
     if (!['monthly', 'quarterly', 'yearly'].includes(frequency)) {
@@ -430,10 +601,45 @@ exports.updateRecurringExpense = asyncHandler(async (req, res) => {
         message: 'Invalid frequency'
       });
     }
+    const oldFrequency = recurringExpense.frequency;
     recurringExpense.frequency = frequency;
+    
+    // If frequency changed, we need to regenerate entries for unpaid periods
+    // Delete unpaid entries and regenerate with new frequency
+    if (oldFrequency !== frequency) {
+      await ExpenseEntry.deleteMany({
+        recurringExpenseId: recurringExpense._id,
+        status: { $in: ['pending', 'overdue'] }
+      });
+      console.log(`Frequency changed from ${oldFrequency} to ${frequency}, deleted unpaid entries`);
+    }
   }
-  if (startDate !== undefined) recurringExpense.startDate = startDate;
-  if (endDate !== undefined) recurringExpense.endDate = endDate || null;
+  if (startDate !== undefined) {
+    const startDateObj = new Date(startDate);
+    if (isNaN(startDateObj.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid start date'
+      });
+    }
+    recurringExpense.startDate = startDate;
+  }
+  if (endDate !== undefined) {
+    const endDateObj = endDate ? new Date(endDate) : null;
+    if (endDateObj && isNaN(endDateObj.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid end date'
+      });
+    }
+    if (endDateObj && new Date(recurringExpense.startDate) && endDateObj < new Date(recurringExpense.startDate)) {
+      return res.status(400).json({
+        success: false,
+        message: 'End date cannot be before start date'
+      });
+    }
+    recurringExpense.endDate = endDate || null;
+  }
   if (status !== undefined) {
     if (!['active', 'inactive', 'paused'].includes(status)) {
       return res.status(400).json({
@@ -446,7 +652,15 @@ exports.updateRecurringExpense = asyncHandler(async (req, res) => {
   if (description !== undefined) recurringExpense.description = description;
   if (vendor !== undefined) recurringExpense.vendor = vendor;
   if (paymentMethod !== undefined) recurringExpense.paymentMethod = paymentMethod;
-  if (dayOfMonth !== undefined) recurringExpense.dayOfMonth = dayOfMonth;
+  if (dayOfMonth !== undefined) {
+    if (dayOfMonth < 1 || dayOfMonth > 31) {
+      return res.status(400).json({
+        success: false,
+        message: 'Day of month must be between 1 and 31'
+      });
+    }
+    recurringExpense.dayOfMonth = dayOfMonth;
+  }
   if (autoPay !== undefined) recurringExpense.autoPay = autoPay;
 
   recurringExpense.updatedBy = req.admin.id;
@@ -619,6 +833,14 @@ exports.markEntryAsPaid = asyncHandler(async (req, res) => {
     });
   }
 
+  // Prevent marking already paid entries as paid again (unless explicitly needed)
+  if (entry.status === 'paid') {
+    return res.status(400).json({
+      success: false,
+      message: 'Expense entry is already marked as paid'
+    });
+  }
+
   const previousStatus = entry.status;
 
   entry.status = 'paid';
@@ -646,20 +868,31 @@ exports.markEntryAsPaid = asyncHandler(async (req, res) => {
     } else {
       // If all entries are paid, calculate next due from this entry
       let nextDue = new Date(entry.dueDate);
+      const dayOfMonth = recurringExpense.dayOfMonth || new Date(recurringExpense.startDate).getDate();
+      
       switch (recurringExpense.frequency) {
         case 'monthly':
           nextDue.setMonth(nextDue.getMonth() + 1);
+          const lastDayOfNextMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+          nextDue.setDate(Math.min(dayOfMonth, lastDayOfNextMonth));
           break;
         case 'quarterly':
           nextDue.setMonth(nextDue.getMonth() + 3);
+          // Ensure it's the first month of the quarter
+          const quarterStartMonth = Math.floor(nextDue.getMonth() / 3) * 3;
+          nextDue = new Date(nextDue.getFullYear(), quarterStartMonth, 1);
+          const lastDayOfQuarterMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+          nextDue.setDate(Math.min(dayOfMonth, lastDayOfQuarterMonth));
           break;
         case 'yearly':
           nextDue.setFullYear(nextDue.getFullYear() + 1);
+          // Use the same month and day as start date
+          const startDate = new Date(recurringExpense.startDate);
+          nextDue = new Date(nextDue.getFullYear(), startDate.getMonth(), 1);
+          const lastDayOfYearMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
+          nextDue.setDate(Math.min(startDate.getDate(), lastDayOfYearMonth));
           break;
       }
-      const dayOfMonth = recurringExpense.dayOfMonth || 1;
-      const lastDayOfNextMonth = new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate();
-      nextDue.setDate(Math.min(dayOfMonth, lastDayOfNextMonth));
       
       recurringExpense.nextDueDate = nextDue;
     }

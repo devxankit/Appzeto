@@ -532,17 +532,11 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   ]);
   const paymentRevenueAmount = paymentRevenue[0]?.totalAmount || 0;
 
-  // 2. Project Advances
-  const projectDateFilter = timeFilter !== 'all'
-    ? { createdAt: dateFilter, 'financialDetails.advanceReceived': { $gt: 0 } }
-    : { 'financialDetails.advanceReceived': { $gt: 0 } };
-  const projectAdvanceRevenue = await Project.aggregate([
-    { $match: projectDateFilter },
-    { $group: { _id: null, totalAmount: { $sum: '$financialDetails.advanceReceived' } } }
-  ]);
-  const projectAdvanceRevenueAmount = projectAdvanceRevenue[0]?.totalAmount || 0;
-
-  // 3. Approved Payment Receipts
+  // 2. Approved Payment Receipts
+  // Note: Project Advances (advanceReceived field) is NOT counted separately because:
+  // - advanceReceived is a cumulative field that includes initial advance + approved receipts + paid installments
+  // - Counting it separately would cause double/triple counting with receipts and installments
+  // - Revenue should only come from actual transaction sources: Payments, Receipts, Installments, and Other Transactions
   const receiptDateFilter = timeFilter !== 'all'
     ? { verifiedAt: dateFilter, status: 'approved' }
     : { status: 'approved' };
@@ -552,7 +546,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   ]);
   const paymentReceiptRevenueAmount = paymentReceiptRevenue[0]?.totalAmount || 0;
 
-  // 4. Paid Project Installments (all collected installment amounts)
+  // 3. Paid Project Installments (all collected installment amounts)
   // Count all installments that have been marked as paid - these are revenue received
   let projectInstallmentFilter = {};
   if (timeFilter !== 'all') {
@@ -578,7 +572,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   ]);
   const projectInstallmentRevenueAmount = projectInstallmentRevenue[0]?.totalAmount || 0;
 
-  // 5. Other Finance incoming transactions (excluding payments and installments to avoid double counting)
+  // 4. Other Finance incoming transactions (excluding payments and installments to avoid double counting)
   // These are manual transactions created by Admin or other incoming transactions not from payments/installments
   // Payments and installments are counted directly from their source models above
   const transactionFilter = timeFilter !== 'all' 
@@ -603,11 +597,12 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
 
   // Total Revenue - ALL incoming amounts are treated as revenue
   // 1. Completed Payments (from Payment model)
-  // 2. Project Advances (advance received when project created)
-  // 3. Approved Payment Receipts
-  // 4. Paid Installments (collected installment amounts)
-  // 5. Other incoming transactions (manual transactions, etc.)
-  const totalRevenue = paymentRevenueAmount + projectAdvanceRevenueAmount + paymentReceiptRevenueAmount + 
+  // 2. Approved Payment Receipts
+  // 3. Paid Installments (collected installment amounts)
+  // 4. Other incoming transactions (manual transactions, etc.)
+  // Note: Project Advances (advanceReceived) is NOT included to avoid double counting
+  // since it already includes receipts and installments
+  const totalRevenue = paymentRevenueAmount + paymentReceiptRevenueAmount + 
                        projectInstallmentRevenueAmount + transactionRevenueAmount;
 
   // ========== EXPENSE SOURCES - Query Actual Data ==========
@@ -615,8 +610,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // 1. Paid Salaries
   // Use 'month' field instead of 'paidDate' to match HR Management's month-based view
   // HR Management shows salaries based on the month they belong to, not when they were paid
-  // Default to current month to match HR Management behavior
-  let salaryMonthFilter = { month: currentMonthStr, status: 'paid' };
+  let salaryMonthFilter = { status: 'paid' };
   if (timeFilter !== 'all') {
     switch (timeFilter) {
       case 'today':
@@ -631,7 +625,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
         break;
     }
   }
-  // Note: 'all' time filter also shows current month only to match HR Management default behavior
+  // For 'all' time filter, show all paid salaries (no month restriction)
   const salaryExpenses = await Salary.aggregate([
     { $match: salaryMonthFilter },
     { $group: { _id: null, totalAmount: { $sum: '$fixedSalary' } } }
@@ -639,44 +633,8 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   const salaryExpensesAmount = salaryExpenses[0]?.totalAmount || 0;
 
   // 2. Paid Recurring Expenses
-  // Query AdminFinance transactions created when ExpenseEntry records are marked as paid
-  // This is more reliable than querying ExpenseEntry directly since transactions are created automatically
-  let recurringExpenseFilter;
-  if (timeFilter !== 'all') {
-    if (dateFilter.$gte && dateFilter.$lte) {
-      recurringExpenseFilter = {
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        status: 'completed',
-        'metadata.sourceType': 'expenseEntry',
-        transactionDate: { $gte: dateFilter.$gte, $lte: dateFilter.$lte }
-      };
-    } else if (dateFilter.$gte) {
-      recurringExpenseFilter = {
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        status: 'completed',
-        'metadata.sourceType': 'expenseEntry',
-        transactionDate: { $gte: dateFilter.$gte }
-      };
-    } else {
-      recurringExpenseFilter = {
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        status: 'completed',
-        'metadata.sourceType': 'expenseEntry'
-      };
-    }
-  } else {
-    recurringExpenseFilter = {
-      recordType: 'transaction',
-      transactionType: 'outgoing',
-      status: 'completed',
-      'metadata.sourceType': 'expenseEntry'
-    };
-  }
-  // Recurring Expenses: Query from ExpenseEntry records (primary source)
-  // This is more reliable as ExpenseEntry is the source of truth for recurring expenses
+  // Query from ExpenseEntry records (primary source of truth)
+  // Note: AdminFinance transactions are created from ExpenseEntry, so we only count ExpenseEntry to avoid double counting
   let expenseDateFilter;
   if (timeFilter !== 'all') {
     if (dateFilter.$gte && dateFilter.$lte) {
@@ -703,26 +661,21 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
     { $match: expenseDateFilter },
     { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
   ]);
-  let recurringExpensesAmount = expenseEntries[0]?.totalAmount || 0;
-  
-  // Also check AdminFinance transactions as a secondary source
-  // This catches cases where transactions were created but ExpenseEntry query missed them
-  const recurringExpensesTransactions = await AdminFinance.aggregate([
-    { $match: recurringExpenseFilter },
-    { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
-  ]);
-  const transactionsAmount = recurringExpensesTransactions[0]?.totalAmount || 0;
-  
-  // Use the maximum value to ensure we capture all paid recurring expenses
-  // This handles edge cases where one source might be incomplete
-  recurringExpensesAmount = Math.max(recurringExpensesAmount, transactionsAmount);
+  const recurringExpensesAmount = expenseEntries[0]?.totalAmount || 0;
 
   // Calculate month-wise recurring expenses breakdown
+  // Note: This shows the actual cash outflow in each month (when payment was made)
+  // For quarterly/yearly expenses, the full amount appears in the month it was paid
   let monthlyRecurringExpensesBreakdown = {};
   if (timeFilter !== 'all') {
     // For filtered periods, get month-wise breakdown
     const monthlyBreakdown = await ExpenseEntry.aggregate([
-      { $match: expenseDateFilter },
+      { 
+        $match: {
+          ...expenseDateFilter,
+          paidDate: { $exists: true, $ne: null } // Only include entries with valid paidDate
+        }
+      },
       {
         $group: {
           _id: {
@@ -735,12 +688,19 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
     ]);
     
     monthlyBreakdown.forEach(item => {
-      monthlyRecurringExpensesBreakdown[item._id] = item.totalAmount;
+      if (item._id) { // Only add if _id exists (paidDate was valid)
+        monthlyRecurringExpensesBreakdown[item._id] = item.totalAmount;
+      }
     });
   } else {
     // For all time, get month-wise breakdown from all paid entries
     const monthlyBreakdown = await ExpenseEntry.aggregate([
-      { $match: { status: 'paid', paidDate: { $exists: true, $ne: null } } },
+      { 
+        $match: { 
+          status: 'paid', 
+          paidDate: { $exists: true, $ne: null } // Only include entries with valid paidDate
+        } 
+      },
       {
         $group: {
           _id: {
@@ -754,7 +714,9 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
     ]);
     
     monthlyBreakdown.forEach(item => {
-      monthlyRecurringExpensesBreakdown[item._id] = item.totalAmount;
+      if (item._id) { // Only add if _id exists (paidDate was valid)
+        monthlyRecurringExpensesBreakdown[item._id] = item.totalAmount;
+      }
     });
   }
 
@@ -891,22 +853,11 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   const projectsWithExpenses = await Project.find(projectExpenseDateFilter).select('expenses');
   
   // Calculate total project expenses
+  // Note: Date filtering is already done in MongoDB query, no need for redundant JavaScript filtering
   let projectExpensesAmount = 0;
   projectsWithExpenses.forEach(project => {
     if (project.expenses && project.expenses.length > 0) {
       project.expenses.forEach(expense => {
-        // Apply date filter if provided
-        if (timeFilter !== 'all') {
-          if (dateFilter.$gte && new Date(expense.expenseDate) < new Date(dateFilter.$gte)) {
-            return;
-          }
-          if (dateFilter.$lte && new Date(expense.expenseDate) > new Date(dateFilter.$lte)) {
-            return;
-          }
-          if (dateFilter.$gte && !dateFilter.$lte && new Date(expense.expenseDate) < new Date(dateFilter.$gte)) {
-            return;
-          }
-        }
         projectExpensesAmount += expense.amount || 0;
       });
     }
@@ -970,13 +921,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // Manual transactions can be created by Admin, but those are already completed (not pending)
 
   // Pending Salaries
-  // Match HR Management behavior: Always show CURRENT MONTH pending salaries by default
-  // HR Management shows salaries for a specific month (defaults to current month)
-  // Finance Management should match this behavior to keep consistency
-  let pendingSalaryFilter = { 
-    status: 'pending',
-    month: currentMonthStr // Default to current month (matches HR Management)
-  };
+  let pendingSalaryFilter = { status: 'pending' };
   
   // Apply time filter if needed
   if (timeFilter !== 'all') {
@@ -997,7 +942,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
         break;
     }
   }
-  // Note: 'all' time filter also shows current month only to match HR Management default behavior
+  // For 'all' time filter, show all pending salaries (no month restriction)
   
   const pendingSalaries = await Salary.aggregate([
     { $match: pendingSalaryFilter },
@@ -1019,7 +964,9 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // 1. Project remainingAmount (Total Cost - Advance - Paid Installments)
   // 2. Pending installments (scheduled but not paid)
   
-  // Calculate from project remainingAmount
+  // Calculate pending outstanding from project remainingAmount
+  // remainingAmount = totalCost - advanceReceived (which includes all paid installments and receipts)
+  // This is the most accurate source as it reflects the actual remaining balance
   const pendingProjectOutstanding = await Project.aggregate([
     { 
       $match: { 
@@ -1029,23 +976,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
     },
     { $group: { _id: null, totalAmount: { $sum: '$financialDetails.remainingAmount' } } }
   ]);
-  const pendingProjectOutstandingAmount = pendingProjectOutstanding[0]?.totalAmount || 0;
-
-  // Calculate from pending installments (more accurate as it shows scheduled amounts)
-  const pendingInstallments = await Project.aggregate([
-    { $unwind: '$installmentPlan' },
-    { 
-      $match: { 
-        'installmentPlan.status': { $in: ['pending', 'overdue'] }
-      } 
-    },
-    { $group: { _id: null, totalAmount: { $sum: '$installmentPlan.amount' } } }
-  ]);
-  const pendingInstallmentsAmount = pendingInstallments[0]?.totalAmount || 0;
-
-  // Use the maximum of remainingAmount and pending installments to ensure accuracy
-  // This covers all project-related outstanding amounts
-  const pendingProjectOutstandingFinal = Math.max(pendingProjectOutstandingAmount, pendingInstallmentsAmount);
+  const pendingProjectOutstandingFinal = pendingProjectOutstanding[0]?.totalAmount || 0;
 
   // Total Pending Receivables = Only Project Outstanding (all revenue comes from projects)
   const totalPendingReceivables = pendingProjectOutstandingFinal;
@@ -1054,15 +985,9 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // ========== TODAY'S METRICS ==========
 
   // Today's Earnings
-  // Note: We don't count todayPayments separately because payments create transactions automatically,
-  // and those transactions are included in todayOtherTransactions. Counting both would cause double counting.
+  // Note: Project Advances (advanceReceived) is NOT counted separately to avoid double counting
+  // with Payment Receipts and Installments, which are already included in advanceReceived
   
-  const todayAdvances = await Project.aggregate([
-    { $match: { createdAt: { $gte: todayStart, $lte: todayEnd }, 'financialDetails.advanceReceived': { $gt: 0 } } },
-    { $group: { _id: null, totalAmount: { $sum: '$financialDetails.advanceReceived' } } }
-  ]);
-  const todayAdvancesAmount = todayAdvances[0]?.totalAmount || 0;
-
   // Today's Payments (completed today)
   const todayPayments = await Payment.aggregate([
     { $match: { paidAt: { $gte: todayStart, $lte: todayEnd }, status: 'completed' } },
@@ -1106,7 +1031,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   const todayOtherTransactionsAmount = todayOtherTransactions[0]?.totalAmount || 0;
 
   // Today's Earnings - ALL incoming amounts
-  const todayEarnings = todayPaymentsAmount + todayAdvancesAmount + todayPaymentReceiptsAmount + 
+  const todayEarnings = todayPaymentsAmount + todayPaymentReceiptsAmount + 
                         todayInstallmentsAmount + todayOtherTransactionsAmount;
 
   // Today's Expenses
@@ -1148,14 +1073,12 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   const todayIncentivesAmount = todayIncentives[0]?.totalAmount || 0;
 
   // Today's Rewards (paid today)
+  // Use only paidAt to match Incentives logic and ensure we only count actual payments, not awards
   const todayRewards = await PMReward.aggregate([
     { 
       $match: { 
         status: 'paid',
-        $or: [
-          { paidAt: { $gte: todayStart, $lte: todayEnd } },
-          { dateAwarded: { $gte: todayStart, $lte: todayEnd } }
-        ]
+        paidAt: { $gte: todayStart, $lte: todayEnd }
       } 
     },
     { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
@@ -1226,10 +1149,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       { $match: { paidAt: { $gte: lastMonthStart, $lte: lastMonthEnd }, status: 'completed' } },
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
     ]);
-    const lastMonthProjectAdvance = await Project.aggregate([
-      { $match: { createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd }, 'financialDetails.advanceReceived': { $gt: 0 } } },
-      { $group: { _id: null, totalAmount: { $sum: '$financialDetails.advanceReceived' } } }
-    ]);
+    // Note: Project Advances not counted to avoid double counting (same as current month)
     const lastMonthReceiptRevenue = await PaymentReceipt.aggregate([
       { $match: { verifiedAt: { $gte: lastMonthStart, $lte: lastMonthEnd }, status: 'approved' } },
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
@@ -1248,9 +1168,8 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       { $match: { transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }, recordType: 'transaction', transactionType: 'incoming', status: 'completed', 'metadata.sourceType': { $nin: ['payment', 'projectInstallment'] } } },
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
     ]);
-    // Last month revenue - ALL incoming amounts
+    // Last month revenue - ALL incoming amounts (excluding project advances to avoid double counting)
     const lastMonthRevenue = (lastMonthPayments[0]?.totalAmount || 0) + 
-                             (lastMonthProjectAdvance[0]?.totalAmount || 0) + 
                              (lastMonthReceiptRevenue[0]?.totalAmount || 0) +
                              (lastMonthInstallmentRevenue[0]?.totalAmount || 0) + 
                              (lastMonthTransactionRevenue[0]?.totalAmount || 0);
@@ -1269,6 +1188,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
     ]);
     
     // Last Month Project Expenses
+    // Note: Date filtering is already done in MongoDB query, no need for redundant JavaScript filtering
     const lastMonthProjectsWithExpenses = await Project.find({
       'expenses.expenseDate': { $gte: lastMonthStart, $lte: lastMonthEnd }
     }).select('expenses');
@@ -1277,10 +1197,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
     lastMonthProjectsWithExpenses.forEach(project => {
       if (project.expenses && project.expenses.length > 0) {
         project.expenses.forEach(expense => {
-          const expenseDate = new Date(expense.expenseDate);
-          if (expenseDate >= lastMonthStart && expenseDate <= lastMonthEnd) {
-            lastMonthProjectExpensesAmount += expense.amount || 0;
-          }
+          lastMonthProjectExpensesAmount += expense.amount || 0;
         });
       }
     });
@@ -1295,7 +1212,14 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
     ]);
     const lastMonthOtherExpenses = await AdminFinance.aggregate([
-      { $match: { transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }, recordType: 'transaction', transactionType: 'outgoing', status: 'completed', category: { $nin: ['Salary Payment', 'Employee Allowance', 'Sales Incentive', 'PM Reward'] } } },
+      { $match: { 
+        transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }, 
+        recordType: 'transaction', 
+        transactionType: 'outgoing', 
+        status: 'completed',
+        'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry'] },
+        category: { $nin: ['Salary Payment', 'Employee Allowance', 'Incentive Payment', 'Reward Payment', 'Sales Incentive', 'PM Reward'] }
+      } },
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
     ]);
     const lastMonthExpenses = (lastMonthSalary[0]?.totalAmount || 0) + 
@@ -1327,10 +1251,10 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       profitMargin: profitMargin.toFixed(2),
       revenueBreakdown: {
         paymentRevenue: paymentRevenueAmount, // Completed payments from Payment model
-        projectAdvanceRevenue: projectAdvanceRevenueAmount, // Advances received when projects created
         projectInstallmentRevenue: projectInstallmentRevenueAmount, // Paid installments
         paymentReceiptRevenue: paymentReceiptRevenueAmount, // Approved payment receipts
         transactionRevenue: transactionRevenueAmount // Other incoming transactions (manual, etc.)
+        // Note: Project Advances not included to avoid double counting with receipts and installments
       },
       expenseBreakdown: {
         salaryExpenses: salaryExpensesAmount,

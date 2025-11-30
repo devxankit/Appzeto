@@ -1888,7 +1888,8 @@ const Admin_hr_management = () => {
 
       // Transform backend data to frontend format
       const transformedData = (res.data || []).map((record, idx) => ({
-        id: record._id || idx + 1,
+        id: record._id ? record._id.toString() : (idx + 1).toString(),
+        _id: record._id ? record._id.toString() : null, // Keep original _id for API calls
         employeeId: record.employeeId,
         employeeName: record.employeeName,
         department: record.department,
@@ -2018,13 +2019,15 @@ const Admin_hr_management = () => {
     }
 
     try {
-      // Determine user type from record
-      const userType = selectedSalaryRecord.role === 'project-manager' ? 'pm' : 
-                      selectedSalaryRecord.department === 'sales' ? 'sales' : 'employee'
-      const employeeId = selectedSalaryRecord.employeeId
+      // Use _id if available, otherwise fall back to id
+      const salaryRecordId = selectedSalaryRecord._id || selectedSalaryRecord.id
+      if (!salaryRecordId) {
+        addToast({ type: 'error', message: 'Salary record ID not found' })
+        return
+      }
 
       // Update the salary record
-      await adminSalaryService.updateSalaryRecord(selectedSalaryRecord.id, {
+      await adminSalaryService.updateSalaryRecord(salaryRecordId, {
         fixedSalary: fixedSalary
       })
 
@@ -6301,11 +6304,27 @@ const Admin_hr_management = () => {
                         Select Employee <span className="text-red-500 ml-1">*</span>
                       </label>
                       <Combobox
-                        options={allUsers.map(user => ({
-                          value: user.id.toString(),
-                          label: `${user.name} - ${user.department || 'General'} (${user.role})`,
-                          icon: user.role === 'project-manager' ? Shield : Code
-                        }))}
+                        options={(() => {
+                          // Get set of employee IDs who already have salary records
+                          const employeesWithSalary = new Set(
+                            salaryData.map(record => {
+                              const empId = record.employeeId
+                              return empId ? empId.toString() : null
+                            }).filter(Boolean)
+                          )
+                          
+                          // Filter out users who already have salary set
+                          return allUsers
+                            .filter(user => {
+                              const userIdStr = (user._id || user.id || user.employeeId)?.toString()
+                              return userIdStr && !employeesWithSalary.has(userIdStr)
+                            })
+                            .map(user => ({
+                              value: (user._id || user.id || user.employeeId).toString(),
+                              label: `${user.name} - ${user.department || 'General'} (${user.role})`,
+                              icon: user.role === 'project-manager' ? Shield : Code
+                            }))
+                        })()}
                         value={newEmployeeSalaryData.employeeId}
                         onChange={(value) => handleNewEmployeeSalaryInputChange('employeeId', value)}
                         placeholder="Choose an employee..."
