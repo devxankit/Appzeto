@@ -5,7 +5,9 @@ const {
   logoutPM,
   createDemoPM,
   getWalletSummary,
-  getWalletTransactions
+  getWalletTransactions,
+  forgotPassword,
+  resetPassword
 } = require('../controllers/pmController');
 const { getPublishedNoticesForPM, incrementNoticeViews } = require('../controllers/noticeController');
 
@@ -28,6 +30,8 @@ const router = express.Router();
 // Public routes
 router.post('/login', loginPM);
 router.post('/create-demo', createDemoPM); // Remove in production
+router.post('/forgot-password', forgotPassword);
+router.put('/reset-password/:resettoken', resetPassword);
 
 // Protected routes
 router.use(protect); // All routes below this middleware are protected

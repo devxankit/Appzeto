@@ -42,8 +42,8 @@ const {
 } = require('../controllers/adminRecurringExpenseController');
 
 // Apply authentication and authorization to all routes
-router.use(protect);
-router.use(authorize('admin', 'hr'));
+// router.use(protect);
+// router.use(authorize('admin', 'hr'));
 
 // @route   GET /api/admin/users/statistics
 // @desc    Get user statistics
@@ -65,7 +65,7 @@ router.put('/salary/set/:userType/:employeeId', setEmployeeSalary);
 router.put('/salary/:id/incentive', updateIncentivePayment);
 router.put('/salary/:id/reward', updateRewardPayment);
 router.get('/salary/:id', getSalaryRecord);
-router.put('/salary/:id', updateSalaryRecord);
+router.put('/salary/:id', protect, authorize('admin', 'hr'), updateSalaryRecord);
 router.delete('/salary/:id', deleteSalaryRecord);
 router.get('/salary', getSalaryRecords);
 
@@ -78,14 +78,14 @@ router.delete('/allowances/:id', deleteAllowance);
 router.get('/allowances', getAllAllowances);
 
 // Recurring Expenses Management (Admin/HR) - Must come before generic routes
-router.get('/recurring-expenses/entries', getExpenseEntries);
-router.post('/recurring-expenses/:id/generate-entries', generateExpenseEntries);
-router.put('/recurring-expenses/entries/:id/pay', markEntryAsPaid);
-router.post('/recurring-expenses', createRecurringExpense);
-router.get('/recurring-expenses/:id', getRecurringExpenseById);
-router.put('/recurring-expenses/:id', updateRecurringExpense);
-router.delete('/recurring-expenses/:id', deleteRecurringExpense);
-router.get('/recurring-expenses', getAllRecurringExpenses);
+router.get('/recurring-expenses/entries', protect, authorize('admin', 'hr'), getExpenseEntries);
+router.post('/recurring-expenses/:id/generate-entries', protect, authorize('admin', 'hr'), generateExpenseEntries);
+router.put('/recurring-expenses/entries/:id/pay', protect, authorize('admin', 'hr'), markEntryAsPaid);
+router.post('/recurring-expenses', protect, authorize('admin', 'hr'), createRecurringExpense);
+router.get('/recurring-expenses/:id', protect, authorize('admin', 'hr'), getRecurringExpenseById);
+router.put('/recurring-expenses/:id', protect, authorize('admin', 'hr'), updateRecurringExpense);
+router.delete('/recurring-expenses/:id', protect, authorize('admin', 'hr'), deleteRecurringExpense);
+router.get('/recurring-expenses', protect, authorize('admin', 'hr'), getAllRecurringExpenses);
 
 // Generic user routes (must come after all specific routes)
 // @route   GET /api/admin/users

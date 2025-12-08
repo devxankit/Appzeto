@@ -1,8 +1,12 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const PM = require('../models/PM');
 const Salary = require('../models/Salary');
 const PMReward = require('../models/PMReward');
+const emailService = require('../services/emailService');
+const asyncHandler = require('../middlewares/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -413,11 +417,95 @@ const getWalletTransactions = async (req, res) => {
   }
 };
 
+// @desc    Forgot password
+// @route   POST /api/pm/forgot-password
+// @access  Public
+const forgotPassword = asyncHandler(async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return next(new ErrorResponse('Please provide an email address', 400));
+  }
+
+  const pm = await PM.findOne({ email });
+
+  if (!pm) {
+    return res.status(200).json({
+      success: true,
+      message: 'If that email exists, a password reset link has been sent'
+    });
+  }
+
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  pm.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  pm.resetPasswordExpire = Date.now() + 60 * 60 * 1000;
+
+  await pm.save({ validateBeforeSave: false });
+
+  try {
+    await emailService.sendPasswordResetEmail(pm.email, resetToken, 'pm');
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset email sent successfully'
+    });
+  } catch (error) {
+    console.error('Email sending error:', error);
+    pm.resetPasswordToken = undefined;
+    pm.resetPasswordExpire = undefined;
+    await pm.save({ validateBeforeSave: false });
+
+    return next(new ErrorResponse('Email could not be sent', 500));
+  }
+});
+
+// @desc    Reset password
+// @route   PUT /api/pm/reset-password/:resettoken
+// @access  Public
+const resetPassword = asyncHandler(async (req, res, next) => {
+  const { password } = req.body;
+  const resetToken = req.params.resettoken;
+
+  if (!password) {
+    return next(new ErrorResponse('Please provide a password', 400));
+  }
+
+  if (password.length < 6) {
+    return next(new ErrorResponse('Password must be at least 6 characters', 400));
+  }
+
+  const resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+  const pm = await PM.findOne({
+    resetPasswordToken,
+    resetPasswordExpire: { $gt: Date.now() }
+  }).select('+password');
+
+  if (!pm) {
+    return next(new ErrorResponse('Invalid or expired reset token', 400));
+  }
+
+  pm.password = password;
+  pm.resetPasswordToken = undefined;
+  pm.resetPasswordExpire = undefined;
+  await pm.save();
+
+  const token = generateToken(pm._id);
+
+  res.status(200).json({
+    success: true,
+    message: 'Password reset successful',
+    token
+  });
+});
+
 module.exports = {
   loginPM,
   getPMProfile,
   logoutPM,
   createDemoPM,
   getWalletSummary,
-  getWalletTransactions
+  getWalletTransactions,
+  forgotPassword,
+  resetPassword
 };

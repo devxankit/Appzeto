@@ -5,7 +5,9 @@ const {
   logoutEmployee,
   createDemoEmployee,
   getWalletSummary,
-  getWalletTransactions
+  getWalletTransactions,
+  forgotPassword,
+  resetPassword
 } = require('../controllers/employeeController');
 const {
   getPublishedNoticesForEmployee,
@@ -18,6 +20,8 @@ const router = express.Router();
 // Public routes
 router.post('/login', loginEmployee);
 router.post('/create-demo', createDemoEmployee); // Remove in production
+router.post('/forgot-password', forgotPassword);
+router.put('/reset-password/:resettoken', resetPassword);
 
 // Protected routes
 router.use(protect); // All routes below this middleware are protected

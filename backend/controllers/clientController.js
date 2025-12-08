@@ -79,7 +79,15 @@ exports.sendOTP = asyncHandler(async (req, res, next) => {
       client.otpLockUntil = undefined;
       await client.save();
       
-      console.log(`[Development Mode] Using default OTP for ${cleanPhoneNumber}: ${DEFAULT_DEMO_OTP}`);
+      // Print OTP to terminal
+      console.log(`\n========================================`);
+      console.log(`📱 OTP Generated for Client Login (Demo)`);
+      console.log(`========================================`);
+      console.log(`Phone Number: ${cleanPhoneNumber}`);
+      console.log(`OTP: ${DEFAULT_DEMO_OTP}`);
+      console.log(`Expires In: Never (Demo Mode)`);
+      console.log(`========================================\n`);
+      
       return res.status(200).json({
         success: true,
         message: 'OTP sent successfully (Development Mode)',
@@ -97,7 +105,15 @@ exports.sendOTP = asyncHandler(async (req, res, next) => {
       client.otpLockUntil = undefined;
       await client.save();
 
-      console.log(`[Development Mode] Resending default OTP for ${cleanPhoneNumber}: ${DEFAULT_DEMO_OTP}`);
+      // Print OTP to terminal
+      console.log(`\n========================================`);
+      console.log(`📱 OTP Resent for Client Login (Demo)`);
+      console.log(`========================================`);
+      console.log(`Phone Number: ${cleanPhoneNumber}`);
+      console.log(`OTP: ${DEFAULT_DEMO_OTP}`);
+      console.log(`Expires In: Never (Demo Mode)`);
+      console.log(`========================================\n`);
+      
       return res.status(200).json({
         success: true,
         message: 'OTP resent successfully (Development Mode)',
@@ -111,6 +127,15 @@ exports.sendOTP = asyncHandler(async (req, res, next) => {
     const otp = client.generateOTP();
     await client.save();
 
+    // Print OTP to terminal
+    console.log(`\n========================================`);
+    console.log(`📱 OTP Generated for Client Login`);
+    console.log(`========================================`);
+    console.log(`Phone Number: ${cleanPhoneNumber}`);
+    console.log(`OTP: ${otp}`);
+    console.log(`Expires In: 5 minutes`);
+    console.log(`========================================\n`);
+
     // Send OTP via SMS
     const smsResult = await smsService.sendOTP(cleanPhoneNumber, otp, 'otp_login');
 
@@ -120,6 +145,15 @@ exports.sendOTP = asyncHandler(async (req, res, next) => {
       
       // In development, we still return success
       if (process.env.NODE_ENV === 'development') {
+        // Print OTP to terminal even if SMS fails
+        console.log(`\n========================================`);
+        console.log(`📱 OTP Generated (SMS Failed - Dev Mode)`);
+        console.log(`========================================`);
+        console.log(`Phone Number: ${cleanPhoneNumber}`);
+        console.log(`OTP: ${otp}`);
+        console.log(`Expires In: 5 minutes`);
+        console.log(`========================================\n`);
+        
         return res.status(200).json({
           success: true,
           message: 'OTP sent successfully (Development Mode)',
@@ -132,13 +166,21 @@ exports.sendOTP = asyncHandler(async (req, res, next) => {
       return next(new ErrorResponse('Failed to send OTP. Please try again.', 500));
     }
 
-    res.status(200).json({
+    // In development mode, include OTP in response for auto-fill
+    const responseData = {
       success: true,
       message: 'OTP sent successfully',
       phoneNumber: cleanPhoneNumber,
       messageId: smsResult.messageId,
       expiresIn: 300 // 5 minutes
-    });
+    };
+
+    // Include OTP in development mode for auto-fill
+    if (process.env.NODE_ENV === 'development') {
+      responseData.otp = otp;
+    }
+
+    res.status(200).json(responseData);
 
   } catch (error) {
     console.error('Send OTP Error:', error);

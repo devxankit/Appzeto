@@ -134,6 +134,14 @@ const employeeSchema = new mongoose.Schema({
     averageCompletionTime: { type: Number, default: 0 }, // in days
     totalPointsEarned: { type: Number, default: 0 },
     totalPointsDeducted: { type: Number, default: 0 }
+  },
+  resetPasswordToken: {
+    type: String,
+    select: false
+  },
+  resetPasswordExpire: {
+    type: Date,
+    select: false
   }
 }, {
   timestamps: true

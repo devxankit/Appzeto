@@ -85,6 +85,14 @@ const pmSchema = new mongoose.Schema({
     type: Number,
     min: 0,
     default: 0
+  },
+  resetPasswordToken: {
+    type: String,
+    select: false
+  },
+  resetPasswordExpire: {
+    type: Date,
+    select: false
   }
 }, {
   timestamps: true

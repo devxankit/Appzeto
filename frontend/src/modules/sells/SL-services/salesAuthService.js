@@ -81,6 +81,32 @@ export const salesAuthService = {
   // Clear all Sales data
   clearSalesData: () => {
     salesStorage.clear();
+  },
+
+  // Forgot password
+  forgotPassword: async (email) => {
+    try {
+      const response = await apiRequest('/sales/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Reset password
+  resetPassword: async (resetToken, password) => {
+    try {
+      const response = await apiRequest(`/sales/reset-password/${resetToken}`, {
+        method: 'PUT',
+        body: JSON.stringify({ password })
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 
@@ -93,7 +119,9 @@ export const {
   isAuthenticated: isSalesAuthenticated,
   getStoredSalesData,
   storeSalesData,
-  clearSalesData
+  clearSalesData,
+  forgotPassword: forgotPasswordSales,
+  resetPassword: resetPasswordSales
 } = salesAuthService;
 
 export default salesAuthService;

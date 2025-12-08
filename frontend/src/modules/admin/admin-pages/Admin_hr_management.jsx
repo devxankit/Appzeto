@@ -1572,7 +1572,9 @@ const Admin_hr_management = () => {
       } else if (showEditModal && selectedUser) {
         // Update existing user
         const userType = selectedUser.role === 'project-manager' ? 'project-manager' : 'employee'
-        response = await adminUserService.updateUser(userType, selectedUser.id, {
+        
+        // Build update payload - only include password fields if password is being changed
+        const updatePayload = {
           name: formData.name,
           email: formData.email,
           phone: normalizedPhone,
@@ -1582,10 +1584,19 @@ const Admin_hr_management = () => {
           status: formData.status || 'active',
           dateOfBirth: formData.dateOfBirth,
           joiningDate: formData.joiningDate,
-          document: formData.document,
-          password: formData.password || undefined,
-          confirmPassword: formData.confirmPassword || undefined
-        })
+          document: formData.document
+        }
+        
+        // Only include password fields if password is provided and not empty
+        if (formData.password && formData.password.trim().length > 0) {
+          updatePayload.password = formData.password
+          // Only include confirmPassword if it's also provided and not empty
+          if (formData.confirmPassword && formData.confirmPassword.trim().length > 0) {
+            updatePayload.confirmPassword = formData.confirmPassword
+          }
+        }
+        
+        response = await adminUserService.updateUser(userType, selectedUser.id, updatePayload)
         addToast({ type: 'success', message: 'User updated successfully' })
       }
 

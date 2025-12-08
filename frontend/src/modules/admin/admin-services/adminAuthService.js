@@ -81,6 +81,32 @@ export const adminAuthService = {
   // Clear all admin data
   clearAdminData: () => {
     adminStorage.clear();
+  },
+
+  // Forgot password
+  forgotPassword: async (email) => {
+    try {
+      const response = await apiRequest('/admin/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Reset password
+  resetPassword: async (resetToken, password) => {
+    try {
+      const response = await apiRequest(`/admin/reset-password/${resetToken}`, {
+        method: 'PUT',
+        body: JSON.stringify({ password })
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 
@@ -93,7 +119,9 @@ export const {
   isAuthenticated: isAdminAuthenticated,
   getStoredAdminData,
   storeAdminData,
-  clearAdminData
+  clearAdminData,
+  forgotPassword: forgotPasswordAdmin,
+  resetPassword: resetPasswordAdmin
 } = adminAuthService;
 
 export default adminAuthService;

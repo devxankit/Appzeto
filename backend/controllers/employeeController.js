@@ -1,8 +1,12 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const Employee = require('../models/Employee');
 const Salary = require('../models/Salary');
 const EmployeeReward = require('../models/EmployeeReward');
+const emailService = require('../services/emailService');
+const asyncHandler = require('../middlewares/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
 
 // Helper to safely cast id
 const safeObjectId = (value) => {
@@ -425,11 +429,100 @@ const getWalletTransactions = async (req, res) => {
   }
 };
 
+// @desc    Forgot password
+// @route   POST /api/employee/forgot-password
+// @access  Public
+const forgotPassword = asyncHandler(async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return next(new ErrorResponse('Please provide an email address', 400));
+  }
+
+  const employee = await Employee.findOne({ email });
+
+  if (!employee) {
+    return res.status(200).json({
+      success: true,
+      message: 'If that email exists, a password reset link has been sent'
+    });
+  }
+
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  employee.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  employee.resetPasswordExpire = Date.now() + 60 * 60 * 1000;
+
+  await employee.save({ validateBeforeSave: false });
+
+  try {
+    await emailService.sendPasswordResetEmail(employee.email, resetToken, 'employee');
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset email sent successfully'
+    });
+  } catch (error) {
+    console.error('Email sending error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      email: employee.email
+    });
+    employee.resetPasswordToken = undefined;
+    employee.resetPasswordExpire = undefined;
+    await employee.save({ validateBeforeSave: false });
+
+    return next(new ErrorResponse(`Email could not be sent: ${error.message}`, 500));
+  }
+});
+
+// @desc    Reset password
+// @route   PUT /api/employee/reset-password/:resettoken
+// @access  Public
+const resetPassword = asyncHandler(async (req, res, next) => {
+  const { password } = req.body;
+  const resetToken = req.params.resettoken;
+
+  if (!password) {
+    return next(new ErrorResponse('Please provide a password', 400));
+  }
+
+  if (password.length < 6) {
+    return next(new ErrorResponse('Password must be at least 6 characters', 400));
+  }
+
+  const resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+  const employee = await Employee.findOne({
+    resetPasswordToken,
+    resetPasswordExpire: { $gt: Date.now() }
+  }).select('+password');
+
+  if (!employee) {
+    return next(new ErrorResponse('Invalid or expired reset token', 400));
+  }
+
+  employee.password = password;
+  employee.resetPasswordToken = undefined;
+  employee.resetPasswordExpire = undefined;
+  await employee.save();
+
+  const token = generateToken(employee._id);
+
+  res.status(200).json({
+    success: true,
+    message: 'Password reset successful',
+    token
+  });
+});
+
 module.exports = {
   loginEmployee,
   getEmployeeProfile,
   logoutEmployee,
   createDemoEmployee,
   getWalletSummary,
-  getWalletTransactions
+  getWalletTransactions,
+  forgotPassword,
+  resetPassword
 };

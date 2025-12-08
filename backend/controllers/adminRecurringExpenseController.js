@@ -349,6 +349,14 @@ exports.createRecurringExpense = asyncHandler(async (req, res) => {
     }
   }
 
+  // Check if admin is authenticated
+  if (!req.admin || !req.admin.id) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authorized. Admin authentication required.'
+    });
+  }
+
   // Create recurring expense
   const recurringExpense = await RecurringExpense.create({
     name,
@@ -529,6 +537,14 @@ exports.getRecurringExpenseById = asyncHandler(async (req, res) => {
 // @route   PUT /api/admin/users/recurring-expenses/:id
 // @access  Private (Admin/HR)
 exports.updateRecurringExpense = asyncHandler(async (req, res) => {
+  // Check if admin is authenticated
+  if (!req.admin || !req.admin.id) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authorized. Admin authentication required.'
+    });
+  }
+
   const {
     name,
     category,
@@ -823,6 +839,14 @@ exports.getExpenseEntries = asyncHandler(async (req, res) => {
 // @route   PUT /api/admin/users/recurring-expenses/entries/:id/pay
 // @access  Private (Admin/HR)
 exports.markEntryAsPaid = asyncHandler(async (req, res) => {
+  // Check if admin is authenticated
+  if (!req.admin || !req.admin.id) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authorized. Admin authentication required.'
+    });
+  }
+
   const { paymentMethod, paymentReference, notes } = req.body;
 
   const entry = await ExpenseEntry.findById(req.params.id);

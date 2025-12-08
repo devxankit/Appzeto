@@ -1,5 +1,9 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const Admin = require('../models/Admin');
+const emailService = require('../services/emailService');
+const asyncHandler = require('../middlewares/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -210,9 +214,98 @@ const createDemoAdmin = async (req, res) => {
   }
 };
 
+// @desc    Forgot password
+// @route   POST /api/admin/forgot-password
+// @access  Public
+const forgotPassword = asyncHandler(async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return next(new ErrorResponse('Please provide an email address', 400));
+  }
+
+  const admin = await Admin.findOne({ email });
+
+  if (!admin) {
+    // Don't reveal if email exists or not for security
+    return res.status(200).json({
+      success: true,
+      message: 'If that email exists, a password reset link has been sent'
+    });
+  }
+
+  // Generate reset token
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  admin.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  admin.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
+
+  await admin.save({ validateBeforeSave: false });
+
+  try {
+    await emailService.sendPasswordResetEmail(admin.email, resetToken, 'admin');
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset email sent successfully'
+    });
+  } catch (error) {
+    console.error('Email sending error:', error);
+    admin.resetPasswordToken = undefined;
+    admin.resetPasswordExpire = undefined;
+    await admin.save({ validateBeforeSave: false });
+
+    return next(new ErrorResponse('Email could not be sent', 500));
+  }
+});
+
+// @desc    Reset password
+// @route   PUT /api/admin/reset-password/:resettoken
+// @access  Public
+const resetPassword = asyncHandler(async (req, res, next) => {
+  const { password } = req.body;
+  const resetToken = req.params.resettoken;
+
+  if (!password) {
+    return next(new ErrorResponse('Please provide a password', 400));
+  }
+
+  if (password.length < 6) {
+    return next(new ErrorResponse('Password must be at least 6 characters', 400));
+  }
+
+  // Get hashed token
+  const resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+  const admin = await Admin.findOne({
+    resetPasswordToken,
+    resetPasswordExpire: { $gt: Date.now() }
+  }).select('+password');
+
+  if (!admin) {
+    return next(new ErrorResponse('Invalid or expired reset token', 400));
+  }
+
+  // Set new password
+  admin.password = password;
+  admin.resetPasswordToken = undefined;
+  admin.resetPasswordExpire = undefined;
+  await admin.save();
+
+  // Generate token
+  const token = generateToken(admin._id);
+
+  res.status(200).json({
+    success: true,
+    message: 'Password reset successful',
+    token
+  });
+});
+
 module.exports = {
   loginAdmin,
   getAdminProfile,
   logoutAdmin,
-  createDemoAdmin
+  createDemoAdmin,
+  forgotPassword,
+  resetPassword
 };

@@ -21,7 +21,9 @@ const {
   getSalesTeam,
   requestDemo,
   transferLead,
-  addNoteToLead
+  addNoteToLead,
+  forgotPassword,
+  resetPassword
 } = require('../controllers/salesController');
 const { getPublishedNoticesForSales, incrementNoticeViews } = require('../controllers/noticeController');
 const { protect } = require('../middlewares/auth');
@@ -32,6 +34,8 @@ const router = express.Router();
 // Public routes
 router.post('/login', loginSales);
 router.post('/create-demo', createDemoSales); // Remove in production
+router.post('/forgot-password', forgotPassword);
+router.put('/reset-password/:resettoken', resetPassword);
 
 // Test route
 router.get('/test', (req, res) => {

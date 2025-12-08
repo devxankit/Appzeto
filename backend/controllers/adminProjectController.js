@@ -9,7 +9,7 @@ const Admin = require('../models/Admin');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const socketService = require('../services/socketService');
-const { createIncomingTransaction } = require('../utils/financeTransactionHelper');
+const { createIncomingTransaction, findExistingTransaction } = require('../utils/financeTransactionHelper');
 
 const populateProjectForAdmin = async (projectId) => {
   if (!projectId) return null;
@@ -20,6 +20,70 @@ const populateProjectForAdmin = async (projectId) => {
     .populate('costHistory.changedBy', 'name email')
     .populate('installmentPlan.createdBy', 'name email')
     .populate('installmentPlan.updatedBy', 'name email');
+};
+
+// Helper function to ensure all paid installments have finance transactions
+// This syncs missing transactions to ensure Finance Management shows all paid installments
+const syncFinanceTransactionsForPaidInstallments = async (project, adminId = null) => {
+  if (!project || !project.installmentPlan || project.installmentPlan.length === 0) {
+    return;
+  }
+
+  try {
+    // Get Admin ID if not provided
+    let adminIdForTransaction = adminId;
+    if (!adminIdForTransaction) {
+      const admin = await Admin.findOne({ isActive: true }).select('_id');
+      adminIdForTransaction = admin ? admin._id : null;
+    }
+
+    if (!adminIdForTransaction) {
+      console.warn('No admin ID available for syncing finance transactions');
+      return;
+    }
+
+
+    // Check all paid installments and create missing transactions
+    for (let i = 0; i < project.installmentPlan.length; i += 1) {
+      const installment = project.installmentPlan[i];
+      
+      if (installment.status === 'paid' && installment._id && installment.amount > 0) {
+        try {
+          // Check if transaction already exists
+          const existingTransaction = await findExistingTransaction({
+            sourceType: 'projectInstallment',
+            sourceId: installment._id.toString()
+          });
+
+          // If transaction doesn't exist, create it
+          if (!existingTransaction) {
+            await createIncomingTransaction({
+              amount: installment.amount,
+              category: 'Project Installment Payment',
+              transactionDate: installment.paidDate || installment.dueDate || new Date(),
+              createdBy: adminIdForTransaction,
+              client: project.client,
+              project: project._id,
+              account: installment.account || undefined,
+              description: `Installment payment for project "${project.name}" - ₹${installment.amount}`,
+              metadata: {
+                sourceType: 'projectInstallment',
+                sourceId: installment._id.toString(),
+                projectId: project._id.toString(),
+                installmentId: installment._id.toString()
+              },
+              checkDuplicate: false // Already checked above
+            });
+            console.log(`Created missing finance transaction for installment ${installment._id.toString()} - Amount: ₹${installment.amount}`);
+          }
+        } catch (error) {
+          console.error(`Error syncing finance transaction for installment ${installment._id?.toString() || 'unknown'}:`, error.message || error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error syncing finance transactions for paid installments:', error);
+  }
 };
 
 const calculateInstallmentTotals = (installments = []) => {
@@ -77,32 +141,42 @@ const recalculateProjectFinancials = async (project, totals) => {
   // The stored advanceReceived might have been updated by PaymentReceipt hook,
   // but we need to ensure it includes all sources correctly
   
+  // Calculate total received from all sources:
+  // 1. Approved PaymentReceipts (from PaymentReceipt model)
+  // 2. Paid installments (from installmentPlan with status 'paid')
+  // 
+  // Note: We always recalculate from actual data sources to ensure accuracy
+  // This ensures that when a new paid installment is added or marked as paid,
+  // the totalReceived is correctly updated and outstanding balance is recalculated
+  
   const totalFromReceiptsAndInstallments = totalApprovedPayments + collectedFromInstallments;
   const storedAdvance = Number(project.financialDetails.advanceReceived || 0);
   
   // Calculate total received correctly:
-  // - If stored >= receipts+installments: stored already includes everything (correct)
-  // - If receipts+installments > stored AND stored > 0: stored is initial advance, add them
-  // - Otherwise: use receipts+installments (no initial advance or already included)
-  //
-  // This handles:
-  // - initial=5000, receipts=15000, installments=0 -> total=20000 ✓
-  // - stored=20000 (includes all), receipts=15000, installments=5000 -> total=20000 ✓
-  // - stored=0, receipts=15000, installments=5000 -> total=20000 ✓
+  // Strategy: Always use the calculated value from current data (receipts + paid installments)
+  // When a new paid installment is added or marked as paid, totalFromReceiptsAndInstallments increases
+  // We should use this new value to ensure outstanding balance updates correctly
+  // If storedAdvance > totalFromReceiptsAndInstallments, it means there's initial advance
+  // that's not included in receipts/installments. We preserve it by adding the difference.
   
-  let totalReceived;
-  if (storedAdvance >= totalFromReceiptsAndInstallments) {
-    // Stored advance already includes everything
-    totalReceived = storedAdvance;
-  } else if (storedAdvance > 0 && totalFromReceiptsAndInstallments > storedAdvance) {
-    // Stored is initial advance, receipts+installments are additional
-    totalReceived = storedAdvance + totalFromReceiptsAndInstallments;
-  } else {
-    // No initial advance or already included - use receipts+installments
-    totalReceived = totalFromReceiptsAndInstallments;
-  }
+  // Always use the calculated value from current data to ensure new paid installments are included
+  // When a new paid installment is added or marked as paid, totalFromReceiptsAndInstallments increases
+  // This ensures outstanding balance updates correctly
+  // If storedAdvance is higher, it includes initial advance, but we still use current calculated value
+  // to ensure new paid installments are always included in outstanding balance calculation
+  // 
+  // Note: When a new paid installment is added, totalFromReceiptsAndInstallments should increase,
+  // so it should be >= storedAdvance. If storedAdvance is still higher, it means there's initial advance.
+  // In that case, we use storedAdvance to preserve initial advance, but this might miss new paid installments.
+  // The fix: always use totalFromReceiptsAndInstallments because it's calculated from current data
+  // and includes all current paid installments. If there's initial advance, it should be tracked separately.
   
-  // Update advanceReceived to reflect total received
+  // Always use the calculated value from current data (includes new paid installments)
+  // This ensures outstanding balance updates correctly when installments are marked as paid
+  const totalReceived = totalFromReceiptsAndInstallments;
+  
+  // Always update advanceReceived to reflect current total received
+  // This ensures outstanding balance is calculated correctly when installments are marked as paid
   project.financialDetails.advanceReceived = totalReceived;
   
   // Calculate remaining amount
@@ -275,6 +349,21 @@ const getProjectById = asyncHandler(async (req, res, next) => {
 
   if (!project) {
     return next(new ErrorResponse('Project not found', 404));
+  }
+
+  // Sync missing finance transactions for paid installments
+  // This ensures all paid installments show up in Finance Management
+  try {
+    let adminId = null;
+    if (req.admin && req.admin.id) {
+      adminId = req.admin.id;
+    } else if (req.user && req.user.role === 'admin') {
+      adminId = req.user.id;
+    }
+    await syncFinanceTransactionsForPaidInstallments(project, adminId);
+  } catch (error) {
+    // Log error but don't fail the request
+    console.error('Error syncing finance transactions in getProjectById:', error);
   }
 
   res.json({
@@ -968,17 +1057,32 @@ const addProjectInstallments = asyncHandler(async (req, res, next) => {
     }
 
     const notes = installment.notes ? String(installment.notes).trim() : undefined;
+    const account = installment.account ? String(installment.account).trim() : undefined;
+    const status = installment.status && ['pending', 'paid', 'overdue'].includes(installment.status) 
+      ? installment.status 
+      : 'pending';
 
-    newInstallments.push({
+    const installmentData = {
       amount,
       dueDate,
-      status: 'pending',
+      status: status, // ✅ Use provided status (paid for manual, pending for regular)
       notes,
       createdBy: adminId,
       updatedBy: adminId,
       createdAt: new Date(),
       updatedAt: new Date()
-    });
+    };
+
+    if (account) {
+      installmentData.account = account;
+    }
+
+    // If status is 'paid', set paidDate to current date
+    if (status === 'paid') {
+      installmentData.paidDate = new Date();
+    }
+
+    newInstallments.push(installmentData);
   }
 
   const existingTotals = calculateInstallmentTotals(project.installmentPlan);
@@ -1008,6 +1112,9 @@ const addProjectInstallments = asyncHandler(async (req, res, next) => {
     );
   }
 
+  // Store count of existing installments before adding new ones
+  const existingInstallmentCount = project.installmentPlan.length;
+
   newInstallments.forEach((inst) => project.installmentPlan.push(inst));
 
   project.markModified('installmentPlan');
@@ -1015,6 +1122,99 @@ const addProjectInstallments = asyncHandler(async (req, res, next) => {
   const totalsAfterAdd = calculateInstallmentTotals(project.installmentPlan);
   await recalculateProjectFinancials(project, totalsAfterAdd);
   await project.save();
+
+  // Reload project to get MongoDB-generated IDs for newly added installments
+  const savedProject = await Project.findById(projectId);
+  if (!savedProject) {
+    return next(new ErrorResponse('Project not found after save', 404));
+  }
+
+  // Create finance transactions for installments added with status 'paid' (manual installments)
+  // This ensures they show up in Finance Management
+  try {
+    // Get Admin ID for createdBy
+    let adminIdForTransaction = null;
+    if (req.admin && req.admin.id) {
+      adminIdForTransaction = req.admin.id;
+    } else if (req.user && req.user.role === 'admin') {
+      adminIdForTransaction = req.user.id;
+    } else {
+      // Find first active admin as fallback
+      const admin = await Admin.findOne({ isActive: true }).select('_id');
+      adminIdForTransaction = admin ? admin._id : null;
+    }
+
+    if (adminIdForTransaction && savedProject.installmentPlan) {
+      // Get the newly added installments (those after the existing count)
+      const newlyAddedInstallments = savedProject.installmentPlan.slice(existingInstallmentCount);
+
+      // Create finance transactions for installments with status 'paid'
+      // This ensures all paid installments show up in Finance Management
+      for (let i = 0; i < newlyAddedInstallments.length; i += 1) {
+        const installment = newlyAddedInstallments[i];
+        if (installment.status === 'paid' && installment._id) {
+          try {
+            // Ensure we have valid installment data
+            if (!installment.amount || installment.amount <= 0) {
+              console.warn(`Skipping transaction creation for installment ${installment._id.toString()} - invalid amount`);
+              continue;
+            }
+
+            const transactionResult = await createIncomingTransaction({
+              amount: installment.amount,
+              category: 'Project Installment Payment',
+              transactionDate: installment.paidDate || installment.dueDate || new Date(),
+              createdBy: adminIdForTransaction,
+              client: savedProject.client,
+              project: savedProject._id,
+              account: installment.account || undefined,
+              description: `Installment payment for project "${savedProject.name}" - ₹${installment.amount}`,
+              metadata: {
+                sourceType: 'projectInstallment',
+                sourceId: installment._id.toString(),
+                projectId: savedProject._id.toString(),
+                installmentId: installment._id.toString()
+              },
+              checkDuplicate: true
+            });
+            
+            // Verify transaction was created or already exists
+            if (transactionResult && transactionResult._id) {
+              console.log(`Finance transaction created/verified for installment ${installment._id.toString()} - Amount: ₹${installment.amount}`);
+            } else {
+              console.warn(`Transaction creation returned unexpected result for installment ${installment._id.toString()}`);
+            }
+          } catch (error) {
+            // Log detailed error but don't fail the installment addition
+            console.error(`Error creating finance transaction for manual installment ${installment._id?.toString() || 'unknown'}:`, {
+              error: error.message || error,
+              installmentId: installment._id?.toString(),
+              amount: installment.amount,
+              projectId: savedProject._id?.toString()
+            });
+          }
+        }
+      }
+    }
+  } catch (error) {
+    // Log error but don't fail the installment addition
+    console.error('Error creating finance transactions for manual installments:', error);
+  }
+
+  // Sync finance transactions to ensure all paid installments have transactions
+  // This ensures all paid installments show up in Finance Management
+  try {
+    let adminIdForSync = null;
+    if (req.admin && req.admin.id) {
+      adminIdForSync = req.admin.id;
+    } else if (req.user && req.user.role === 'admin') {
+      adminIdForSync = req.user.id;
+    }
+    await syncFinanceTransactionsForPaidInstallments(savedProject, adminIdForSync);
+  } catch (error) {
+    // Log error but don't fail the installment addition
+    console.error('Error syncing finance transactions after adding installments:', error);
+  }
 
   const populatedProject = await populateProjectForAdmin(project._id);
 

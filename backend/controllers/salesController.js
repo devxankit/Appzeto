@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const Sales = require('../models/Sales');
+const emailService = require('../services/emailService');
+const asyncHandler = require('../middlewares/asyncHandler');
+const ErrorResponse = require('../utils/errorResponse');
 const Lead = require('../models/Lead');
 const LeadCategory = require('../models/LeadCategory');
 const Account = require('../models/Account');
@@ -3374,6 +3378,88 @@ const getWalletSummary = async (req, res) => {
   }
 };
 
+// @desc    Forgot password
+// @route   POST /api/sales/forgot-password
+// @access  Public
+const forgotPassword = asyncHandler(async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return next(new ErrorResponse('Please provide an email address', 400));
+  }
+
+  const sales = await Sales.findOne({ email });
+
+  if (!sales) {
+    return res.status(200).json({
+      success: true,
+      message: 'If that email exists, a password reset link has been sent'
+    });
+  }
+
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  sales.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  sales.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
+
+  await sales.save({ validateBeforeSave: false });
+
+  try {
+    await emailService.sendPasswordResetEmail(sales.email, resetToken, 'sales');
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset email sent successfully'
+    });
+  } catch (error) {
+    console.error('Email sending error:', error);
+    sales.resetPasswordToken = undefined;
+    sales.resetPasswordExpire = undefined;
+    await sales.save({ validateBeforeSave: false });
+
+    return next(new ErrorResponse('Email could not be sent', 500));
+  }
+});
+
+// @desc    Reset password
+// @route   PUT /api/sales/reset-password/:resettoken
+// @access  Public
+const resetPassword = asyncHandler(async (req, res, next) => {
+  const { password } = req.body;
+  const resetToken = req.params.resettoken;
+
+  if (!password) {
+    return next(new ErrorResponse('Please provide a password', 400));
+  }
+
+  if (password.length < 6) {
+    return next(new ErrorResponse('Password must be at least 6 characters', 400));
+  }
+
+  const resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+  const sales = await Sales.findOne({
+    resetPasswordToken,
+    resetPasswordExpire: { $gt: Date.now() }
+  }).select('+password');
+
+  if (!sales) {
+    return next(new ErrorResponse('Invalid or expired reset token', 400));
+  }
+
+  sales.password = password;
+  sales.resetPasswordToken = undefined;
+  sales.resetPasswordExpire = undefined;
+  await sales.save();
+
+  const token = generateToken(sales._id);
+
+  res.status(200).json({
+    success: true,
+    message: 'Password reset successful',
+    token
+  });
+});
+
 module.exports = {
   loginSales,
   getSalesProfile,
@@ -3425,5 +3511,7 @@ module.exports = {
   increaseProjectCost,
   transferClient,
   markProjectCompleted,
-  getClientTransactions
+  getClientTransactions,
+  forgotPassword,
+  resetPassword
 };

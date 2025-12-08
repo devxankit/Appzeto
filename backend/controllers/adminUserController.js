@@ -415,8 +415,14 @@ const updateUser = asyncHandler(async (req, res, next) => {
   if (department) user.department = department;
 
   // Handle password update for non-client users
-  if (userType !== 'client' && password) {
-    if (!confirmPassword) {
+  // Only require password update if password is provided and not empty
+  // Check if password is a non-empty string (handles null, undefined, empty string, whitespace)
+  const hasPassword = password && typeof password === 'string' && password.trim().length > 0;
+  
+  if (userType !== 'client' && hasPassword) {
+    const hasConfirmPassword = confirmPassword && typeof confirmPassword === 'string' && confirmPassword.trim().length > 0;
+    
+    if (!hasConfirmPassword) {
       return next(new ErrorResponse('Please confirm password', 400));
     }
     if (password !== confirmPassword) {

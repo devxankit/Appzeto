@@ -66,6 +66,14 @@ const adminSchema = new mongoose.Schema({
   },
   lockUntil: {
     type: Date
+  },
+  resetPasswordToken: {
+    type: String,
+    select: false
+  },
+  resetPasswordExpire: {
+    type: Date,
+    select: false
   }
 }, {
   timestamps: true

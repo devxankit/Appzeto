@@ -3,7 +3,9 @@ const {
   loginAdmin,
   getAdminProfile,
   logoutAdmin,
-  createDemoAdmin
+  createDemoAdmin,
+  forgotPassword,
+  resetPassword
 } = require('../controllers/adminController');
 const { protect, authorize, canAccessHR, isAdmin } = require('../middlewares/auth');
 
@@ -12,6 +14,8 @@ const router = express.Router();
 // Public routes
 router.post('/login', loginAdmin);
 router.post('/create-demo', createDemoAdmin); // Remove in production
+router.post('/forgot-password', forgotPassword);
+router.put('/reset-password/:resettoken', resetPassword);
 
 // Protected routes
 router.use(protect); // All routes below this middleware are protected

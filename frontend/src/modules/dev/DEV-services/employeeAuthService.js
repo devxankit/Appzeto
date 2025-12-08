@@ -81,6 +81,32 @@ export const employeeAuthService = {
   // Clear all Employee data
   clearEmployeeData: () => {
     employeeStorage.clear();
+  },
+
+  // Forgot password
+  forgotPassword: async (email) => {
+    try {
+      const response = await apiRequest('/employee/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Reset password
+  resetPassword: async (resetToken, password) => {
+    try {
+      const response = await apiRequest(`/employee/reset-password/${resetToken}`, {
+        method: 'PUT',
+        body: JSON.stringify({ password })
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 
@@ -93,7 +119,9 @@ export const {
   isAuthenticated: isEmployeeAuthenticated,
   getStoredEmployeeData,
   storeEmployeeData,
-  clearEmployeeData
+  clearEmployeeData,
+  forgotPassword: forgotPasswordEmployee,
+  resetPassword: resetPasswordEmployee
 } = employeeAuthService;
 
 export default employeeAuthService;

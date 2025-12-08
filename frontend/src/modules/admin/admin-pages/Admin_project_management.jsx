@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import { adminProjectService } from '../admin-services/adminProjectService'
+import { adminFinanceService } from '../admin-services/adminFinanceService'
+import { adminUserService } from '../admin-services/adminUserService'
 import { 
   FiUsers, 
   FiFolder, 
@@ -81,6 +83,35 @@ const Admin_project_management = () => {
   const [isSavingInstallment, setIsSavingInstallment] = useState(false)
   const [showDeleteInstallmentModal, setShowDeleteInstallmentModal] = useState(false)
   const [installmentToDelete, setInstallmentToDelete] = useState(null)
+  const [showManualInstallmentModal, setShowManualInstallmentModal] = useState(false)
+  const [manualInstallmentFormData, setManualInstallmentFormData] = useState({
+    account: '',
+    amount: '',
+    dueDate: '',
+    notes: ''
+  })
+  const [manualInstallmentError, setManualInstallmentError] = useState('')
+  const [isSavingManualInstallment, setIsSavingManualInstallment] = useState(false)
+  const [accounts, setAccounts] = useState([])
+  const [accountsLoading, setAccountsLoading] = useState(false)
+  
+  // Edit form states for employee, client, PM
+  const [employeeFormData, setEmployeeFormData] = useState({
+    name: '',
+    email: '',
+    role: '',
+    department: ''
+  })
+  const [clientFormData, setClientFormData] = useState({
+    name: '',
+    email: '',
+    contact: ''
+  })
+  const [pmFormData, setPmFormData] = useState({
+    name: '',
+    email: ''
+  })
+  const [isSavingUser, setIsSavingUser] = useState(false)
 
   // PM Options for Combobox
   const getPMOptions = () => {
@@ -903,6 +934,24 @@ const projectFinancialSummary =
       })
       setProjectFormErrors({})
       setCreateModalError(null)
+    } else if (type === 'employee') {
+      setEmployeeFormData({
+        name: item.name || '',
+        email: item.email || '',
+        role: item.role || item.position || '',
+        department: item.department || ''
+      })
+    } else if (type === 'client') {
+      setClientFormData({
+        name: item.name || item.companyName || '',
+        email: item.email || '',
+        contact: item.contact || item.phone || item.phoneNumber || ''
+      })
+    } else if (type === 'pm') {
+      setPmFormData({
+        name: item.name || '',
+        email: item.email || ''
+      })
     }
     
     setShowEditModal(true)
@@ -929,14 +978,64 @@ const projectFinancialSummary =
     // In real app, update the state to remove the item
   }
 
-  const handleSave = (formData) => {
-    // Simulate API call
-    console.log(`Saving ${modalType}:`, formData)
-    setShowCreateModal(false)
-    setShowEditModal(false)
-    setSelectedItem(null)
-    setModalType('')
-    // In real app, update the state with new/updated item
+  const handleSave = async (e) => {
+    e.preventDefault()
+    
+    if (isSavingUser) return
+    
+    if (!selectedItem || (!selectedItem._id && !selectedItem.id)) {
+      toast.error('Item ID is missing. Cannot update.')
+      return
+    }
+    
+    setIsSavingUser(true)
+    
+    try {
+      const itemId = selectedItem._id || selectedItem.id
+      let userType = ''
+      let updateData = {}
+      
+      if (modalType === 'employee') {
+        userType = 'employee'
+        updateData = {
+          name: employeeFormData.name.trim(),
+          email: employeeFormData.email.trim(),
+          department: employeeFormData.department || undefined
+        }
+      } else if (modalType === 'client') {
+        userType = 'client'
+        updateData = {
+          name: clientFormData.name.trim(),
+          email: clientFormData.email.trim(),
+          phone: clientFormData.contact.trim()
+        }
+      } else if (modalType === 'pm') {
+        userType = 'pm'
+        updateData = {
+          name: pmFormData.name.trim(),
+          email: pmFormData.email.trim()
+        }
+      }
+      
+      const response = await adminUserService.updateUser(userType, itemId, updateData)
+      
+      if (response?.success) {
+        toast.success(`${modalType.charAt(0).toUpperCase() + modalType.slice(1)} updated successfully!`)
+        setShowEditModal(false)
+        setSelectedItem(null)
+        setModalType('')
+        
+        // Reload data
+        await loadData(false)
+      } else {
+        toast.error(response?.message || `Failed to update ${modalType}`)
+      }
+    } catch (error) {
+      console.error(`Error updating ${modalType}:`, error)
+      toast.error(error?.response?.data?.message || error?.message || `Failed to update ${modalType}`)
+    } finally {
+      setIsSavingUser(false)
+    }
   }
 
   const closeModals = () => {
@@ -970,6 +1069,10 @@ const projectFinancialSummary =
     setInstallmentToDelete(null)
     setInstallmentError('')
     setIsSavingInstallment(false)
+    setEmployeeFormData({ name: '', email: '', role: '', department: '' })
+    setClientFormData({ name: '', email: '', contact: '' })
+    setPmFormData({ name: '', email: '' })
+    setIsSavingUser(false)
   }
 
   // Handle cost edit
@@ -1273,6 +1376,92 @@ function getFinancialSummary(project) {
     if (!selectedItem || modalType !== 'project') return
     setInstallmentToDelete(installment)
     setShowDeleteInstallmentModal(true)
+  }
+
+  // Fetch accounts for manual installment
+  const fetchAccounts = async () => {
+    try {
+      setAccountsLoading(true)
+      const response = await adminFinanceService.getAccounts({ isActive: 'true' })
+      if (response.success && response.data) {
+        setAccounts(response.data)
+      }
+    } catch (err) {
+      console.error('Error fetching accounts:', err)
+      toast.error('Failed to load accounts')
+    } finally {
+      setAccountsLoading(false)
+    }
+  }
+
+  const handleAddManualInstallment = () => {
+    setManualInstallmentFormData({
+      account: '',
+      amount: '',
+      dueDate: '',
+      notes: ''
+    })
+    setManualInstallmentError('')
+    fetchAccounts()
+    setShowManualInstallmentModal(true)
+  }
+
+  const handleSaveManualInstallment = async () => {
+    if (!selectedItem || modalType !== 'project') return
+
+    if (!manualInstallmentFormData.account) {
+      setManualInstallmentError('Please select an account')
+      return
+    }
+
+    const amountValue = Number(manualInstallmentFormData.amount)
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      setManualInstallmentError('Please enter a valid installment amount greater than 0')
+      return
+    }
+
+    if (!manualInstallmentFormData.dueDate) {
+      setManualInstallmentError('Please select a due date for the installment')
+      return
+    }
+
+    const projectId = selectedItem._id || selectedItem.id
+    setIsSavingManualInstallment(true)
+
+    try {
+      const response = await adminProjectService.addProjectInstallments(projectId, [
+        {
+          amount: amountValue,
+          dueDate: manualInstallmentFormData.dueDate,
+          notes: manualInstallmentFormData.notes || '',
+          account: manualInstallmentFormData.account,
+          status: 'paid' // ✅ Mark as paid immediately for manual installments
+        }
+      ])
+
+      if (response?.success) {
+        toast.success('Manual installment added successfully!')
+        await loadData(false)
+        if (response.data) {
+          setSelectedItem(response.data)
+        }
+        setShowManualInstallmentModal(false)
+        setManualInstallmentFormData({
+          account: '',
+          amount: '',
+          dueDate: '',
+          notes: ''
+        })
+        setManualInstallmentError('')
+      } else {
+        setManualInstallmentError(response?.message || 'Failed to save manual installment')
+      }
+    } catch (error) {
+      console.error('Error saving manual installment:', error)
+      setManualInstallmentError(error?.response?.data?.message || error?.message || 'Failed to save manual installment')
+    } finally {
+      setIsSavingManualInstallment(false)
+    }
   }
 
   const confirmDeleteInstallment = async () => {
@@ -3192,7 +3381,7 @@ function getFinancialSummary(project) {
                   </div>
                 </form>
               ) : (
-                <form className="space-y-4">
+                <form className="space-y-4" onSubmit={handleSave}>
                   {modalType === 'employee' && (
                     <>
                       <div className="grid grid-cols-2 gap-4">
@@ -3200,18 +3389,22 @@ function getFinancialSummary(project) {
                           <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
                           <input
                             type="text"
-                            defaultValue={selectedItem?.name || ''}
+                            value={employeeFormData.name}
+                            onChange={(e) => setEmployeeFormData(prev => ({ ...prev, name: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                             placeholder="Enter employee name"
+                            required
                           />
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                           <input
                             type="email"
-                            defaultValue={selectedItem?.email || ''}
+                            value={employeeFormData.email}
+                            onChange={(e) => setEmployeeFormData(prev => ({ ...prev, email: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                             placeholder="Enter email address"
+                            required
                           />
                         </div>
                       </div>
@@ -3220,7 +3413,8 @@ function getFinancialSummary(project) {
                           <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
                           <input
                             type="text"
-                            defaultValue={selectedItem?.role || ''}
+                            value={employeeFormData.role}
+                            onChange={(e) => setEmployeeFormData(prev => ({ ...prev, role: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                             placeholder="Enter role"
                           />
@@ -3228,13 +3422,16 @@ function getFinancialSummary(project) {
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
                           <select
-                            defaultValue={selectedItem?.department || 'Engineering'}
+                            value={employeeFormData.department}
+                            onChange={(e) => setEmployeeFormData(prev => ({ ...prev, department: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                           >
-                            <option value="Engineering">Engineering</option>
-                            <option value="Design">Design</option>
-                            <option value="Management">Management</option>
-                            <option value="Business">Business</option>
+                            <option value="">Select Department</option>
+                            <option value="full-stack">Full Stack</option>
+                            <option value="nodejs">Node.js</option>
+                            <option value="web">Web</option>
+                            <option value="app">App</option>
+                            <option value="sales">Sales</option>
                           </select>
                         </div>
                       </div>
@@ -3247,28 +3444,34 @@ function getFinancialSummary(project) {
                         <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
                         <input
                           type="text"
-                          defaultValue={selectedItem?.name || ''}
+                          value={clientFormData.name}
+                          onChange={(e) => setClientFormData(prev => ({ ...prev, name: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                           placeholder="Enter company name"
+                          required
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Contact Person</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Contact</label>
                           <input
                             type="text"
-                            defaultValue={selectedItem?.contact || ''}
+                            value={clientFormData.contact}
+                            onChange={(e) => setClientFormData(prev => ({ ...prev, contact: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                            placeholder="Enter contact person"
+                            placeholder="Enter contact number"
+                            required
                           />
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                           <input
                             type="email"
-                            defaultValue={selectedItem?.email || ''}
+                            value={clientFormData.email}
+                            onChange={(e) => setClientFormData(prev => ({ ...prev, email: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                             placeholder="Enter email address"
+                            required
                           />
                         </div>
                       </div>
@@ -3282,18 +3485,22 @@ function getFinancialSummary(project) {
                           <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
                           <input
                             type="text"
-                            defaultValue={selectedItem?.name || ''}
+                            value={pmFormData.name}
+                            onChange={(e) => setPmFormData(prev => ({ ...prev, name: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                             placeholder="Enter PM name"
+                            required
                           />
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                           <input
                             type="email"
-                            defaultValue={selectedItem?.email || ''}
+                            value={pmFormData.email}
+                            onChange={(e) => setPmFormData(prev => ({ ...prev, email: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                             placeholder="Enter email address"
+                            required
                           />
                         </div>
                       </div>
@@ -3305,18 +3512,16 @@ function getFinancialSummary(project) {
                       type="button"
                       onClick={closeModals}
                       className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                      disabled={isSavingUser}
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        handleSave({})
-                      }}
-                      className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                      disabled={isSavingUser}
+                      className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {showCreateModal ? 'Create' : 'Update'}
+                      {isSavingUser ? 'Updating...' : 'Update'}
                     </button>
                   </div>
                 </form>
@@ -3434,13 +3639,22 @@ function getFinancialSummary(project) {
                           Break down the project cost into scheduled payments for the client.
                         </p>
                       </div>
-                      <button
-                        onClick={handleAddInstallment}
-                        className="inline-flex items-center px-3 py-2 bg-emerald-500 text-white text-sm font-semibold rounded-lg hover:bg-emerald-600 transition-colors"
-                      >
-                        <FiPlus className="h-4 w-4 mr-1" />
-                        Add Installment
-                      </button>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={handleAddInstallment}
+                          className="inline-flex items-center px-3 py-2 bg-emerald-500 text-white text-sm font-semibold rounded-lg hover:bg-emerald-600 transition-colors"
+                        >
+                          <FiPlus className="h-4 w-4 mr-1" />
+                          Add Installment
+                        </button>
+                        <button
+                          onClick={handleAddManualInstallment}
+                          className="inline-flex items-center px-3 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 transition-colors"
+                        >
+                          <FiPlus className="h-4 w-4 mr-1" />
+                          Add manually
+                        </button>
+                      </div>
                     </div>
                     {(() => {
                       const financialSummary = projectFinancialSummary || getFinancialSummary(selectedItem)
@@ -4446,6 +4660,171 @@ function getFinancialSummary(project) {
                     disabled={isSavingInstallment}
                   >
                     {isSavingInstallment ? 'Saving...' : installmentToEdit ? 'Update Installment' : 'Add Installment'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Add Manual Installment Modal */}
+        {showManualInstallmentModal && selectedItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowManualInstallmentModal(false)
+              setManualInstallmentFormData({
+                account: '',
+                amount: '',
+                dueDate: '',
+                notes: ''
+              })
+              setManualInstallmentError('')
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-md w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    Add manually
+                  </h3>
+                  <p className="text-gray-600 text-sm mt-1">
+                    Create a manual installment with account selection
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowManualInstallmentModal(false)
+                    setManualInstallmentFormData({
+                      account: '',
+                      amount: '',
+                      dueDate: '',
+                      notes: ''
+                    })
+                    setManualInstallmentError('')
+                  }}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+
+              {manualInstallmentError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  {manualInstallmentError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Account <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={manualInstallmentFormData.account}
+                    onChange={(e) =>
+                      setManualInstallmentFormData((prev) => ({
+                        ...prev,
+                        account: e.target.value
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                    disabled={accountsLoading}
+                  >
+                    <option value="">Select Account</option>
+                    {accounts.map((account) => (
+                      <option key={account._id || account.id} value={account._id || account.id}>
+                        {account.accountName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Amount (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={manualInstallmentFormData.amount}
+                    onChange={(e) =>
+                      setManualInstallmentFormData((prev) => ({
+                        ...prev,
+                        amount: e.target.value
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter installment amount"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Due Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={manualInstallmentFormData.dueDate}
+                    onChange={(e) =>
+                      setManualInstallmentFormData((prev) => ({
+                        ...prev,
+                        dueDate: e.target.value
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notes</label>
+                  <textarea
+                    value={manualInstallmentFormData.notes}
+                    onChange={(e) =>
+                      setManualInstallmentFormData((prev) => ({
+                        ...prev,
+                        notes: e.target.value
+                      }))
+                    }
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                    placeholder="Optional notes about this manually"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end space-x-3 pt-4">
+                  <button
+                    onClick={() => {
+                      setShowManualInstallmentModal(false)
+                      setManualInstallmentFormData({
+                        account: '',
+                        amount: '',
+                        dueDate: '',
+                        notes: ''
+                      })
+                      setManualInstallmentError('')
+                    }}
+                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    disabled={isSavingManualInstallment}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveManualInstallment}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold disabled:opacity-70"
+                    disabled={isSavingManualInstallment}
+                  >
+                    {isSavingManualInstallment ? 'Saving...' : 'Add manually'}
                   </button>
                 </div>
               </div>

@@ -81,6 +81,32 @@ export const pmAuthService = {
   // Clear all PM data
   clearPMData: () => {
     pmStorage.clear();
+  },
+
+  // Forgot password
+  forgotPassword: async (email) => {
+    try {
+      const response = await apiRequest('/pm/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Reset password
+  resetPassword: async (resetToken, password) => {
+    try {
+      const response = await apiRequest(`/pm/reset-password/${resetToken}`, {
+        method: 'PUT',
+        body: JSON.stringify({ password })
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 
@@ -93,7 +119,9 @@ export const {
   isAuthenticated: isPMAuthenticated,
   getStoredPMData,
   storePMData,
-  clearPMData
+  clearPMData,
+  forgotPassword: forgotPasswordPM,
+  resetPassword: resetPasswordPM
 } = pmAuthService;
 
 export default pmAuthService;

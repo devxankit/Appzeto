@@ -100,6 +100,7 @@ import Admin_sales_management from './modules/admin/admin-pages/Admin_sales_mana
 import Admin_user_management from './modules/admin/admin-pages/Admin_user_management'
 import Admin_hr_management from './modules/admin/admin-pages/Admin_hr_management'
 import Admin_notice_board from './modules/admin/admin-pages/Admin_notice_board'
+import ResetPassword from './components/auth/ResetPassword'
 
 function App() {
   return (
@@ -114,6 +115,7 @@ function App() {
           <Route path="/pm-login" element={<PM_login />} />
           <Route path="/client-login" element={<Client_login />} />
           <Route path="/admin-login" element={<Admin_login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           
           //SL pages start here //
           <Route path="/dashboard" element={

@@ -139,6 +139,13 @@ class AdminUserService {
         joiningDate: formatDateForAPI(userData.joiningDate)
       };
 
+      // Remove password fields if they are empty or undefined (for update operations)
+      // Only include password if it's actually being changed
+      if (!requestData.password || requestData.password.trim().length === 0) {
+        delete requestData.password;
+        delete requestData.confirmPassword;
+      }
+
       const response = await apiRequest(`/admin/users/${normalizedType}/${id}`, {
         method: 'PUT',
         body: JSON.stringify(requestData),

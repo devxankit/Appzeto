@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FaEye, FaEyeSlash, FaUser, FaLock, FaArrowRight } from 'react-icons/fa'
+import { FaEye, FaEyeSlash, FaUser, FaLock, FaArrowRight, FaTimes } from 'react-icons/fa'
 import { Button } from '../../../../components/ui/button'
 import { Input } from '../../../../components/ui/input'
 import logo from '../../../../assets/images/logo.png'
-import { loginPM, isPMAuthenticated } from '../../DEV-services/pmAuthService'
+import { loginPM, isPMAuthenticated, forgotPasswordPM } from '../../DEV-services/pmAuthService'
 import { useToast } from '../../../../contexts/ToastContext'
 
 const PM_login = () => {
@@ -18,6 +18,9 @@ const PM_login = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState({})
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
+  const [isSendingReset, setIsSendingReset] = useState(false)
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -275,6 +278,7 @@ const PM_login = () => {
               </label>
               <button
                 type="button"
+                onClick={() => setShowForgotPassword(true)}
                 className="text-teal-600 hover:text-teal-700 font-medium transition-colors"
                 disabled={isLoading}
               >
@@ -319,6 +323,107 @@ const PM_login = () => {
         </div>
 
       </motion.div>
+
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setShowForgotPassword(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 relative z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Forgot Password</h2>
+              <button
+                onClick={() => setShowForgotPassword(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FaTimes className="h-6 w-6" />
+              </button>
+            </div>
+
+            <p className="text-gray-600 mb-6">
+              Enter your email address and we'll send you a link to reset your password.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                if (!forgotPasswordEmail) {
+                  toast.error('Please enter your email address', { title: 'Email Required' })
+                  return
+                }
+
+                setIsSendingReset(true)
+                try {
+                  const response = await forgotPasswordPM(forgotPasswordEmail)
+                  if (response.success) {
+                    toast.success('Password reset link has been sent to your email', {
+                      title: 'Email Sent',
+                      duration: 4000
+                    })
+                    setShowForgotPassword(false)
+                    setForgotPasswordEmail('')
+                  }
+                } catch (error) {
+                  toast.error(error?.response?.data?.message || error?.message || 'Failed to send reset email', {
+                    title: 'Error',
+                    duration: 4000
+                  })
+                } finally {
+                  setIsSendingReset(false)
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label htmlFor="forgotEmail" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <Input
+                  id="forgotEmail"
+                  type="email"
+                  value={forgotPasswordEmail}
+                  onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  className="w-full h-12 text-base border-2 border-gray-200 focus:border-teal-500 focus:ring-teal-200"
+                  disabled={isSendingReset}
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotPassword(false)
+                    setForgotPasswordEmail('')
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  disabled={isSendingReset}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSendingReset}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSendingReset ? 'Sending...' : 'Send Reset Link'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
     </div>
   )
 }

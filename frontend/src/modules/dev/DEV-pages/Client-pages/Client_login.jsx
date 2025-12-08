@@ -85,6 +85,14 @@ const Client_login = () => {
         setIsOtpSent(true)
         setOtpTimer(60) // 60 seconds timer
         
+        // Auto-fill OTP if available in response (development mode)
+        if (response.otp) {
+          setFormData(prev => ({
+            ...prev,
+            otp: response.otp
+          }))
+        }
+        
         // Start countdown timer
         const timer = setInterval(() => {
           setOtpTimer(prev => {
@@ -164,6 +172,14 @@ const Client_login = () => {
       
       if (response.success) {
         setOtpTimer(60) // Reset timer
+        
+        // Auto-fill OTP if available in response (development mode)
+        if (response.otp) {
+          setFormData(prev => ({
+            ...prev,
+            otp: response.otp
+          }))
+        }
         
         // Start countdown timer
         const timer = setInterval(() => {

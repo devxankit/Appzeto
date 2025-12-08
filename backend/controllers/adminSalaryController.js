@@ -270,6 +270,13 @@ exports.getSalaryRecord = asyncHandler(async (req, res) => {
 exports.updateSalaryRecord = asyncHandler(async (req, res) => {
   const { status, paymentMethod, remarks, fixedSalary, incentiveStatus, rewardStatus } = req.body;
 
+  console.log('Update Salary Request:', {
+    id: req.params.id,
+    body: req.body,
+    fixedSalary: fixedSalary,
+    fixedSalaryType: typeof fixedSalary
+  });
+
   const salary = await Salary.findById(req.params.id);
   if (!salary) {
     return res.status(404).json({
@@ -277,6 +284,12 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
       message: 'Salary record not found'
     });
   }
+
+  console.log('Current salary before update:', {
+    _id: salary._id,
+    fixedSalary: salary.fixedSalary,
+    month: salary.month
+  });
 
   // Check if trying to edit past month (read-only)
   const salaryMonth = new Date(salary.month + '-01');
@@ -295,14 +308,27 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
   const previousStatus = salary.status;
 
   // Update fixedSalary if provided
-  if (fixedSalary !== undefined) {
-    if (fixedSalary < 0) {
+  if (fixedSalary !== undefined && fixedSalary !== null) {
+    const parsedSalary = parseFloat(fixedSalary);
+    console.log('Parsing fixedSalary:', { original: fixedSalary, parsed: parsedSalary });
+    
+    if (isNaN(parsedSalary)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Fixed salary must be a valid number'
+      });
+    }
+    
+    if (parsedSalary < 0) {
       return res.status(400).json({
         success: false,
         message: 'Fixed salary must be greater than or equal to 0'
       });
     }
-    salary.fixedSalary = fixedSalary;
+    
+    console.log('Updating fixedSalary from', salary.fixedSalary, 'to', parsedSalary);
+    salary.fixedSalary = parsedSalary;
+    console.log('Salary after update:', salary.fixedSalary);
   }
 
   // Update fields
@@ -535,13 +561,20 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
     }
   }
 
-  salary.updatedBy = req.admin.id;
+  salary.updatedBy = req.admin ? req.admin.id : null;
+  
+  console.log('Before save - salary.fixedSalary:', salary.fixedSalary);
   await salary.save();
+  console.log('After save - salary.fixedSalary:', salary.fixedSalary);
+  
+  // Refresh from database to ensure we have latest data
+  const updatedSalary = await Salary.findById(req.params.id);
+  console.log('After refresh - updatedSalary.fixedSalary:', updatedSalary.fixedSalary);
 
   res.json({
     success: true,
     message: 'Salary record updated successfully',
-    data: salary
+    data: updatedSalary
   });
 });
 

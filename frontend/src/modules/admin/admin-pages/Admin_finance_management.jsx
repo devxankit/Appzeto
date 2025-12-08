@@ -824,6 +824,8 @@ const Admin_finance_management = () => {
       handleEditBudget(item)
     } else if (activeTab === 'transactions') {
       handleEditTransaction(item)
+    } else if (activeTab === 'expenses') {
+      handleEditExpense(item)
     } else {
       setSelectedItem(item)
       setShowEditModal(true)
@@ -1047,6 +1049,18 @@ const Admin_finance_management = () => {
         toast.success(response.message || 'Account updated successfully')
         setShowAccountEditModal(false)
         closeModals()
+        setSelectedItem(null)
+        // Reset form
+        setAccountFormData({
+          accountName: '',
+          bankName: '',
+          accountNumber: '',
+          ifscCode: '',
+          branchName: '',
+          accountType: 'current',
+          isActive: true,
+          description: ''
+        })
         // Refresh accounts list
         await fetchAccounts()
       } else {
@@ -1088,11 +1102,25 @@ const Admin_finance_management = () => {
 
 
   const handleCreateExpense = () => {
+    setSelectedItem(null)
     setExpenseFormData({
       category: '',
       amount: '',
       date: new Date().toISOString().split('T')[0],
       description: ''
+    })
+    setShowExpenseModal(true)
+  }
+
+  const handleEditExpense = (expense) => {
+    setSelectedItem(expense)
+    setExpenseFormData({
+      category: expense.category || '',
+      amount: expense.amount || '',
+      date: expense.transactionDate || expense.date || expense.createdAt 
+        ? new Date(expense.transactionDate || expense.date || expense.createdAt).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      description: expense.description || ''
     })
     setShowExpenseModal(true)
   }
@@ -1307,22 +1335,40 @@ const Admin_finance_management = () => {
         description: expenseFormData.description || ''
       }
 
-      console.log('Creating expense with data:', expenseData)
-      const response = await adminFinanceService.createExpense(expenseData)
-      console.log('Expense creation response:', response)
+      let response
+      if (selectedItem && (selectedItem._id || selectedItem.id)) {
+        // Update existing expense
+        const expenseId = selectedItem._id || selectedItem.id
+        console.log('Updating expense with data:', expenseData)
+        response = await adminFinanceService.updateExpense(expenseId, expenseData)
+        console.log('Expense update response:', response)
+      } else {
+        // Create new expense
+        console.log('Creating expense with data:', expenseData)
+        response = await adminFinanceService.createExpense(expenseData)
+        console.log('Expense creation response:', response)
+      }
       
       if (response && response.success) {
-        toast.success(response.message || 'Expense created successfully')
+        toast.success(response.message || (selectedItem ? 'Expense updated successfully' : 'Expense created successfully'))
         setShowExpenseModal(false)
         closeModals()
+        setSelectedItem(null)
+        // Reset form
+        setExpenseFormData({
+          category: '',
+          amount: '',
+          date: new Date().toISOString().split('T')[0],
+          description: ''
+        })
         // Refresh expenses list
         await fetchExpenses()
       } else {
-        toast.error(response?.message || 'Failed to create expense')
+        toast.error(response?.message || (selectedItem ? 'Failed to update expense' : 'Failed to create expense'))
       }
     } catch (err) {
-      console.error('Error creating expense:', err)
-      toast.error(err.message || 'Failed to create expense')
+      console.error('Error saving expense:', err)
+      toast.error(err.message || (selectedItem ? 'Failed to update expense' : 'Failed to create expense'))
     } finally {
       setLoading(false)
     }
@@ -2812,7 +2858,20 @@ const Admin_finance_management = () => {
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold text-gray-900">Edit Account</h3>
               <button
-                onClick={closeModals}
+                onClick={() => {
+                  closeModals()
+                  setSelectedItem(null)
+                  setAccountFormData({
+                    accountName: '',
+                    bankName: '',
+                    accountNumber: '',
+                    ifscCode: '',
+                    branchName: '',
+                    accountType: 'current',
+                    isActive: true,
+                    description: ''
+                  })
+                }}
                 className="p-2 hover:bg-gray-100 rounded-full"
               >
                 <FiX className="h-5 w-5" />
@@ -2922,14 +2981,28 @@ const Admin_finance_management = () => {
               <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
-                  onClick={closeModals}
+                  onClick={() => {
+                    closeModals()
+                    setSelectedItem(null)
+                    setAccountFormData({
+                      accountName: '',
+                      bankName: '',
+                      accountNumber: '',
+                      ifscCode: '',
+                      branchName: '',
+                      accountType: 'current',
+                      isActive: true,
+                      description: ''
+                    })
+                  }}
                   className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                  disabled={loading}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FiEdit className="h-4 w-4" />
                   <span>Update Account</span>
@@ -3663,9 +3736,20 @@ const Admin_finance_management = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">Add New Expense</h3>
+              <h3 className="text-2xl font-bold text-gray-900">
+                {selectedItem ? 'Edit Expense' : 'Add New Expense'}
+              </h3>
               <button
-                onClick={closeModals}
+                onClick={() => {
+                  closeModals()
+                  setSelectedItem(null)
+                  setExpenseFormData({
+                    category: '',
+                    amount: '',
+                    date: new Date().toISOString().split('T')[0],
+                    description: ''
+                  })
+                }}
                 className="p-2 hover:bg-gray-100 rounded-full"
               >
                 <FiX className="h-5 w-5" />
@@ -3728,7 +3812,16 @@ const Admin_finance_management = () => {
               <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
-                  onClick={closeModals}
+                  onClick={() => {
+                    closeModals()
+                    setSelectedItem(null)
+                    setExpenseFormData({
+                      category: '',
+                      amount: '',
+                      date: new Date().toISOString().split('T')[0],
+                      description: ''
+                    })
+                  }}
                   className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Cancel
@@ -3737,8 +3830,17 @@ const Admin_finance_management = () => {
                   type="submit"
                   className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
                 >
-                  <FiPlus className="h-4 w-4" />
-                  <span>Add Expense</span>
+                  {selectedItem ? (
+                    <>
+                      <FiEdit className="h-4 w-4" />
+                      <span>Update Expense</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiPlus className="h-4 w-4" />
+                      <span>Add Expense</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
