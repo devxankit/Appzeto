@@ -2010,6 +2010,30 @@ const Admin_hr_management = () => {
   }
 
   const handleEditSalary = (record) => {
+    // Check if record is for future month (next month or later)
+    let recordMonth = record.month || ''
+    if (!recordMonth && record.paymentDate) {
+      const paymentDate = new Date(record.paymentDate)
+      recordMonth = paymentDate.toISOString().slice(0, 7)
+    }
+    // If still no month, use selectedSalaryMonth (for next month records)
+    if (!recordMonth) {
+      recordMonth = selectedSalaryMonth
+    }
+    
+    const today = new Date()
+    const currentMonthStr = today.toISOString().slice(0, 7)
+    
+    // Check if record month OR selected month is in the future (next month or later)
+    const isFutureMonth = recordMonth > currentMonthStr || selectedSalaryMonth > currentMonthStr
+    
+    // Block editing if: paid AND not future month
+    // Allow editing if: pending OR future month (next month) - always allow future months
+    if (record.status === 'paid' && !isFutureMonth) {
+      addToast({ type: 'error', message: 'Cannot edit paid salary records. Next month salaries can be edited.' })
+      return
+    }
+    
     setSelectedSalaryRecord(record)
     setEditSalaryData({
       basicSalary: record.fixedSalary || record.basicSalary || ''
@@ -2020,6 +2044,31 @@ const Admin_hr_management = () => {
   const handleSaveSalaryEdit = async () => {
     if (!selectedSalaryRecord || !editSalaryData.basicSalary) {
       addToast({ type: 'error', message: 'Please enter a valid salary amount' })
+      return
+    }
+
+    // Check if record is for future month (next month or later)
+    let recordMonth = selectedSalaryRecord.month || ''
+    if (!recordMonth && selectedSalaryRecord.paymentDate) {
+      const paymentDate = new Date(selectedSalaryRecord.paymentDate)
+      recordMonth = paymentDate.toISOString().slice(0, 7)
+    }
+    // If still no month, use selectedSalaryMonth (for next month records)
+    if (!recordMonth) {
+      recordMonth = selectedSalaryMonth
+    }
+    
+    const today = new Date()
+    const currentMonthStr = today.toISOString().slice(0, 7)
+    // Check if record month OR selected month is in the future
+    const isFutureMonth = recordMonth > currentMonthStr || selectedSalaryMonth > currentMonthStr
+
+    // Prevent editing paid salaries only if not future month
+    // Allow editing for future months (next month) even if paid
+    if (selectedSalaryRecord.status === 'paid' && !isFutureMonth) {
+      addToast({ type: 'error', message: 'Cannot edit paid salary records. Next month salaries can be edited.' })
+      setShowEditSalaryModal(false)
+      setSelectedSalaryRecord(null)
       return
     }
 
@@ -3205,7 +3254,8 @@ const Admin_hr_management = () => {
                     />
                   </div>
 
-                  {/* Action Button */}
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-3">
                   <Button
                     onClick={() => setShowAddEmployeeSalaryModal(true)}
                     className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 font-semibold"
@@ -3213,6 +3263,16 @@ const Admin_hr_management = () => {
                     <Banknote className="h-5 w-5" />
                     Set Employee Salary
                   </Button>
+                    <Button
+                      onClick={() => loadSalaryData(selectedSalaryMonth)}
+                      variant="outline"
+                      className="px-4 py-3 rounded-xl flex items-center gap-2 border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 transition-all duration-200"
+                      title="Refresh salary data"
+                    >
+                      <RefreshCw className="h-5 w-5" />
+                      Refresh
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -3417,6 +3477,24 @@ const Admin_hr_management = () => {
                     const isOverdue = daysUntilPayment < 0 && record.status !== 'paid'
                     const isDueSoon = daysUntilPayment <= 3 && daysUntilPayment >= 0 && record.status !== 'paid'
                     
+                    // Check if record is for future month (next month or later)
+                    let recordMonth = record.month || ''
+                    if (!recordMonth && record.paymentDate) {
+                      const paymentDate = new Date(record.paymentDate)
+                      recordMonth = paymentDate.toISOString().slice(0, 7)
+                    }
+                    // If still no month, use selectedSalaryMonth (for next month records)
+                    if (!recordMonth) {
+                      recordMonth = selectedSalaryMonth
+                    }
+                    
+                    const today = new Date()
+                    const currentMonthStr = today.toISOString().slice(0, 7)
+                    // Check if record month OR selected month is in the future
+                    const isFutureMonth = recordMonth > currentMonthStr || selectedSalaryMonth > currentMonthStr
+                    // Allow editing if: pending OR future month (next month) - always allow future months
+                    const canEdit = record.status !== 'paid' || isFutureMonth
+                    
                     const totalAmount = (record.fixedSalary || 0) + (record.incentiveAmount || 0) + (record.rewardAmount || 0)
                     
                     return (
@@ -3572,8 +3650,13 @@ const Admin_hr_management = () => {
                               onClick={() => handleEditSalary(record)}
                               size="sm"
                               variant="outline"
-                              className="px-2.5 text-xs h-8 text-blue-600 border-blue-300 hover:bg-blue-50"
-                              title="Edit"
+                              disabled={!canEdit}
+                              className={`px-2.5 text-xs h-8 ${
+                                !canEdit
+                                  ? 'text-gray-400 border-gray-200 cursor-not-allowed bg-gray-50' 
+                                  : 'text-blue-600 border-blue-300 hover:bg-blue-50'
+                              }`}
+                              title={!canEdit ? 'Cannot edit paid salary for current month' : 'Edit'}
                             >
                               <Edit3 className="h-3.5 w-3.5" />
                             </Button>
@@ -4074,24 +4157,22 @@ const Admin_hr_management = () => {
                               </div>
                             </div>
                             <div className="flex flex-col gap-1 items-end">
+                              <div className="flex items-center gap-1">
                               <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getExpenseStatusColor(expense.status)}`}>
                                 {expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}
                               </span>
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  expense.paymentStatus === 'paid' 
+                                    ? 'bg-green-100 text-green-700' 
+                                    : 'bg-orange-100 text-orange-700'
+                                }`}>
+                                  {expense.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
+                                </span>
+                              </div>
                               {expense.autoPay && (
                                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
                                   <RefreshCw className="h-3 w-3 mr-1" />
                                   Auto Pay
-                                </span>
-                              )}
-                              {expense.paymentStatus && (
-                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                  expense.paymentStatus === 'paid' 
-                                    ? 'bg-green-100 text-green-700' 
-                                    : expense.paymentStatus === 'due'
-                                    ? 'bg-orange-100 text-orange-700'
-                                    : 'bg-gray-100 text-gray-700'
-                                }`}>
-                                  {expense.paymentStatus === 'paid' ? '✓ Paid' : expense.paymentStatus === 'due' ? '⚠ Due' : 'Pending'}
                                 </span>
                               )}
                             </div>

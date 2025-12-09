@@ -29,7 +29,8 @@ import {
   FiUpload,
   FiFile,
   FiX,
-  FiDollarSign
+  FiDollarSign,
+  FiUserPlus
 } from 'react-icons/fi'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
@@ -93,11 +94,24 @@ const Admin_sales_management = () => {
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showCategoryEditModal, setShowCategoryEditModal] = useState(false)
   const [showCategoryDeleteModal, setShowCategoryDeleteModal] = useState(false)
+  const [showAssignTeamModal, setShowAssignTeamModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [modalType, setModalType] = useState('')
   const [selectedLeadCategory, setSelectedLeadCategory] = useState('')
   const [selectedLeadCategoryData, setSelectedLeadCategoryData] = useState([])
   const [loadingMemberDetails, setLoadingMemberDetails] = useState(false)
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState([])
+  const [alreadyAssignedMembers, setAlreadyAssignedMembers] = useState([])
+  const [assigningMembers, setAssigningMembers] = useState(false)
+  const [salesLeadToggle, setSalesLeadToggle] = useState(false)
+  const [paymentDetails, setPaymentDetails] = useState({
+    pendingIncentive: 0,
+    paidIncentive: 0,
+    currentIncentiveAmount: 0,
+    allTimeIncentive: 0,
+    reward: 0
+  })
+  const [loadingPaymentDetails, setLoadingPaymentDetails] = useState(false)
   
   // Form states
   const [leadNumber, setLeadNumber] = useState('')
@@ -316,7 +330,6 @@ const Admin_sales_management = () => {
       loadClients()
     }
   }, [activeTab])
-
  
   
 
@@ -713,6 +726,7 @@ const Admin_sales_management = () => {
     if (type === 'sales-team' && (item._id || item.id)) {
       try {
         setLoadingMemberDetails(true)
+        setLoadingPaymentDetails(true)
         const memberId = item._id || item.id
         const response = await adminSalesService.getSalesTeamMember(memberId)
         let memberLeads = []
@@ -728,12 +742,60 @@ const Admin_sales_management = () => {
         if (response && response.success && response.data) {
           const transformedLeadBreakdown = transformLeadBreakdown(response.data.leadBreakdown)
           
-          setSelectedItem({
+          const updatedItem = {
+            ...item,
+            ...response.data,
+            leadBreakdown: transformedLeadBreakdown,
+            leads: memberLeads,
+            teamLeadIncentiveSummary: response.data.teamLeadIncentiveSummary || null,
+            teamMemberIncentives: response.data.teamMemberIncentives || []
+          }
+          setSelectedItem(updatedItem)
+          
+          // Calculate payment details
+          const memberData = {
             ...item,
             ...response.data,
             leadBreakdown: transformedLeadBreakdown,
             leads: memberLeads
+          }
+          
+          // Calculate payment details with member data
+          const currentIncentive = Number(memberData.currentIncentive || 0)
+          const reward = Number(memberData.reward || 0)
+          
+          // Get incentive history to calculate paid and pending
+          const incentiveHistory = memberData.incentiveHistory || []
+          let paidIncentive = 0
+          let pendingIncentive = 0
+          let allTimeIncentive = 0
+          
+          // Calculate from incentive history using currentBalance and pendingBalance
+          incentiveHistory.forEach(incentive => {
+            const amount = Number(incentive.amount || 0)
+            const currentBal = Number(incentive.currentBalance || 0)
+            const pendingBal = Number(incentive.pendingBalance || 0)
+            
+            allTimeIncentive += amount
+            paidIncentive += currentBal  // Current balance = paid/available
+            pendingIncentive += pendingBal  // Pending balance = pending
           })
+          
+          // If no history, use current incentive
+          if (incentiveHistory.length === 0) {
+            allTimeIncentive = currentIncentive
+            pendingIncentive = currentIncentive
+          }
+          
+          setPaymentDetails({
+            pendingIncentive: pendingIncentive,
+            paidIncentive: paidIncentive,
+            currentIncentiveAmount: currentIncentive,
+            allTimeIncentive: allTimeIncentive,
+            reward: reward
+          })
+          
+          setLoadingPaymentDetails(false)
         }
       } catch (error) {
         console.error('Error fetching member details:', error)
@@ -741,7 +803,164 @@ const Admin_sales_management = () => {
         // Continue with existing item data if fetch fails
       } finally {
         setLoadingMemberDetails(false)
+        setLoadingPaymentDetails(false)
       }
+    }
+  }
+
+  const handleAssignTeam = async (item) => {
+    setSelectedItem(item)
+    
+    // Ensure sales team is loaded before opening modal
+    if (salesTeam.length === 0) {
+      await loadSalesTeam()
+    }
+    
+    // Check if it's a lead or sales team member (team leader)
+    // Sales team members have: department === 'sales' or team === 'sales'
+    // Leads have: category, phone, status
+    const isSalesTeamMember = item.department === 'sales' || item.team === 'sales' || (item.email && !item.category)
+    const isLead = item.category !== undefined || (item.phone && !item.department)
+    
+    // Get currently assigned team members if any
+    if (isSalesTeamMember && !isLead) {
+      // For sales team members (team leaders), get their team members if any
+      const existingTeamMembers = item.teamMembers || []
+      // Convert to string IDs for proper comparison
+      const existingTeamMemberIds = existingTeamMembers.map(tm => {
+        return typeof tm === 'object' ? String(tm._id || tm.id) : String(tm)
+      })
+      setAlreadyAssignedMembers(existingTeamMemberIds)
+      setSelectedTeamMembers([])
+      setSalesLeadToggle(item.isTeamLead || false)
+    } else if (isLead) {
+      // For leads, get assignedTo
+      if (item.assignedTo && item.assignedTo !== 'unassigned' && typeof item.assignedTo === 'object') {
+        setSelectedTeamMembers([item.assignedTo._id || item.assignedTo.id])
+      } else if (item.assignedTo && item.assignedTo !== 'unassigned') {
+        setSelectedTeamMembers([item.assignedTo])
+      } else {
+        setSelectedTeamMembers([])
+      }
+      setSalesLeadToggle(false)
+      } else {
+        setSelectedTeamMembers([])
+        setAlreadyAssignedMembers([])
+        setSalesLeadToggle(false)
+      }
+    
+    setShowAssignTeamModal(true)
+  }
+
+  const handleTeamMemberToggle = (memberId) => {
+    setSelectedTeamMembers(prev => {
+      if (prev.includes(memberId)) {
+        return prev.filter(id => id !== memberId)
+      } else {
+        return [...prev, memberId]
+      }
+    })
+  }
+
+  const handleConfirmAssignment = async () => {
+    if (!selectedItem) return
+    
+    try {
+      setAssigningMembers(true)
+      const itemId = selectedItem._id || selectedItem.id
+      
+      if (!itemId) {
+        toast.error('Team leader ID not found')
+        return
+      }
+      
+      // Check if it's a sales team member (team leader) - NOT a lead
+      // Sales team members have: department, team, email, etc.
+      // Leads have: phone, category, status, etc.
+      const isSalesTeamMember = selectedItem.department === 'sales' || selectedItem.team === 'sales' || (selectedItem.email && !selectedItem.phone)
+      const isLead = selectedItem.category !== undefined || (selectedItem.phone && !selectedItem.department)
+      
+      if (isSalesTeamMember && !isLead) {
+        // Handle sales team member (team leader) - save as team lead with assigned team members
+        // Merge newly selected members with already assigned members (after any removals)
+        // Convert all to string IDs for consistent comparison
+        const allAssignedIds = [...new Set([
+          ...alreadyAssignedMembers.map(id => typeof id === 'object' ? String(id._id || id.id) : String(id)),
+          ...selectedTeamMembers.map(id => String(id))
+        ])]
+        
+        // Save to backend
+        const response = await adminSalesService.updateTeamMembers(itemId, {
+          teamMembers: allAssignedIds,
+          isTeamLead: salesLeadToggle
+        })
+        
+        if (response && response.success) {
+          // Update the salesTeam array dynamically
+          setSalesTeam(prevTeam => {
+            return prevTeam.map(member => {
+              if ((member._id || member.id) === itemId) {
+                return {
+                  ...member,
+                  teamMembers: allAssignedIds,
+                  isTeamLead: salesLeadToggle
+                }
+              }
+              return member
+            })
+          })
+          
+          const teamLeadStatus = salesLeadToggle ? 'enabled' : 'disabled'
+          const membersCount = allAssignedIds.length
+          
+          toast.success(`Team lead status: ${teamLeadStatus}, ${membersCount} team member(s) assigned`)
+        } else {
+          throw new Error(response?.message || 'Failed to update team members')
+        }
+      } else if (isLead) {
+        // Handle lead assignment (only if it's actually a lead)
+        if (selectedTeamMembers.length === 0) {
+          const response = await adminSalesService.updateLead(itemId, { assignedTo: 'unassigned' })
+          if (response && response.success) {
+            toast.success('Lead unassigned successfully')
+          } else {
+            throw new Error(response?.message || 'Failed to unassign lead')
+          }
+        } else {
+          const memberId = selectedTeamMembers[0]
+          if (!memberId) {
+            toast.error('Invalid team member ID')
+            return
+          }
+          
+          const response = await adminSalesService.updateLead(itemId, { assignedTo: memberId })
+          if (response && response.success) {
+            toast.success('Team member assigned successfully')
+          } else {
+            throw new Error(response?.message || 'Failed to assign team member')
+          }
+        }
+        
+        // Reload leads
+        await loadLeads()
+      } else {
+        toast.error('Invalid item type - expected Sales Team member')
+        return
+      }
+      
+      // Close modal after confirmation
+      setShowAssignTeamModal(false)
+      setSelectedItem(null)
+      setSelectedTeamMembers([])
+      setAlreadyAssignedMembers([])
+      setSalesLeadToggle(false)
+      
+    } catch (error) {
+      console.error('Error assigning team member:', error)
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to assign team member'
+      toast.error(errorMessage)
+    } finally {
+      setAssigningMembers(false)
     }
   }
 
@@ -1762,7 +1981,7 @@ const Admin_sales_management = () => {
                     <FiCreditCard className="h-4 w-4 text-emerald-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-emerald-700">{statistics?.sales?.conversion || 0}%</p>
+                    <p className="text-xs font-medium text-emerald-700">{Math.round(statistics?.sales?.conversion || 0)}%</p>
                     <p className="text-xs text-emerald-600">conversion</p>
                   </div>
                 </div>
@@ -2100,6 +2319,13 @@ const Admin_sales_management = () => {
                                 </span>
                               )}
                           <button 
+                            onClick={() => handleView(lead, 'lead')}
+                            className="text-gray-400 hover:text-primary p-2 rounded hover:bg-primary/10 transition-all duration-200"
+                            title="View Lead"
+                          >
+                            <FiEye className="h-4 w-4" />
+                          </button>
+                          <button 
                             onClick={() => handleDelete(lead, 'lead')}
                                 className="text-gray-400 hover:text-red-600 p-2 rounded hover:bg-red-50 transition-all duration-200"
                                 title="Delete Lead"
@@ -2196,6 +2422,13 @@ const Admin_sales_management = () => {
                             title="View Details"
                           >
                             <FiEye className="h-3 w-3" />
+                          </button>
+                          <button 
+                            onClick={() => handleAssignTeam(member)}
+                            className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
+                            title="Assign Team Members"
+                          >
+                            <FiUserPlus className="h-3 w-3" />
                           </button>
                           <button 
                             onClick={() => handleEditTarget(member)}
@@ -3186,6 +3419,80 @@ const Admin_sales_management = () => {
 
                 </div>
               </div>
+
+              {/* Payment Details Section */}
+              <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center">
+                  <FiDollarSign className="h-4 w-4 mr-2 text-blue-600" />
+                  Payment Details
+                </h4>
+                {loadingPaymentDetails ? (
+                  <div className="text-center py-4 text-gray-500 text-sm">Loading payment details...</div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="bg-white rounded-lg p-3 border border-orange-200">
+                      <div className="text-xs text-orange-600 font-medium mb-1">Pending Incentive</div>
+                      <div className="text-lg font-bold text-orange-800">
+                        ₹{paymentDetails.pendingIncentive.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-green-200">
+                      <div className="text-xs text-green-600 font-medium mb-1">Paid Incentive</div>
+                      <div className="text-lg font-bold text-green-800">
+                        ₹{paymentDetails.paidIncentive.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-blue-200">
+                      <div className="text-xs text-blue-600 font-medium mb-1">Current Incentive Amount</div>
+                      <div className="text-lg font-bold text-blue-800">
+                        ₹{paymentDetails.currentIncentiveAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-purple-200">
+                      <div className="text-xs text-purple-600 font-medium mb-1">All Time Incentive</div>
+                      <div className="text-lg font-bold text-purple-800">
+                        ₹{paymentDetails.allTimeIncentive.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-yellow-200">
+                      <div className="text-xs text-yellow-600 font-medium mb-1">Reward</div>
+                      <div className="text-lg font-bold text-yellow-800">
+                        ₹{paymentDetails.reward.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Team Lead Incentive Section - Only show if team lead */}
+              {selectedItem?.isTeamLead && selectedItem?.teamLeadIncentiveSummary && (
+                <div className="mt-6 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-lg p-4 border border-teal-200">
+                  <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center">
+                    <FiUsers className="h-4 w-4 mr-2 text-teal-600" />
+                    Team Lead Incentive Summary
+                  </h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-white rounded-lg p-3 border border-teal-200">
+                      <div className="text-xs text-teal-600 font-medium mb-1">Team Lead Total</div>
+                      <div className="text-lg font-bold text-teal-800">
+                        ₹{Number(selectedItem.teamLeadIncentiveSummary?.total || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-teal-200">
+                      <div className="text-xs text-teal-600 font-medium mb-1">Team Lead Current</div>
+                      <div className="text-lg font-bold text-teal-800">
+                        ₹{Number(selectedItem.teamLeadIncentiveSummary?.current || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-teal-200">
+                      <div className="text-xs text-teal-600 font-medium mb-1">Team Lead Pending</div>
+                      <div className="text-lg font-bold text-teal-800">
+                        ₹{Number(selectedItem.teamLeadIncentiveSummary?.pending || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex items-center justify-between pt-4 border-t border-gray-200 mt-4">
@@ -4230,6 +4537,257 @@ const Admin_sales_management = () => {
                     <>
                       <FiTrash2 className="h-4 w-4" />
                       <span>Delete Category</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Assign Team Modal */}
+        {showAssignTeamModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowAssignTeamModal(false)
+              setSelectedItem(null)
+              setSelectedTeamMembers([])
+              setAlreadyAssignedMembers([])
+              setSalesLeadToggle(false)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold">Sales Team Lead</h3>
+                    <p className="text-blue-100 text-sm mt-1">Select team members to assign</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowAssignTeamModal(false)
+                      setSelectedItem(null)
+                      setSelectedTeamMembers([])
+                      setSalesLeadToggle(false)
+                    }}
+                    className="text-white hover:text-gray-200 transition-colors"
+                  >
+                    <FiX className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 max-h-[60vh] overflow-y-auto">
+                {/* Sales Lead Toggle Section */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Sales Lead
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setSalesLeadToggle(!salesLeadToggle)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        salesLeadToggle ? 'bg-blue-600' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          salesLeadToggle ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Unassigned Team Members Dropdown - Only show when Sales Lead toggle is ON */}
+                {salesLeadToggle && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Unassigned Team Members
+                    </label>
+                    <div className="border border-gray-300 rounded-lg max-h-64 overflow-y-auto">
+                      {salesTeam.length > 0 ? (
+                        <div className="divide-y divide-gray-200">
+                          {salesTeam
+                            .filter((member) => {
+                              // Show all sales team members except the currently selected item and already assigned ones
+                              const memberId = member._id || member.id
+                              const selectedItemId = selectedItem?._id || selectedItem?.id
+                              // Check if member is already assigned (handle both object and string IDs)
+                              const isAlreadyAssigned = alreadyAssignedMembers.some(assignedId => {
+                                const assignedIdStr = typeof assignedId === 'object' ? String(assignedId._id || assignedId.id) : String(assignedId)
+                                return String(memberId) === assignedIdStr
+                              })
+                              // Exclude only if it's the currently selected item or if it's already assigned
+                              return String(memberId) !== String(selectedItemId) && !isAlreadyAssigned
+                            })
+                            .map((member) => {
+                            const memberId = member._id || member.id
+                            const isSelected = selectedTeamMembers.includes(memberId)
+                            return (
+                              <div
+                                key={memberId}
+                                className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+                                  isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                                }`}
+                                onClick={() => handleTeamMemberToggle(memberId)}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                                      isSelected ? 'bg-blue-600' : 'bg-gray-400'
+                                    }`}>
+                                      {member?.avatar || member?.name?.charAt(0) || 'S'}
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-semibold text-gray-900">
+                                        {member?.name || 'Unknown Member'}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        {member?.position || member?.email || 'Sales Rep'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                    isSelected 
+                                      ? 'bg-blue-600 border-blue-600' 
+                                      : 'border-gray-300'
+                                  }`}>
+                                    {isSelected && (
+                                      <FiCheckCircle className="h-4 w-4 text-white" />
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center text-gray-500 text-sm">
+                          No team members available
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Already Assigned Members Display */}
+                {alreadyAssignedMembers.length > 0 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Already Assigned
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {alreadyAssignedMembers.map((memberId, index) => {
+                        const member = salesTeam.find(m => {
+                          const mId = m._id || m.id
+                          const compareId = typeof memberId === 'object' ? (memberId._id || memberId.id) : memberId
+                          return mId && compareId && String(mId) === String(compareId)
+                        })
+                        const memberName = member?.name || (typeof memberId === 'object' ? memberId.name : null) || `Member ${index + 1}`
+                        const actualMemberId = typeof memberId === 'object' ? (memberId._id || memberId.id) : memberId
+                        return (
+                          <div
+                            key={actualMemberId}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-800 rounded-full text-sm font-medium"
+                          >
+                            <span>{index + 1}</span>
+                            <span className="text-xs">{memberName}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setAlreadyAssignedMembers(prev => prev.filter(id => {
+                                  const idToCompare = typeof id === 'object' ? (id._id || id.id) : id
+                                  return String(idToCompare) !== String(actualMemberId)
+                                }))
+                              }}
+                              className="text-green-600 hover:text-green-800 hover:bg-green-200 rounded-full p-0.5 transition-colors ml-1"
+                              title={`Remove ${memberName}`}
+                            >
+                              <FiX className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected Members Display */}
+                {selectedTeamMembers.length > 0 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Selected Members
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedTeamMembers.map((memberId, index) => {
+                        const member = salesTeam.find(m => (m._id || m.id) === memberId)
+                        return (
+                          <div
+                            key={memberId}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
+                          >
+                            <span>{index + 1}</span>
+                            <span className="text-xs">{member?.name || `Member ${index + 1}`}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleTeamMemberToggle(memberId)
+                              }}
+                              className="text-blue-600 hover:text-blue-800 hover:bg-blue-200 rounded-full p-0.5 transition-colors ml-1"
+                              title={`Remove ${member?.name || 'member'}`}
+                            >
+                              <FiX className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowAssignTeamModal(false)
+                    setSelectedItem(null)
+                    setSelectedTeamMembers([])
+                    setAlreadyAssignedMembers([])
+                  }}
+                  disabled={assigningMembers}
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmAssignment}
+                  disabled={assigningMembers}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {assigningMembers ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Assigning...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiCheckCircle className="h-4 w-4" />
+                      <span>Confirm</span>
                     </>
                   )}
                 </button>

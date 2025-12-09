@@ -61,6 +61,33 @@ const incentiveSchema = new mongoose.Schema({
   pendingMovedToCurrentAt: {
     type: Date
   },
+  // Team incentive fields
+  teamLeadId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Sales'
+  },
+  teamMemberId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Sales'
+  },
+  isTeamLeadIncentive: {
+    type: Boolean,
+    default: false
+  },
+  isTeamMemberIncentive: {
+    type: Boolean,
+    default: false
+  },
+  teamLeadSharePercentage: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0
+  },
+  originalIncentiveId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Incentive'
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',
@@ -92,6 +119,11 @@ incentiveSchema.index({ isConversionBased: 1 });
 incentiveSchema.index({ projectId: 1 });
 incentiveSchema.index({ clientId: 1 });
 incentiveSchema.index({ leadId: 1 });
+incentiveSchema.index({ teamLeadId: 1 });
+incentiveSchema.index({ teamMemberId: 1 });
+incentiveSchema.index({ isTeamLeadIncentive: 1 });
+incentiveSchema.index({ isTeamMemberIncentive: 1 });
+incentiveSchema.index({ originalIncentiveId: 1 });
 
 // Virtual for days since awarded
 incentiveSchema.virtual('daysSinceAwarded').get(function() {
