@@ -1,8 +1,17 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const path = require('path');
 
-// Hardcoded MongoDB URI
-const MONGODB_URI = 'mongodb+srv://ram312908_db_user:Ankit@cluster0.vg2zbcm.mongodb.net/Appzeto';
+// Load environment variables from .env file
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
+// Use environment variable for MongoDB URI
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  console.error('❌ ERROR: MONGODB_URI is not defined in .env file');
+  process.exit(1);
+}
 
 // Admin Schema (inline for script)
 const adminSchema = new mongoose.Schema({

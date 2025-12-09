@@ -26,7 +26,7 @@ module.exports = {
     // This prevents PM2 from caching old env values
     env: {
       NODE_ENV: process.env.NODE_ENV || 'production',
-      PORT: process.env.PORT || 5050  // Changed to 5050 to match Nginx proxy_pass configuration
+      PORT: process.env.PORT || 5051  // Changed to 5050 to match Nginx proxy_pass configuration
       // All other environment variables (MONGODB_URI, JWT_SECRET, etc.)
       // are loaded directly from .env file by server.js
       // This ensures PM2 always uses the latest .env values after restart

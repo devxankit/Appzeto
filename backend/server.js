@@ -17,6 +17,12 @@ if (envResult.error) {
 } else {
   console.log('✅ Loaded .env file from:', envPath);
   console.log('   Environment variables loaded:', Object.keys(envResult.parsed || {}).length, 'variables');
+  
+  // Debug: Show MongoDB URI (masked for security)
+  if (process.env.MONGODB_URI) {
+    const maskedURI = process.env.MONGODB_URI.replace(/:[^:@]+@/, ':****@');
+    console.log('   🔗 MongoDB URI: ' + maskedURI.split('@')[1] || 'Loaded');
+  }
 }
 
 // Validate critical environment variables on startup
@@ -524,7 +530,7 @@ const startServer = async () => {
     // Connect to MongoDB
     await connectDB();
     
-    // Start server
+    // Start server with error handling for port conflicts
     const server = app.listen(PORT, () => {
       // Clear console for clean startup
       console.clear();
@@ -558,6 +564,43 @@ const startServer = async () => {
       console.log('   🎉 Server started successfully! Ready for connections.');
       console.log('🚀 ' + '='.repeat(60));
       console.log('');
+    });
+
+    // Handle server errors (especially port conflicts)
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.log('\n');
+        console.log('❌ ' + '='.repeat(60));
+        console.log('   🚨 PORT ALREADY IN USE');
+        console.log('❌ ' + '='.repeat(60));
+        console.log(`   ⚠️  Port ${PORT} is already being used by another process.`);
+        console.log('');
+        console.log('🔧 SOLUTIONS:');
+        console.log('');
+        console.log('   1️⃣  Find and kill the process using port ' + PORT + ':');
+        console.log('      • Linux/Mac: lsof -ti:' + PORT + ' | xargs kill -9');
+        console.log('      • Or: fuser -k ' + PORT + '/tcp');
+        console.log('      • Or: netstat -tulpn | grep :' + PORT);
+        console.log('');
+        console.log('   2️⃣  If using PM2, check for running instances:');
+        console.log('      • pm2 list');
+        console.log('      • pm2 stop Appzeto-Backend');
+        console.log('      • pm2 delete Appzeto-Backend');
+        console.log('');
+        console.log('   3️⃣  Change the port in your .env file:');
+        console.log('      • Set PORT=5051 (or another available port)');
+        console.log('');
+        console.log('❌ ' + '='.repeat(60));
+        process.exit(1);
+      } else {
+        console.log('\n');
+        console.log('❌ ' + '='.repeat(50));
+        console.log('   🚨 SERVER ERROR');
+        console.log('❌ ' + '='.repeat(50));
+        console.error('   Error:', error.message);
+        console.log('❌ ' + '='.repeat(50));
+        process.exit(1);
+      }
     });
 
     // Initialize Socket.io with enhanced logging
