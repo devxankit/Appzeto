@@ -547,6 +547,7 @@ const getCategoryPerformance = asyncHandler(async (req, res, next) => {
 const getAllSalesTeam = asyncHandler(async (req, res, next) => {
   const salesTeam = await Sales.find({ isActive: true })
     .select('-password -loginAttempts -lockUntil')
+    .populate('teamMembers', 'name email')
     .sort({ name: 1 });
 
   // Get performance metrics for each team member
@@ -595,7 +596,8 @@ const getAllSalesTeam = asyncHandler(async (req, res, next) => {
 // @access  Private (Admin/HR only)
 const getSalesTeamMember = asyncHandler(async (req, res, next) => {
   const member = await Sales.findById(req.params.id)
-    .select('-password -loginAttempts -lockUntil');
+    .select('-password -loginAttempts -lockUntil')
+    .populate('teamMembers', 'name email');
 
   if (!member) {
     return next(new ErrorResponse('Sales team member not found', 404));
@@ -652,7 +654,7 @@ const getSalesTeamMember = asyncHandler(async (req, res, next) => {
     }
   ]);
 
-  // Get conversion-based incentive history only
+  // Get conversion-based incentive history only (both individual and team lead incentives)
   const incentiveHistory = await Incentive.find({ 
     salesEmployee: member._id,
     isConversionBased: true
@@ -660,15 +662,51 @@ const getSalesTeamMember = asyncHandler(async (req, res, next) => {
     .populate('clientId', 'name')
     .populate('projectId', 'name status financialDetails')
     .populate('leadId', 'phone')
+    .populate('teamLeadId', 'name')
+    .populate('teamMemberId', 'name')
     .sort({ dateAwarded: -1 })
     .limit(10);
+
+  // Get team member incentives if this is a team lead
+  let teamMemberIncentives = [];
+  if (member.isTeamLead && member.teamMembers && member.teamMembers.length > 0) {
+    teamMemberIncentives = await Incentive.find({
+      teamLeadId: member._id,
+      isTeamLeadIncentive: true,
+      isConversionBased: true
+    })
+      .populate('clientId', 'name')
+      .populate('projectId', 'name status financialDetails')
+      .populate('teamMemberId', 'name email')
+      .sort({ dateAwarded: -1 })
+      .limit(20);
+  }
+
+  // Calculate team lead incentive totals
+  let teamLeadIncentiveTotal = 0;
+  let teamLeadIncentiveCurrent = 0;
+  let teamLeadIncentivePending = 0;
+  
+  if (teamMemberIncentives.length > 0) {
+    teamMemberIncentives.forEach(inc => {
+      teamLeadIncentiveTotal += inc.amount || 0;
+      teamLeadIncentiveCurrent += inc.currentBalance || 0;
+      teamLeadIncentivePending += inc.pendingBalance || 0;
+    });
+  }
 
   res.status(200).json({
     success: true,
     data: {
       ...member.toObject(),
       leadBreakdown,
-      incentiveHistory
+      incentiveHistory,
+      teamMemberIncentives: teamMemberIncentives,
+      teamLeadIncentiveSummary: {
+        total: teamLeadIncentiveTotal,
+        current: teamLeadIncentiveCurrent,
+        pending: teamLeadIncentivePending
+      }
     }
   });
 });
@@ -699,6 +737,55 @@ const setSalesTarget = asyncHandler(async (req, res, next) => {
       id: member._id,
       name: member.name,
       salesTarget: member.salesTarget
+    }
+  });
+});
+
+// @desc    Update sales team member team assignment
+// @route   PUT /api/admin/sales/team/:id/team-members
+// @access  Private (Admin/HR only)
+const updateTeamMembers = asyncHandler(async (req, res, next) => {
+  const { teamMembers, isTeamLead } = req.body;
+
+  const member = await Sales.findById(req.params.id);
+
+  if (!member) {
+    return next(new ErrorResponse('Sales team member not found', 404));
+  }
+
+  // Update team members if provided
+  if (teamMembers !== undefined) {
+    // Validate team members are valid ObjectIds
+    if (Array.isArray(teamMembers)) {
+      const mongoose = require('mongoose');
+      const validTeamMembers = teamMembers.filter(id => {
+        try {
+          return mongoose.Types.ObjectId.isValid(id);
+        } catch {
+          return false;
+        }
+      });
+      member.teamMembers = validTeamMembers;
+    } else {
+      member.teamMembers = [];
+    }
+  }
+
+  // Update isTeamLead if provided
+  if (isTeamLead !== undefined) {
+    member.isTeamLead = Boolean(isTeamLead);
+  }
+
+  await member.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Team members updated successfully',
+    data: {
+      id: member._id,
+      name: member.name,
+      isTeamLead: member.isTeamLead,
+      teamMembers: member.teamMembers
     }
   });
 });
@@ -1150,6 +1237,11 @@ const getSalesOverview = asyncHandler(async (req, res, next) => {
       averageDealValue: leadData.convertedLeads > 0 ? 
         leadData.convertedValue / leadData.convertedLeads : 0
     },
+    sales: {
+      total: leadData.convertedValue || 0, // Total sales = converted leads value
+      conversion: leadData.totalLeads > 0 ? 
+        Math.round((leadData.convertedLeads / leadData.totalLeads) * 100 * 100) / 100 : 0
+    },
     team: {
       total: teamData.totalTeamMembers,
       totalTarget: teamData.totalTarget,
@@ -1289,6 +1381,7 @@ const deleteSalesMember = asyncHandler(async (req, res, next) => {
 });
 
 module.exports = {
+  updateTeamMembers,
   // Lead Management
   createLead,
   createBulkLeads,

@@ -8,7 +8,8 @@ import {
   FiCalendar,
   FiTrendingUp,
   FiActivity,
-  FiX
+  FiX,
+  FiUsers
 } from 'react-icons/fi'
 import { FaRupeeSign } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
@@ -26,6 +27,11 @@ const SL_wallet = () => {
     monthlyEarning: 0,
     totalEarning: 0,
     monthlySalary: 0,
+    teamLeadIncentive: {
+      total: 0,
+      current: 0,
+      pending: 0
+    },
     transactions: []
   })
 
@@ -39,20 +45,45 @@ const SL_wallet = () => {
         const monthly = Number(data?.incentive?.monthly || 0)
         const allTime = Number(data?.incentive?.allTime || 0)
         const fixedSalary = Number(data?.salary?.fixedSalary || 0)
+        const breakdown = data?.incentive?.breakdown || []
+
+        // Calculate team lead incentive totals from breakdown
+        let teamLeadIncentiveTotal = 0
+        let teamLeadIncentiveCurrent = 0
+        let teamLeadIncentivePending = 0
+        
+        breakdown.forEach(inc => {
+          if (inc.isTeamLeadIncentive) {
+            teamLeadIncentiveTotal += Number(inc.amount || 0)
+            teamLeadIncentiveCurrent += Number(inc.currentBalance || 0)
+            teamLeadIncentivePending += Number(inc.pendingBalance || 0)
+          }
+        })
+
+        // Use backend values directly (backend already handles 50% split)
+        const currentBalance = current
+        const pendingIncentive = pending
 
         setWallet({
-          currentBalance: current,
-          pendingIncentive: pending,
+          currentBalance: currentBalance,
+          pendingIncentive: pendingIncentive,
           monthlyEarning: monthly,
           totalEarning: allTime,
           monthlySalary: fixedSalary,
+          teamLeadIncentive: {
+            total: teamLeadIncentiveTotal,
+            current: teamLeadIncentiveCurrent,
+            pending: teamLeadIncentivePending
+          },
           transactions: (data?.transactions || []).map(t => ({
             id: t.id || `${t.type}-${t.date}`,
             amount: Number(t.amount || 0),
             type: 'income',
             date: new Date(t.date).toLocaleDateString(),
             category: t.type === 'salary' ? 'Salary' : 'Reward',
-            description: t.type === 'salary' ? 'Monthly Salary' : (t.clientName ? `Incentive - ${t.clientName}` : 'Incentive')
+            description: t.type === 'salary' ? 'Monthly Salary' : (t.clientName ? `Incentive - ${t.clientName}` : 'Incentive'),
+            isTeamLeadIncentive: t.isTeamLeadIncentive || false,
+            teamMemberName: t.teamMemberName || null
           }))
         })
         setError(null)
@@ -221,6 +252,39 @@ const SL_wallet = () => {
                 </div>
               </motion.div>
             </motion.div>
+
+            {/* Team Lead Incentive Section - Only show if team lead incentive exists */}
+            {wallet.teamLeadIncentive && wallet.teamLeadIncentive.total > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.7 }}
+                className="mb-3"
+              >
+                <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-lg p-3 border border-teal-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-teal-800 text-xs font-semibold flex items-center">
+                      <FiUsers className="mr-1" />
+                      Team Lead Incentive
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <p className="text-gray-600 text-xs">Total</p>
+                      <p className="text-teal-800 text-sm font-bold">{formatCurrency(wallet.teamLeadIncentive.total)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 text-xs">Current</p>
+                      <p className="text-teal-800 text-sm font-bold">{formatCurrency(wallet.teamLeadIncentive.current)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 text-xs">Pending</p>
+                      <p className="text-teal-800 text-sm font-bold">{formatCurrency(wallet.teamLeadIncentive.pending)}</p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
             {/* Monthly Summary */}
             <motion.div 

@@ -110,6 +110,7 @@ const generateSignature = (publicId) => {
   return Math.abs(hash).toString(16);
 };
 
+
 // Get optimized image URL
 export const getOptimizedImageUrl = (publicId, options = {}) => {
   const defaultOptions = {

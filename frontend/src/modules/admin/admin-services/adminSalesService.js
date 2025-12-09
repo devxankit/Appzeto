@@ -298,6 +298,23 @@ class AdminSalesService {
     }
   }
 
+  // Update team members assignment
+  async updateTeamMembers(memberId, teamData) {
+    try {
+      const response = await apiRequest(`/admin/sales/team/${memberId}/team-members`, {
+        method: 'PUT',
+        body: JSON.stringify(teamData),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response;
+    } catch (error) {
+      console.error('Error updating team members:', error);
+      throw error;
+    }
+  }
+
   // Distribute leads to sales member
   async distributeLeads(memberId, count, categoryId = 'all') {
     try {

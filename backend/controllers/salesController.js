@@ -2284,6 +2284,8 @@ const convertLeadToClient = async (req, res) => {
     const Incentive = require('../models/Incentive');
     const incentivePerClient = Number(sales?.incentivePerClient || 0);
     
+    let teamMemberIncentive = null;
+    
     if (incentivePerClient > 0) {
       try {
         // Calculate split: 50% current, 50% pending
@@ -2291,8 +2293,8 @@ const convertLeadToClient = async (req, res) => {
         const currentBalance = totalAmount * 0.5;
         const pendingBalance = totalAmount * 0.5;
 
-        // Create conversion-based incentive
-        await Incentive.create({
+        // Create conversion-based incentive for team member
+        teamMemberIncentive = await Incentive.create({
           salesEmployee: req.sales.id,
           amount: totalAmount,
           currentBalance: currentBalance,
@@ -2304,9 +2306,53 @@ const convertLeadToClient = async (req, res) => {
           isConversionBased: true,
           projectId: newProject._id,
           clientId: client._id,
-          leadId: lead._id
+          leadId: lead._id,
+          isTeamMemberIncentive: false // Will be updated if team lead exists
           // createdBy is not required for conversion-based incentives
         });
+
+        // Check if this sales employee has a team lead
+        const Sales = require('../models/Sales');
+        const teamLead = await Sales.findOne({
+          teamMembers: req.sales.id,
+          isTeamLead: true,
+          isActive: true
+        });
+
+        // If team lead exists, create team lead incentive
+        if (teamLead && teamLead.teamLeadSharePercentage > 0) {
+          const teamLeadSharePercentage = Number(teamLead.teamLeadSharePercentage || 10);
+          const teamLeadIncentiveAmount = (totalAmount * teamLeadSharePercentage) / 100;
+          const teamLeadCurrentBalance = teamLeadIncentiveAmount * 0.5;
+          const teamLeadPendingBalance = teamLeadIncentiveAmount * 0.5;
+
+          // Create team lead incentive
+          await Incentive.create({
+            salesEmployee: teamLead._id,
+            amount: teamLeadIncentiveAmount,
+            currentBalance: teamLeadCurrentBalance,
+            pendingBalance: teamLeadPendingBalance,
+            reason: 'Team member lead conversion',
+            description: `Team lead incentive for ${sales.name || 'Team Member'}'s conversion: ${client.name || 'Client'}`,
+            dateAwarded: new Date(),
+            status: 'conversion-current',
+            isConversionBased: true,
+            projectId: newProject._id,
+            clientId: client._id,
+            leadId: lead._id,
+            isTeamLeadIncentive: true,
+            isTeamMemberIncentive: false,
+            teamLeadId: teamLead._id,
+            teamMemberId: req.sales.id,
+            teamLeadSharePercentage: teamLeadSharePercentage,
+            originalIncentiveId: teamMemberIncentive._id
+          });
+
+          // Update team member incentive to mark it
+          teamMemberIncentive.isTeamMemberIncentive = true;
+          teamMemberIncentive.teamLeadId = teamLead._id;
+          await teamMemberIncentive.save();
+        }
       } catch (incentiveError) {
         // Log error but don't fail the conversion
         console.error('Error creating conversion incentive:', incentiveError);
@@ -3301,6 +3347,16 @@ const getWalletSummary = async (req, res) => {
     let pending = 0;
     const breakdown = [];
 
+    // Populate team member and team lead names
+    const teamMemberIds = [...new Set(conversionIncentives.filter(inc => inc.teamMemberId).map(inc => inc.teamMemberId.toString()))];
+    const teamLeadIds = [...new Set(conversionIncentives.filter(inc => inc.teamLeadId).map(inc => inc.teamLeadId.toString()))];
+    
+    const teamMembers = await Sales.find({ _id: { $in: teamMemberIds } }).select('name').lean();
+    const teamLeads = await Sales.find({ _id: { $in: teamLeadIds } }).select('name').lean();
+    
+    const teamMemberMap = new Map(teamMembers.map(tm => [tm._id.toString(), tm.name]));
+    const teamLeadMap = new Map(teamLeads.map(tl => [tl._id.toString(), tl.name]));
+
     conversionIncentives.forEach(incentive => {
       totalIncentive += incentive.amount;
       current += incentive.currentBalance || 0;
@@ -3317,7 +3373,11 @@ const getWalletSummary = async (req, res) => {
         convertedAt: incentive.dateAwarded || null,
         amount: incentive.amount,
         currentBalance: incentive.currentBalance || 0,
-        pendingBalance: incentive.pendingBalance || 0
+        pendingBalance: incentive.pendingBalance || 0,
+        isTeamLeadIncentive: incentive.isTeamLeadIncentive || false,
+        isTeamMemberIncentive: incentive.isTeamMemberIncentive || false,
+        teamMemberName: incentive.teamMemberId ? teamMemberMap.get(incentive.teamMemberId.toString()) || null : null,
+        teamLeadName: incentive.teamLeadId ? teamLeadMap.get(incentive.teamLeadId.toString()) || null : null
       });
     });
 

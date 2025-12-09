@@ -22,6 +22,7 @@ const {
   getAllSalesTeam,
   getSalesTeamMember,
   setSalesTarget,
+  updateTeamMembers,
   distributeLeads,
   getLeadsForMember,
   getLeadsByCategory,
@@ -128,6 +129,11 @@ router.get('/team/:id', getSalesTeamMember);
 // @desc    Set/update sales target for team member
 // @access  Private (Admin/HR only)
 router.put('/team/:id/target', setSalesTarget);
+
+// @route   PUT /api/admin/sales/team/:id/team-members
+// @desc    Update team members assignment for sales team lead
+// @access  Private (Admin/HR only)
+router.put('/team/:id/team-members', updateTeamMembers);
 
 // @route   POST /api/admin/sales/team/:id/distribute-leads
 // @desc    Distribute leads to sales team member
