@@ -57,17 +57,17 @@ pm2 monit
    nano .env
    ```
 
-2. **Restart PM2** (automatically picks up new .env values):
+2. **Restart PM2**:
    ```bash
    pm2 restart Appzeto-Backend
    ```
 
-That's it! The server.js file loads .env automatically, so no PM2 caching issues.
+That's it! Standard Node.js deployment - .env file is loaded automatically when the app starts.
 
 ## Notes
 
-- All environment variables are loaded from `.env` file by `server.js`
-- PM2 ecosystem.config.js doesn't set any env vars (to avoid caching)
-- Just edit `.env` and restart - changes take effect immediately
-- Standard Node.js + PM2 deployment - no special tricks needed
+- All environment variables are loaded from `.env` file by `server.js` (standard Node.js practice)
+- PM2 ecosystem.config.js is minimal - just runs the app, no env vars set
+- Edit `.env` and restart - changes take effect immediately
+- Standard Node.js + PM2 deployment - simple and reliable
 

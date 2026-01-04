@@ -5,32 +5,14 @@ const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 
-// Load environment variables with explicit path resolution
-// This ensures it works in both development and production (PM2)
-const envPath = path.resolve(__dirname, '.env');
-const envResult = require('dotenv').config({ path: envPath });
-
-// Log .env file loading status
-if (envResult.error) {
-  console.warn('⚠️  WARNING: Could not load .env file:', envResult.error.message);
-  console.warn('   Environment variables will be read from system environment or PM2 config');
-} else {
-  console.log('✅ Loaded .env file from:', envPath);
-  console.log('   Environment variables loaded:', Object.keys(envResult.parsed || {}).length, 'variables');
-  
-  // Debug: Show MongoDB URI (masked for security)
-  if (process.env.MONGODB_URI) {
-    const maskedURI = process.env.MONGODB_URI.replace(/:[^:@]+@/, ':****@');
-    console.log('   🔗 MongoDB URI: ' + maskedURI.split('@')[1] || 'Loaded');
-  }
-}
+// Load environment variables from .env file
+// Standard Node.js practice: load dotenv once at entry point
+require('dotenv').config();
 
 // Validate critical environment variables on startup
 if (!process.env.MONGODB_URI) {
   console.error('❌ ERROR: MONGODB_URI environment variable is not set!');
   console.error('   Please ensure your .env file exists and contains MONGODB_URI');
-  console.error('   Or set MONGODB_URI as an environment variable in your PM2 config');
-  console.error('   .env file path:', envPath);
   process.exit(1);
 }
 
