@@ -1,17 +1,5 @@
-// PM2 Ecosystem Configuration
-// This file configures PM2 to run the Appzeto Backend application
-// 
-// Usage:
-//   pm2 start ecosystem.config.js
-//   pm2 restart Appzeto-Backend
-//   pm2 stop Appzeto-Backend
-//   pm2 delete Appzeto-Backend
-//
-// Note: Make sure your .env file exists in the backend directory
-// The application will automatically load environment variables from .env file
-// IMPORTANT: Do NOT set env vars here except NODE_ENV and PORT
-// All other env vars should be loaded from .env file by server.js
-// This ensures PM2 always picks up the latest .env changes
+// PM2 Ecosystem Configuration for VPS Deployment
+// Simple and standard PM2 setup - all environment variables loaded from .env file by server.js
 
 module.exports = {
   apps: [{
@@ -21,16 +9,9 @@ module.exports = {
     instances: 1,
     exec_mode: 'fork',
     
-    // Environment variables
-    // Only set NODE_ENV and PORT here - all other vars loaded from .env by server.js
-    // This prevents PM2 from caching old env values
-    env: {
-      NODE_ENV: process.env.NODE_ENV || 'production',
-      PORT: process.env.PORT || 5051  // Changed to 5050 to match Nginx proxy_pass configuration
-      // All other environment variables (MONGODB_URI, JWT_SECRET, etc.)
-      // are loaded directly from .env file by server.js
-      // This ensures PM2 always uses the latest .env values after restart
-    },
+    // All environment variables are loaded from .env file by server.js
+    // No env vars set here to avoid PM2 caching issues
+    // Just edit .env file and run: pm2 restart Appzeto-Backend
     
     // Logging
     error_file: './logs/pm2-error.log',
@@ -49,15 +30,12 @@ module.exports = {
     max_memory_restart: '1G',
     
     // Monitoring
-    watch: false, // Set to true for development auto-reload
+    watch: false,
     
     // Graceful shutdown
     kill_timeout: 5000,
     wait_ready: true,
-    listen_timeout: 10000,
-    
-    // Advanced
-    ignore_watch: ['node_modules', 'logs', '.git']
+    listen_timeout: 10000
   }]
 };
 
