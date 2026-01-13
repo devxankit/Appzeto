@@ -437,8 +437,6 @@ const LeadDashboard = () => {
           </div>
         </div>
 
-        {/* Desktop Layout - Hidden on mobile */}
-        <div className="hidden lg:block mt-8">
           <div>
               {/* Add New Lead Button */}
               <motion.div 
@@ -578,7 +576,6 @@ const LeadDashboard = () => {
                 </Link>
               </motion.div>
           </div>
-        </div>
       </main>
 
       {/* Add Lead Modal */}

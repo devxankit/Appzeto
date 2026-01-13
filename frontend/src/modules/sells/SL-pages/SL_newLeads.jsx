@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   FiPhone, 
@@ -22,7 +23,6 @@ const SL_newLeads = () => {
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedLeadId, setSelectedLeadId] = useState(null)
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -63,7 +63,7 @@ const SL_newLeads = () => {
   }
 
   // Fetch leads from API
-  const fetchLeads = async () => {
+  const fetchLeads = useCallback(async () => {
     setIsLoadingLeads(true)
     try {
       const params = {
@@ -96,14 +96,12 @@ const SL_newLeads = () => {
       setTotalNewLeads(response.total)
     } catch (error) {
       console.error('Error fetching leads:', error)
-      // Service already returns empty data on error, just show a subtle message
-      if (leadsData.length === 0) {
-        toast.error('Unable to load leads. Please check your connection.')
-      }
+      // Show error message
+      toast.error('Unable to load leads. Please check your connection.')
     } finally {
       setIsLoadingLeads(false)
     }
-  }
+  }, [selectedCategory, searchTerm, selectedFilter, pagination.page, pagination.limit, toast])
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -114,7 +112,7 @@ const SL_newLeads = () => {
   useEffect(() => {
     fetchCategories()
     fetchLeads()
-  }, [selectedCategory, searchTerm, selectedFilter, pagination.page])
+  }, [fetchLeads])
 
   const filters = [
     { id: 'today', label: 'Today' },
@@ -155,16 +153,6 @@ const SL_newLeads = () => {
     
     // Return default if not found
     return { name: 'Unknown', color: '#999999', icon: '📋' }
-  }
-
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'high': return 'text-red-500'
-      case 'medium': return 'text-gray-500'
-      case 'low': return 'text-green-500'
-      default: return 'text-gray-500'
-    }
   }
 
   const handleCall = (phone) => {
@@ -415,109 +403,14 @@ const SL_newLeads = () => {
     )
   }
 
-  // Desktop Lead Card Component - Simplified
-  const DesktopLeadCard = ({ lead }) => {
-    const categoryInfo = getCategoryInfo(lead.category)
-    
-    return (
-      <div className="flex items-center justify-between">
-        {/* Left Section - Avatar & Info */}
-        <div className="flex-1 flex items-center space-x-4">
-          {/* Avatar */}
-          <div className="flex-shrink-0">
-            <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center">
-              <FiUser className="text-white text-lg" />
-            </div>
-          </div>
-
-          {/* Phone Number & Category */}
-          <div className="flex-1">
-            <h3 className="text-xl font-semibold text-gray-900">{lead.phone}</h3>
-            {/* Category Tag */}
-            <div className="flex items-center space-x-2 mt-1">
-                <span 
-                  className="text-xs text-black"
-                >
-                  {categoryInfo.icon} {categoryInfo.name}
-                </span>
-            </div>
-          </div>
-        </div>
-
-      {/* Actions Section */}
-      <div className="flex items-center space-x-4">
-        <button
-          onClick={() => handleCall(lead.phone)}
-          className="bg-white text-teal-600 border border-teal-200 px-4 py-2 rounded-lg hover:bg-teal-50 transition-all duration-200 text-sm font-medium"
-        >
-          Call
-        </button>
-        
-        <button
-          onClick={() => handleWhatsApp(lead.phone)}
-          className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-all duration-200 flex items-center space-x-2"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/>
-          </svg>
-          <span className="text-sm">WhatsApp</span>
-        </button>
-
-        <div className="relative">
-          <button
-            onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
-            className="bg-gray-100 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-200 transition-all duration-200"
-          >
-            <FiMoreVertical className="text-lg" />
-          </button>
-
-          {/* Actions Dropdown */}
-          <AnimatePresence>
-            {showActionsMenu === lead._id && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                transition={{ duration: 0.2}}
-                className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl border border-gray-200 z-50"
-              >
-                <div className="py-2.5">
-                  <button
-                    onClick={() => handleStatusChange(lead._id, 'contacted')}
-                    className="w-full px-5 py-3 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
-                  >
-                    Mark as Contacted
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(lead._id, 'not_picked')}
-                    className="w-full px-5 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors duration-200"
-                  >
-                    Mark as Not Picked
-                  </button>
-                  <button
-                    onClick={() => handleNotInterested(lead._id)}
-                    className="w-full px-5 py-3 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
-                  >
-                    Mark as Not Interested
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-    </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <SL_navbar />
       
-      <main className="max-w-7xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
+      <main className="max-w-4xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
         
-         {/* Mobile Layout */}
-         <div className="lg:hidden">
+         {/* Responsive Layout */}
+         <div>
            {/* Enhanced Header Section */}
            <motion.div 
              initial={{ opacity: 0, y: 20 }}
@@ -750,329 +643,6 @@ const SL_newLeads = () => {
               </motion.div>
             )}
           </motion.div>
-        </div>
-
-        {/* Desktop Layout */}
-        <div className="hidden lg:block">
-          <div className="grid grid-cols-12 gap-8">
-            
-            {/* Main Content - 8 columns */}
-            <div className="col-span-8 space-y-6">
-              
-              {/* Desktop Header */}
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                className="flex items-center justify-between"
-              >
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900">New Leads</h1>
-                  <p className="text-gray-600 mt-2">Manage and track your potential customers</p>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="bg-gradient-to-r from-teal-500 to-teal-600 text-white px-6 py-3 rounded-xl">
-                    <span className="text-sm font-semibold">Total: {totalNewLeads}</span>
-                  </div>
-                  <div className="bg-white text-gray-600 px-6 py-3 rounded-xl border border-gray-200">
-                    <span className="text-sm font-semibold">Showing: {filteredLeads.length}</span>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Desktop Search & Filters */}
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                className="bg-white rounded-xl p-6 shadow-lg border border-gray-200"
-              >
-                <div className="flex items-center space-x-4 mb-6">
-                  <div className="flex-1 relative">
-                    <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl" />
-                    <input
-                      type="text"
-                      placeholder="Search by phone number..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 text-lg"
-                    />
-                  </div>
-                </div>
-                
-                {/* Time Period Filters */}
-                <div className="mb-4">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Time Period</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {filters.map((filter) => (
-                      <button
-                        key={filter.id}
-                        onClick={() => setSelectedFilter(filter.id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                          selectedFilter === filter.id
-                            ? 'bg-teal-500 text-white shadow-md'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Category Filters */}
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Category</h4>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setSelectedCategory('all')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                        selectedCategory === 'all'
-                          ? 'bg-teal-500 text-white shadow-md'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      All Categories
-                    </button>
-                    {categories.length > 0 ? categories.map((category) => (
-                      <button
-                        key={category._id}
-                        onClick={() => setSelectedCategory(category._id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
-                          selectedCategory === category._id
-                            ? 'text-white shadow-md'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                        style={{
-                          backgroundColor: selectedCategory === category._id ? category.color : undefined
-                        }}
-                      >
-                        <span>{category.icon}</span>
-                        <span>{category.name}</span>
-                      </button>
-                    )) : (
-                      <div className="text-sm text-gray-500">Loading categories...</div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Desktop Leads Grid */}
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-                className="space-y-3"
-              >
-                <AnimatePresence>
-                  {isLoadingLeads ? (
-                    <div className="space-y-3">
-                      {[...Array(3)].map((_, index) => (
-                        <div key={index} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse">
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <div className="h-5 bg-gray-200 rounded w-32 mb-2"></div>
-                              <div className="h-4 bg-gray-200 rounded w-20"></div>
-                            </div>
-                            <div className="h-10 w-10 bg-gray-200 rounded-full"></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : filteredLeads.length === 0 ? (
-                    <div className="text-center py-12">
-                      <p className="text-gray-500 text-lg">No new leads found</p>
-                    </div>
-                  ) : (
-                    filteredLeads.map((lead, index) => (
-                    <motion.div
-                      key={lead._id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
-                      className="bg-white rounded-xl p-5 shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300"
-                    >
-                      <DesktopLeadCard lead={lead} />
-                    </motion.div>
-                  ))
-                  )}
-                </AnimatePresence>
-              </motion.div>
-
-              {/* Empty State */}
-              {filteredLeads.length === 0 && !isLoadingLeads && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-16"
-                >
-                  <div className="max-w-md mx-auto">
-                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <FiSearch className="text-gray-400 text-3xl" />
-                    </div>
-                    <h3 className="text-2xl font-semibold text-gray-900 mb-4">No leads found</h3>
-                    <p className="text-gray-600 text-lg">
-                      {searchTerm ? 'Try adjusting your search criteria or filters.' : 'No leads match your current filters.'}
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Desktop Pagination */}
-              {pagination.pages > 1 && (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.6, delay: 0.8 }}
-                  className="flex items-center justify-center space-x-4 mt-8"
-                >
-                  <button
-                    onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
-                    disabled={pagination.page === 1}
-                    className="px-4 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-                  >
-                    Previous
-                  </button>
-                  
-                  <div className="flex items-center space-x-2">
-                    {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                      const pageNum = i + 1;
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setPagination(prev => ({ ...prev, page: pageNum }))}
-                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 ${
-                            pagination.page === pageNum
-                              ? 'bg-teal-500 text-white'
-                              : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
-                    {pagination.pages > 5 && (
-                      <>
-                        <span className="text-gray-500">...</span>
-                        <button
-                          onClick={() => setPagination(prev => ({ ...prev, page: prev.pages }))}
-                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 ${
-                            pagination.page === pagination.pages
-                              ? 'bg-teal-500 text-white'
-                              : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {pagination.pages}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  
-                  <button
-                    onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
-                    disabled={pagination.page === pagination.pages}
-                    className="px-4 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-                  >
-                    Next
-                  </button>
-                </motion.div>
-              )}
-            </div>
-
-            {/* Sidebar - 4 columns */}
-            <div className="col-span-4 space-y-6">
-            
-              {/* Stats Overview */}
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, ease: "easeOut", delay: 0.6 }}
-                className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-2xl p-6 shadow-xl border border-teal-200/50"
-              >
-                <h3 className="text-lg font-bold text-teal-900 mb-4">Lead Analytics</h3>
-                
-                 <div className="space-y-4">
-                   <div className="flex items-center justify-between">
-                     <span className="text-teal-700 text-sm font-medium">Total Leads</span>
-                     <span className="text-teal-900 text-xl font-bold">{totalNewLeads}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-teal-700 text-sm font-medium">Showing</span>
-                     <span className="text-teal-900 text-xl font-bold">{filteredLeads.length}</span>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-teal-700 text-sm font-medium">High Priority</span>
-                     <span className="text-teal-900 text-xl font-bold">{leadsData.filter(lead => lead.priority === 'high').length}</span>
-                   </div>
-                 </div>
-              </motion.div>
-
-              {/* Quick Actions */}
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, ease: "easeOut", delay: 0.8 }}
-                className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200"
-              >
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
-                
-                <div className="space-y-3">
-                  <button className="w-full bg-teal-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-teal-600 transition-colors duration-200 flex items-center justify-center space-x-2">
-                    <FiSearch className="text-lg" />
-                    <span>Advanced Search</span>
-                  </button>
-                  
-                  <button className="w-full bg-white text-gray-700 font-semibold py-3 px-4 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors duration-200 flex items-center justify-center space-x-2">
-                    <FiFilter className="text-lg" />
-                    <span>Export Leads</span>
-                  </button>
-                </div>
-              </motion.div>
-
-              {/* Recent Activity */}
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, ease: "easeOut", delay: 1.0 }}
-                className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200"
-              >
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
-                
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <FiPhone className="text-green-600 text-sm" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">Call made</p>
-                      <p className="text-xs text-gray-600">2 minutes ago</p>
-                    </div>
-                  </div>
-                
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <FiUserCheck className="text-blue-600 text-sm" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">Lead contacted</p>
-                      <p className="text-xs text-gray-600">15 minutes ago</p>
-                    </div>
-                  </div>
-                
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                      <FiAlertCircle className="text-orange-600 text-sm" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">New lead added</p>
-                      <p className="text-xs text-gray-600">1 hour ago</p>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          </div>
         </div>
       </main>
 

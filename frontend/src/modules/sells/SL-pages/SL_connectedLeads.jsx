@@ -252,7 +252,7 @@ const SL_connectedLeads = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
       <SL_navbar />
       
-      <main className="max-w-7xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8 lg:pt-20 lg:pb-4">
+      <main className="max-w-4xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8 lg:pt-20 lg:pb-4">
         {/* Mobile-first layout */}
         <div className="space-y-6 lg:hidden">
           {/* Header */}
@@ -390,127 +390,6 @@ const SL_connectedLeads = () => {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3, delay: index * 0.05 }}
                   className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
-                >
-                  <MobileLeadCard lead={lead} />
-                </motion.div>
-              ))
-              )}
-            </AnimatePresence>
-          </motion.div>
-        </div>
-
-        {/* Desktop layout */}
-        <div className="hidden lg:block space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Connected Leads</h1>
-              <p className="text-gray-600 mt-1">Leads that have been contacted and are in progress</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                <input
-                  type="text"
-                  placeholder="Search leads..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
-                />
-              </div>
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
-              >
-                <FiFilter size={16} />
-                <span>Filters</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-4 gap-6">
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Total Connected</p>
-                  <p className="text-2xl font-bold text-teal-900">{pagination.total}</p>
-                </div>
-                <div className="p-3 bg-teal-100 rounded-lg">
-                  <FiUserCheck className="text-teal-600" size={24} />
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">With Profile</p>
-                  <p className="text-2xl font-bold text-green-900">{leadsData.filter(lead => lead.leadProfile).length}</p>
-                </div>
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <FiFileText className="text-green-600" size={24} />
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Hot Leads</p>
-                  <p className="text-2xl font-bold text-red-900">{leadsData.filter(lead => lead.priority === 'high').length}</p>
-                </div>
-                <div className="p-3 bg-red-100 rounded-lg">
-                  <FiAlertCircle className="text-red-600" size={24} />
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Conversion Rate</p>
-                  <p className="text-2xl font-bold text-blue-900">12.5%</p>
-                </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <FiTag className="text-blue-600" size={24} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Leads Grid */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="space-y-3"
-          >
-            <AnimatePresence>
-              {isLoadingLeads ? (
-                <div className="space-y-3">
-                  {[...Array(3)].map((_, index) => (
-                    <div key={index} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="h-5 bg-gray-200 rounded w-32 mb-2"></div>
-                          <div className="h-4 bg-gray-200 rounded w-20"></div>
-                        </div>
-                        <div className="h-10 w-10 bg-gray-200 rounded-full"></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : filteredLeads.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-gray-500 text-lg">No connected leads found</p>
-                </div>
-              ) : (
-                filteredLeads.map((lead, index) => (
-                <motion.div
-                  key={lead._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="bg-white rounded-xl p-5 shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300"
                 >
                   <MobileLeadCard lead={lead} />
                 </motion.div>

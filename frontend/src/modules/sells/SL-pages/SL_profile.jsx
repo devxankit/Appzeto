@@ -1,34 +1,83 @@
-import React, { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { 
-  FaWallet, 
-  FaBell, 
-  FaSignOutAlt, 
-  FaPhone, 
-  FaEnvelope,
-  FaUser,
-  FaHeart,
-  FaArrowRight,
-  FaClipboardList,
-  FaSpinner
-} from 'react-icons/fa'
+import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import SL_navbar from '../SL-components/SL_navbar'
+import { FiUser as User, FiMail as Mail, FiCamera as Camera, FiSave as Save, FiX as X, FiCalendar as Calendar, FiAward as Award, FiBriefcase as Briefcase, FiLogOut as LogOut, FiLoader as Loader } from 'react-icons/fi'
 import { logoutSales, clearSalesData, getStoredSalesData } from '../SL-services/salesAuthService'
 import { useToast } from '../../../contexts/ToastContext'
 
 const SL_profile = () => {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const [isEditing, setIsEditing] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [salesData, setSalesData] = useState(null)
+  const [profileData, setProfileData] = useState({
+    fullName: '',
+    email: '',
+    role: '',
+    department: '',
+    jobTitle: '',
+    workTitle: '',
+    joinDate: '',
+    avatar: '',
+    phone: '',
+    location: '',
+    skills: []
+  })
 
-  // Load sales data from stored authentication data
   useEffect(() => {
-    const storedSalesData = getStoredSalesData()
-    if (storedSalesData) {
-      setSalesData(storedSalesData)
+    const load = async () => {
+      setLoading(true)
+      await new Promise(r => setTimeout(r, 400))
+      
+      // Load profile data from stored Sales data
+      const storedSalesData = getStoredSalesData()
+      if (storedSalesData) {
+        setProfileData({
+          fullName: storedSalesData.name || 'Sales User',
+          email: storedSalesData.email || 'sales@example.com',
+          role: storedSalesData.role || 'sales',
+          department: storedSalesData.department || 'Sales',
+          jobTitle: storedSalesData.position || 'Sales Representative',
+          workTitle: storedSalesData.position || 'Sales Representative',
+          joinDate: storedSalesData.joiningDate || new Date(Date.now()-200*24*60*60*1000).toISOString(),
+          avatar: 'SL',
+          phone: storedSalesData.phone || '+91 90000 00000',
+          location: 'Indore, IN',
+          skills: storedSalesData.skills || ['Sales', 'Communication']
+        })
+      } else {
+        // Fallback data if no stored data
+        setProfileData({
+          fullName: 'Sales User',
+          email: 'sales@example.com',
+          role: 'sales',
+          department: 'Sales',
+          jobTitle: 'Sales Representative',
+          workTitle: 'Sales Representative',
+          joinDate: new Date(Date.now()-200*24*60*60*1000).toISOString(),
+          avatar: 'SL',
+          phone: '+91 90000 00000',
+          location: 'Indore, IN',
+          skills: ['Sales', 'Communication']
+        })
+      }
+      setLoading(false)
     }
+    load()
   }, [])
+
+  const handleProfileUpdate = (field, value) => {
+    setProfileData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleSaveProfile = async () => {
+    setSaving(true)
+    await new Promise(r => setTimeout(r, 500))
+    setSaving(false)
+    setIsEditing(false)
+  }
 
   const handleLogout = async () => {
     try {
@@ -57,236 +106,153 @@ const SL_profile = () => {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
+        <SL_navbar />
+        <main className="pt-16 pb-24 md:pt-20 md:pb-8">
+          <div className="px-4 md:max-w-4xl md:mx-auto md:px-6 lg:px-8">
+            <div className="flex items-center justify-center h-64 text-gray-600">Loading profile...</div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
       <SL_navbar />
-      
-      {/* Mobile Layout */}
-      <main className="max-w-md mx-auto px-4 pt-16 pb-20 lg:hidden">
-        {/* Profile Header Section */}
-        <div className="text-center mb-6">
-          {/* Profile Picture */}
-          <div className="mb-4">
-            <div className="w-20 h-20 mx-auto bg-gradient-to-br from-teal-100 to-teal-200 rounded-full flex items-center justify-center shadow-md border border-teal-300/50">
-              <FaUser className="text-teal-600 text-2xl" />
-            </div>
-          </div>
-
-          {/* User Information */}
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 mb-1 tracking-tight">
-              {salesData?.name || 'Sales User'}
-            </h1>
-            <p className="text-gray-600 text-sm font-medium">
-              {salesData?.email || 'sales@example.com'}
-            </p>
-          </div>
-        </div>
-
-        {/* Contact Information Card */}
-        <div className="bg-white rounded-xl p-4 mb-4 shadow-sm border border-gray-200/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-teal-100 to-teal-200 rounded-lg flex items-center justify-center">
-                <FaPhone className="text-teal-600 text-sm transform scale-x-[-1]" />
-              </div>
-              <span className="text-gray-600 font-medium text-sm">Phone</span>
-            </div>
-            <span className="text-gray-900 font-semibold text-sm">
-              {salesData?.phone || '+1234567890'}
-            </span>
-          </div>
-        </div>
-
-        {/* Navigation Cards */}
-        <div className="space-y-3 mb-6">
-          {/* Wallet Card */}
-          <Link to="/wallet">
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-teal-100 to-teal-200 rounded-lg flex items-center justify-center">
-                    <FaWallet className="text-teal-600 text-base" />
-                  </div>
-                  <span className="text-gray-900 font-semibold text-base">Wallet</span>
-                </div>
-                <FaArrowRight className="text-gray-400 text-sm" />
-              </div>
-            </div>
-          </Link>
-
-          {/* Notifications Card */}
-          <Link to="/notifications">
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-teal-100 to-teal-200 rounded-lg flex items-center justify-center">
-                    <FaBell className="text-teal-600 text-base" />
-                  </div>
-                  <span className="text-gray-900 font-semibold text-base">Notifications</span>
-                </div>
-                <FaArrowRight className="text-gray-400 text-sm" />
-              </div>
-            </div>
-          </Link>
-
-          {/* Requests Card */}
-          <Link to="/requests">
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-teal-100 to-teal-200 rounded-lg flex items-center justify-center">
-                    <FaClipboardList className="text-teal-600 text-base" />
-                  </div>
-                  <span className="text-gray-900 font-semibold text-base">Requests</span>
-                </div>
-                <FaArrowRight className="text-gray-400 text-sm" />
-              </div>
-            </div>
-          </Link>
-
-          {/* Logout Card */}
-          <div 
-            onClick={handleLogout}
-            className="bg-white rounded-xl p-4 shadow-sm border border-red-200/50 cursor-pointer transition-all duration-200 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-red-100 to-red-200 rounded-lg flex items-center justify-center">
-                  {isLoggingOut ? (
-                    <FaSpinner className="text-red-600 text-base animate-spin" />
-                  ) : (
-                    <FaSignOutAlt className="text-red-600 text-base" />
-                  )}
-                </div>
-                <span className="text-red-600 font-semibold text-base">
-                  {isLoggingOut ? 'Logging out...' : 'Logout'}
-                </span>
-              </div>
-              {!isLoggingOut && <FaArrowRight className="text-red-400 text-sm" />}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer Message */}
-        <div className="text-center">
-          <div className="flex items-center justify-center space-x-2">
-            <span className="text-teal-600 font-medium text-sm">Appzeto loves you</span>
-            <FaHeart className="text-teal-400 text-sm" />
-          </div>
-        </div>
-      </main>
-
-      {/* Desktop Layout */}
-      <main className="hidden lg:block max-w-4xl mx-auto px-6 pt-16 pb-8">
-        <div className="grid grid-cols-12 gap-6">
-          {/* Left Column - Profile Info */}
-          <div className="col-span-4">
-            {/* Profile Header */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200/50 mb-4">
-              <div className="text-center">
-                {/* Profile Picture */}
-                <div className="mb-4">
-                  <div className="w-16 h-16 mx-auto bg-gradient-to-br from-teal-100 to-teal-200 rounded-full flex items-center justify-center shadow-md border border-teal-300/50">
-                    <FaUser className="text-teal-600 text-xl" />
-                  </div>
-                </div>
-
-                {/* User Information */}
-                <h1 className="text-lg font-bold text-gray-900 mb-1">
-                  {salesData?.name || 'Sales User'}
-                </h1>
-                <p className="text-gray-600 text-sm">
-                  {salesData?.email || 'sales@example.com'}
-                </p>
-              </div>
-            </div>
-
-            {/* Contact Information */}
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200/50">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Contact Information</h3>
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-teal-100 to-teal-200 rounded-lg flex items-center justify-center">
-                  <FaPhone className="text-teal-600 text-sm transform scale-x-[-1]" />
-                </div>
-                <div>
-                  <p className="text-gray-600 text-xs">Phone</p>
-                  <p className="text-gray-900 font-semibold text-sm">
-                    {salesData?.phone || '+1234567890'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column - Navigation Cards */}
-          <div className="col-span-8">
-            <div className="grid grid-cols-2 gap-4">
-              {/* Wallet Card */}
-              <Link to="/wallet">
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-teal-100 to-teal-200 rounded-lg flex items-center justify-center">
-                      <FaWallet className="text-teal-600 text-base" />
-                    </div>
-                    <span className="text-gray-900 font-semibold text-base">Wallet</span>
-                  </div>
-                  <p className="text-gray-600 text-xs">Manage your wallet and transactions</p>
-                </div>
-              </Link>
-
-              {/* Notifications Card */}
-              <Link to="/notifications">
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-teal-100 to-teal-200 rounded-lg flex items-center justify-center">
-                      <FaBell className="text-teal-600 text-base" />
-                    </div>
-                    <span className="text-gray-900 font-semibold text-base">Notifications</span>
-                  </div>
-                  <p className="text-gray-600 text-xs">View and manage your notifications</p>
-                </div>
-              </Link>
-
-              {/* Requests Card */}
-              <Link to="/requests">
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200/50 cursor-pointer transition-all duration-200 hover:shadow-md">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-teal-100 to-teal-200 rounded-lg flex items-center justify-center">
-                      <FaClipboardList className="text-teal-600 text-base" />
-                    </div>
-                    <span className="text-gray-900 font-semibold text-base">Requests</span>
-                  </div>
-                  <p className="text-gray-600 text-xs">View and manage your requests</p>
-                </div>
-              </Link>
-
-              {/* Logout Card */}
-              <div 
-                onClick={handleLogout}
-                className="bg-white rounded-xl p-4 shadow-sm border border-red-200/50 cursor-pointer transition-all duration-200 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <div className="flex items-center space-x-3 mb-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-red-100 to-red-200 rounded-lg flex items-center justify-center">
+      <main className="pt-16 pb-24 md:pt-20 md:pb-8">
+        <div className="px-4 md:max-w-4xl md:mx-auto md:px-6 lg:px-8">
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-gray-900">Profile Information</h2>
+                <div className="flex items-center space-x-2">
+                  <button onClick={() => setIsEditing(!isEditing)} className={`p-2 rounded-lg transition-all duration-200 ${isEditing ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-primary text-white hover:bg-primary-dark'}`}>
+                    {isEditing ? <X className="h-4 w-4" /> : 'Edit'}
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className="p-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Logout"
+                  >
                     {isLoggingOut ? (
-                      <FaSpinner className="text-red-600 text-base animate-spin" />
+                      <Loader className="h-4 w-4 animate-spin" />
                     ) : (
-                      <FaSignOutAlt className="text-red-600 text-base" />
+                      <LogOut className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-col space-y-4">
+                <div className="flex items-center space-x-3">
+                  <div className="relative">
+                    <div className="w-16 h-16 md:w-18 md:h-18 bg-gradient-to-br from-primary/20 to-primary/30 rounded-full flex items-center justify-center">
+                      <span className="text-lg md:text-xl font-bold text-primary">{profileData.avatar}</span>
+                    </div>
+                    {isEditing && (
+                      <button className="absolute -bottom-1 -right-1 w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primary-dark transition-colors duration-200 shadow-lg">
+                        <Camera className="h-3 w-3" />
+                      </button>
                     )}
                   </div>
-                  <span className="text-red-600 font-semibold text-base">
-                    {isLoggingOut ? 'Logging out...' : 'Logout'}
-                  </span>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">{profileData.fullName}</h3>
+                    <p className="text-xs text-gray-500">{profileData.role}</p>
+                  </div>
                 </div>
-                <p className="text-gray-600 text-xs">Sign out of your account</p>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Name</label>
+                    {isEditing ? (
+                      <input type="text" value={profileData.fullName} onChange={(e)=>handleProfileUpdate('fullName', e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 text-sm font-medium" placeholder="Enter your full name" />
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <User className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm font-medium text-gray-900">{profileData.fullName}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                    <div className="flex items-center space-x-2">
+                      <Mail className="h-4 w-4 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-500">{profileData.email}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">Email cannot be changed</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Role</label>
+                    <div className="flex items-center space-x-2">
+                      <Award className="h-4 w-4 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-900">{profileData.role}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">Role assigned by admin</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Department</label>
+                    <div className="flex items-center space-x-2">
+                      <Briefcase className="h-4 w-4 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-900">{profileData.department}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">Department assigned by admin</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Join Date</label>
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="h-4 w-4 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-900">Joined {new Date(profileData.joinDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">Start date</p>
+                  </div>
+                </div>
               </div>
+
+              {isEditing && (
+                <div className="mt-6 pt-4 border-t border-gray-100 text-center">
+                  <button onClick={handleSaveProfile} disabled={saving} className="flex items-center space-x-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark transition-all duration-200 shadow-lg hover:shadow-xl mx-auto disabled:opacity-50">
+                    <Save className="h-4 w-4" />
+                    <span className="text-sm font-medium">{saving ? 'Saving...' : 'Save Changes'}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Footer Message */}
-            <div className="text-center mt-6">
-              <div className="flex items-center justify-center space-x-2">
-                <span className="text-teal-600 font-medium text-sm">Appzeto loves you</span>
-                <FaHeart className="text-teal-400 text-sm" />
+            <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <User className="h-4 w-4 text-blue-600" />
+                </div>
+                <h2 className="text-lg font-bold text-gray-900">Account Information</h2>
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <span className="text-xs font-medium text-gray-600">Account Type</span>
+                  <span className="text-xs font-semibold text-gray-900">Sales</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <span className="text-xs font-medium text-gray-600">Role</span>
+                  <span className="text-xs font-semibold text-gray-900">{profileData.role}</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <span className="text-xs font-medium text-gray-600">Department</span>
+                  <span className="text-xs font-semibold text-gray-900">{profileData.department}</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <span className="text-xs font-medium text-gray-600">Member Since</span>
+                  <span className="text-xs font-semibold text-gray-900">{new Date(profileData.joinDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}</span>
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-xs font-medium text-gray-600">Status</span>
+                  <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Active</span>
+                </div>
               </div>
             </div>
           </div>
@@ -297,4 +263,3 @@ const SL_profile = () => {
 }
 
 export default SL_profile
-
