@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { 
   FiBell, 
@@ -21,6 +21,8 @@ const Client_notification = () => {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const isLoadingRef = useRef(false)
+  const hasErrorShownRef = useRef(false)
 
   const formatRelativeTime = useCallback((dateString) => {
     if (!dateString) return 'Just now'
@@ -109,25 +111,44 @@ const Client_notification = () => {
   )
 
   const loadNotifications = useCallback(async () => {
+    // Prevent multiple simultaneous calls
+    if (isLoadingRef.current) {
+      return
+    }
+
     try {
+      isLoadingRef.current = true
       setLoading(true)
       setError(null)
+      hasErrorShownRef.current = false
 
       const response = await clientNotificationService.getNotifications({ limit: 50 })
       const items = Array.isArray(response) ? response : response?.data || []
       const decorated = items.map(decorateNotification)
       setNotifications(decorated)
     } catch (err) {
-      console.error('Failed to load notifications:', err)
-      setError(err.message || 'Unable to load notifications right now.')
+      // Only log and show error once
+      if (!hasErrorShownRef.current) {
+        hasErrorShownRef.current = true
+        const errorMessage = err.message || 'Unable to load notifications right now.'
+        
+        // Handle 401 (Unauthorized) errors gracefully
+        if (errorMessage.includes('token') || errorMessage.includes('Unauthorized') || errorMessage.includes('401')) {
+          setError('Session expired. Please log in again.')
+        } else {
+          setError(errorMessage)
+        }
+      }
     } finally {
+      isLoadingRef.current = false
       setLoading(false)
     }
   }, [decorateNotification])
 
   useEffect(() => {
     loadNotifications()
-  }, [loadNotifications])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
 
   const markAsRead = (id) => {
     setNotifications(prev => 
@@ -233,13 +254,11 @@ const Client_notification = () => {
         >
           {notifications.length === 0 ? (
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-2xl p-8 text-center shadow-xl border border-teal-200"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-16"
             >
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FiBell className="w-8 h-8 text-gray-400" />
-              </div>
+              <FiBell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
               <h3 className="text-lg font-semibold text-gray-800 mb-2">No notifications</h3>
               <p className="text-gray-600">You're all caught up!</p>
             </motion.div>

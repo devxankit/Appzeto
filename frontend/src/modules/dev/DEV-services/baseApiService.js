@@ -53,7 +53,8 @@ export const apiRequest = async (url, options = {}) => {
 
     return data;
   } catch (error) {
-    console.error('API Request Error:', error);
+    // Don't log here - let the calling component handle error logging
+    // Only re-throw the error for the caller to handle
     
     // Provide better error messages for connection issues
     if (error instanceof TypeError && (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError'))) {

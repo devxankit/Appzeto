@@ -24,6 +24,7 @@ export { teamService } from './teamService';
 export { pmWalletService } from './pmWalletService';
 export { default as pmNoticeService } from './pmNoticeService';
 export { default as pmRequestService } from './pmRequestService';
+export { default as pmNotificationService } from './pmNotificationService';
 export { default as socketService } from './socketService';
 
 // Employee Module Services

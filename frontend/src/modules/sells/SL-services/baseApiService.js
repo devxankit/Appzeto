@@ -64,10 +64,10 @@ export const apiRequest = async (url, options = {}) => {
         return data;
       }
     } catch (fallbackError) {
-      console.error('API Request Error (fallback failed):', fallbackError);
+      // Don't log here - let the calling component handle error logging
       throw fallbackError;
     }
-    console.error('API Request Error:', error);
+    // Don't log here - let the calling component handle error logging
     throw error;
   }
 };

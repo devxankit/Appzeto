@@ -26,6 +26,7 @@ const {
   resetPassword
 } = require('../controllers/salesController');
 const { getPublishedNoticesForSales, incrementNoticeViews } = require('../controllers/noticeController');
+const { getSalesNotifications } = require('../controllers/salesNotificationController');
 const { protect } = require('../middlewares/auth');
 const upload = require('../middlewares/upload');
 
@@ -127,5 +128,8 @@ router.get('/wallet/summary', getWalletSummary);
 // Notices
 router.get('/notices', getPublishedNoticesForSales);
 router.post('/notices/:id/view', incrementNoticeViews);
+
+// Notifications
+router.get('/notifications', getSalesNotifications);
 
 module.exports = router;

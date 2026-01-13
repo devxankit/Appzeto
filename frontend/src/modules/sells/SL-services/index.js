@@ -26,6 +26,9 @@ export { default as salesMeetingsService } from './salesMeetingsService';
 // Notices
 export { default as salesNoticeService } from './salesNoticeService';
 
+// Notifications
+export { default as salesNotificationService } from './salesNotificationService';
+
 // Base API Service (for internal use)
 export { default as baseApiService } from './baseApiService';
 

@@ -110,7 +110,7 @@ export const apiRequest = async (url, options = {}) => {
 
     return data;
   } catch (error) {
-    console.error('API Request Error:', error);
+    // Don't log here - let the calling component handle error logging
     throw error;
   }
 };

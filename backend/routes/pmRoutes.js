@@ -10,6 +10,7 @@ const {
   resetPassword
 } = require('../controllers/pmController');
 const { getPublishedNoticesForPM, incrementNoticeViews } = require('../controllers/noticeController');
+const { getPMNotifications } = require('../controllers/pmNotificationController');
 
 // Import team-related controllers
 const {
@@ -57,5 +58,8 @@ router.use('/', pmProjectRoutes);
 // Notices
 router.get('/notices', getPublishedNoticesForPM);
 router.post('/notices/:id/view', incrementNoticeViews);
+
+// Notifications
+router.get('/notifications', getPMNotifications);
 
 module.exports = router;

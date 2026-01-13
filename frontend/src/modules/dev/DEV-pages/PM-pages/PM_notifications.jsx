@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { 
   FiBell, 
@@ -11,80 +11,186 @@ import {
   FiInfo,
   FiAward,
   FiCheckSquare,
-  FiTrendingUp
+  FiTrendingUp,
+  FiMessageSquare,
+  FiSend,
+  FiLoader
 } from 'react-icons/fi'
 import PM_navbar from '../../DEV-components/PM_navbar'
+import { pmNotificationService } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
 
 const PM_notifications = () => {
-  // Mock notification data for PM
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: 'project',
-      title: 'Project Milestone Completed',
-      message: 'Website Redesign project milestone "UI/UX Design" has been completed by John Doe',
-      time: '30 minutes ago',
-      isRead: false,
-      icon: FiCheckSquare,
-      iconColor: 'text-green-600',
-      iconBg: 'bg-green-100'
-    },
-    {
-      id: 2,
-      type: 'team',
-      title: 'Team Performance Update',
-      message: 'Your team achieved 95% completion rate this week. Great job!',
-      time: '2 hours ago',
-      isRead: false,
-      icon: FiTrendingUp,
-      iconColor: 'text-blue-600',
-      iconBg: 'bg-blue-100'
-    },
-    {
-      id: 3,
-      type: 'urgent',
-      title: 'Urgent Task Alert',
-      message: 'Critical security vulnerability task needs immediate attention',
-      time: '4 hours ago',
-      isRead: false,
-      icon: FiAlertCircle,
-      iconColor: 'text-red-600',
-      iconBg: 'bg-red-100'
-    },
-    {
-      id: 4,
-      type: 'reward',
-      title: 'Performance Reward',
-      message: 'You earned ₹8,000 reward for excellent project management this month',
-      time: '1 day ago',
-      isRead: true,
-      icon: FiAward,
-      iconColor: 'text-yellow-600',
-      iconBg: 'bg-yellow-100'
-    },
-    {
-      id: 5,
-      type: 'salary',
-      title: 'Salary Credited',
-      message: 'Your monthly salary of ₹35,000 has been credited to your account',
-      time: '2 days ago',
-      isRead: true,
-      icon: FiDollarSign,
-      iconColor: 'text-green-600',
-      iconBg: 'bg-green-100'
-    },
-    {
-      id: 6,
-      type: 'team',
-      title: 'New Team Member',
-      message: 'Sarah Wilson has been added to your team for the Mobile App project',
-      time: '3 days ago',
-      isRead: true,
-      icon: FiUser,
-      iconColor: 'text-purple-600',
-      iconBg: 'bg-purple-100'
+  const { toast } = useToast()
+  const [notifications, setNotifications] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const isLoadingRef = useRef(false)
+  const hasErrorShownRef = useRef(false)
+
+  const formatRelativeTime = useCallback((dateString) => {
+    if (!dateString) return 'Just now'
+    const eventDate = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - eventDate.getTime()
+    const diffMinutes = Math.floor(diffMs / (1000 * 60))
+
+    if (diffMinutes < 1) return 'Just now'
+    if (diffMinutes < 60) return `${diffMinutes} min ago`
+
+    const diffHours = Math.floor(diffMinutes / 60)
+    if (diffHours < 24) return `${diffHours} hr${diffHours === 1 ? '' : 's'} ago`
+
+    const diffDays = Math.floor(diffHours / 24)
+    if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
+
+    return eventDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  }, [])
+
+  const buildNotificationStyle = useCallback((notification) => {
+    if (notification.type === 'request') {
+      const incoming = notification.direction === 'incoming'
+      return {
+        icon: incoming ? FiMessageSquare : FiSend,
+        iconColor: incoming ? 'text-blue-600' : 'text-purple-600',
+        iconBg: incoming ? 'bg-blue-100' : 'bg-purple-100'
+      }
     }
-  ])
+
+    if (notification.type === 'task') {
+      const isUrgent = notification.task?.priority === 'urgent' || notification.task?.priority === 'high'
+      return {
+        icon: isUrgent ? FiAlertCircle : FiCheckSquare,
+        iconColor: isUrgent ? 'text-red-600' : 'text-blue-600',
+        iconBg: isUrgent ? 'bg-red-100' : 'bg-blue-100'
+      }
+    }
+
+    if (notification.type === 'activity') {
+      if (notification.scope === 'milestone') {
+        return {
+          icon: FiTrendingUp,
+          iconColor: 'text-green-600',
+          iconBg: 'bg-green-100'
+        }
+      }
+      if (notification.scope === 'task') {
+        return {
+          icon: FiCheckSquare,
+          iconColor: 'text-blue-600',
+          iconBg: 'bg-blue-100'
+        }
+      }
+      return {
+        icon: FiTrendingUp,
+        iconColor: 'text-blue-600',
+        iconBg: 'bg-blue-100'
+      }
+    }
+
+    if (notification.type === 'project') {
+      return {
+        icon: FiTrendingUp,
+        iconColor: 'text-teal-600',
+        iconBg: 'bg-teal-100'
+      }
+    }
+
+    return {
+      icon: FiInfo,
+      iconColor: 'text-teal-600',
+      iconBg: 'bg-teal-100'
+    }
+  }, [])
+
+  const decorateNotification = useCallback(
+    (notification) => {
+      const style = buildNotificationStyle(notification)
+      const timestamp = notification.updatedAt || notification.createdAt
+
+      // Build title based on notification type if not provided
+      let title = notification.title
+      if (!title) {
+        if (notification.type === 'task') {
+          title = 'New Task Created'
+        } else if (notification.type === 'activity') {
+          title = notification.scope === 'milestone' 
+            ? 'Milestone Update' 
+            : notification.scope === 'task'
+            ? 'Task Update'
+            : 'Project Update'
+        } else if (notification.type === 'request') {
+          title = notification.direction === 'incoming' 
+            ? 'New Request' 
+            : 'Request Update'
+        } else if (notification.type === 'project') {
+          title = 'Project Update'
+        } else {
+          title = 'Notification'
+        }
+      }
+
+      return {
+        id: notification.id || notification._id,
+        type: notification.type,
+        title,
+        message: notification.message,
+        time: formatRelativeTime(timestamp),
+        isRead: notification.read ?? notification.isRead ?? false,
+        icon: style.icon,
+        iconColor: style.iconColor,
+        iconBg: style.iconBg,
+        metadata: notification
+      }
+    },
+    [buildNotificationStyle, formatRelativeTime]
+  )
+
+  const loadNotifications = useCallback(async () => {
+    // Prevent multiple simultaneous calls
+    if (isLoadingRef.current) {
+      return
+    }
+
+    try {
+      isLoadingRef.current = true
+      setLoading(true)
+      setError(null)
+      hasErrorShownRef.current = false
+
+      const response = await pmNotificationService.getNotifications({ limit: 50 })
+      const items = Array.isArray(response) ? response : response?.data || []
+      const decorated = items.map(decorateNotification)
+      setNotifications(decorated)
+    } catch (err) {
+      // Only log and show error once
+      if (!hasErrorShownRef.current) {
+        hasErrorShownRef.current = true
+        const errorMessage = err.message || 'Unable to load notifications right now.'
+        
+        // Handle 401 (Unauthorized) errors gracefully
+        if (errorMessage.includes('token') || errorMessage.includes('Unauthorized') || errorMessage.includes('401')) {
+          setError('Session expired. Please log in again.')
+          // Don't show toast for auth errors to avoid spam
+        } else {
+          setError(errorMessage)
+          toast.error(errorMessage)
+        }
+      }
+    } finally {
+      isLoadingRef.current = false
+      setLoading(false)
+    }
+  }, [decorateNotification, toast])
+
+  useEffect(() => {
+    loadNotifications()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
 
   const markAsRead = (id) => {
     setNotifications(prev => 
@@ -94,18 +200,21 @@ const PM_notifications = () => {
           : notification
       )
     )
+    // TODO: Call API to mark as read when backend supports it
   }
 
   const markAllAsRead = () => {
     setNotifications(prev => 
       prev.map(notification => ({ ...notification, isRead: true }))
     )
+    // TODO: Call API to mark all as read when backend supports it
   }
 
   const deleteNotification = (id) => {
     setNotifications(prev => 
       prev.filter(notification => notification.id !== id)
     )
+    // TODO: Call API to delete when backend supports it
   }
 
   const unreadCount = notifications.filter(n => !n.isRead).length
@@ -127,10 +236,10 @@ const PM_notifications = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
               <p className="text-sm text-gray-600 mt-1">
-                {unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up!'}
+                {loading ? 'Loading...' : unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up!'}
               </p>
             </div>
-            {unreadCount > 0 && (
+            {unreadCount > 0 && !loading && (
               <button
                 onClick={markAllAsRead}
                 className="px-3 py-1.5 bg-teal-500 text-white text-sm font-medium rounded-lg hover:bg-teal-600 transition-colors"
@@ -141,7 +250,39 @@ const PM_notifications = () => {
           </div>
         </motion.div>
 
+        {/* Error State */}
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mx-4 mb-4 bg-red-50 border border-red-200 rounded-xl p-4"
+          >
+            <div className="flex items-center">
+              <FiAlertCircle className="w-5 h-5 text-red-600 mr-2" />
+              <p className="text-sm text-red-600">{error}</p>
+              <button 
+                onClick={loadNotifications}
+                className="ml-auto text-red-400 hover:text-red-600"
+              >
+                <FiLoader className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mx-4 flex items-center justify-center py-12"
+          >
+            <FiLoader className="w-8 h-8 animate-spin text-teal-600" />
+          </motion.div>
+        )}
+
         {/* Notifications List */}
+        {!loading && (
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -150,13 +291,11 @@ const PM_notifications = () => {
         >
           {notifications.length === 0 ? (
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-2xl p-8 text-center shadow-xl border border-teal-100"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-16"
             >
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FiBell className="w-8 h-8 text-gray-400" />
-              </div>
+              <FiBell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
               <h3 className="text-lg font-semibold text-gray-800 mb-2">No notifications</h3>
               <p className="text-gray-600">You're all caught up!</p>
             </motion.div>
@@ -233,7 +372,8 @@ const PM_notifications = () => {
               )
             })
           )}
-        </motion.div>
+          </motion.div>
+        )}
 
       </main>
     </div>
