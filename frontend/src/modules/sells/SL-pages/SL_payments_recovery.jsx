@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { 
-  FiArrowLeft, 
   FiSearch, 
   FiPhone,
   FiX,
@@ -25,21 +24,24 @@ const SL_payments_recovery = () => {
   const [selectedPaymentType, setSelectedPaymentType] = useState('all')
   const [receivables, setReceivables] = useState([])
   const [stats, setStats] = useState({ totalDues: 0, overdueCount: 0, overdueAmount: 0 })
-  const [isLoading, setIsLoading] = useState(false)
   const [expandedProjects, setExpandedProjects] = useState({})
-  const [projectInstallments, setProjectInstallments] = useState({})
-  const [showInstallmentDialog, setShowInstallmentDialog] = useState(false)
-  const [selectedInstallment, setSelectedInstallment] = useState(null)
-  const [installmentForm, setInstallmentForm] = useState({
-    paidDate: new Date().toISOString().split('T')[0],
+  const [projectPaymentReceipts, setProjectPaymentReceipts] = useState({})
+  const [accounts, setAccounts] = useState([])
+  const [showAddPaymentDialog, setShowAddPaymentDialog] = useState(false)
+  const [selectedProjectForPayment, setSelectedProjectForPayment] = useState(null)
+  const [paymentForm, setPaymentForm] = useState({
+    amount: '',
+    accountId: '',
+    method: 'upi',
+    referenceId: '',
     notes: ''
   })
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false)
 
   // Fetch data
   React.useEffect(() => {
     const run = async () => {
       try {
-        setIsLoading(true)
         const [st, list] = await Promise.all([
           salesPaymentsService.getReceivableStats(),
           salesPaymentsService.getReceivables({
@@ -52,8 +54,6 @@ const SL_payments_recovery = () => {
         setReceivables(list)
       } catch (e) {
         console.error('Payments fetch error', e)
-      } finally {
-        setIsLoading(false)
       }
     }
     run()
@@ -121,62 +121,122 @@ Thank you!`
     navigate(`/client-profile/${clientId}`)
   }
 
-  const toggleProjectInstallments = async (projectId) => {
-    if (expandedProjects[projectId]) {
-      setExpandedProjects(prev => ({ ...prev, [projectId]: false }))
-    } else {
-      setExpandedProjects(prev => ({ ...prev, [projectId]: true }))
-      // Fetch installments if not already loaded
-      if (!projectInstallments[projectId]) {
-        try {
-          const installments = await salesPaymentsService.getInstallments(projectId)
-          setProjectInstallments(prev => ({ ...prev, [projectId]: installments }))
-        } catch (e) {
-          console.error('Failed to fetch installments', e)
-        }
+  // Fetch accounts on mount
+  React.useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        const accs = await salesPaymentsService.getAccounts()
+        setAccounts(accs || [])
+      } catch (e) {
+        console.error('Failed to fetch accounts', e)
       }
     }
-  }
+    fetchAccounts()
+  }, [])
 
-  const handleMarkInstallmentPaid = (installment, projectId) => {
-    setSelectedInstallment({ ...installment, projectId })
-    setInstallmentForm({
-      paidDate: new Date().toISOString().split('T')[0],
+
+  const handleAddRecoveryPayment = (payment) => {
+    setSelectedProjectForPayment(payment)
+    setPaymentForm({
+      amount: '',
+      accountId: '',
+      method: 'upi',
+      referenceId: '',
       notes: ''
     })
-    setShowInstallmentDialog(true)
+    setShowAddPaymentDialog(true)
   }
 
-  const handleInstallmentSubmit = async () => {
-    if (!selectedInstallment) return
+  const handleSubmitRecoveryPayment = async () => {
+    if (!selectedProjectForPayment) return
 
+    const amountValue = parseFloat(paymentForm.amount)
+    if (!amountValue || amountValue <= 0) {
+      alert('Please enter a valid amount greater than 0')
+      return
+    }
+
+    if (!paymentForm.accountId) {
+      alert('Please select an account')
+      return
+    }
+
+    // Calculate available amount (remaining - pending receipts)
+    const pendingReceipts = projectPaymentReceipts[selectedProjectForPayment.projectId]?.filter(r => r.status === 'pending') || []
+    const totalPending = pendingReceipts.reduce((sum, r) => sum + (r.amount || 0), 0)
+    const availableAmount = Math.max(0, (selectedProjectForPayment.remainingAmount || 0) - totalPending)
+
+    if (amountValue > availableAmount) {
+      alert(`Amount exceeds available balance. Available: ₹${availableAmount.toLocaleString()}`)
+      return
+    }
+
+    setIsSubmittingPayment(true)
     try {
-      await salesPaymentsService.requestInstallmentPayment(
-        selectedInstallment.projectId,
-        selectedInstallment._id || selectedInstallment.id,
-        {
-          paidDate: installmentForm.paidDate,
-          notes: installmentForm.notes
+      await salesPaymentsService.createReceipt(selectedProjectForPayment.projectId, {
+        amount: amountValue,
+        accountId: paymentForm.accountId,
+        method: paymentForm.method,
+        referenceId: paymentForm.referenceId || undefined,
+        notes: paymentForm.notes || undefined
+      })
+
+      // Optimistically update remaining amount
+      const updatedReceivables = receivables.map(p => {
+        if (p.projectId === selectedProjectForPayment.projectId) {
+          return { ...p, remainingAmount: Math.max(0, (p.remainingAmount || 0) - amountValue) }
         }
-      )
-      // Refresh installments
-      const installments = await salesPaymentsService.getInstallments(selectedInstallment.projectId)
-      setProjectInstallments(prev => ({ ...prev, [selectedInstallment.projectId]: installments }))
+        return p
+      })
+      setReceivables(updatedReceivables)
+      
+      // Refresh receivables data to get updated stats
+      try {
+        const [st, list] = await Promise.all([
+          salesPaymentsService.getReceivableStats(),
+          salesPaymentsService.getReceivables({
+            search: searchTerm,
+            overdue: selectedPaymentType === 'overdue',
+            band: selectedFilter === 'all' ? undefined : selectedFilter
+          })
+        ])
+        setStats({ totalDues: st.totalDue || 0, overdueCount: st.overdueCount || 0, overdueAmount: st.overdueAmount || 0 })
+        setReceivables(list)
+      } catch (e) {
+        console.error('Failed to refresh receivables', e)
+      }
+
+      // Refresh payment receipts
+      const receipts = await salesPaymentsService.getPaymentReceipts(selectedProjectForPayment.projectId)
+      setProjectPaymentReceipts(prev => ({ ...prev, [selectedProjectForPayment.projectId]: receipts }))
+
       // Close dialog
-      setShowInstallmentDialog(false)
-      setSelectedInstallment(null)
-      alert('Payment request submitted successfully. Waiting for admin approval.')
+      setShowAddPaymentDialog(false)
+      setSelectedProjectForPayment(null)
+      setPaymentForm({
+        amount: '',
+        accountId: '',
+        method: 'upi',
+        referenceId: '',
+        notes: ''
+      })
+      alert('Payment receipt created successfully. Pending admin approval.')
     } catch (e) {
-      console.error('Failed to request installment payment', e)
-      alert(e.message || 'Failed to submit payment request')
+      console.error('Failed to create payment receipt', e)
+      alert(e.message || 'Failed to create payment receipt')
+    } finally {
+      setIsSubmittingPayment(false)
     }
   }
 
-  const handleCloseInstallmentDialog = () => {
-    setShowInstallmentDialog(false)
-    setSelectedInstallment(null)
-    setInstallmentForm({
-      paidDate: new Date().toISOString().split('T')[0],
+  const handleCloseAddPaymentDialog = () => {
+    setShowAddPaymentDialog(false)
+    setSelectedProjectForPayment(null)
+    setPaymentForm({
+      amount: '',
+      accountId: '',
+      method: 'upi',
+      referenceId: '',
       notes: ''
     })
   }
@@ -185,18 +245,6 @@ Thank you!`
     if (!dateString) return 'N/A'
     const date = new Date(dateString)
     return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-  }
-
-  const getInstallmentStatusBadge = (installment) => {
-    if (installment.status === 'paid') {
-      return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">Paid</span>
-    } else if (installment.status === 'overdue') {
-      return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">Overdue</span>
-    } else if (installment.pendingApproval) {
-      return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-semibold">Pending Approval</span>
-    } else {
-      return <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-semibold">Pending</span>
-    }
   }
 
   return (
@@ -301,70 +349,109 @@ Thank you!`
               {/* Client Info Section */}
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
-                  <h3 className="font-bold text-gray-900 text-lg mb-1">{payment.clientName}</h3>
+                  <h3 className="font-bold text-gray-900 text-lg mb-1">
+                    {payment.clientName || 'Unknown Client'}
+                  </h3>
+                  {payment.companyName && (
+                    <p className="text-xs text-gray-500 mb-1">{payment.companyName}</p>
+                  )}
                   <p className="text-sm text-gray-600 flex items-center">
                     <FiPhone className="mr-1 text-xs" />
-                    {payment.phone}
+                    {payment.phone || 'N/A'}
                   </p>
                 </div>
                 
-                {/* Amount Badge */}
+                {/* Amount Badge - Show available amount (remaining - pending) */}
                 <div className="bg-red-50 px-3 py-1 rounded-full">
-                  <p className="text-red-700 font-bold text-sm">₹{payment.remainingAmount.toLocaleString()}</p>
+                  <p className="text-red-700 font-bold text-sm">
+                    ₹{(() => {
+                      const pendingReceipts = projectPaymentReceipts[payment.projectId]?.filter(r => r.status === 'pending') || []
+                      const totalPending = pendingReceipts.reduce((sum, r) => sum + (r.amount || 0), 0)
+                      const available = Math.max(0, payment.remainingAmount - totalPending)
+                      return available.toLocaleString()
+                    })()}
+                  </p>
                 </div>
               </div>
 
-              {/* Installments Section */}
+              {/* Add Recovery Payment Button */}
               <div className="mb-3">
                 <button
-                  onClick={() => toggleProjectInstallments(payment.projectId)}
+                  onClick={() => handleAddRecoveryPayment(payment)}
+                  className="w-full bg-gradient-to-r from-teal-500 to-teal-600 text-white px-4 py-2 rounded-lg hover:from-teal-600 hover:to-teal-700 transition-all duration-200 text-sm font-medium"
+                >
+                  Add Recovery Payment
+                </button>
+              </div>
+
+              {/* Payment History Section */}
+              <div className="mb-3">
+                <button
+                  onClick={() => {
+                    const key = `receipts-${payment.projectId}`
+                    setExpandedProjects(prev => ({ ...prev, [key]: !prev[key] }))
+                    // Fetch receipts if not loaded
+                    if (!projectPaymentReceipts[payment.projectId] && !expandedProjects[`receipts-${payment.projectId}`]) {
+                      salesPaymentsService.getPaymentReceipts(payment.projectId)
+                        .then(receipts => {
+                          setProjectPaymentReceipts(prev => ({ ...prev, [payment.projectId]: receipts }))
+                        })
+                        .catch(e => console.error('Failed to fetch receipts', e))
+                    }
+                  }}
                   className="flex items-center justify-between w-full text-left p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
                 >
                   <span className="text-sm font-medium text-gray-700">
-                    View Installments
+                    Payment History
                   </span>
-                  <FiChevronDown className={`text-gray-500 transition-transform duration-200 ${expandedProjects[payment.projectId] ? 'rotate-180' : ''}`} />
+                  <FiChevronDown className={`text-gray-500 transition-transform duration-200 ${expandedProjects[`receipts-${payment.projectId}`] ? 'rotate-180' : ''}`} />
                 </button>
 
-                {expandedProjects[payment.projectId] && (
+                {expandedProjects[`receipts-${payment.projectId}`] && (
                   <div className="mt-2 space-y-2">
-                    {isLoading ? (
-                      <p className="text-sm text-gray-500 text-center py-2">Loading installments...</p>
-                    ) : projectInstallments[payment.projectId]?.length > 0 ? (
-                      projectInstallments[payment.projectId].map((installment) => (
+                    {projectPaymentReceipts[payment.projectId]?.length > 0 ? (
+                      projectPaymentReceipts[payment.projectId].map((receipt) => (
                         <div
-                          key={installment._id || installment.id}
+                          key={receipt._id || receipt.id}
                           className="bg-gray-50 rounded-lg p-3 border border-gray-200"
                         >
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-semibold text-gray-500">Installment #{installment.index}</span>
-                                {getInstallmentStatusBadge(installment)}
+                                <span className="text-sm font-bold text-gray-900">₹{receipt.amount.toLocaleString()}</span>
+                                {receipt.status === 'pending' && (
+                                  <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-semibold">Pending</span>
+                                )}
+                                {receipt.status === 'approved' && (
+                                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">Approved</span>
+                                )}
+                                {receipt.status === 'rejected' && (
+                                  <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">Rejected</span>
+                                )}
                               </div>
-                              <p className="text-sm font-bold text-gray-900">₹{installment.amount.toLocaleString()}</p>
-                              <p className="text-xs text-gray-600">Due: {formatDate(installment.dueDate)}</p>
-                              {installment.paidDate && (
-                                <p className="text-xs text-green-600">Paid: {formatDate(installment.paidDate)}</p>
+                              <p className="text-xs text-gray-600">
+                                Account: {receipt.account?.name || 'N/A'}
+                              </p>
+                              <p className="text-xs text-gray-600">
+                                Method: {receipt.method || 'N/A'}
+                              </p>
+                              {receipt.referenceId && (
+                                <p className="text-xs text-gray-600">
+                                  Reference: {receipt.referenceId}
+                                </p>
+                              )}
+                              <p className="text-xs text-gray-600">
+                                Date: {formatDate(receipt.createdAt)}
+                              </p>
+                              {receipt.notes && (
+                                <p className="text-xs text-gray-600 mt-1">Notes: {receipt.notes}</p>
                               )}
                             </div>
-                            {installment.status !== 'paid' && !installment.pendingApproval && (
-                              <button
-                                onClick={() => handleMarkInstallmentPaid(installment, payment.projectId)}
-                                className="bg-teal-500 text-white px-3 py-1 rounded-lg hover:bg-teal-600 transition-all duration-200 text-xs font-medium"
-                                title="Mark as Paid (Requires Approval)"
-                              >
-                                Mark Paid
-                              </button>
-                            )}
                           </div>
-                          {installment.notes && (
-                            <p className="text-xs text-gray-600 mt-1">Notes: {installment.notes}</p>
-                          )}
                         </div>
                       ))
                     ) : (
-                      <p className="text-sm text-gray-500 text-center py-2">No installments found</p>
+                      <p className="text-sm text-gray-500 text-center py-2">No payment receipts found</p>
                     )}
                   </div>
                 )}
@@ -479,8 +566,8 @@ Thank you!`
         </div>
       )}
 
-      {/* Installment Payment Dialog */}
-      {showInstallmentDialog && selectedInstallment && (
+      {/* Add Recovery Payment Dialog */}
+      {showAddPaymentDialog && selectedProjectForPayment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -491,32 +578,99 @@ Thank you!`
           >
             {/* Dialog Header */}
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-gray-900">Mark Installment as Paid</h2>
+              <h2 className="text-lg font-bold text-gray-900">Add Recovery Payment</h2>
               <button
-                onClick={handleCloseInstallmentDialog}
+                onClick={handleCloseAddPaymentDialog}
                 className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200"
               >
                 <FiX className="text-lg text-gray-600" />
               </button>
             </div>
 
-            {/* Installment Info */}
+            {/* Project Info */}
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600">Installment #{selectedInstallment.index}</p>
-              <p className="text-lg font-bold text-gray-900">₹{selectedInstallment.amount.toLocaleString()}</p>
-              <p className="text-xs text-gray-600">Due Date: {formatDate(selectedInstallment.dueDate)}</p>
+              <p className="text-sm text-gray-600">
+                Client: <span className="font-semibold text-gray-900">
+                  {selectedProjectForPayment.clientName || 'Unknown Client'}
+                </span>
+              </p>
+              {selectedProjectForPayment.companyName && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {selectedProjectForPayment.companyName}
+                </p>
+              )}
+              <p className="text-sm text-gray-600 mt-2">
+                Available: <span className="font-semibold text-red-600">
+                  ₹{(() => {
+                    const pendingReceipts = projectPaymentReceipts[selectedProjectForPayment.projectId]?.filter(r => r.status === 'pending') || []
+                    const totalPending = pendingReceipts.reduce((sum, r) => sum + (r.amount || 0), 0)
+                    const available = Math.max(0, (selectedProjectForPayment.remainingAmount || 0) - totalPending)
+                    return available.toLocaleString()
+                  })()}
+                </span>
+              </p>
             </div>
 
             {/* Form Fields */}
             <div className="space-y-4">
-              {/* Paid Date Field */}
+              {/* Amount Field */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Paid Date</label>
-                <input
-                  type="date"
-                  value={installmentForm.paidDate}
-                  onChange={(e) => setInstallmentForm(prev => ({ ...prev, paidDate: e.target.value }))}
+                <label className="text-sm font-medium text-gray-700">Amount *</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                    <span className="text-lg">₹</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={paymentForm.amount}
+                    onChange={(e) => setPaymentForm(prev => ({ ...prev, amount: e.target.value }))}
+                    placeholder="Enter amount"
+                    className="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                  />
+                </div>
+              </div>
+
+              {/* Account Field */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Account *</label>
+                <select
+                  value={paymentForm.accountId}
+                  onChange={(e) => setPaymentForm(prev => ({ ...prev, accountId: e.target.value }))}
                   className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                >
+                  <option value="">Select an account</option>
+                  {accounts.map(account => (
+                    <option key={account._id || account.id} value={account._id || account.id}>
+                      {account.name} {account.bankName ? `- ${account.bankName}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Payment Method Field */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Payment Method *</label>
+                <select
+                  value={paymentForm.method}
+                  onChange={(e) => setPaymentForm(prev => ({ ...prev, method: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                >
+                  <option value="upi">UPI</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="cash">Cash</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* Reference ID Field */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Reference ID (Optional)</label>
+                <input
+                  type="text"
+                  value={paymentForm.referenceId}
+                  onChange={(e) => setPaymentForm(prev => ({ ...prev, referenceId: e.target.value }))}
+                  placeholder="Transaction/Reference ID"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                 />
               </div>
 
@@ -524,8 +678,8 @@ Thank you!`
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">Notes (Optional)</label>
                 <textarea
-                  value={installmentForm.notes}
-                  onChange={(e) => setInstallmentForm(prev => ({ ...prev, notes: e.target.value }))}
+                  value={paymentForm.notes}
+                  onChange={(e) => setPaymentForm(prev => ({ ...prev, notes: e.target.value }))}
                   placeholder="Add any additional notes..."
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
@@ -535,7 +689,7 @@ Thank you!`
               {/* Info Message */}
               <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-xs text-yellow-800">
-                  <strong>Note:</strong> This will create an approval request. The installment will be marked as paid only after admin approval.
+                  <strong>Note:</strong> This payment receipt will be pending admin approval. The remaining amount will be updated immediately.
                 </p>
               </div>
             </div>
@@ -543,16 +697,22 @@ Thank you!`
             {/* Action Buttons */}
             <div className="flex items-center justify-end space-x-3 mt-6">
               <button
-                onClick={handleCloseInstallmentDialog}
+                onClick={handleCloseAddPaymentDialog}
                 className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors duration-200"
+                disabled={isSubmittingPayment}
               >
                 Cancel
               </button>
               <button
-                onClick={handleInstallmentSubmit}
-                className="px-4 py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg font-medium hover:from-teal-600 hover:to-teal-700 transition-all duration-200"
+                onClick={handleSubmitRecoveryPayment}
+                disabled={isSubmittingPayment || !paymentForm.amount || !paymentForm.accountId}
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                  isSubmittingPayment || !paymentForm.amount || !paymentForm.accountId
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-teal-500 to-teal-600 text-white hover:from-teal-600 hover:to-teal-700'
+                }`}
               >
-                Request Approval
+                {isSubmittingPayment ? 'Submitting...' : 'Submit Payment'}
               </button>
             </div>
           </motion.div>

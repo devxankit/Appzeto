@@ -21,6 +21,11 @@ export const salesPaymentsService = {
     return res.data || { totalDue: 0, overdueCount: 0, overdueAmount: 0 }
   },
 
+  async getPaymentReceipts(projectId) {
+    const res = await apiRequest(`/sales/payment-recovery/${projectId}/receipts`, { method: 'GET' })
+    return res.data || []
+  },
+
   async createReceipt(projectId, payload) {
     const res = await apiRequest(`/sales/payment-recovery/${projectId}/receipts`, {
       method: 'POST',

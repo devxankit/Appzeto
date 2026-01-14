@@ -84,8 +84,12 @@ const getPaymentRecovery = async (req, res) => {
 
     // Fetch projects and compute remaining based on financialDetails
     const projects = await Project.find(projectFilter)
-      .select('client dueDate financialDetails')
-      .populate('client', 'name phoneNumber');
+      .select('client dueDate financialDetails name')
+      .populate({
+        path: 'client',
+        select: 'name phoneNumber email companyName',
+        match: { isActive: true } // Only include active clients
+      });
 
     const bandFilter = (amount) => {
       if (!band) return true;
@@ -97,15 +101,27 @@ const getPaymentRecovery = async (req, res) => {
 
     const list = projects
       .map(p => {
+        // Skip if client is not populated (null or inactive)
+        if (!p.client || !p.client._id) {
+          return null;
+        }
+
         const rem = (p.financialDetails?.remainingAmount || 0);
-        return rem > 0 ? {
-          projectId: p._id,
-          clientId: p.client?._id,
-          clientName: p.client?.name,
-          phone: p.client?.phoneNumber,
-          dueDate: p.dueDate,
+        if (rem <= 0) {
+          return null;
+        }
+
+        return {
+          projectId: p._id.toString(),
+          projectName: p.name || 'Unnamed Project',
+          clientId: p.client._id.toString(),
+          clientName: p.client.name || 'Unknown Client',
+          phone: p.client.phoneNumber || 'N/A',
+          email: p.client.email || null,
+          companyName: p.client.companyName || null,
+          dueDate: p.dueDate || null,
           remainingAmount: rem
-        } : null;
+        };
       })
       .filter(Boolean)
       .filter(r => bandFilter(r.remainingAmount));
@@ -144,6 +160,43 @@ const getPaymentRecoveryStats = async (req, res) => {
   }
 };
 
+// @desc    Get payment receipts for a project
+// @route   GET /api/sales/payment-recovery/:projectId/receipts
+// @access  Private (Sales)
+const getPaymentReceipts = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const { projectId } = req.params;
+
+    const project = await Project.findById(projectId).populate('client');
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+
+    // Verify access - client must be converted by this sales person
+    const client = await Client.findById(project.client);
+    if (!client || String(client.convertedBy) !== String(salesId)) {
+      return res.status(403).json({ success: false, message: 'Not authorized for this project' });
+    }
+
+    // Fetch all payment receipts for this project
+    const receipts = await PaymentReceipt.find({ project: projectId })
+      .populate('account', 'name bankName accountNumber ifsc upiId')
+      .populate('createdBy', 'name email')
+      .populate('verifiedBy', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: receipts,
+      message: 'Payment receipts fetched successfully'
+    });
+  } catch (error) {
+    console.error('getPaymentReceipts error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch payment receipts' });
+  }
+};
+
 // @desc    Create payment receipt (pending verification)
 // @route   POST /api/sales/payment-recovery/:projectId/receipts
 const createPaymentReceipt = async (req, res) => {
@@ -156,6 +209,11 @@ const createPaymentReceipt = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Amount and account are required' });
     }
 
+    const amountValue = parseFloat(amount);
+    if (isNaN(amountValue) || amountValue <= 0) {
+      return res.status(400).json({ success: false, message: 'Amount must be a positive number' });
+    }
+
     const project = await Project.findById(projectId).populate('client');
     if (!project) return res.status(404).json({ success: false, message: 'Project not found' });
 
@@ -165,10 +223,48 @@ const createPaymentReceipt = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized for this client' });
     }
 
+    // Initialize financialDetails if not present
+    if (!project.financialDetails) {
+      project.financialDetails = {
+        totalCost: project.budget || 0,
+        advanceReceived: 0,
+        includeGST: false,
+        remainingAmount: project.budget || 0
+      };
+    }
+
+    // Get current remaining amount (including pending receipts)
+    const currentRemaining = Number(project.financialDetails.remainingAmount || 0);
+    
+    // Calculate sum of pending receipts for this project
+    const pendingReceipts = await PaymentReceipt.find({
+      project: projectId,
+      status: 'pending'
+    }).select('amount');
+    const totalPendingAmount = pendingReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
+    
+    // Available amount = remainingAmount - pending receipts
+    const availableAmount = currentRemaining - totalPendingAmount;
+
+    // Validate amount doesn't exceed available
+    if (amountValue > availableAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `Amount exceeds available balance. Available: ₹${availableAmount.toLocaleString()}`
+      });
+    }
+
+    // Verify account exists and is active
+    const account = await Account.findById(accountId);
+    if (!account || !account.isActive) {
+      return res.status(404).json({ success: false, message: 'Account not found or inactive' });
+    }
+
+    // Create receipt
     const receipt = await PaymentReceipt.create({
       client: client._id,
       project: project._id,
-      amount,
+      amount: amountValue,
       account: accountId,
       method,
       referenceId,
@@ -177,7 +273,54 @@ const createPaymentReceipt = async (req, res) => {
       status: 'pending'
     });
 
-    res.status(201).json({ success: true, data: receipt, message: 'Receipt created and pending verification' });
+    // Optimistically update remainingAmount immediately
+    const newRemainingAmount = Math.max(0, currentRemaining - amountValue);
+    project.financialDetails.remainingAmount = newRemainingAmount;
+    await project.save();
+
+    // Create approval request for admin
+    try {
+      const Admin = require('../models/Admin');
+      const admin = await Admin.findOne({ isActive: true }).select('_id');
+      if (admin) {
+        // Get sales person name for description
+        const salesPerson = await Sales.findById(salesId).select('name');
+        const salesName = salesPerson?.name || 'Sales Employee';
+        
+        const Request = require('../models/Request');
+        await Request.create({
+          module: 'sales',
+          type: 'payment-recovery',
+          title: `Payment Recovery - ₹${amountValue.toLocaleString()}`,
+          description: `Sales person ${salesName} requests approval for payment receipt of ₹${amountValue.toLocaleString()} for project "${project.name || 'Project'}".${notes ? ` Notes: ${notes}` : ''}${referenceId ? ` Reference ID: ${referenceId}` : ''}`,
+          priority: 'normal',
+          requestedBy: salesId,
+          requestedByModel: 'Sales',
+          recipient: admin._id,
+          recipientModel: 'Admin',
+          project: project._id,
+          client: client._id,
+          amount: amountValue,
+          metadata: {
+            paymentReceiptId: receipt._id.toString(),
+            projectId: projectId,
+            accountId: accountId,
+            method: method,
+            referenceId: referenceId || null,
+            notes: notes || null
+          }
+        });
+      }
+    } catch (requestError) {
+      // Log error but don't fail the receipt creation
+      console.error('Error creating approval request for payment receipt:', requestError);
+    }
+
+    res.status(201).json({
+      success: true,
+      data: receipt,
+      message: 'Receipt created and pending verification'
+    });
   } catch (error) {
     console.error('createPaymentReceipt error:', error);
     res.status(500).json({ success: false, message: 'Failed to create receipt' });
@@ -3241,8 +3384,17 @@ const getClientProfile = async (req, res) => {
     if (primaryProject) {
       totalCost = primaryProject.financialDetails?.totalCost || primaryProject.budget || 0;
       
-      // Recalculate from actual payment sources to ensure accuracy
-      // This matches the logic used in recalculateProjectFinancials and PaymentReceipt hook
+      // Use shared utility to recalculate financials for consistency
+      const { recalculateProjectFinancials, calculateInstallmentTotals } = require('../utils/projectFinancialHelper');
+      
+      // Recalculate project financials using shared utility
+      await recalculateProjectFinancials(primaryProject);
+      
+      // Get calculated values from project (now updated by recalculateProjectFinancials)
+      advanceReceived = Number(primaryProject.financialDetails?.advanceReceived || 0);
+      pending = Number(primaryProject.financialDetails?.remainingAmount || 0);
+      
+      // Calculate breakdown for display
       const PaymentReceipt = require('../models/PaymentReceipt');
       const approvedReceipts = await PaymentReceipt.find({
         project: primaryProject._id,
@@ -3252,59 +3404,23 @@ const getClientProfile = async (req, res) => {
       totalApprovedPayments = approvedReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
       
       // Calculate paid installments
-      const installmentPlan = primaryProject.installmentPlan || [];
-      const paidInstallments = installmentPlan.filter(inst => inst.status === 'paid');
-      paidInstallmentAmount = paidInstallments.reduce((sum, inst) => sum + Number(inst.amount || 0), 0);
+      const installmentTotals = calculateInstallmentTotals(primaryProject.installmentPlan || []);
+      paidInstallmentAmount = Number(installmentTotals.paid || 0);
       
-      // Get stored advanceReceived (might include initial advance)
-      const storedAdvance = Number(primaryProject.financialDetails?.advanceReceived || 0);
-      totalFromReceiptsAndInstallments = totalApprovedPayments + paidInstallmentAmount;
-      
-      // Calculate initial advance (the amount set during conversion, before any receipts/installments)
-      // If stored advance > receipts+installments, the difference is initial advance
-      if (storedAdvance > totalFromReceiptsAndInstallments) {
-        initialAdvance = storedAdvance - totalFromReceiptsAndInstallments;
-      } else if (storedAdvance > 0 && totalFromReceiptsAndInstallments === 0) {
-        // No receipts/installments yet, stored is initial advance
-        initialAdvance = storedAdvance;
+      // Calculate initial advance (if any)
+      const totalFromReceiptsAndInstallments = totalApprovedPayments + paidInstallmentAmount;
+      if (advanceReceived > totalFromReceiptsAndInstallments) {
+        initialAdvance = advanceReceived - totalFromReceiptsAndInstallments;
       } else {
-        // Initial advance might be 0 or already included
         initialAdvance = 0;
       }
       
-      // Calculate total received using same logic as recalculateProjectFinancials
-      if (storedAdvance >= totalFromReceiptsAndInstallments) {
-        // Stored advance already includes everything
-        advanceReceived = storedAdvance;
-      } else if (storedAdvance > 0 && totalFromReceiptsAndInstallments > storedAdvance) {
-        // Stored is initial advance, receipts+installments are additional
-        advanceReceived = storedAdvance + totalFromReceiptsAndInstallments;
-      } else {
-        // No initial advance or already included - use receipts+installments
-        advanceReceived = totalFromReceiptsAndInstallments;
-      }
-      
-      // Calculate pending amount
-      pending = Math.max(0, totalCost - advanceReceived);
-      
-      // Update project's financialDetails if different (for consistency)
-      const tolerance = 0.01;
-      const needsUpdate = 
-        Math.abs((primaryProject.financialDetails?.remainingAmount || 0) - pending) > tolerance ||
-        Math.abs((primaryProject.financialDetails?.advanceReceived || 0) - advanceReceived) > tolerance ||
-        Math.abs((primaryProject.financialDetails?.totalCost || 0) - totalCost) > tolerance;
-      
-      if (needsUpdate) {
-        try {
-          primaryProject.financialDetails = primaryProject.financialDetails || {};
-          primaryProject.financialDetails.advanceReceived = advanceReceived;
-          primaryProject.financialDetails.remainingAmount = pending;
-          primaryProject.financialDetails.totalCost = totalCost;
-          await primaryProject.save();
-        } catch (updateError) {
-          console.error('Error updating project financials in getClientProfile:', updateError);
-          // Continue with calculated values even if save fails
-        }
+      // Save project to persist the recalculated financials
+      try {
+        await primaryProject.save();
+      } catch (updateError) {
+        console.error('Error saving project financials in getClientProfile:', updateError);
+        // Continue with calculated values even if save fails
       }
       
       workProgress = primaryProject.progress || 0;
@@ -3383,6 +3499,14 @@ const createClientPayment = async (req, res) => {
       });
     }
 
+    const amountValue = parseFloat(amount);
+    if (isNaN(amountValue) || amountValue <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount must be a positive number'
+      });
+    }
+
     // Find client and verify access
     const client = await Client.findById(clientId);
     if (!client) {
@@ -3410,7 +3534,38 @@ const createClientPayment = async (req, res) => {
       });
     }
 
-    // Verify account exists
+    // Initialize financialDetails if not present
+    if (!project.financialDetails) {
+      project.financialDetails = {
+        totalCost: project.budget || 0,
+        advanceReceived: 0,
+        includeGST: false,
+        remainingAmount: project.budget || 0
+      };
+    }
+
+    // Get current remaining amount (including pending receipts)
+    const currentRemaining = Number(project.financialDetails.remainingAmount || 0);
+    
+    // Calculate sum of pending receipts for this project
+    const pendingReceipts = await PaymentReceipt.find({
+      project: project._id,
+      status: 'pending'
+    }).select('amount');
+    const totalPendingAmount = pendingReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
+    
+    // Available amount = remainingAmount - pending receipts
+    const availableAmount = currentRemaining - totalPendingAmount;
+
+    // Validate amount doesn't exceed available
+    if (amountValue > availableAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `Amount exceeds available balance. Available: ₹${availableAmount.toLocaleString()}`
+      });
+    }
+
+    // Verify account exists and is active
     const account = await Account.findById(accountId);
     if (!account || !account.isActive) {
       return res.status(404).json({
@@ -3423,7 +3578,7 @@ const createClientPayment = async (req, res) => {
     const receipt = await PaymentReceipt.create({
       client: client._id,
       project: project._id,
-      amount: parseFloat(amount),
+      amount: amountValue,
       account: accountId,
       method,
       referenceId: referenceId || undefined,
@@ -3431,6 +3586,49 @@ const createClientPayment = async (req, res) => {
       createdBy: salesId,
       status: 'pending'
     });
+
+    // Optimistically update remainingAmount immediately
+    const newRemainingAmount = Math.max(0, currentRemaining - amountValue);
+    project.financialDetails.remainingAmount = newRemainingAmount;
+    await project.save();
+
+    // Create approval request for admin
+    try {
+      const Admin = require('../models/Admin');
+      const admin = await Admin.findOne({ isActive: true }).select('_id');
+      if (admin) {
+        // Get sales person name for description
+        const salesPerson = await Sales.findById(salesId).select('name');
+        const salesName = salesPerson?.name || 'Sales Employee';
+        
+        const Request = require('../models/Request');
+        await Request.create({
+          module: 'sales',
+          type: 'payment-recovery',
+          title: `Payment Recovery - ₹${amountValue.toLocaleString()}`,
+          description: `Sales person ${salesName} requests approval for payment receipt of ₹${amountValue.toLocaleString()} for project "${project.name || 'Project'}".${notes ? ` Notes: ${notes}` : ''}${referenceId ? ` Reference ID: ${referenceId}` : ''}`,
+          priority: 'normal',
+          requestedBy: salesId,
+          requestedByModel: 'Sales',
+          recipient: admin._id,
+          recipientModel: 'Admin',
+          project: project._id,
+          client: client._id,
+          amount: amountValue,
+          metadata: {
+            paymentReceiptId: receipt._id.toString(),
+            projectId: project._id.toString(),
+            accountId: accountId,
+            method: method,
+            referenceId: referenceId || null,
+            notes: notes || null
+          }
+        });
+      }
+    } catch (requestError) {
+      // Log error but don't fail the receipt creation
+      console.error('Error creating approval request for payment receipt:', requestError);
+    }
 
     res.status(201).json({
       success: true,
@@ -4123,6 +4321,7 @@ module.exports = {
   getAccounts,
   getPaymentRecovery,
   getPaymentRecoveryStats,
+  getPaymentReceipts,
   createPaymentReceipt,
   getProjectInstallments,
   requestInstallmentPayment,

@@ -26,6 +26,7 @@ import {
 import SL_navbar from '../SL-components/SL_navbar'
 import { colors, gradients } from '../../../lib/colors'
 import salesClientService from '../SL-services/salesClientService'
+import { salesPaymentsService } from '../SL-services'
 
 const SL_ClientProfile = () => {
   const { id } = useParams()
@@ -47,6 +48,10 @@ const SL_ClientProfile = () => {
   const [selectedAccount, setSelectedAccount] = useState('')
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [showAccountDropdown, setShowAccountDropdown] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState('upi')
+  const [referenceId, setReferenceId] = useState('')
+  const [paymentNotes, setPaymentNotes] = useState('')
+  const [paymentReceipts, setPaymentReceipts] = useState([])
   const [showAccelerateModal, setShowAccelerateModal] = useState(false)
   const [showHoldModal, setShowHoldModal] = useState(false)
   const [showIncreaseCostModal, setShowIncreaseCostModal] = useState(false)
@@ -136,31 +141,80 @@ const SL_ClientProfile = () => {
   }
 
   const handleAddMoney = async () => {
-    if (!amount || !selectedAccountId) {
-      toast.error('Please enter amount and select an account')
+    const amountValue = parseFloat(amount)
+    if (!amountValue || amountValue <= 0) {
+      toast.error('Please enter a valid amount greater than 0')
+      return
+    }
+
+    if (!selectedAccountId) {
+      toast.error('Please select an account')
+      return
+    }
+
+    // Calculate available amount (remaining - pending receipts)
+    const pendingReceipts = paymentReceipts.filter(r => r.status === 'pending') || []
+    const totalPending = pendingReceipts.reduce((sum, r) => sum + (r.amount || 0), 0)
+    const availableAmount = Math.max(0, (clientData?.financial?.pending || 0) - totalPending)
+
+    if (amountValue > availableAmount) {
+      toast.error(`Amount exceeds available balance. Available: ₹${availableAmount.toLocaleString()}`)
       return
     }
 
     setIsSubmitting(true)
     try {
       await salesClientService.createPayment(id, {
-        amount: parseFloat(amount),
+        amount: amountValue,
         accountId: selectedAccountId,
-        method: 'upi'
+        method: paymentMethod,
+        referenceId: referenceId || undefined,
+        notes: paymentNotes || undefined
       })
       toast.success('Payment receipt created successfully. Pending admin approval.')
       setShowAddMoneyModal(false)
       setAmount('')
       setSelectedAccount('')
       setSelectedAccountId('')
+      setPaymentMethod('upi')
+      setReferenceId('')
+      setPaymentNotes('')
       setShowAccountDropdown(false)
       // Refresh client data to update financial info
-      fetchClientProfile()
+      await fetchClientProfile()
+      // Refresh payment receipts
+      const projectId = clientData?.project?.projectDetails?._id || clientData?.allProjects?.[0]?._id
+      if (projectId) {
+        try {
+          const receipts = await salesPaymentsService.getPaymentReceipts(projectId)
+          setPaymentReceipts(receipts || [])
+        } catch (e) {
+          console.error('Failed to refresh payment receipts', e)
+        }
+      }
     } catch (err) {
       console.error('Error creating payment:', err)
       toast.error(err.message || 'Failed to create payment receipt')
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  // Fetch payment receipts when modal opens
+  const handleOpenAddMoneyModal = async () => {
+    setShowAddMoneyModal(true)
+    // Fetch payment receipts to calculate available amount
+    const projectId = clientData?.project?.projectDetails?._id || clientData?.allProjects?.[0]?._id
+    if (projectId) {
+      try {
+        const receipts = await salesPaymentsService.getPaymentReceipts(projectId)
+        setPaymentReceipts(receipts || [])
+      } catch (e) {
+        console.error('Failed to fetch payment receipts', e)
+        setPaymentReceipts([])
+      }
+    } else {
+      setPaymentReceipts([])
     }
   }
 
@@ -509,7 +563,7 @@ const SL_ClientProfile = () => {
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setShowAddMoneyModal(true)}
+            onClick={handleOpenAddMoneyModal}
             className="w-full rounded-xl p-4 shadow-xl border-0 text-white font-semibold flex items-center justify-center gap-2"
             style={{ 
               background: gradients.primary,
@@ -628,7 +682,16 @@ const SL_ClientProfile = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-            onClick={() => setShowAddMoneyModal(false)}
+            onClick={() => {
+              setShowAddMoneyModal(false)
+              setAmount('')
+              setSelectedAccount('')
+              setSelectedAccountId('')
+              setPaymentMethod('upi')
+              setReferenceId('')
+              setPaymentNotes('')
+              setShowAccountDropdown(false)
+            }}
           >
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
@@ -636,11 +699,28 @@ const SL_ClientProfile = () => {
               className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-xl font-semibold text-gray-800 mb-6 text-center">{client.name}</h3>
+              <h3 className="text-xl font-semibold text-gray-800 mb-4 text-center">{clientData?.client?.name || 'Client'}</h3>
+              
+              {/* Available Amount Info */}
+              {clientData?.financial && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600">
+                    Available: <span className="font-semibold text-red-600">
+                      ₹{(() => {
+                        const pendingReceipts = paymentReceipts.filter(r => r.status === 'pending') || []
+                        const totalPending = pendingReceipts.reduce((sum, r) => sum + (r.amount || 0), 0)
+                        const available = Math.max(0, (clientData.financial.pending || 0) - totalPending)
+                        return available.toLocaleString()
+                      })()}
+                    </span>
+                  </p>
+                </div>
+              )}
               
               <div className="space-y-4">
                 {/* Amount Input */}
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Amount *</label>
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
                       <span className="text-teal-600 font-bold text-lg">₹</span>
@@ -649,16 +729,33 @@ const SL_ClientProfile = () => {
                       type="number"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      placeholder="Amount"
+                      placeholder="Enter amount"
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                     />
                   </div>
                 </div>
 
+                {/* Payment Method Field */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Payment Method *
+                  </label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 bg-white"
+                  >
+                    <option value="upi">UPI</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="cash">Cash</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
                 {/* Choose Account Dropdown */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Choose Account
+                    Account *
                   </label>
                   <div className="relative" ref={dropdownRef}>
                     <button
@@ -720,18 +817,32 @@ const SL_ClientProfile = () => {
                 {/* Action Buttons */}
                 <div className="flex gap-3 pt-4">
                   <button
-                    onClick={() => setShowAddMoneyModal(false)}
+                    onClick={() => {
+                      setShowAddMoneyModal(false)
+                      setAmount('')
+                      setSelectedAccount('')
+                      setSelectedAccountId('')
+                      setPaymentMethod('upi')
+                      setReferenceId('')
+                      setPaymentNotes('')
+                      setShowAccountDropdown(false)
+                    }}
                     className="flex-1 px-4 py-3 text-gray-700 font-medium hover:bg-gray-50 rounded-lg transition-colors"
+                    disabled={isSubmitting}
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleAddMoney}
-                    disabled={isSubmitting}
-                    className={`flex-1 px-4 py-3 rounded-lg text-white font-medium ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={isSubmitting || !amount || !selectedAccountId}
+                    className={`flex-1 px-4 py-3 rounded-lg text-white font-medium transition-all duration-200 ${
+                      isSubmitting || !amount || !selectedAccountId
+                        ? 'opacity-50 cursor-not-allowed'
+                        : ''
+                    }`}
                     style={{ background: gradients.primary }}
                   >
-                    {isSubmitting ? 'Adding...' : 'Add money'}
+                    {isSubmitting ? 'Submitting...' : 'Submit Payment'}
                   </button>
                 </div>
               </div>

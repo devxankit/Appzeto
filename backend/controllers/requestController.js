@@ -311,6 +311,40 @@ const respondToRequest = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Request has already been responded to', 400));
   }
 
+  // Handle payment receipt approval/rejection - update PaymentReceipt status
+  if (request.type === 'payment-recovery' && request.module === 'sales' && request.metadata?.paymentReceiptId) {
+    const PaymentReceipt = require('../models/PaymentReceipt');
+    const receipt = await PaymentReceipt.findById(request.metadata.paymentReceiptId);
+    
+    if (!receipt) {
+      return next(new ErrorResponse('Payment receipt not found', 404));
+    }
+
+    if (responseType === 'approve') {
+      // Update receipt status to approved
+      if (receipt.status === 'approved') {
+        return next(new ErrorResponse('Payment receipt is already approved', 400));
+      }
+      
+      receipt.status = 'approved';
+      receipt.verifiedBy = user.id;
+      receipt.verifiedAt = new Date();
+      await receipt.save();
+      // The PaymentReceipt post-save hook will handle project financials update and finance transaction creation
+    } else if (responseType === 'reject') {
+      // Update receipt status to rejected
+      if (receipt.status === 'rejected') {
+        return next(new ErrorResponse('Payment receipt is already rejected', 400));
+      }
+      
+      receipt.status = 'rejected';
+      receipt.verifiedBy = user.id;
+      receipt.verifiedAt = new Date();
+      await receipt.save();
+      // The PaymentReceipt post-save hook will handle restoring remainingAmount
+    }
+  }
+
   // Handle installment payment approval - update installment status if approved
   if (request.type === 'approval' && request.module === 'sales' && request.metadata?.installmentId) {
     if (responseType === 'approve') {
