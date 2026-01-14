@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { 
   FiPhone, 
   FiFilter,
@@ -19,7 +19,9 @@ import { useToast } from '../../../contexts/ToastContext'
 
 const SL_converted = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const { toast } = useToast()
+  const prevLocationRef = useRef()
   
   // State for filters and UI
   const [selectedFilter, setSelectedFilter] = useState('all')
@@ -37,6 +39,37 @@ const SL_converted = () => {
     fetchCategories()
     fetchLeads()
   }, [selectedFilter, selectedCategory, searchTerm])
+
+  // Refresh when navigating back to this page (e.g., after transferring a client)
+  useEffect(() => {
+    // Check if we're coming from a different route
+    if (prevLocationRef.current && prevLocationRef.current.pathname !== location.pathname) {
+      // We navigated to this page, refresh the data
+      fetchLeads()
+    }
+    prevLocationRef.current = location
+  }, [location.pathname])
+
+  // Refresh when component becomes visible (handles navigation back from other pages)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchLeads()
+      }
+    }
+    
+    const handleFocus = () => {
+      fetchLeads()
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [selectedFilter, selectedCategory, searchTerm]) // Refresh with current filters when page becomes visible
 
   // Fetch categories from API
   const fetchCategories = async () => {
@@ -60,7 +93,11 @@ const SL_converted = () => {
         limit: 50
       }
       const response = await salesLeadService.getLeadsByStatus('converted', params)
-      setLeadsData(response.data || [])
+      // Filter out any leads without valid client info (safety check for transferred clients)
+      const validLeads = (response.data || []).filter(lead => 
+        lead?.convertedClientId || lead?.convertedClient?.id
+      )
+      setLeadsData(validLeads)
     } catch (error) {
       console.error('Error fetching leads:', error)
       toast.error('Failed to fetch leads')
@@ -122,7 +159,13 @@ const SL_converted = () => {
       client?.project?.client
 
     if (!clientId) {
-      toast.error('Client profile is not available yet. Please try again after conversion completes.')
+      toast.error('Client profile is not available. This client may have been transferred.')
+      return
+    }
+
+    // Double-check that we have a valid client before navigating
+    if (!client?.convertedClient && !client?.convertedClientId) {
+      toast.error('Client information is not available. This client may have been transferred to another sales employee.')
       return
     }
 
@@ -139,6 +182,8 @@ const SL_converted = () => {
     const displayName = client.leadProfile?.name || client.name || 'Unknown'
     const displayBusiness = client.leadProfile?.businessName || client.company || 'No company'
     const avatar = displayName.charAt(0).toUpperCase()
+    const isTransferred = client?.convertedClient?.isTransferred || false
+    const transferInfo = client?.convertedClient?.transferInfo
     
     return (
       <div 
@@ -156,9 +201,16 @@ const SL_converted = () => {
 
           {/* Client Info */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-gray-900 truncate">
-              {displayName}
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-semibold text-gray-900 truncate">
+                {displayName}
+              </h3>
+              {isTransferred && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                  Transferred
+                </span>
+              )}
+            </div>
             <p className="text-sm text-gray-600 truncate">
               {displayBusiness}
             </p>
@@ -167,6 +219,11 @@ const SL_converted = () => {
               <span className="text-xs text-black">
                 {categoryInfo.name}
               </span>
+              {isTransferred && transferInfo && (
+                <span className="text-xs text-gray-500">
+                  • Transferred by {transferInfo.transferredBy}
+                </span>
+              )}
             </div>
           </div>
 

@@ -62,27 +62,28 @@ const SL_ClientProfile = () => {
   const [accounts, setAccounts] = useState([])
   const [salesTeam, setSalesTeam] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isTransferred, setIsTransferred] = useState(false)
   const dropdownRef = useRef(null)
   
   // Fetch client profile data
   useEffect(() => {
-    if (id) {
+    if (id && !isTransferred) {
       fetchClientProfile()
       fetchAccounts()
       fetchSalesTeam()
     }
-  }, [id])
+  }, [id, isTransferred])
 
   // Refresh client profile when component becomes visible (handles back navigation)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden && id) {
+      if (!document.hidden && id && !isTransferred) {
         fetchClientProfile()
       }
     }
     
     const handleFocus = () => {
-      if (id) {
+      if (id && !isTransferred) {
         fetchClientProfile()
       }
     }
@@ -94,9 +95,14 @@ const SL_ClientProfile = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [id])
+  }, [id, isTransferred])
 
   const fetchClientProfile = async () => {
+    // Don't fetch if client has been transferred
+    if (isTransferred) {
+      return
+    }
+    
     setIsLoading(true)
     setError(null)
     try {
@@ -107,6 +113,15 @@ const SL_ClientProfile = () => {
         throw new Error(response.message || 'Failed to fetch client profile')
       }
     } catch (err) {
+      // Don't show error if client was transferred (403 is expected)
+      if (isTransferred || err.message?.includes('Not authorized') || err.message?.includes('403')) {
+        // Silently handle - client was transferred, navigate away
+        if (!isTransferred) {
+          setIsTransferred(true)
+          navigate('/clients')
+        }
+        return
+      }
       console.error('Error fetching client profile:', err)
       setError(err.message || 'Failed to load client profile')
       toast.error(err.message || 'Failed to load client profile')
@@ -248,13 +263,15 @@ const SL_ClientProfile = () => {
     setIsSubmitting(true)
     try {
       await salesClientService.transferClient(id, selectedUserId)
+      // Mark as transferred to prevent further fetches
+      setIsTransferred(true)
       toast.success('Client transferred successfully')
       setShowTransferConfirmation(false)
       setSelectedUser('')
       setSelectedUserId('')
       setShowUserDropdown(false)
-      // Refresh client data
-      fetchClientProfile()
+      // Navigate to converted clients page immediately since we no longer have access to this client
+      navigate('/converted')
     } catch (err) {
       console.error('Error transferring client:', err)
       toast.error(err.message || 'Failed to transfer client')
@@ -342,15 +359,15 @@ const SL_ClientProfile = () => {
         amount: amountValue,
         reason: increaseReason.trim()
       })
-      toast.success('Project cost increased successfully')
+      toast.success('Request for cost increase submitted successfully. Pending admin approval.')
       setShowIncreaseCostModal(false)
       setIncreaseAmount('')
       setIncreaseReason('')
-      // Refresh client data to show updated cost
+      // Refresh client data (cost won't change until admin approves)
       fetchClientProfile()
     } catch (err) {
-      console.error('Error increasing cost:', err)
-      toast.error(err.message || 'Failed to increase cost')
+      console.error('Error creating cost increase request:', err)
+      toast.error(err.message || 'Failed to create cost increase request')
     } finally {
       setIsSubmitting(false)
     }

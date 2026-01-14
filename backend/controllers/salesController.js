@@ -14,6 +14,7 @@ const SalesMeeting = require('../models/SalesMeeting');
 const Project = require('../models/Project');
 const Client = require('../models/Client');
 const Request = require('../models/Request');
+const Admin = require('../models/Admin');
 // Ensure LeadProfile model is registered before any populate calls
 require('../models/LeadProfile');
 
@@ -1948,31 +1949,42 @@ const getLeadsByStatus = async (req, res) => {
     // For converted leads, populate associated project with financial details
     if (status === 'converted') {
       const leadIds = leads.map(lead => lead._id);
-      const projects = await Project.find({ originLead: { $in: leadIds } })
+      const salesObjectId = safeObjectId(salesId);
+      
+      // Get clients that belong to this sales employee first
+      const clientDocs = await Client.find({ convertedBy: salesObjectId })
+        .select('_id originLead phoneNumber name companyName convertedBy transferHistory')
+        .populate({
+          path: 'transferHistory.fromSales',
+          select: 'name'
+        })
+        .populate({
+          path: 'transferHistory.transferredBy',
+          select: 'name'
+        });
+      const clients = clientDocs.map(doc => doc.toObject());
+      const clientIds = clients.map(c => c._id);
+      
+      // Get projects for both leads and clients
+      const projects = await Project.find({
+        $or: [
+          { originLead: { $in: leadIds } },
+          { client: { $in: clientIds } }
+        ]
+      })
         .select('originLead client financialDetails budget projectType status progress')
         .lean();
-      const phoneNumbers = leads
-        .map((lead) => lead.phone)
-        .filter((phone) => typeof phone === 'string' && phone.length > 0);
-      const clientQueryOr = [];
-      if (leadIds.length > 0) {
-        clientQueryOr.push({ originLead: { $in: leadIds } });
-      }
-      if (phoneNumbers.length > 0) {
-        clientQueryOr.push({ phoneNumber: { $in: phoneNumbers } });
-      }
-      let clients = [];
-      if (clientQueryOr.length > 0) {
-        clients = await Client.find({ $or: clientQueryOr })
-          .select('_id originLead phoneNumber name companyName')
-          .lean();
-      }
+      // Clients are already fetched above, no need to query again
       
-      // Create a map of leadId -> project
-      const projectMap = {};
+      // Create maps: leadId -> project and clientId -> project
+      const projectMapByLead = {};
+      const projectMapByClient = {};
       projects.forEach(project => {
         if (project.originLead) {
-          projectMap[project.originLead.toString()] = project;
+          projectMapByLead[project.originLead.toString()] = project;
+        }
+        if (project.client) {
+          projectMapByClient[String(project.client)] = project;
         }
       });
 
@@ -1987,35 +1999,156 @@ const getLeadsByStatus = async (req, res) => {
         }
       });
       
-      // Attach project data to each lead
-      leads = leads.map(lead => {
-        const leadObj = lead.toObject();
-        const project = projectMap[lead._id.toString()];
-        if (project) {
-          leadObj.project = project;
-        }
-        const clientDoc =
-          clientMapByLead.get(lead._id.toString()) ||
-          (lead.phone ? clientMapByPhone.get(lead.phone) : null);
+      // Attach project data to each lead and filter out leads whose clients were transferred
+      // For converted status, only show leads that have a client AND that client belongs to this sales employee
+      leads = leads
+        .map(lead => {
+          const leadObj = lead.toObject();
+          const project = projectMapByLead[lead._id.toString()];
+          if (project) {
+            leadObj.project = project;
+          }
+          const clientDoc =
+            clientMapByLead.get(lead._id.toString()) ||
+            (lead.phone ? clientMapByPhone.get(lead.phone) : null);
 
-        if (clientDoc) {
-          const clientIdStr =
-            typeof clientDoc._id === 'object' && clientDoc._id !== null && clientDoc._id.toString
-              ? clientDoc._id.toString()
-              : clientDoc._id;
-          leadObj.convertedClient = {
-            id: clientIdStr,
+          if (clientDoc) {
+            // Verify client belongs to this sales employee
+            // Since we already filtered by convertedBy in the query, this should always match
+            // But we double-check here for safety - handle both ObjectId and string cases
+            const clientConvertedBy = clientDoc.convertedBy 
+              ? String(clientDoc.convertedBy._id || clientDoc.convertedBy)
+              : null;
+            const currentSalesIdStr = String(salesId);
+            
+            if (clientConvertedBy && clientConvertedBy !== currentSalesIdStr) {
+              // Client doesn't belong to this sales employee, exclude this lead
+              return null;
+            }
+            
+            const clientIdStr =
+              typeof clientDoc._id === 'object' && clientDoc._id !== null && clientDoc._id.toString
+                ? clientDoc._id.toString()
+                : clientDoc._id;
+            
+            // Check if this client was transferred to the current sales employee
+            const transferHistory = clientDoc.transferHistory || [];
+            const latestTransfer = transferHistory.length > 0 
+              ? transferHistory[transferHistory.length - 1] 
+              : null;
+            
+            // Check if transferred TO current sales employee (toSales matches current salesId)
+            // Handle both ObjectId and populated object cases
+            let isTransferred = false;
+            let transferredByName = 'Unknown';
+            let fromSalesName = 'Unknown';
+            
+            if (latestTransfer) {
+              // Get IDs - handle both populated objects and raw ObjectIds
+              const toSalesId = latestTransfer.toSales?._id 
+                ? String(latestTransfer.toSales._id)
+                : String(latestTransfer.toSales || '');
+              const fromSalesId = latestTransfer.fromSales?._id 
+                ? String(latestTransfer.fromSales._id)
+                : String(latestTransfer.fromSales || '');
+              
+              // Client was transferred TO this sales employee if:
+              // 1. toSales matches current salesId
+              // 2. fromSales is different from current salesId (was transferred from someone else)
+              isTransferred = toSalesId === currentSalesIdStr && fromSalesId !== currentSalesIdStr && fromSalesId !== '';
+              
+              // Get names from populated objects
+              transferredByName = latestTransfer.transferredBy?.name || 'Unknown';
+              fromSalesName = latestTransfer.fromSales?.name || 'Unknown';
+            }
+            
+            leadObj.convertedClient = {
+              id: clientIdStr,
+              name: clientDoc.name,
+              phoneNumber: clientDoc.phoneNumber,
+              companyName: clientDoc.companyName,
+              isTransferred: isTransferred,
+              transferInfo: isTransferred ? {
+                transferredBy: transferredByName,
+                transferredAt: latestTransfer.transferredAt,
+                fromSales: fromSalesName
+              } : null
+            };
+            leadObj.convertedClientId = clientIdStr;
+            return leadObj;
+          } else {
+            // For converted status, if there's no client found, exclude the lead
+            // (This can happen if client was deleted or transferred before the query)
+            return null;
+          }
+        })
+        .filter(lead => lead !== null && lead.convertedClientId !== null); // Remove leads without valid clients
+        
+        // Also include clients that belong to this sales employee but don't have matching leads
+        // This handles cases where clients were transferred but the original lead isn't assigned to this sales employee
+        const clientIdsInLeads = new Set(leads.map(l => l.convertedClientId).filter(Boolean));
+        const clientsWithoutLeads = clients.filter(client => {
+          const clientIdStr = String(client._id);
+          return !clientIdsInLeads.has(clientIdStr);
+        });
+        
+        // Create lead-like objects for clients without matching leads
+        for (const clientDoc of clientsWithoutLeads) {
+          const clientIdStr = String(clientDoc._id);
+          
+          // Check if this client was transferred to the current sales employee
+          const transferHistory = clientDoc.transferHistory || [];
+          const latestTransfer = transferHistory.length > 0 
+            ? transferHistory[transferHistory.length - 1] 
+            : null;
+          
+          let isTransferred = false;
+          let transferredByName = 'Unknown';
+          let fromSalesName = 'Unknown';
+          
+          if (latestTransfer) {
+            const toSalesId = latestTransfer.toSales?._id 
+              ? String(latestTransfer.toSales._id)
+              : String(latestTransfer.toSales || '');
+            const fromSalesId = latestTransfer.fromSales?._id 
+              ? String(latestTransfer.fromSales._id)
+              : String(latestTransfer.fromSales || '');
+            const currentSalesIdStr = String(salesId);
+            
+            isTransferred = toSalesId === currentSalesIdStr && fromSalesId !== currentSalesIdStr && fromSalesId !== '';
+            
+            transferredByName = latestTransfer.transferredBy?.name || 'Unknown';
+            fromSalesName = latestTransfer.fromSales?.name || 'Unknown';
+          }
+          
+          // Find associated project for this client
+          const clientProject = projectMapByClient[clientIdStr];
+          
+          // Create a lead-like object
+          const clientLeadObj = {
+            _id: clientDoc.originLead || clientDoc._id, // Use originLead if available, otherwise use client ID
+            phone: clientDoc.phoneNumber,
             name: clientDoc.name,
-            phoneNumber: clientDoc.phoneNumber,
-            companyName: clientDoc.companyName
+            company: clientDoc.companyName,
+            convertedClient: {
+              id: clientIdStr,
+              name: clientDoc.name,
+              phoneNumber: clientDoc.phoneNumber,
+              companyName: clientDoc.companyName,
+              isTransferred: isTransferred,
+              transferInfo: isTransferred ? {
+                transferredBy: transferredByName,
+                transferredAt: latestTransfer.transferredAt,
+                fromSales: fromSalesName
+              } : null
+            },
+            convertedClientId: clientIdStr,
+            project: clientProject || null,
+            updatedAt: latestTransfer?.transferredAt || clientDoc.updatedAt || new Date()
           };
-          leadObj.convertedClientId = clientIdStr;
-        } else {
-          leadObj.convertedClient = null;
-          leadObj.convertedClientId = null;
+          
+          leads.push(clientLeadObj);
         }
-        return leadObj;
-      });
     }
 
     // For status-specific queries that check leadProfile flags, count needs special handling
@@ -3695,16 +3828,51 @@ const createProjectRequest = async (req, res) => {
       });
     }
 
-    // Create request
+    // Find an active admin to be the recipient
+    const admin = await Admin.findOne({ isActive: true }).select('_id');
+    if (!admin) {
+      return res.status(500).json({
+        success: false,
+        message: 'No active admin found to receive the request'
+      });
+    }
+
+    // Map requestType to Request type (convert underscore to hyphen)
+    const requestTypeMap = {
+      'accelerate_work': 'accelerate-work',
+      'hold_work': 'hold-work'
+    };
+    const requestTypeValue = requestTypeMap[requestType] || requestType;
+
+    // Create title based on request type
+    const titleMap = {
+      'accelerate-work': 'Accelerate Work Request',
+      'hold-work': 'Hold Work Request'
+    };
+    const title = titleMap[requestTypeValue] || 'Project Request';
+
+    // Get sales person name for description
+    const salesPerson = await Sales.findById(salesId).select('name');
+    const salesName = salesPerson?.name || 'Sales Employee';
+
+    // Create request with all required fields
     const request = await Request.create({
       module: 'sales',
-      requestType,
-      client: client._id,
-      project: project._id,
-      reason: reason.trim(),
+      type: requestTypeValue,
+      title: `${title} - ${client.name || 'Client'}`,
+      description: `${salesName} requests to ${requestTypeValue === 'accelerate-work' ? 'accelerate' : 'hold'} work for project "${project.name || 'Project'}". Reason: ${reason.trim()}`,
+      priority: 'normal',
       requestedBy: salesId,
       requestedByModel: 'Sales',
-      status: 'pending'
+      recipient: admin._id,
+      recipientModel: 'Admin',
+      client: client._id,
+      project: project._id,
+      status: 'pending',
+      metadata: {
+        requestType: requestType,
+        reason: reason.trim()
+      }
     });
 
     res.status(201).json({
@@ -3821,50 +3989,54 @@ const increaseProjectCost = async (req, res) => {
       });
     }
 
-    // Store previous cost for history
-    const previousCost = project.financialDetails?.totalCost || project.budget || 0;
-    const newCost = previousCost + increaseAmount;
-
-    // Update financial details
-    const currentAdvanceReceived = project.financialDetails?.advanceReceived || 0;
-    project.financialDetails = {
-      totalCost: newCost,
-      advanceReceived: currentAdvanceReceived,
-      includeGST: project.financialDetails?.includeGST || false,
-      remainingAmount: newCost - currentAdvanceReceived
-    };
-
-    // Update budget
-    project.budget = newCost;
-
-    // Add to cost history
-    if (!project.costHistory) {
-      project.costHistory = [];
+    // Find an active admin to be the recipient
+    const admin = await Admin.findOne({ isActive: true }).select('_id');
+    if (!admin) {
+      return res.status(500).json({
+        success: false,
+        message: 'No active admin found to receive the request'
+      });
     }
-    project.costHistory.push({
-      previousCost,
-      newCost,
-      reason: reason.trim(),
-      changedBy: salesId,
-      changedByModel: 'Sales',
-      changedAt: new Date()
+
+    // Get sales person name for description
+    const salesPerson = await Sales.findById(salesId).select('name');
+    const salesName = salesPerson?.name || 'Sales Employee';
+
+    // Store current cost
+    const currentCost = project.financialDetails?.totalCost || project.budget || 0;
+    const newCost = currentCost + increaseAmount;
+
+    // Create request for admin approval
+    const request = await Request.create({
+      module: 'sales',
+      type: 'increase-cost',
+      title: `Increase Project Cost - ₹${increaseAmount.toLocaleString()}`,
+      description: `${salesName} requests to increase project cost by ₹${increaseAmount.toLocaleString()} for project "${project.name || 'Project'}". Current cost: ₹${currentCost.toLocaleString()}, New cost: ₹${newCost.toLocaleString()}. Reason: ${reason.trim()}`,
+      priority: 'normal',
+      requestedBy: salesId,
+      requestedByModel: 'Sales',
+      recipient: admin._id,
+      recipientModel: 'Admin',
+      client: client._id,
+      project: project._id,
+      amount: increaseAmount,
+      status: 'pending',
+      metadata: {
+        previousCost: currentCost,
+        newCost: newCost,
+        reason: reason.trim()
+      }
     });
 
-    await project.save();
-
-    res.status(200).json({
+    res.status(201).json({
       success: true,
       data: {
-        project: {
-          _id: project._id,
-          financialDetails: project.financialDetails,
-          budget: project.budget
-        },
+        request: request,
         costIncrease: increaseAmount,
-        previousCost,
-        newCost
+        previousCost: currentCost,
+        newCost: newCost
       },
-      message: 'Project cost increased successfully'
+      message: 'Request for cost increase submitted successfully. Pending admin approval.'
     });
   } catch (error) {
     console.error('Increase project cost error:', error);
@@ -3908,8 +4080,17 @@ const transferClient = async (req, res) => {
       });
     }
 
+    // Convert toSalesId to ObjectId
+    const targetSalesId = safeObjectId(toSalesId);
+    if (!targetSalesId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid target sales employee ID'
+      });
+    }
+
     // Verify target sales employee exists
-    const targetSales = await Sales.findById(toSalesId);
+    const targetSales = await Sales.findById(targetSalesId);
     if (!targetSales) {
       return res.status(404).json({
         success: false,
@@ -3918,12 +4099,15 @@ const transferClient = async (req, res) => {
     }
 
     // Prevent transferring to self
-    if (String(toSalesId) === String(salesId)) {
+    if (String(targetSalesId) === String(salesId)) {
       return res.status(400).json({
         success: false,
         message: 'Cannot transfer client to yourself'
       });
     }
+
+    // Store the previous owner before transfer
+    const previousOwner = client.convertedBy;
 
     // Initialize transferHistory if it doesn't exist
     if (!client.transferHistory) {
@@ -3932,15 +4116,15 @@ const transferClient = async (req, res) => {
 
     // Add transfer history entry
     client.transferHistory.push({
-      fromSales: client.convertedBy,
-      toSales: toSalesId,
+      fromSales: previousOwner,
+      toSales: targetSalesId,
       reason: reason ? reason.trim() : undefined,
       transferredAt: new Date(),
       transferredBy: salesId
     });
 
-    // Update convertedBy
-    client.convertedBy = toSalesId;
+    // Update convertedBy to the new sales employee
+    client.convertedBy = targetSalesId;
     await client.save();
 
     res.status(200).json({
@@ -3952,8 +4136,8 @@ const transferClient = async (req, res) => {
           convertedBy: client.convertedBy
         },
         transfer: {
-          fromSales: salesId,
-          toSales: toSalesId
+          fromSales: previousOwner,
+          toSales: targetSalesId
         }
       },
       message: 'Client transferred successfully'

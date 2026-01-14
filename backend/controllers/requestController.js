@@ -441,6 +441,67 @@ const respondToRequest = asyncHandler(async (req, res, next) => {
     }
   }
 
+  // Handle increase-cost request approval - update project cost if approved
+  if (request.type === 'increase-cost' && request.module === 'sales' && request.project) {
+    const project = await Project.findById(request.project);
+    
+    if (!project) {
+      return next(new ErrorResponse('Project not found', 404));
+    }
+
+    if (responseType === 'approve') {
+      // Check if cost was already increased (prevent duplicate increases)
+      const currentCost = project.financialDetails?.totalCost || project.budget || 0;
+      const expectedNewCost = request.metadata?.newCost;
+      
+      if (expectedNewCost && currentCost >= expectedNewCost) {
+        // Cost already increased, might be duplicate approval
+        console.warn('Project cost may have already been increased');
+      }
+
+      // Get the increase amount from request
+      const increaseAmount = request.amount || (request.metadata?.newCost - request.metadata?.previousCost);
+      
+      if (!increaseAmount || increaseAmount <= 0) {
+        return next(new ErrorResponse('Invalid increase amount in request', 400));
+      }
+
+      // Store previous cost for history
+      const previousCost = project.financialDetails?.totalCost || project.budget || 0;
+      const newCost = previousCost + increaseAmount;
+
+      // Update financial details
+      const currentAdvanceReceived = project.financialDetails?.advanceReceived || 0;
+      project.financialDetails = {
+        totalCost: newCost,
+        advanceReceived: currentAdvanceReceived,
+        includeGST: project.financialDetails?.includeGST || false,
+        remainingAmount: newCost - currentAdvanceReceived
+      };
+
+      // Update budget
+      project.budget = newCost;
+
+      // Add to cost history
+      if (!project.costHistory) {
+        project.costHistory = [];
+      }
+      project.costHistory.push({
+        previousCost,
+        newCost,
+        reason: request.metadata?.reason || request.description || 'Cost increase approved by admin',
+        changedBy: request.requestedBy,
+        changedByModel: request.requestedByModel,
+        changedAt: new Date(),
+        approvedBy: user.id,
+        approvedByModel: user.model
+      });
+
+      await project.save();
+    }
+    // If rejected, we don't need to do anything - cost stays the same
+  }
+
   // Respond to request
   await request.respond(user.id, user.model, responseType, message || '');
 
