@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, memo } from 'react'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Sparklines, SparklinesLine, SparklinesSpots } from 'react-sparklines'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
@@ -43,6 +43,9 @@ import { colors, gradients } from '../../../lib/colors'
 import { salesAnalyticsService } from '../SL-services'
 
 const SL_dashboard = () => {
+  // Unique component ID to track renders
+  const componentId = useRef(Math.random().toString(36).substr(2, 9))
+  
   // Refs for scroll-triggered animations
   const tileCardsRef = useRef(null)
   const chartRef = useRef(null)
@@ -107,6 +110,18 @@ const SL_dashboard = () => {
   const [heroStatsLoading, setHeroStatsLoading] = useState(true)
 
   useEffect(() => {
+    // Check for duplicate instances in DOM after a short delay
+    setTimeout(() => {
+      const allDashboards = document.querySelectorAll('.min-h-screen.bg-gray-50')
+      
+      if (allDashboards.length > 1) {
+        console.error(`WARNING: Found ${allDashboards.length} dashboard containers in DOM!`)
+        allDashboards.forEach((el, idx) => {
+          console.error(`Dashboard ${idx + 1}:`, el)
+        })
+      }
+    }, 100)
+    
     let active = true
     const load = async () => {
       try {
@@ -193,10 +208,13 @@ const SL_dashboard = () => {
   const incentiveTrendData = [0.8, 0.9, 1.0, 0.7, 1.1, 0.9, 1.2, 1.0, 1.0]
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div 
+      id={`sl-dashboard-${componentId.current}`}
+      className="min-h-screen bg-gray-50"
+      data-component-id={componentId.current}
+    >
       <SL_navbar />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20 lg:pt-20 lg:pb-4">
-        {/* Responsive layout - works on both mobile and desktop */}
         <div className="space-y-6">
           {/* Hero Dashboard Card */}
             <motion.div 
@@ -869,10 +887,9 @@ const SL_dashboard = () => {
              </div>
            </motion.div>
          </div>
-
       </main>
     </div>
   )
 }
 
-export default SL_dashboard 
+export default memo(SL_dashboard) 

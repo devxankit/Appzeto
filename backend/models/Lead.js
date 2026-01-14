@@ -123,7 +123,7 @@ const leadSchema = new mongoose.Schema({
   }],
   // Activity/interaction log
   activities: [{
-    type: { type: String, enum: ['call', 'email', 'whatsapp', 'meeting', 'note', 'status_change'] },
+    type: { type: String, enum: ['call', 'email', 'whatsapp', 'meeting', 'note', 'status_change', 'followup_added', 'followup_completed', 'followup_cancelled', 'followup_rescheduled'] },
     description: String,
     performedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Sales' },
     timestamp: { type: Date, default: Date.now }
@@ -176,7 +176,7 @@ leadSchema.methods.updateStatus = function(newStatus) {
     'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
     'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'not_interested', 'lost'],
     'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'not_interested', 'lost'],
-    'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'hot': ['connected', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
     'converted': [], // Final state
     'lost': ['connected'], // Can be recovered and connected
     'not_interested': ['connected'] // Recoverable to connected

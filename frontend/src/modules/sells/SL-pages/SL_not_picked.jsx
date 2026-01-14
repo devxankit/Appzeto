@@ -165,11 +165,16 @@ const SL_not_picked = () => {
   // Handle follow-up form submission
   const handleFollowUpSubmit = async (followUpData) => {
     try {
-      await salesLeadService.updateLeadStatus(selectedLeadForFollowup, 'followup', followUpData)
+      // Convert FollowUpDialog format (followupDate/followupTime) to API format (date/time)
+      const followUpPayload = {
+        date: followUpData.followupDate,
+        time: followUpData.followupTime,
+        notes: followUpData.notes || '',
+        priority: followUpData.priority || 'medium'
+      }
+      // Use addFollowUp instead of updateLeadStatus to avoid changing lead status
+      await salesLeadService.addFollowUp(selectedLeadForFollowup, followUpPayload)
       toast.success('Follow-up scheduled successfully')
-      
-      // Remove lead from current list
-      setLeadsData(prev => prev.filter(lead => lead._id !== selectedLeadForFollowup))
       
       // Refresh dashboard stats
       if (window.refreshDashboardStats) {
@@ -283,7 +288,10 @@ const SL_not_picked = () => {
     const categoryInfo = getCategoryInfo(lead.category)
     
     return (
-      <div className="p-4 space-y-3">
+      <div 
+        className="p-4 space-y-3 cursor-pointer hover:bg-gray-50 transition-colors duration-200"
+        onClick={() => handleProfileClick(lead)}
+      >
         {/* Header Section */}
         <div className="flex items-center space-x-3">
           {/* Avatar */}
@@ -303,11 +311,8 @@ const SL_not_picked = () => {
             </p>
             {/* Category Tag */}
             <div className="flex items-center space-x-1 mt-1">
-              <span 
-                className="text-xs text-black"
-                style={{ color: categoryInfo.color }}
-              >
-                {categoryInfo.icon} {categoryInfo.name}
+              <span className="text-xs text-black">
+                {categoryInfo.name}
               </span>
             </div>
           </div>
@@ -331,7 +336,10 @@ const SL_not_picked = () => {
         <div className="flex items-center space-x-1">
           {/* Call Button */}
           <button
-            onClick={() => handleCall(lead.phone)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleCall(lead.phone)
+            }}
             className="p-2 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200"
             title="Call"
           >
@@ -340,7 +348,10 @@ const SL_not_picked = () => {
 
           {/* WhatsApp Button */}
           <button
-            onClick={() => handleWhatsApp(lead.phone)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleWhatsApp(lead.phone)
+            }}
             className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
             title="WhatsApp"
           >
@@ -353,10 +364,7 @@ const SL_not_picked = () => {
           {lead.leadProfile && (
             <button
               onClick={(e) => {
-                e.preventDefault()
                 e.stopPropagation()
-                console.log('Lead object:', lead)
-                console.log('Lead _id:', lead._id)
                 handleProfile(lead._id)
               }}
               className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
@@ -369,7 +377,10 @@ const SL_not_picked = () => {
           {/* More Options */}
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)
+              }}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -440,11 +451,8 @@ const SL_not_picked = () => {
             </p>
             {/* Category Tag */}
             <div className="flex items-center space-x-2 mt-1">
-              <span 
-                className="text-xs text-black"
-                style={{ color: categoryInfo.color }}
-              >
-                {categoryInfo.icon} {categoryInfo.name}
+              <span className="text-xs text-black">
+                {categoryInfo.name}
               </span>
             </div>
           </div>
@@ -456,17 +464,14 @@ const SL_not_picked = () => {
         </div>
       </div>
 
-      {/* Phone & Status */}
+      {/* Phone */}
       <div className="flex justify-between items-center">
         <span className="text-sm text-gray-500">{lead.phone}</span>
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-800">
-          Not Picked
-        </span>
       </div>
 
       {/* Actions Section */}
       <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <span className="text-sm text-gray-500">Status: Not picked</span>
+        <span className="text-sm text-gray-500"></span>
         
         <div className="flex items-center space-x-2">
           {/* Call Button */}

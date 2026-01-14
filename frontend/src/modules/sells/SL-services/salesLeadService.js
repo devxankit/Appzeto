@@ -79,6 +79,7 @@ export const getLeadsByStatus = async (status, params = {}) => {
     if (params.category) queryParams.append('category', params.category);
     if (params.priority) queryParams.append('priority', params.priority);
     if (params.search) queryParams.append('search', params.search);
+    if (params.timeFrame) queryParams.append('timeFrame', params.timeFrame);
     if (params.page) queryParams.append('page', params.page);
     if (params.limit) queryParams.append('limit', params.limit);
 
@@ -139,6 +140,88 @@ export const updateLeadStatus = async (leadId, status, payload = '') => {
     return response.data;
   } catch (error) {
     console.error('Error updating lead status:', error);
+    throw error;
+  }
+};
+
+// Follow-up Management
+export const addFollowUp = async (leadId, followUpData) => {
+  try {
+    // Handle both 'date'/'time' and 'followupDate'/'followupTime' formats
+    const requestBody = {
+      date: followUpData.date || followUpData.followupDate,
+      time: followUpData.time || followUpData.followupTime,
+      notes: followUpData.notes || '',
+      type: followUpData.type || 'call',
+      priority: followUpData.priority || 'medium'
+    };
+    
+    if (!requestBody.date || !requestBody.time) {
+      throw new Error('Date and time are required for follow-up');
+    }
+    
+    const response = await apiRequest(`/sales/leads/${leadId}/followups`, {
+      method: 'POST',
+      body: JSON.stringify(requestBody)
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error adding follow-up:', error);
+    throw error;
+  }
+};
+
+export const completeFollowUp = async (leadId, followUpId) => {
+  try {
+    const response = await apiRequest(`/sales/leads/${leadId}/followups/${followUpId}/complete`, {
+      method: 'PATCH'
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error completing follow-up:', error);
+    throw error;
+  }
+};
+
+export const cancelFollowUp = async (leadId, followUpId) => {
+  try {
+    const response = await apiRequest(`/sales/leads/${leadId}/followups/${followUpId}/cancel`, {
+      method: 'PATCH'
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error cancelling follow-up:', error);
+    throw error;
+  }
+};
+
+export const rescheduleFollowUp = async (leadId, followUpId, followUpData) => {
+  try {
+    // Handle both 'date'/'time' and 'followupDate'/'followupTime' formats
+    let scheduledDate = followUpData.date || followUpData.followupDate || followUpData.scheduledDate;
+    let scheduledTime = followUpData.time || followUpData.followupTime || followUpData.scheduledTime;
+    
+    // Format date if needed (ensure it's in ISO format)
+    if (scheduledDate && typeof scheduledDate === 'string' && !scheduledDate.includes('T')) {
+      // If it's just a date string (YYYY-MM-DD), convert to ISO
+      scheduledDate = new Date(scheduledDate).toISOString();
+    }
+    
+    const requestBody = {
+      scheduledDate: scheduledDate,
+      scheduledTime: scheduledTime,
+      notes: followUpData.notes || '',
+      type: followUpData.type || 'call',
+      priority: followUpData.priority || 'medium'
+    };
+    
+    const response = await apiRequest(`/sales/leads/${leadId}/followups/${followUpId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(requestBody)
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error rescheduling follow-up:', error);
     throw error;
   }
 };
@@ -299,7 +382,7 @@ export const getValidStatusTransitions = (currentStatus) => {
     'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
     'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'not_interested', 'lost'],
     'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'not_interested', 'lost'],
-    'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'hot': ['connected', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
     'converted': [],
     'lost': ['connected'],
     'not_interested': ['connected']
@@ -307,19 +390,10 @@ export const getValidStatusTransitions = (currentStatus) => {
   return transitions[currentStatus] || [];
 };
 
-// Get activity indicators for a lead (quotation sent, demo sent, follow-ups)
+// Get activity indicators for a lead (follow-ups)
+// Note: Removed quotation sent and demo sent as they're status-related and redundant since leads appear on status-specific pages
 export const getLeadActivities = (lead) => {
   const activities = [];
-  
-  // Check quotation sent
-  if (lead.leadProfile?.quotationSent) {
-    activities.push({ type: 'quotation', label: 'Quotation Sent', color: 'bg-purple-100 text-purple-800' });
-  }
-  
-  // Check demo sent
-  if (lead.leadProfile?.demoSent) {
-    activities.push({ type: 'demo', label: 'Demo Sent', color: 'bg-teal-100 text-teal-800' });
-  }
   
   // Check follow-ups
   if (lead.followUps && Array.isArray(lead.followUps) && lead.followUps.length > 0) {
@@ -406,7 +480,11 @@ const salesLeadService = {
   getSalesTeam,
   requestDemo,
   transferLead,
-  addNoteToLead
+  addNoteToLead,
+  addFollowUp,
+  completeFollowUp,
+  cancelFollowUp,
+  rescheduleFollowUp
 };
 
 export default salesLeadService;

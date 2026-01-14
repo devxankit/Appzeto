@@ -120,8 +120,19 @@ const SL_connected = () => {
       await salesLeadService.updateLeadStatus(leadId, newStatus)
       toast.success(`Lead status updated to ${salesLeadService.getStatusDisplayName(newStatus)}`)
       
-      // Remove lead from current list
+      // Only remove lead from list if status is one that should disappear from connected leads
+      // Leads should disappear only when marked as: not_interested, not_picked, or converted
+      // Hot leads and other statuses should remain visible in connected leads
+      const shouldRemove = ['not_interested', 'not_picked', 'converted'].includes(newStatus)
+      
+      if (shouldRemove) {
       setLeadsData(prev => prev.filter(lead => lead._id !== leadId))
+      } else {
+        // Update the lead's status in the list to reflect the change
+        setLeadsData(prev => prev.map(lead => 
+          lead._id === leadId ? { ...lead, status: newStatus } : lead
+        ))
+      }
       
       // Refresh dashboard stats
       if (window.refreshDashboardStats) {
@@ -144,11 +155,16 @@ const SL_connected = () => {
   // Handle follow-up form submission
   const handleFollowUpSubmit = async (followUpData) => {
     try {
-      await salesLeadService.updateLeadStatus(selectedLeadForFollowup, 'followup', followUpData)
+      // Convert FollowUpDialog format (followupDate/followupTime) to API format (date/time)
+      const followUpPayload = {
+        date: followUpData.followupDate,
+        time: followUpData.followupTime,
+        notes: followUpData.notes || '',
+        priority: followUpData.priority || 'medium'
+      }
+      // Use addFollowUp instead of updateLeadStatus to avoid changing lead status
+      await salesLeadService.addFollowUp(selectedLeadForFollowup, followUpPayload)
       toast.success('Follow-up scheduled successfully')
-      
-      // Remove lead from current list
-      setLeadsData(prev => prev.filter(lead => lead._id !== selectedLeadForFollowup))
       
       // Refresh dashboard stats
       if (window.refreshDashboardStats) {
@@ -201,7 +217,16 @@ const SL_connected = () => {
     const statusDisplayName = salesLeadService.getStatusDisplayName(lead.status)
     
     return (
-      <div className="flex items-center justify-between">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => {
+          if (lead.leadProfile) {
+            handleProfile(lead._id)
+          } else {
+            toast.error('This lead doesn\'t have a profile. Please connect to the lead first to create a profile.')
+          }
+        }}
+      >
         {/* Left Section - Avatar & Info */}
         <div className="flex items-center space-x-3 flex-1 min-w-0">
           {/* Avatar */}
@@ -220,17 +245,10 @@ const SL_connected = () => {
               {lead.leadProfile?.name || lead.name || 'Unknown'}
             </h3>
             <p className="text-sm text-gray-600 truncate">{lead.phone}</p>
-            {/* Category Tag & Status Badge */}
+            {/* Category Tag & Activity Indicators */}
             <div className="flex items-center space-x-2 mt-1 flex-wrap gap-1">
-              <span 
-                className="text-xs text-black"
-                style={{ color: categoryInfo.color }}
-              >
-                {categoryInfo.icon} {categoryInfo.name}
-              </span>
-              {/* Status Badge */}
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor}`}>
-                {statusDisplayName}
+              <span className="text-xs text-black">
+                {categoryInfo.name}
               </span>
               {/* Activity Indicators */}
               {activities.map((activity, idx) => (
@@ -246,7 +264,10 @@ const SL_connected = () => {
       <div className="flex items-center space-x-3">
         {/* Call Button */}
         <button
-          onClick={() => handleCall(lead.phone)}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleCall(lead.phone)
+          }}
           className="bg-white text-teal-600 border border-teal-200 px-2.5 py-1.5 rounded-lg hover:bg-teal-50 transition-all duration-200 text-xs font-medium"
         >
           Call
@@ -254,7 +275,10 @@ const SL_connected = () => {
 
         {/* WhatsApp Button */}
         <button
-          onClick={() => handleWhatsApp(lead.phone)}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleWhatsApp(lead.phone)
+          }}
           className="bg-green-500 text-white p-1.5 rounded-lg hover:bg-green-600 transition-all duration-200"
         >
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -266,7 +290,6 @@ const SL_connected = () => {
         {lead.leadProfile && (
           <button
             onClick={(e) => {
-              e.preventDefault()
               e.stopPropagation()
               handleProfile(lead._id)
             }}
@@ -279,7 +302,10 @@ const SL_connected = () => {
         {/* More Options */}
         <div className="relative">
           <button
-            onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)
+            }}
             className="text-gray-400 hover:text-gray-600 p-1"
           >
             <FiMoreVertical className="text-lg" />
@@ -344,7 +370,16 @@ const SL_connected = () => {
     const statusDisplayName = salesLeadService.getStatusDisplayName(lead.status)
     
     return (
-      <div className="flex items-center justify-between">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => {
+          if (lead.leadProfile) {
+            handleProfile(lead._id)
+          } else {
+            toast.error('This lead doesn\'t have a profile. Please connect to the lead first to create a profile.')
+          }
+        }}
+      >
         {/* Left Section - Avatar & Info */}
         <div className="flex-1 flex items-center space-x-4">
           {/* Avatar */}
@@ -363,17 +398,10 @@ const SL_connected = () => {
               {lead.leadProfile?.name || lead.name || 'Unknown'}
             </h3>
             <p className="text-gray-600">{lead.phone}</p>
-            {/* Category Tag, Status Badge & Activity Indicators */}
+            {/* Category Tag & Activity Indicators */}
             <div className="flex items-center space-x-2 mt-1 flex-wrap gap-1.5">
-              <span 
-                className="text-xs text-black"
-                style={{ color: categoryInfo.color }}
-              >
-                {categoryInfo.icon} {categoryInfo.name}
-              </span>
-              {/* Status Badge */}
-              <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColor}`}>
-                {statusDisplayName}
+              <span className="text-xs text-black">
+                {categoryInfo.name}
               </span>
               {/* Activity Indicators */}
               {activities.map((activity, idx) => (
@@ -388,14 +416,20 @@ const SL_connected = () => {
       {/* Actions Section */}
       <div className="flex items-center space-x-4">
         <button
-          onClick={() => handleCall(lead.phone)}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleCall(lead.phone)
+          }}
           className="bg-white text-teal-600 border border-teal-200 px-3.5 py-1.5 rounded-lg hover:bg-teal-50 transition-all duration-200 text-sm font-medium"
         >
           Call
         </button>
         
         <button
-          onClick={() => handleWhatsApp(lead.phone)}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleWhatsApp(lead.phone)
+          }}
           className="bg-green-500 text-white px-3.5 py-1.5 rounded-lg hover:bg-green-600 transition-all duration-200 flex items-center space-x-2"
         >
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -408,7 +442,6 @@ const SL_connected = () => {
         {lead.leadProfile && (
           <button
             onClick={(e) => {
-              e.preventDefault()
               e.stopPropagation()
               handleProfile(lead._id)
             }}
@@ -421,7 +454,10 @@ const SL_connected = () => {
 
         <div className="relative">
           <button
-            onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)
+            }}
             className="bg-gray-100 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-200 transition-all duration-200"
           >
             <FiMoreVertical className="text-lg" />

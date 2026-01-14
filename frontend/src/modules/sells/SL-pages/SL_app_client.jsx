@@ -201,7 +201,10 @@ const SL_app_client = () => {
     const categoryInfo = getCategoryInfo(lead.category)
     
     return (
-    <div className="p-4 space-y-3">
+    <div 
+      className="p-4 space-y-3 cursor-pointer hover:bg-gray-50 transition-colors duration-200"
+      onClick={() => handleProfile(lead._id)}
+    >
       {/* Header Section */}
       <div className="flex items-center space-x-3">
         {/* Avatar */}
@@ -221,11 +224,8 @@ const SL_app_client = () => {
           </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-1 mt-1">
-            <span 
-              className="text-xs text-gray-500"
-              style={{ color: categoryInfo.color }}
-            >
-              {categoryInfo.icon} {categoryInfo.name}
+            <span className="text-xs text-black">
+              {categoryInfo.name}
             </span>
           </div>
         </div>
@@ -249,7 +249,10 @@ const SL_app_client = () => {
         <div className="flex items-center space-x-1">
           {/* Call Button */}
           <button
-            onClick={() => handleCall(lead.phone)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleCall(lead.phone)
+            }}
             className="p-2 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200"
             title="Call"
           >
@@ -258,7 +261,10 @@ const SL_app_client = () => {
 
           {/* WhatsApp Button */}
           <button
-            onClick={() => handleWhatsApp(lead.phone)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleWhatsApp(lead.phone)
+            }}
             className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
             title="WhatsApp"
           >
@@ -270,7 +276,6 @@ const SL_app_client = () => {
           {/* Profile Button */}
           <button
             onClick={(e) => {
-              e.preventDefault()
               e.stopPropagation()
               handleProfile(lead._id)
             }}
@@ -378,11 +383,8 @@ const SL_app_client = () => {
           </p>
           {/* Category Tag */}
           <div className="flex items-center space-x-2 mt-1">
-            <span 
-              className="text-xs text-gray-500"
-              style={{ color: categoryInfo.color }}
-            >
-              {categoryInfo.icon} {categoryInfo.name}
+            <span className="text-xs text-black">
+              {categoryInfo.name}
             </span>
           </div>
         </div>
@@ -393,12 +395,9 @@ const SL_app_client = () => {
         </div>
       </div>
 
-      {/* Phone & Status */}
+      {/* Phone */}
       <div className="flex justify-between items-center">
         <span className="text-sm text-gray-500">{lead.phone}</span>
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-          App Client
-        </span>
       </div>
 
       {/* Actions Section */}

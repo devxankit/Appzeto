@@ -15,6 +15,10 @@ const {
   getLeadsByStatus,
   getLeadDetail,
   updateLeadStatus,
+  addFollowUp,
+  completeFollowUp,
+  cancelFollowUp,
+  rescheduleFollowUp,
   createLeadProfile,
   updateLeadProfile,
   convertLeadToClient,
@@ -68,6 +72,12 @@ router.get('/leads', getMyLeads);
 router.get('/leads/status/:status', getLeadsByStatus);
 router.get('/leads/:id', getLeadDetail);
 router.patch('/leads/:id/status', updateLeadStatus);
+
+// Follow-up Management
+router.post('/leads/:id/followups', addFollowUp);
+router.patch('/leads/:leadId/followups/:followUpId/complete', completeFollowUp);
+router.patch('/leads/:leadId/followups/:followUpId/cancel', cancelFollowUp);
+router.patch('/leads/:leadId/followups/:followUpId', rescheduleFollowUp);
 
 // LeadProfile Management
 router.post('/leads/:id/profile', createLeadProfile);

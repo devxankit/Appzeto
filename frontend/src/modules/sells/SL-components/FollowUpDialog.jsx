@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiX, FiCalendar, FiClock, FiFlag, FiFileText } from 'react-icons/fi'
 
@@ -6,16 +6,48 @@ const FollowUpDialog = ({
   isOpen, 
   onClose, 
   onSubmit, 
-  initialData = {},
+  initialData = null,
   title = "Schedule Follow-up",
   submitText = "Schedule Follow-up"
 }) => {
   const [formData, setFormData] = useState({
-    followupDate: initialData.followupDate || '',
-    followupTime: initialData.followupTime || '',
-    priority: initialData.priority || 'medium',
-    notes: initialData.notes || ''
+    followupDate: '',
+    followupTime: '',
+    priority: 'medium',
+    notes: ''
   })
+
+  // Update form data when initialData changes
+  useEffect(() => {
+    if (initialData) {
+      // Handle both 'date' and 'followupDate', 'time' and 'followupTime'
+      const date = initialData.date || initialData.followupDate || ''
+      const time = initialData.time || initialData.followupTime || ''
+      
+      // Format date if it's a Date object or ISO string
+      let formattedDate = date
+      if (date && (date instanceof Date || typeof date === 'string')) {
+        const dateObj = new Date(date)
+        if (!isNaN(dateObj.getTime())) {
+          formattedDate = dateObj.toISOString().split('T')[0]
+        }
+      }
+      
+      setFormData({
+        followupDate: formattedDate,
+        followupTime: time,
+        priority: initialData.priority || 'medium',
+        notes: initialData.notes || ''
+      })
+    } else {
+      setFormData({
+        followupDate: '',
+        followupTime: '',
+        priority: 'medium',
+        notes: ''
+      })
+    }
+  }, [initialData, isOpen])
 
   const [errors, setErrors] = useState({})
 

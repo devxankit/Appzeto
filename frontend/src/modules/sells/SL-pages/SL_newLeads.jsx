@@ -311,7 +311,14 @@ const SL_newLeads = () => {
     const categoryInfo = getCategoryInfo(lead.category)
     
     return (
-      <div className="flex items-center justify-between">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => {
+          // New leads don't have profiles yet, so navigate to lead profile page
+          // which will handle the case where profile doesn't exist
+          handleProfile(lead._id)
+        }}
+      >
         {/* Left Section - Avatar & Phone */}
         <div className="flex items-center space-x-3 flex-1 min-w-0">
           {/* Avatar */}
@@ -326,10 +333,8 @@ const SL_newLeads = () => {
             <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.phone}</h3>
             {/* Category Tag */}
             <div className="flex items-center space-x-1 mt-1">
-                <span 
-                  className="text-xs text-black"
-                >
-                  {categoryInfo.icon} {categoryInfo.name}
+                <span className="text-xs text-black">
+                  {categoryInfo.name}
                 </span>
             </div>
           </div>
@@ -339,7 +344,10 @@ const SL_newLeads = () => {
         <div className="flex items-center space-x-3">
         {/* Call Button */}
         <button
-          onClick={() => handleCall(lead.phone)}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleCall(lead.phone)
+          }}
           className="bg-white text-teal-600 border border-teal-200 px-3 py-1.5 rounded-lg hover:bg-teal-50 transition-all duration-200 text-xs font-medium"
         >
           Call
@@ -347,7 +355,10 @@ const SL_newLeads = () => {
 
         {/* WhatsApp Button */}
         <button
-          onClick={() => handleWhatsApp(lead.phone)}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleWhatsApp(lead.phone)
+          }}
           className="bg-green-500 text-white p-1.5 rounded-lg hover:bg-green-600 transition-all duration-200"
         >
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -358,7 +369,10 @@ const SL_newLeads = () => {
         {/* More Options */}
         <div className="relative">
           <button
-            onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)
+            }}
             className="text-gray-400 hover:text-gray-600 p-1"
           >
             <FiMoreVertical className="text-lg" />

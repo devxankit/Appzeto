@@ -162,27 +162,45 @@ const SL_lost = () => {
   }
 
   const handleProfileClick = (lead) => {
-    if (lead.leadProfile) {
+    // Always allow navigation to profile page - it will handle cases where profile doesn't exist
       handleProfile(lead._id)
-    } else {
-      toast.error('This lead doesn\'t have a profile. Please connect to the lead first to create a profile.')
-    }
   }
 
-  // Handle recover and connect functionality
+  // Handle simple recover for leads with existing profile
+  const handleRecover = async (leadId) => {
+    try {
+      await salesLeadService.updateLeadStatus(leadId, 'connected')
+      toast.success('Lead recovered successfully')
+      
+      // Remove lead from current list
+      setLeadsData(prev => prev.filter(lead => lead._id !== leadId))
+      
+      // Refresh dashboard stats
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+      
+      // Navigate to connected leads page
+      navigate('/connected')
+    } catch (error) {
+      console.error('Error recovering lead:', error)
+      toast.error('Failed to recover lead')
+    }
+    setShowActionsMenu(null)
+  }
+
+  // Handle recover and connect functionality for leads without profile
   const handleRecoverAndConnect = (leadId) => {
     const lead = leadsData.find(l => l._id === leadId)
     if (lead) {
       // Pre-populate form with existing lead data
       setContactedFormData({
-        name: lead.leadProfile?.name || lead.name || '',
-        description: lead.leadProfile?.description || '',
-        projectType: lead.leadProfile?.projectType?.web ? 'web' : 
-                     lead.leadProfile?.projectType?.app ? 'app' : 
-                     lead.leadProfile?.projectType?.taxi ? 'taxi' : 'web',
-        estimatedPrice: lead.leadProfile?.estimatedCost?.toString() || '50000',
-        quotationSent: lead.leadProfile?.quotationSent || false,
-        demoSent: lead.leadProfile?.demoSent || false
+        name: lead.name || '',
+        description: '',
+        projectType: 'web',
+        estimatedPrice: '50000',
+        quotationSent: false,
+        demoSent: false
       })
       setSelectedLeadForForm(leadId)
       setShowContactedForm(true)
@@ -190,14 +208,14 @@ const SL_lost = () => {
     setShowActionsMenu(null)
   }
 
-  // Handle contacted form submission
+  // Handle contacted form submission (only for leads without profile)
   const handleContactedFormSubmit = async (e) => {
     e.preventDefault()
     try {
       // First update lead status to connected
       await salesLeadService.updateLeadStatus(selectedLeadForForm, 'connected')
       
-      // Then create/update lead profile
+      // Then create lead profile
       const profileData = {
         name: contactedFormData.name,
         businessName: contactedFormData.name, // Using name as business name
@@ -224,6 +242,9 @@ const SL_lost = () => {
       if (window.refreshDashboardStats) {
         window.refreshDashboardStats()
       }
+      
+      // Navigate to connected leads page
+      navigate('/connected')
       
       // Reset form and close modal
       setContactedFormData({
@@ -266,8 +287,14 @@ const SL_lost = () => {
   const handleStatusChange = async (leadId, newStatus) => {
     try {
       if (newStatus === 'recover') {
-        // Show recover & connect form
+        const lead = leadsData.find(l => l._id === leadId)
+        if (lead?.leadProfile) {
+          // Lead has profile, just recover it
+          handleRecover(leadId)
+        } else {
+          // Lead doesn't have profile, show form to create profile
         handleRecoverAndConnect(leadId)
+        }
       } else {
         await salesLeadService.updateLeadStatus(leadId, newStatus)
         toast.success(`Lead status updated to ${salesLeadService.getStatusDisplayName(newStatus)}`)
@@ -293,7 +320,10 @@ const SL_lost = () => {
     const hasProfile = lead.leadProfile
     
     return (
-      <div className="p-4 space-y-3">
+      <div 
+        className="p-4 space-y-3 cursor-pointer hover:bg-gray-50 transition-colors duration-200"
+        onClick={() => handleProfile(lead._id)}
+      >
         {/* Header Section */}
         <div className="flex items-center space-x-3">
           {/* Avatar */}
@@ -313,11 +343,8 @@ const SL_lost = () => {
             </p>
             {/* Category Tag */}
             <div className="flex items-center space-x-1 mt-1">
-              <span 
-                className="text-xs text-gray-500"
-                style={{ color: categoryInfo.color }}
-              >
-                {categoryInfo.icon} {categoryInfo.name}
+              <span className="text-xs text-black">
+                {categoryInfo.name}
               </span>
             </div>
           </div>
@@ -344,7 +371,10 @@ const SL_lost = () => {
         <div className="flex items-center space-x-1">
           {/* Call Button */}
           <button
-            onClick={() => handleCall(lead.phone || '')}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleCall(lead.phone || '')
+            }}
             className="p-2 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200"
             title="Call"
           >
@@ -353,7 +383,10 @@ const SL_lost = () => {
 
           {/* WhatsApp Button */}
           <button
-            onClick={() => handleWhatsApp(lead.phone || '')}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleWhatsApp(lead.phone || '')
+            }}
             className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
             title="WhatsApp"
           >
@@ -362,25 +395,25 @@ const SL_lost = () => {
             </svg>
           </button>
 
-          {/* Profile Button - Only show if lead has profile */}
-          {lead.leadProfile && (
+          {/* Profile Button - Always show, profile page will handle missing profiles */}
           <button
             onClick={(e) => {
-              e.preventDefault()
               e.stopPropagation()
               handleProfile(lead._id)
             }}
             className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
-            title="Profile"
+            title="View Profile"
           >
             <FiUser className="w-4 h-4" />
           </button>
-          )}
 
           {/* More Options */}
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)
+              }}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all duration-200"
             >
               <FiMoreVertical className="w-4 h-4" />
@@ -401,7 +434,7 @@ const SL_lost = () => {
                       onClick={() => handleStatusChange(lead._id, 'recover')}
                       className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200"
                     >
-                      Recover & Connect
+                      {lead.leadProfile ? 'Recover' : 'Recover & Connect'}
                     </button>
                   </div>
                 </motion.div>
@@ -440,11 +473,8 @@ const SL_lost = () => {
             </p>
             {/* Category Tag */}
             <div className="flex items-center space-x-2 mt-1">
-              <span 
-                className="text-xs text-gray-500"
-                style={{ color: categoryInfo.color }}
-              >
-                {categoryInfo.icon} {categoryInfo.name}
+              <span className="text-xs text-black">
+                {categoryInfo.name}
               </span>
             </div>
           </div>
@@ -458,12 +488,9 @@ const SL_lost = () => {
         </div>
 
 
-      {/* Phone & Status */}
+      {/* Phone */}
       <div className="flex justify-between items-center">
         <span className="text-sm text-gray-500">{lead.phone || 'No Phone'}</span>
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-          Lost
-        </span>
       </div>
 
       {/* Reason */}
@@ -495,8 +522,7 @@ const SL_lost = () => {
             <span>WhatsApp</span>
           </button>
 
-          {/* Profile Button - Only show if lead has profile */}
-          {lead.leadProfile && (
+          {/* Profile Button - Always show, profile page will handle missing profiles */}
           <button
             onClick={(e) => {
               e.preventDefault()
@@ -508,7 +534,6 @@ const SL_lost = () => {
             <FiUser className="w-4 h-4" />
             <span>Profile</span>
           </button>
-          )}
 
           <div className="relative">
             <button
@@ -533,7 +558,7 @@ const SL_lost = () => {
                       onClick={() => handleStatusChange(lead._id, 'recover')}
                       className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200"
                     >
-                      Recover & Connect
+                      {lead.leadProfile ? 'Recover' : 'Recover & Connect'}
                     </button>
                   </div>
                 </motion.div>

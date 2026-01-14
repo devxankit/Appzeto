@@ -1288,21 +1288,85 @@ const getSalesDashboardStats = async (req, res) => {
       lost: 0,
       hot: 0,
       demo_requested: 0,
+      demo_sent: 0,
       not_interested: 0
     };
 
-    // Map aggregation results to status counts
+    // Count demo_sent leads (leads with leadProfile.demoSent = true)
+    const demoSentCount = await Lead.countDocuments({
+      assignedTo: new mongoose.Types.ObjectId(salesId),
+      leadProfile: { $exists: true, $ne: null }
+    });
+    
+    // Get all leads with profiles and count those with flags
+    const leadsWithProfiles = await Lead.find({
+      assignedTo: new mongoose.Types.ObjectId(salesId),
+      leadProfile: { $exists: true, $ne: null }
+    }).populate('leadProfile', 'demoSent quotationSent projectType').lean();
+    
+    const actualDemoSentCount = leadsWithProfiles.filter(lead => 
+      lead.leadProfile && lead.leadProfile.demoSent === true
+    ).length;
+    
+    statusCounts.demo_sent = actualDemoSentCount;
+
+    // Count quotation_sent leads: status='quotation_sent' OR leadProfile.quotationSent=true
+    const actualQuotationSentCount = leadsWithProfiles.filter(lead => 
+      lead.status === 'quotation_sent' || 
+      (lead.leadProfile && lead.leadProfile.quotationSent === true)
+    ).length;
+    
+    statusCounts.quotation_sent = actualQuotationSentCount;
+
+    // Count app_client leads: status='app_client' OR leadProfile.projectType.app=true
+    const actualAppClientCount = leadsWithProfiles.filter(lead => 
+      lead.status === 'app_client' || 
+      (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.app === true)
+    ).length;
+    
+    statusCounts.app_client = actualAppClientCount;
+
+    // Count web leads: status='web' OR leadProfile.projectType.web=true
+    const actualWebCount = leadsWithProfiles.filter(lead => 
+      lead.status === 'web' || 
+      (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.web === true)
+    ).length;
+    
+    statusCounts.web = actualWebCount;
+
+    // Count followup leads: leads with pending follow-ups (today onwards, regardless of status)
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    
+    const followupLeads = await Lead.find({
+      assignedTo: new mongoose.Types.ObjectId(salesId),
+      followUps: {
+        $elemMatch: {
+          scheduledDate: { $gte: todayStart },
+          status: 'pending'
+        }
+      }
+    }).lean();
+    
+    statusCounts.followup = followupLeads.length;
+
+    // Map aggregation results to status counts (but don't override calculated ones above)
     stats.forEach(stat => {
-      if (statusCounts.hasOwnProperty(stat._id)) {
+      if (statusCounts.hasOwnProperty(stat._id) && 
+          stat._id !== 'quotation_sent' && 
+          stat._id !== 'demo_sent' && 
+          stat._id !== 'app_client' && 
+          stat._id !== 'web' &&
+          stat._id !== 'followup') {
         statusCounts[stat._id] = stat.count;
       }
     });
 
-    // Calculate connected count: all leads with leadProfile that are not converted/lost/not_interested
+    // Calculate connected count: all leads with leadProfile that are not converted/lost/not_interested/not_picked
     const connectedCount = await Lead.countDocuments({
       assignedTo: new mongoose.Types.ObjectId(salesId),
       leadProfile: { $exists: true, $ne: null },
-      status: { $nin: ['converted', 'lost', 'not_interested'] }
+      status: { $nin: ['converted', 'lost', 'not_interested', 'not_picked'] }
     });
     statusCounts.connected = connectedCount;
 
@@ -1490,7 +1554,7 @@ const getLeadsByStatus = async (req, res) => {
     } = req.query;
 
     // Validate status (with backward compatibility for today_followup)
-    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested', 'not_interested'];
+    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested', 'demo_sent', 'not_interested'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -1514,13 +1578,58 @@ const getLeadsByStatus = async (req, res) => {
       assignedToValue = salesId;
     }
     
-    // Special handling for 'connected' status: show all leads with leadProfile that are not converted/lost/not_interested
+    // Special handling for status-specific queries:
+    // - 'connected': all leads with leadProfile that are not converted/lost/not_interested/not_picked
+    // - 'quotation_sent': leads with status='quotation_sent' OR leadProfile.quotationSent=true
+    // - 'hot': leads with status='hot'
+    // - 'demo_sent': leads with leadProfile.demoSent=true
+    // - 'app_client': leads with status='app_client' OR leadProfile.projectType.app=true
+    // - 'web': leads with status='web' OR leadProfile.projectType.web=true
     let filter;
     if (status === 'connected') {
       filter = { 
         assignedTo: assignedToValue,
         leadProfile: { $exists: true, $ne: null },
-        status: { $nin: ['converted', 'lost', 'not_interested'] }
+        status: { $nin: ['converted', 'lost', 'not_interested', 'not_picked'] }
+      };
+    } else if (status === 'quotation_sent') {
+      // Show leads with status='quotation_sent' OR leadProfile.quotationSent=true
+      filter = { 
+        assignedTo: assignedToValue,
+        $or: [
+          { status: 'quotation_sent' },
+          { leadProfile: { $exists: true, $ne: null } }
+        ]
+      };
+    } else if (status === 'demo_sent') {
+      // Filter leads where leadProfile.demoSent is true
+      filter = { 
+        assignedTo: assignedToValue,
+        leadProfile: { $exists: true, $ne: null }
+      };
+    } else if (status === 'app_client') {
+      // Show leads with status='app_client' OR leadProfile.projectType.app=true
+      filter = { 
+        assignedTo: assignedToValue,
+        $or: [
+          { status: 'app_client' },
+          { leadProfile: { $exists: true, $ne: null } }
+        ]
+      };
+    } else if (status === 'web') {
+      // Show leads with status='web' OR leadProfile.projectType.web=true
+      filter = { 
+        assignedTo: assignedToValue,
+        $or: [
+          { status: 'web' },
+          { leadProfile: { $exists: true, $ne: null } }
+        ]
+      };
+    } else if (actualStatus === 'followup') {
+      // For followup status, don't filter by status - show leads with pending follow-ups regardless of status
+      filter = { 
+        assignedTo: assignedToValue
+        // Status filter is NOT applied here - we want leads with pending follow-ups from any status
       };
     } else {
       // For other statuses, use exact status match (allows leads to appear in both connected page and status-specific page)
@@ -1539,12 +1648,25 @@ const getLeadsByStatus = async (req, res) => {
     }
 
     if (search) {
-      filter.$or = [
-        { phone: { $regex: search, $options: 'i' } },
-        { name: { $regex: search, $options: 'i' } },
-        { company: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
-      ];
+      // For search, combine with existing filters using $and if there's already a $or or complex filter
+      // Otherwise, just add $or directly
+      const searchConditions = {
+        $or: [
+          { phone: { $regex: search, $options: 'i' } },
+          { name: { $regex: search, $options: 'i' } },
+          { company: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ]
+      };
+      
+      // If filter already has $or (from quotation_sent, web, app_client), use $and
+      if (filter.$or) {
+        filter.$and = filter.$and || [];
+        filter.$and.push(searchConditions);
+        delete filter.$or; // Remove the old $or, it's now in $and
+      } else {
+        filter.$or = searchConditions.$or;
+      }
     }
 
     // Add time frame filtering for followup status
@@ -1567,8 +1689,8 @@ const getLeadsByStatus = async (req, res) => {
             endDate = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate(), 23, 59, 59, 999);
             break;
         }
-      } else if (timeFrame === 'all') {
-        // For 'all' filter, show all upcoming follow-ups (from today onwards)
+      } else if (timeFrame === 'all' || !timeFrame) {
+        // For 'all' filter or no filter, show all upcoming follow-ups (from today onwards)
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
         endDate = null; // No end date limit
       } else {
@@ -1577,9 +1699,10 @@ const getLeadsByStatus = async (req, res) => {
         endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
       }
       
+      // Filter for both pending and completed follow-ups (from today onwards)
       const followUpFilter = {
         scheduledDate: { $gte: startDate },
-        status: 'pending'
+        status: { $in: ['pending', 'completed'] }
       };
       
       if (endDate) {
@@ -1589,8 +1712,13 @@ const getLeadsByStatus = async (req, res) => {
       filter.followUps = {
         $elemMatch: followUpFilter
       };
+      
+      console.log('Followup query filter:', JSON.stringify(filter, null, 2));
     } else if (timeFrame && timeFrame !== 'all') {
-      // For other statuses, filter by creation date
+      // For status-specific queries, determine which date field to use for filtering
+      // - 'new' status: Use createdAt (leads are created as new, not updated to new)
+      // - Other statuses: Use updatedAt (when status was changed to this status)
+      const dateField = actualStatus === 'new' ? 'createdAt' : 'updatedAt';
       const now = new Date();
       let startDate, endDate;
       
@@ -1610,9 +1738,9 @@ const getLeadsByStatus = async (req, res) => {
       }
       
       if (startDate) {
-        filter.createdAt = { $gte: startDate };
+        filter[dateField] = { $gte: startDate };
         if (endDate) {
-          filter.createdAt.$lte = endDate;
+          filter[dateField].$lte = endDate;
         }
       }
     }
@@ -1622,12 +1750,57 @@ const getLeadsByStatus = async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    let leads = await Lead.find(filter)
+    let query = Lead.find(filter)
       .populate('category', 'name color icon')
       .populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum);
+      .sort({ createdAt: -1 });
+    
+    // For status-specific queries that check leadProfile flags, filter after population
+    let leads;
+    if (status === 'demo_sent') {
+      // Get all leads with leadProfile, then filter by demoSent
+      const allLeads = await query;
+      const filteredLeads = allLeads.filter(lead => lead.leadProfile && lead.leadProfile.demoSent === true);
+      // Apply pagination after filtering
+      leads = filteredLeads.slice(skip, skip + limitNum);
+    } else if (status === 'quotation_sent') {
+      // Get all leads matching the filter, then filter by quotationSent flag
+      const allLeads = await query;
+      const filteredLeads = allLeads.filter(lead => 
+        lead.status === 'quotation_sent' || 
+        (lead.leadProfile && lead.leadProfile.quotationSent === true)
+      );
+      // Apply pagination after filtering
+      leads = filteredLeads.slice(skip, skip + limitNum);
+    } else if (status === 'app_client') {
+      // Get all leads matching the filter, then filter by projectType.app flag
+      const allLeads = await query;
+      const filteredLeads = allLeads.filter(lead => 
+        lead.status === 'app_client' || 
+        (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.app === true)
+      );
+      // Apply pagination after filtering
+      leads = filteredLeads.slice(skip, skip + limitNum);
+    } else if (status === 'web') {
+      // Get all leads matching the filter, then filter by projectType.web flag
+      const allLeads = await query;
+      const filteredLeads = allLeads.filter(lead => 
+        lead.status === 'web' || 
+        (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.web === true)
+      );
+      // Apply pagination after filtering
+      leads = filteredLeads.slice(skip, skip + limitNum);
+    } else if (status === 'followup') {
+      // For followup status, get all leads matching the filter (which includes followUps filter)
+      // The followUps are already in the lead document, no need for post-filtering
+      leads = await query.skip(skip).limit(limitNum);
+      console.log(`Found ${leads.length} leads with follow-ups`);
+      if (leads.length > 0) {
+        console.log('Sample lead followUps:', leads[0].followUps?.length || 0, 'follow-ups');
+      }
+    } else {
+      leads = await query.skip(skip).limit(limitNum);
+    }
 
     // For converted leads, populate associated project with financial details
     if (status === 'converted') {
@@ -1702,7 +1875,36 @@ const getLeadsByStatus = async (req, res) => {
       });
     }
 
-    const totalLeads = await Lead.countDocuments(filter);
+    // For status-specific queries that check leadProfile flags, count needs special handling
+    let totalLeads;
+    if (status === 'demo_sent') {
+      const allLeads = await Lead.find(filter)
+        .populate('leadProfile', 'demoSent');
+      totalLeads = allLeads.filter(lead => lead.leadProfile && lead.leadProfile.demoSent === true).length;
+    } else if (status === 'quotation_sent') {
+      const allLeads = await Lead.find(filter)
+        .populate('leadProfile', 'quotationSent');
+      totalLeads = allLeads.filter(lead => 
+        lead.status === 'quotation_sent' || 
+        (lead.leadProfile && lead.leadProfile.quotationSent === true)
+      ).length;
+    } else if (status === 'app_client') {
+      const allLeads = await Lead.find(filter)
+        .populate('leadProfile', 'projectType');
+      totalLeads = allLeads.filter(lead => 
+        lead.status === 'app_client' || 
+        (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.app === true)
+      ).length;
+    } else if (status === 'web') {
+      const allLeads = await Lead.find(filter)
+        .populate('leadProfile', 'projectType');
+      totalLeads = allLeads.filter(lead => 
+        lead.status === 'web' || 
+        (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.web === true)
+      ).length;
+    } else {
+      totalLeads = await Lead.countDocuments(filter);
+    }
 
     res.status(200).json({
       success: true,
@@ -1772,7 +1974,7 @@ const updateLeadStatus = async (req, res) => {
   try {
     const salesId = req.sales.id;
     const leadId = req.params.id;
-    const { status, notes, followupDate, followupTime, priority } = req.body;
+    const { status, notes, followupDate, followupTime, priority, lostReason } = req.body;
 
     // Validate status (with backward compatibility for today_followup)
     const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested', 'not_interested'];
@@ -1813,7 +2015,7 @@ const updateLeadStatus = async (req, res) => {
       'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
       'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'not_interested', 'lost'],
       'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'not_interested', 'lost'],
-      'hot': ['quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+      'hot': ['connected', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
       'converted': [],
       'lost': ['connected'],
       'not_interested': ['connected']
@@ -1834,6 +2036,11 @@ const updateLeadStatus = async (req, res) => {
     // If converting, stamp convertedAt if missing
     if (actualStatus === 'converted' && !lead.convertedAt) {
       lead.convertedAt = new Date();
+    }
+
+    // If marking as lost, update lostReason if provided
+    if (actualStatus === 'lost' && lostReason) {
+      lead.lostReason = lostReason.trim();
     }
 
     // Handle follow-up scheduling
@@ -1937,6 +2144,370 @@ const updateLeadStatus = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while updating lead status'
+    });
+  }
+};
+
+// @desc    Add follow-up to lead (without changing lead status)
+// @route   POST /api/sales/leads/:id/followups
+// @access  Private (Sales only)
+const addFollowUp = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const leadId = req.params.id;
+    const { date, time, followupDate, followupTime, notes, type, priority } = req.body;
+
+    // Support both 'date'/'time' and 'followupDate'/'followupTime' for backward compatibility
+    const actualDate = date || followupDate;
+    const actualTime = time || followupTime;
+
+    // Validate follow-up data
+    if (!actualDate || !actualTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Follow-up date and time are required'
+      });
+    }
+
+    // Find lead and verify ownership
+    const lead = await Lead.findOne({ 
+      _id: leadId, 
+      assignedTo: salesId 
+    });
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+
+    // Parse and validate date
+    let parsedDate;
+    if (typeof actualDate === 'string') {
+      parsedDate = new Date(actualDate);
+    } else {
+      parsedDate = new Date(actualDate);
+    }
+    
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid follow-up date format'
+      });
+    }
+
+    // Add follow-up entry
+    const followUpData = {
+      scheduledDate: parsedDate,
+      scheduledTime: actualTime,
+      notes: notes || '',
+      priority: priority || 'medium',
+      type: type || 'call',
+      status: 'pending'
+    };
+
+    lead.followUps.push(followUpData);
+    
+    // Update lead priority if provided
+    if (priority) {
+      lead.priority = priority;
+    }
+
+    // Update nextFollowUpDate to the nearest upcoming follow-up (including today)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const upcomingFollowUps = lead.followUps
+      .filter(fu => fu.status === 'pending' && fu.scheduledDate >= today)
+      .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
+    
+    if (upcomingFollowUps.length > 0) {
+      lead.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
+    }
+
+    // Add activity log for follow-up scheduling (without status change)
+    lead.activities.push({
+      type: 'followup_added',
+      description: `Follow-up scheduled for ${parsedDate.toLocaleDateString()} at ${actualTime}${notes ? ` - ${notes}` : ''}`,
+      performedBy: salesId,
+      timestamp: new Date()
+    });
+
+    await lead.save();
+
+    // Populate the lead document (no need to reload from DB, Mongoose already has the updated document)
+    await lead.populate('category', 'name color icon');
+    await lead.populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent');
+
+    res.status(200).json({
+      success: true,
+      message: 'Follow-up added successfully',
+      data: lead
+    });
+
+  } catch (error) {
+    console.error('Add follow-up error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while adding follow-up'
+    });
+  }
+};
+
+// @desc    Complete a follow-up
+// @route   PATCH /api/sales/leads/:leadId/followups/:followUpId/complete
+// @access  Private (Sales only)
+const completeFollowUp = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const { leadId, followUpId } = req.params;
+
+    // Find lead and verify ownership
+    const lead = await Lead.findOne({ 
+      _id: leadId, 
+      assignedTo: salesId 
+    });
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+
+    // Find the follow-up
+    const followUp = lead.followUps.id(followUpId);
+    if (!followUp) {
+      return res.status(404).json({
+        success: false,
+        message: 'Follow-up not found'
+      });
+    }
+
+    // Update follow-up status
+    followUp.status = 'completed';
+    followUp.completedAt = new Date();
+
+    // Update nextFollowUpDate if this was the next one
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const upcomingFollowUps = lead.followUps
+      .filter(fu => fu.status === 'pending' && fu.scheduledDate >= today)
+      .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
+    
+    if (upcomingFollowUps.length > 0) {
+      lead.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
+    } else {
+      lead.nextFollowUpDate = null;
+    }
+
+    // Add activity log
+    lead.activities.push({
+      type: 'followup_completed',
+      description: `Follow-up completed: ${followUp.type} scheduled for ${new Date(followUp.scheduledDate).toLocaleDateString()} at ${followUp.scheduledTime}`,
+      performedBy: salesId,
+      timestamp: new Date()
+    });
+
+    await lead.save();
+
+    // Populate for response
+    await lead.populate('category', 'name color icon');
+    await lead.populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent');
+
+    res.status(200).json({
+      success: true,
+      message: 'Follow-up marked as completed',
+      data: lead
+    });
+
+  } catch (error) {
+    console.error('Complete follow-up error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while completing follow-up'
+    });
+  }
+};
+
+// @desc    Cancel a follow-up
+// @route   PATCH /api/sales/leads/:leadId/followups/:followUpId/cancel
+// @access  Private (Sales only)
+const cancelFollowUp = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const { leadId, followUpId } = req.params;
+
+    // Find lead and verify ownership
+    const lead = await Lead.findOne({ 
+      _id: leadId, 
+      assignedTo: salesId 
+    });
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+
+    // Find the follow-up
+    const followUp = lead.followUps.id(followUpId);
+    if (!followUp) {
+      return res.status(404).json({
+        success: false,
+        message: 'Follow-up not found'
+      });
+    }
+
+    // Update follow-up status
+    followUp.status = 'cancelled';
+
+    // Update nextFollowUpDate if this was the next one
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const upcomingFollowUps = lead.followUps
+      .filter(fu => fu.status === 'pending' && fu.scheduledDate >= today)
+      .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
+    
+    if (upcomingFollowUps.length > 0) {
+      lead.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
+    } else {
+      lead.nextFollowUpDate = null;
+    }
+
+    // Add activity log
+    lead.activities.push({
+      type: 'followup_cancelled',
+      description: `Follow-up cancelled: ${followUp.type} scheduled for ${new Date(followUp.scheduledDate).toLocaleDateString()} at ${followUp.scheduledTime}`,
+      performedBy: salesId,
+      timestamp: new Date()
+    });
+
+    await lead.save();
+
+    // Populate for response
+    await lead.populate('category', 'name color icon');
+    await lead.populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent');
+
+    res.status(200).json({
+      success: true,
+      message: 'Follow-up cancelled',
+      data: lead
+    });
+
+  } catch (error) {
+    console.error('Cancel follow-up error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while cancelling follow-up'
+    });
+  }
+};
+
+// @desc    Reschedule a follow-up
+// @route   PATCH /api/sales/leads/:leadId/followups/:followUpId
+// @access  Private (Sales only)
+const rescheduleFollowUp = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const { leadId, followUpId } = req.params;
+    const { scheduledDate, scheduledTime, notes, type, priority } = req.body;
+
+    // Find lead and verify ownership
+    const lead = await Lead.findOne({ 
+      _id: leadId, 
+      assignedTo: salesId 
+    });
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+
+    // Find the follow-up
+    const followUp = lead.followUps.id(followUpId);
+    if (!followUp) {
+      return res.status(404).json({
+        success: false,
+        message: 'Follow-up not found'
+      });
+    }
+
+    // Validate date and time
+    if (!scheduledDate || !scheduledTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Date and time are required'
+      });
+    }
+
+    // Parse and validate date
+    let parsedDate;
+    if (typeof scheduledDate === 'string') {
+      parsedDate = new Date(scheduledDate);
+    } else {
+      parsedDate = new Date(scheduledDate);
+    }
+    
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format'
+      });
+    }
+
+    // Store old date/time for activity log
+    const oldDate = followUp.scheduledDate;
+    const oldTime = followUp.scheduledTime;
+
+    // Update follow-up
+    followUp.scheduledDate = parsedDate;
+    followUp.scheduledTime = scheduledTime;
+    if (notes !== undefined) followUp.notes = notes || '';
+    if (type) followUp.type = type;
+    if (priority) followUp.priority = priority;
+    followUp.status = 'pending'; // Reset to pending when rescheduled
+
+    // Update nextFollowUpDate
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const upcomingFollowUps = lead.followUps
+      .filter(fu => fu.status === 'pending' && fu.scheduledDate >= today)
+      .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
+    
+    if (upcomingFollowUps.length > 0) {
+      lead.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
+    }
+
+    // Add activity log
+    lead.activities.push({
+      type: 'followup_rescheduled',
+      description: `Follow-up rescheduled from ${new Date(oldDate).toLocaleDateString()} at ${oldTime} to ${parsedDate.toLocaleDateString()} at ${scheduledTime}`,
+      performedBy: salesId,
+      timestamp: new Date()
+    });
+
+    await lead.save();
+
+    // Populate for response
+    await lead.populate('category', 'name color icon');
+    await lead.populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent');
+
+    res.status(200).json({
+      success: true,
+      message: 'Follow-up rescheduled successfully',
+      data: lead
+    });
+
+  } catch (error) {
+    console.error('Reschedule follow-up error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while rescheduling follow-up'
     });
   }
 };
@@ -3538,6 +4109,10 @@ module.exports = {
   getLeadsByStatus,
   getLeadDetail,
   updateLeadStatus,
+  addFollowUp,
+  completeFollowUp,
+  cancelFollowUp,
+  rescheduleFollowUp,
   createLeadProfile,
   updateLeadProfile,
   convertLeadToClient,

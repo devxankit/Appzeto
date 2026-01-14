@@ -11,8 +11,7 @@ import {
   FiMail,
   FiTag,
   FiLoader,
-  FiExternalLink,
-  FiMoreVertical
+  FiExternalLink
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 import { salesLeadService } from '../SL-services'
@@ -27,7 +26,6 @@ const SL_converted = () => {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [showFilters, setShowFilters] = useState(false)
-  const [showActionsMenu, setShowActionsMenu] = useState(null)
   
   // State for real data
   const [leadsData, setLeadsData] = useState([])
@@ -131,264 +129,112 @@ const SL_converted = () => {
     navigate(`/client-profile/${clientId}`)
   }
 
-  const handleStatusChange = (clientId, newStatus) => {
-    console.log(`Client ${clientId} status changed to: ${newStatus}`)
-    setShowActionsMenu(null)
-  }
 
   // Mobile Client Card Component
-  const MobileClientCard = ({ client, showActionsMenu, setShowActionsMenu }) => {
+  const MobileClientCard = ({ client }) => {
     const categoryInfo = getCategoryInfo(client.category)
+    const projectType = client.project?.projectType || client.leadProfile?.projectType || {}
+    const projectTypeLabel = projectType.web ? 'Web' : projectType.app ? 'App' : projectType.taxi ? 'Taxi' : 'N/A'
+    const totalCost = client.project?.financialDetails?.totalCost || client.project?.budget || client.leadProfile?.estimatedCost || 0
+    const displayName = client.leadProfile?.name || client.name || 'Unknown'
+    const displayBusiness = client.leadProfile?.businessName || client.company || 'No company'
+    const avatar = displayName.charAt(0).toUpperCase()
     
     return (
-    <div className="p-4 space-y-3">
-      {/* Header Section */}
-      <div className="flex items-center space-x-3">
-        {/* Avatar */}
-        <div className="flex-shrink-0">
-          <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-sm">
-            <FiCheckCircle className="text-white text-sm" />
+      <div 
+        className="p-3 space-y-2 cursor-pointer hover:bg-gray-50 transition-colors duration-200"
+        onClick={() => handleProfile(client)}
+      >
+        {/* Header Section */}
+        <div className="flex items-center space-x-3">
+          {/* Avatar */}
+          <div className="flex-shrink-0">
+            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-sm">
+              <span className="text-white font-semibold text-sm">{avatar}</span>
+            </div>
+          </div>
+
+          {/* Client Info */}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold text-gray-900 truncate">
+              {displayName}
+            </h3>
+            <p className="text-sm text-gray-600 truncate">
+              {displayBusiness}
+            </p>
+            {/* Category */}
+            <div className="flex items-center space-x-1 mt-0.5">
+              <span className="text-xs text-black">
+                {categoryInfo.name}
+              </span>
+            </div>
+          </div>
+
+          {/* Revenue */}
+          <div className="text-right flex-shrink-0">
+            <p className="text-sm font-bold text-green-600">₹{totalCost.toLocaleString()}</p>
           </div>
         </div>
 
-        {/* Client Info & Category */}
-        <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-gray-900 truncate">
-            {client.leadProfile?.name || client.name || 'Unknown'}
-          </h3>
-          <p className="text-sm text-gray-600 truncate">
-            {client.leadProfile?.businessName || client.company || 'No company'}
-          </p>
-          {/* Category Tag */}
-          <div className="flex items-center space-x-1 mt-1">
-            <span 
-              className="text-xs text-gray-500"
-              style={{ color: categoryInfo.color }}
-            >
-              {categoryInfo.icon} {categoryInfo.name}
-            </span>
-          </div>
+        {/* Package Badge & Date */}
+        <div className="flex justify-between items-center">
+          <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+            {projectTypeLabel}
+          </span>
+          <span className="text-xs text-gray-500">{client.updatedAt ? new Date(client.updatedAt).toLocaleDateString() : 'N/A'}</span>
         </div>
 
-        {/* Revenue */}
-        <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-green-600">₹{(client.project?.financialDetails?.totalCost || client.project?.budget || client.leadProfile?.estimatedCost || 0).toLocaleString()}</p>
-        </div>
-      </div>
-
-      {/* Package Badge */}
-      <div className="flex justify-between items-center">
-        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
-          {client.project?.projectType?.web ? 'Web' : client.project?.projectType?.app ? 'App' : client.project?.projectType?.taxi ? 'Taxi' : client.leadProfile?.projectType?.web ? 'Web' : client.leadProfile?.projectType?.app ? 'App' : client.leadProfile?.projectType?.taxi ? 'Taxi' : 'N/A'}
-        </span>
-        <span className="text-xs text-gray-500">{client.updatedAt ? new Date(client.updatedAt).toLocaleDateString() : 'N/A'}</span>
-      </div>
-
-      {/* Actions Section */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <span className="text-xs text-gray-500">{client.phone || 'No phone'}</span>
-        
-        <div className="flex items-center space-x-1">
-          {/* Call Button */}
-          <button
-            onClick={() => handleCall(client.phone)}
-            className="p-2 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200"
-            title="Call"
-          >
-            <FiPhone className="w-4 h-4" />
-          </button>
-
-          {/* WhatsApp Button */}
-          <button
-            onClick={() => handleWhatsApp(client.phone)}
-            className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
-            title="WhatsApp"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/>
-            </svg>
-          </button>
-
-          {/* Profile Button */}
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              handleProfile(client)
-            }}
-            className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
-            title="Profile"
-          >
-            <FiUser className="w-4 h-4" />
-          </button>
-
-          {/* More Options */}
-          <div className="relative">
+        {/* Actions Section */}
+        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+          <span className="text-xs text-gray-500">{client.phone || 'No phone'}</span>
+          
+          <div className="flex items-center space-x-1">
+            {/* Call Button */}
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === client._id ? null : client._id)}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all duration-200"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleCall(client.phone)
+              }}
+              className="p-2 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200"
+              title="Call"
             >
-              <FiMoreVertical className="w-4 h-4" />
+              <FiPhone className="w-4 h-4" />
             </button>
 
-            {/* Actions Dropdown */}
-            <AnimatePresence>
-              {showActionsMenu === client._id && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  transition={{ duration: 0.2}}
-                  className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-200 z-50"
-                >
-                  <div className="py-1">
-                  <button
-                    onClick={() => handleStatusChange(client._id, 'follow_up')}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
-                    >
-                      Follow Up
-                    </button>
-                  <button
-                    onClick={() => handleStatusChange(client._id, 'support')}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
-                    >
-                      Support
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* WhatsApp Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleWhatsApp(client.phone)
+              }}
+              className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
+              title="WhatsApp"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/>
+              </svg>
+            </button>
+
+            {/* Profile Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleProfile(client)
+              }}
+              className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
+              title="Profile"
+            >
+              <FiUser className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
-    </div>
     )
   }
 
-  // Desktop Client Card Component
-  const DesktopClientCard = ({ client, showActionsMenu, setShowActionsMenu }) => {
-    const categoryInfo = getCategoryInfo(client.category)
-    
-    return (
-    <div className="p-4 space-y-3">
-      {/* Header Section */}
-      <div className="flex items-center space-x-3">
-        {/* Avatar */}
-        <div className="flex-shrink-0">
-          <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-sm">
-            <FiCheckCircle className="text-white text-lg" />
-          </div>
-        </div>
-
-        {/* Client Info & Category */}
-        <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 truncate">
-            {client.leadProfile?.name || client.name || 'Unknown'}
-          </h3>
-          <p className="text-sm text-gray-600 truncate">
-            {client.leadProfile?.businessName || client.company || 'No company'}
-          </p>
-          {/* Category Tag */}
-          <div className="flex items-center space-x-2 mt-1">
-            <span 
-              className="text-xs text-gray-500"
-              style={{ color: categoryInfo.color }}
-            >
-              {categoryInfo.icon} {categoryInfo.name}
-            </span>
-          </div>
-        </div>
-
-        {/* Revenue */}
-        <div className="text-right flex-shrink-0">
-          <p className="text-lg font-bold text-green-600">₹{(client.project?.financialDetails?.totalCost || client.project?.budget || client.leadProfile?.estimatedCost || 0).toLocaleString()}</p>
-        </div>
-      </div>
-
-      {/* Package & Date */}
-      <div className="flex justify-between items-center">
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          {client.project?.projectType?.web ? 'Web' : client.project?.projectType?.app ? 'App' : client.project?.projectType?.taxi ? 'Taxi' : client.leadProfile?.projectType?.web ? 'Web' : client.leadProfile?.projectType?.app ? 'App' : client.leadProfile?.projectType?.taxi ? 'Taxi' : 'N/A'}
-        </span>
-        <span className="text-xs text-gray-500">{client.updatedAt ? new Date(client.updatedAt).toLocaleDateString() : 'N/A'}</span>
-      </div>
-
-      {/* Actions Section */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <span className="text-sm text-gray-500">{client.phone || 'No phone'}</span>
-        
-        <div className="flex items-center space-x-2">
-          {/* Call Button */}
-          <button
-            onClick={() => handleCall(client.phone)}
-            className="px-3 py-1.5 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200 text-sm font-medium flex items-center space-x-1"
-          >
-            <FiPhone className="w-4 h-4" />
-            <span>Call</span>
-          </button>
-          
-          <button
-            onClick={() => handleWhatsApp(client.phone)}
-            className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200 flex items-center space-x-1"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.87 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/>
-            </svg>
-            <span>WhatsApp</span>
-          </button>
-
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              handleProfile(client)
-            }}
-            className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200 flex items-center space-x-1"
-          >
-            <FiUser className="w-4 h-4" />
-            <span>Profile</span>
-          </button>
-
-          <div className="relative">
-            <button
-              onClick={() => setShowActionsMenu(showActionsMenu === client._id ? null : client._id)}
-              className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all duration-200"
-            >
-              <FiMoreVertical className="w-4 h-4" />
-            </button>
-
-            {/* Actions Dropdown */}
-            <AnimatePresence>
-              {showActionsMenu === client._id && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  transition={{ duration: 0.2}}
-                  className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-xl border border-gray-200 z-50"
-                >
-                  <div className="py-1">
-                    <button
-                      onClick={() => handleStatusChange(client._id, 'follow_up')}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
-                    >
-                      Follow Up
-                    </button>
-                    <button
-                      onClick={() => handleStatusChange(client._id, 'support')}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
-                    >
-                      Support
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
-    </div>
-    )
+  // Desktop Client Card Component (same as mobile for consistency)
+  const DesktopClientCard = ({ client }) => {
+    return <MobileClientCard client={client} />
   }
 
   return (
@@ -591,7 +437,7 @@ const SL_converted = () => {
                   transition={{ duration: 0.3, delay: index * 0.05 }}
                   className="bg-white rounded-lg p-3 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
                 >
-                  <MobileClientCard client={lead} showActionsMenu={showActionsMenu} setShowActionsMenu={setShowActionsMenu} />
+                  <MobileClientCard client={lead} />
                 </motion.div>
                 ))
               )}

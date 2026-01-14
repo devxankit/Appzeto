@@ -1,107 +1,126 @@
 // Professional Wallet Dashboard component with enhanced UI
-import React, { useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { 
   FiCreditCard,
-  FiArrowUp,
-  FiArrowDown,
   FiCalendar,
   FiTrendingUp,
   FiActivity,
-  FiX,
-  FiUsers
+  FiUsers,
+  FiLoader,
+  FiAlertCircle
 } from 'react-icons/fi'
 import { FaRupeeSign } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
 import { salesWalletService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_wallet = () => {
-  // Withdrawal removed as per requirement
-
-  // Live state
+  const { toast } = useToast()
+  const isLoadingRef = useRef(false)
+  const hasErrorShownRef = useRef(false)
+  
+  // Live state - initialize as null to show skeleton loaders
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [wallet, setWallet] = useState({
-    currentBalance: 0,
-    pendingIncentive: 0,
-    monthlyEarning: 0,
-    totalEarning: 0,
-    monthlySalary: 0,
-    teamLeadIncentive: {
-      total: 0,
-      current: 0,
-      pending: 0
-    },
-    transactions: []
-  })
+  const [wallet, setWallet] = useState(null)
+
+  const loadWallet = useCallback(async () => {
+    // Prevent multiple simultaneous calls
+    if (isLoadingRef.current) {
+      return
+    }
+
+    try {
+      isLoadingRef.current = true
+      setLoading(true)
+      setError(null)
+      hasErrorShownRef.current = false
+
+      const data = await salesWalletService.getWalletSummary()
+      const current = Number(data?.incentive?.current || 0)
+      const pending = Number(data?.incentive?.pending || 0)
+      const monthly = Number(data?.incentive?.monthly || 0)
+      const allTime = Number(data?.incentive?.allTime || 0)
+      const fixedSalary = Number(data?.salary?.fixedSalary || 0)
+      const breakdown = data?.incentive?.breakdown || []
+
+      // Calculate team lead incentive totals from breakdown
+      let teamLeadIncentiveTotal = 0
+      let teamLeadIncentiveCurrent = 0
+      let teamLeadIncentivePending = 0
+      
+      breakdown.forEach(inc => {
+        if (inc.isTeamLeadIncentive) {
+          teamLeadIncentiveTotal += Number(inc.amount || 0)
+          teamLeadIncentiveCurrent += Number(inc.currentBalance || 0)
+          teamLeadIncentivePending += Number(inc.pendingBalance || 0)
+        }
+      })
+
+      // Use backend values directly (backend already handles 50% split)
+      const currentBalance = current
+      const pendingIncentive = pending
+
+      setWallet({
+        currentBalance: currentBalance,
+        pendingIncentive: pendingIncentive,
+        monthlyEarning: monthly,
+        totalEarning: allTime,
+        monthlySalary: fixedSalary,
+        teamLeadIncentive: {
+          total: teamLeadIncentiveTotal,
+          current: teamLeadIncentiveCurrent,
+          pending: teamLeadIncentivePending
+        },
+        transactions: (data?.transactions || []).map(t => ({
+          id: t.id || `${t.type}-${t.date}`,
+          amount: Number(t.amount || 0),
+          type: 'income',
+          date: new Date(t.date).toLocaleDateString(),
+          category: t.type === 'salary' ? 'Salary' : 'Reward',
+          description: t.type === 'salary' ? 'Monthly Salary' : (t.clientName ? `Incentive - ${t.clientName}` : 'Incentive'),
+          isTeamLeadIncentive: t.isTeamLeadIncentive || false,
+          teamMemberName: t.teamMemberName || null
+        }))
+      })
+    } catch (e) {
+      // Only show error once
+      if (!hasErrorShownRef.current) {
+        hasErrorShownRef.current = true
+        const errorMessage = e?.message || 'Failed to load wallet data'
+        
+        // Handle 401 (Unauthorized) errors gracefully
+        if (errorMessage.includes('token') || errorMessage.includes('Unauthorized') || errorMessage.includes('401')) {
+          setError('Session expired. Please log in again.')
+        } else {
+          setError(errorMessage)
+          toast.error(errorMessage)
+        }
+      }
+    } finally {
+      isLoadingRef.current = false
+      setLoading(false)
+    }
+  }, [toast])
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true)
-        const data = await salesWalletService.getWalletSummary()
-        const current = Number(data?.incentive?.current || 0)
-        const pending = Number(data?.incentive?.pending || 0)
-        const monthly = Number(data?.incentive?.monthly || 0)
-        const allTime = Number(data?.incentive?.allTime || 0)
-        const fixedSalary = Number(data?.salary?.fixedSalary || 0)
-        const breakdown = data?.incentive?.breakdown || []
-
-        // Calculate team lead incentive totals from breakdown
-        let teamLeadIncentiveTotal = 0
-        let teamLeadIncentiveCurrent = 0
-        let teamLeadIncentivePending = 0
-        
-        breakdown.forEach(inc => {
-          if (inc.isTeamLeadIncentive) {
-            teamLeadIncentiveTotal += Number(inc.amount || 0)
-            teamLeadIncentiveCurrent += Number(inc.currentBalance || 0)
-            teamLeadIncentivePending += Number(inc.pendingBalance || 0)
-          }
-        })
-
-        // Use backend values directly (backend already handles 50% split)
-        const currentBalance = current
-        const pendingIncentive = pending
-
-        setWallet({
-          currentBalance: currentBalance,
-          pendingIncentive: pendingIncentive,
-          monthlyEarning: monthly,
-          totalEarning: allTime,
-          monthlySalary: fixedSalary,
-          teamLeadIncentive: {
-            total: teamLeadIncentiveTotal,
-            current: teamLeadIncentiveCurrent,
-            pending: teamLeadIncentivePending
-          },
-          transactions: (data?.transactions || []).map(t => ({
-            id: t.id || `${t.type}-${t.date}`,
-            amount: Number(t.amount || 0),
-            type: 'income',
-            date: new Date(t.date).toLocaleDateString(),
-            category: t.type === 'salary' ? 'Salary' : 'Reward',
-            description: t.type === 'salary' ? 'Monthly Salary' : (t.clientName ? `Incentive - ${t.clientName}` : 'Incentive'),
-            isTeamLeadIncentive: t.isTeamLeadIncentive || false,
-            teamMemberName: t.teamMemberName || null
-          }))
-        })
-        setError(null)
-      } catch (e) {
-        setError(e?.message || 'Failed to load wallet')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [])
+    loadWallet()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
 
   // Filter out withdrawals from visible history
-  const visibleTransactions = wallet.transactions
+  const visibleTransactions = wallet?.transactions || []
 
   const formatCurrency = (amount) => {
-    return `₹${amount.toLocaleString()}`
+    if (amount === null || amount === undefined) return '₹0'
+    return `₹${Number(amount).toLocaleString()}`
   }
+
+  // Skeleton loader component
+  const SkeletonLoader = ({ className = '' }) => (
+    <div className={`animate-pulse bg-gray-200 rounded ${className}`}></div>
+  )
 
   const getTransactionIcon = (category) => {
     switch(category) {
@@ -128,6 +147,26 @@ const SL_wallet = () => {
         {/* Responsive Layout */}
         <div className="space-y-6">
           
+          {/* Error State */}
+          {error && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-50 border border-red-200 rounded-xl p-4"
+            >
+              <div className="flex items-center">
+                <FiAlertCircle className="w-5 h-5 text-red-600 mr-2" />
+                <p className="text-sm text-red-600 flex-1">{error}</p>
+                <button 
+                  onClick={loadWallet}
+                  className="ml-auto text-red-400 hover:text-red-600"
+                >
+                  <FiLoader className="w-4 h-4" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           {/* Financial Summary Card */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -193,7 +232,11 @@ const SL_wallet = () => {
                   <span className="text-teal-800 text-xs font-semibold">Current Balance</span>
                   <FaRupeeSign className="text-teal-600 text-sm" />
                 </div>
-                <p className="text-gray-900 text-lg font-bold">{formatCurrency(wallet.currentBalance)}</p>
+                {loading ? (
+                  <SkeletonLoader className="h-6 w-24" />
+                ) : (
+                  <p className="text-gray-900 text-lg font-bold">{formatCurrency(wallet?.currentBalance)}</p>
+                )}
               </div>
             </motion.div>
 
@@ -209,7 +252,11 @@ const SL_wallet = () => {
                   <span className="text-teal-800 text-xs font-semibold">Monthly Salary</span>
                   <FaRupeeSign className="text-teal-600 text-sm" />
                 </div>
-                <p className="text-gray-900 text-lg font-bold">{formatCurrency(wallet.monthlySalary)}</p>
+                {loading ? (
+                  <SkeletonLoader className="h-6 w-24" />
+                ) : (
+                  <p className="text-gray-900 text-lg font-bold">{formatCurrency(wallet?.monthlySalary)}</p>
+                )}
               </div>
             </motion.div>
 
@@ -229,8 +276,17 @@ const SL_wallet = () => {
                   <span className="text-emerald-800 text-xs font-semibold">Total Incentive</span>
                   <FiTrendingUp className="text-emerald-600 text-xs" />
                 </div>
-                <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet.totalEarning)}</p>
-                <p className="text-emerald-600 text-xs">All Time</p>
+                {loading ? (
+                  <>
+                    <SkeletonLoader className="h-4 w-20 mb-1" />
+                    <SkeletonLoader className="h-3 w-16" />
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet?.totalEarning)}</p>
+                    <p className="text-emerald-600 text-xs">All Time</p>
+                  </>
+                )}
               </motion.div>
               
               {/* Pending Incentive */}
@@ -242,8 +298,17 @@ const SL_wallet = () => {
                   <span className="text-yellow-800 text-xs font-semibold">Pending Incentive</span>
                   <FiCalendar className="text-yellow-600 text-xs" />
                 </div>
-                <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet.pendingIncentive)}</p>
-                <p className="text-yellow-600 text-xs">Awaiting Recovery</p>
+                {loading ? (
+                  <>
+                    <SkeletonLoader className="h-4 w-20 mb-1" />
+                    <SkeletonLoader className="h-3 w-24" />
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet?.pendingIncentive)}</p>
+                    <p className="text-yellow-600 text-xs">Awaiting Recovery</p>
+                  </>
+                )}
                 
                 {/* Hover Tooltip */}
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-20">
@@ -254,7 +319,7 @@ const SL_wallet = () => {
             </motion.div>
 
             {/* Team Lead Incentive Section - Only show if team lead incentive exists */}
-            {wallet.teamLeadIncentive && wallet.teamLeadIncentive.total > 0 && (
+            {!loading && wallet?.teamLeadIncentive && wallet.teamLeadIncentive.total > 0 && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -298,7 +363,11 @@ const SL_wallet = () => {
                 className="bg-white/60 backdrop-blur-sm rounded-lg p-2 border border-cyan-300/50 text-center hover:border-cyan-400/70 transition-all duration-300 shadow-sm"
               >
                 <p className="text-cyan-800 text-xs font-semibold mb-0.5">This Month</p>
-                <p className="text-gray-900 text-xs font-bold">{formatCurrency(wallet.monthlyEarning)}</p>
+                {loading ? (
+                  <SkeletonLoader className="h-3 w-16 mx-auto" />
+                ) : (
+                  <p className="text-gray-900 text-xs font-bold">{formatCurrency(wallet?.monthlyEarning)}</p>
+                )}
               </motion.div>
               
               {/* Removed Total Balance (duplicate of Current Balance) */}
@@ -308,7 +377,11 @@ const SL_wallet = () => {
                 className="bg-white/60 backdrop-blur-sm rounded-lg p-2 border border-violet-300/50 text-center hover:border-violet-400/70 transition-all duration-300 shadow-sm"
               >
                 <p className="text-violet-800 text-xs font-semibold mb-0.5">All Time</p>
-                <p className="text-gray-900 text-xs font-bold">{formatCurrency(wallet.totalEarning)}</p>
+                {loading ? (
+                  <SkeletonLoader className="h-3 w-16 mx-auto" />
+                ) : (
+                  <p className="text-gray-900 text-xs font-bold">{formatCurrency(wallet?.totalEarning)}</p>
+                )}
               </motion.div>
             </motion.div>
           </motion.div>
@@ -317,14 +390,40 @@ const SL_wallet = () => {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-bold text-gray-900">Transaction History</h3>
-              <p className="text-sm text-gray-600 mt-1">{visibleTransactions.length} recent transactions</p>
+              {loading ? (
+                <SkeletonLoader className="h-4 w-32 mt-1" />
+              ) : (
+                <p className="text-sm text-gray-600 mt-1">{visibleTransactions.length} recent transactions</p>
+              )}
             </div>
-              <div className="flex items-center space-x-2" />
+            <div className="flex items-center space-x-2" />
           </div>
 
           {/* Transaction List */}
           <div className="space-y-3">
-            {visibleTransactions.map((transaction, index) => {
+            {loading ? (
+              // Show skeleton loaders for transactions
+              [...Array(3)].map((_, index) => (
+                <div key={index} className="bg-white rounded-lg p-3 border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <SkeletonLoader className="w-10 h-10 rounded-lg" />
+                      <div>
+                        <SkeletonLoader className="h-4 w-32 mb-2" />
+                        <SkeletonLoader className="h-3 w-20" />
+                      </div>
+                    </div>
+                    <SkeletonLoader className="h-4 w-16" />
+                  </div>
+                </div>
+              ))
+            ) : visibleTransactions.length === 0 ? (
+              <div className="text-center py-8">
+                <FiActivity className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600">No transactions yet</p>
+              </div>
+            ) : (
+              visibleTransactions.map((transaction, index) => {
               const IconComponent = getTransactionIcon(transaction.category)
               
               return (
@@ -354,7 +453,7 @@ const SL_wallet = () => {
                   </div>
                 </motion.div>
               )
-            })}
+            }))}
           </div>
 
         </div>

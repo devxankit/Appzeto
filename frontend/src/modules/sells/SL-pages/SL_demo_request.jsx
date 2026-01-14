@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { 
   FiArrowLeft, 
@@ -15,19 +15,25 @@ import {
   FiEye,
   FiMoreVertical,
   FiFilter,
-  FiTag
+  FiTag,
+  FiMessageCircle,
+  FiMapPin,
+  FiFileText
 } from 'react-icons/fi'
 import { FaWhatsapp } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
 import { salesDemoService, salesLeadService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_demo_request = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
   // Lead categories (matching admin system)
   const leadCategories = [
@@ -97,12 +103,26 @@ const SL_demo_request = () => {
         setStats(res.stats || { total: 0, pending: 0, scheduled: 0, completed: 0 })
       } catch (e) {
         console.error('Fetch demo requests failed', e)
+        toast.error('Failed to fetch demo requests')
       } finally {
         setIsLoading(false)
       }
     }
     run()
   }, [searchTerm, selectedFilter, selectedCategory])
+
+  // Close menu when clicking outside
+  React.useEffect(() => {
+    if (!showActionsMenu) return
+    
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('[data-action-menu]')) {
+        setShowActionsMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showActionsMenu])
 
   const filteredRequests = demoRequestsData
 
@@ -140,32 +160,49 @@ const SL_demo_request = () => {
     }
   }
 
-  const handleCall = (phone) => {
-    window.open(`tel:${phone}`, '_self')
-  }
 
-  const handleWhatsApp = (phone) => {
-    // Remove any non-numeric characters and add country code if needed
-    const cleanPhone = phone.replace(/\D/g, '')
-    const whatsappUrl = `https://wa.me/${cleanPhone}`
-    window.open(whatsappUrl, '_blank')
-  }
-
-  const handleViewDetails = (requestId) => {
-    console.log('View details for request:', requestId)
+  const handleViewDetails = (leadId) => {
+    navigate(`/lead-profile/${leadId}`)
   }
 
   const handleDemoStatusChange = async (requestId, newStatus) => {
+    setIsUpdatingStatus(true)
     try {
       await salesDemoService.updateStatus(requestId, newStatus)
-      // refresh
-      const res = await salesDemoService.list({ search: searchTerm, status: selectedFilter, category: selectedCategory })
+      toast.success(`Demo request marked as ${newStatus}`)
+      
+      // Refresh data
+      const res = await salesDemoService.list({ 
+        search: searchTerm, 
+        status: selectedFilter, 
+        category: selectedCategory 
+      })
       setDemoRequestsData(res.items || [])
       setStats(res.stats || stats)
       setShowActionsMenu(null)
     } catch (e) {
       console.error('Update demo status failed', e)
+      toast.error('Failed to update demo status')
+    } finally {
+      setIsUpdatingStatus(false)
     }
+  }
+
+  const handleCall = (phone) => {
+    if (!phone) {
+      toast.error('Phone number not available')
+      return
+    }
+    window.open(`tel:${phone}`, '_self')
+  }
+
+  const handleWhatsApp = (phone) => {
+    if (!phone) {
+      toast.error('Phone number not available')
+      return
+    }
+    const message = encodeURIComponent("Hello! I'm following up on the demo request. How can I help you today?")
+    window.open(`https://wa.me/91${phone}?text=${message}`, '_blank')
   }
 
   return (
@@ -184,22 +221,31 @@ const SL_demo_request = () => {
             </div>
             
             {/* Right Section - Status Breakdown */}
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-4 md:space-x-6">
               {/* Pending */}
               <div className="text-center">
-                <p className="text-lg font-bold mb-1">{stats.pending}</p>
+                <p className="text-lg font-bold mb-1">{stats.pending || 0}</p>
                 <div className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-orange-300 rounded-full"></div>
-                  <span className="text-sm">Pending</span>
+                  <span className="text-xs md:text-sm">Pending</span>
                 </div>
               </div>
               
               {/* Scheduled */}
               <div className="text-center">
-                <p className="text-lg font-bold mb-1">{stats.scheduled}</p>
+                <p className="text-lg font-bold mb-1">{stats.scheduled || 0}</p>
                 <div className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-blue-300 rounded-full"></div>
-                  <span className="text-sm">Scheduled</span>
+                  <span className="text-xs md:text-sm">Scheduled</span>
+                </div>
+              </div>
+
+              {/* Completed */}
+              <div className="text-center">
+                <p className="text-lg font-bold mb-1">{stats.completed || 0}</p>
+                <div className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-green-300 rounded-full"></div>
+                  <span className="text-xs md:text-sm">Completed</span>
                 </div>
               </div>
             </div>
@@ -295,84 +341,193 @@ const SL_demo_request = () => {
 
         {/* Demo Requests List */}
         <div className="space-y-3">
-          {filteredRequests.length === 0 ? (
+          {isLoading ? (
             <div className="text-center py-12">
-              <FiVideo className="text-6xl text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">No demo requests found</p>
-              <p className="text-gray-400 text-sm">Try adjusting your search terms or filters</p>
+              <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-500">Loading demo requests...</p>
             </div>
+          ) : filteredRequests.length === 0 ? (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-12"
+            >
+              <FiVideo className="text-6xl text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg font-medium mb-2">No demo requests found</p>
+              <p className="text-gray-400 text-sm">Try adjusting your search terms or filters</p>
+            </motion.div>
           ) : (
-            filteredRequests.map((request, index) => {
-              const displayName = request.leadProfile?.name || request.name || request.clientName || request.company || 'Unknown'
-              const displayPhone = request.phone
-              const category = request.category
-              const demoStatus = request.demoRequest?.status || 'pending'
-              return (
-                <div
+            <AnimatePresence>
+              {filteredRequests.map((request, index) => {
+                const displayName = request.leadProfile?.name || request.name || request.clientName || request.company || 'Unknown'
+                const displayPhone = request.phone
+                const displayBusiness = request.leadProfile?.businessName || request.company || 'No business info'
+                const category = request.category
+                const demoStatus = request.demoRequest?.status || request.status || 'pending'
+                const demoRequest = request.demoRequest || request
+                const leadId = request._id || request.leadId || request.id
+                const avatar = displayName.charAt(0).toUpperCase()
+                
+                return (
+                <motion.div
                   key={request._id || request.id || index}
-                  className="bg-white rounded-lg p-3 shadow-sm border border-gray-200"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
                 >
-                  <div className="flex items-center justify-between">
-                    {/* Left Section - Avatar & Info (matching Connected) */}
+                  <div className="flex items-start justify-between">
+                    {/* Left Section - Lead Info */}
                     <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center">
-                          <FiUser className="text-white text-xs" />
+                      <div className="flex items-center space-x-3 mb-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center shadow-md">
+                          <span className="text-white font-semibold text-sm">{avatar}</span>
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-gray-900 text-sm">{displayName}</h3>
-                          <p className="text-xs text-gray-600">{displayPhone}</p>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900 text-base mb-1">{displayName}</h3>
+                          <p className="text-sm text-gray-600 mb-1">{displayBusiness}</p>
+                          <p className="text-xs text-gray-500">{displayPhone}</p>
                         </div>
                       </div>
 
-                      {/* Category Tag */}
-                      <div className="mb-1">
-                        <div className="flex items-center space-x-1">
-                          <span
-                            className="text-xs text-gray-500"
-                            style={{ color: category?.color || '#6b7280' }}
-                          >
-                            {category?.icon || ''} {category?.name || 'Category'}
+                      {/* Category */}
+                      {category && (
+                        <div className="mb-2">
+                          <span className="text-xs text-black">
+                            {category.name || 'Category'}
                           </span>
                         </div>
-                      </div>
+                      )}
+
+                      {/* Demo Request Info */}
+                      {demoRequest && (
+                        <div className="mt-3 space-y-1">
+                          {demoRequest.description && (
+                            <div className="flex items-start space-x-2 text-xs text-gray-600">
+                              <FiFileText className="text-gray-400 mt-0.5" />
+                              <span className="line-clamp-2">{demoRequest.description}</span>
+                            </div>
+                          )}
+                          {demoRequest.reference && (
+                            <div className="flex items-center space-x-2 text-xs text-gray-600">
+                              <FiTag className="text-gray-400" />
+                              <span>Ref: {demoRequest.reference}</span>
+                            </div>
+                          )}
+                          {demoRequest.requestedAt && (
+                            <div className="flex items-center space-x-2 text-xs text-gray-500">
+                              <FiClock className="text-gray-400" />
+                              <span>Requested: {new Date(demoRequest.requestedAt).toLocaleDateString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Right Section - Demo Request Status and Actions */}
-                    <div className="flex flex-col items-end space-y-2">
-                      <div className={`px-2 py-1 rounded-full text-xs font-medium border flex items-center space-x-1 ${getStatusColor(demoStatus)}`}>
+                    {/* Right Section - Status and Actions */}
+                    <div className="flex flex-col items-end space-y-3 ml-4">
+                      {/* Status Badge */}
+                      <div className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center space-x-1.5 ${getStatusColor(demoStatus)}`}>
                         {getStatusIcon(demoStatus)}
                         <span className="capitalize">{demoStatus}</span>
                       </div>
 
+                      {/* Action Buttons */}
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => handleCall(displayPhone)}
-                          className="p-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors duration-200"
+                          className="p-2 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-colors duration-200"
                           title="Call"
                         >
-                          <FiPhone className="text-sm" />
+                          <FiPhone className="text-base" />
                         </button>
                         <button
                           onClick={() => handleWhatsApp(displayPhone)}
-                          className="p-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors duration-200"
+                          className="p-2 bg-white text-green-600 border border-green-200 rounded-lg hover:bg-green-50 transition-colors duration-200"
                           title="WhatsApp"
                         >
-                          <FaWhatsapp className="text-sm" />
+                          <FaWhatsapp className="text-base" />
                         </button>
                         <button
-                          onClick={() => handleViewDetails(request._id || request.id)}
-                          className="p-1.5 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-200"
-                          title="View Details"
+                          onClick={() => handleViewDetails(leadId)}
+                          className="p-2 bg-white text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors duration-200"
+                          title="View Lead Profile"
                         >
-                          <FiEye className="text-sm" />
+                          <FiEye className="text-base" />
                         </button>
+                        
+                        {/* Status Update Menu */}
+                        <div className="relative" data-action-menu>
+                          <button
+                            onClick={() => setShowActionsMenu(showActionsMenu === leadId ? null : leadId)}
+                            className="p-2 bg-white text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                            title="More Actions"
+                            disabled={isUpdatingStatus}
+                          >
+                            <FiMoreVertical className="text-base" />
+                          </button>
+                          
+                          <AnimatePresence>
+                            {showActionsMenu === leadId && (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10 overflow-hidden"
+                                data-action-menu
+                              >
+                                {demoStatus !== 'completed' && (
+                                  <button
+                                    onClick={() => handleDemoStatusChange(leadId, 'completed')}
+                                    className="w-full px-4 py-2.5 text-left text-sm text-green-700 hover:bg-green-50 flex items-center space-x-2 transition-colors duration-200"
+                                    disabled={isUpdatingStatus}
+                                  >
+                                    <FiCheckCircle className="text-base" />
+                                    <span>Mark as Completed</span>
+                                  </button>
+                                )}
+                                {demoStatus !== 'cancelled' && (
+                                  <button
+                                    onClick={() => handleDemoStatusChange(leadId, 'cancelled')}
+                                    className="w-full px-4 py-2.5 text-left text-sm text-red-700 hover:bg-red-50 flex items-center space-x-2 transition-colors duration-200"
+                                    disabled={isUpdatingStatus}
+                                  >
+                                    <FiXCircle className="text-base" />
+                                    <span>Mark as Cancelled</span>
+                                  </button>
+                                )}
+                                {demoStatus !== 'pending' && (
+                                  <button
+                                    onClick={() => handleDemoStatusChange(leadId, 'pending')}
+                                    className="w-full px-4 py-2.5 text-left text-sm text-orange-700 hover:bg-orange-50 flex items-center space-x-2 transition-colors duration-200"
+                                    disabled={isUpdatingStatus}
+                                  >
+                                    <FiClock className="text-base" />
+                                    <span>Mark as Pending</span>
+                                  </button>
+                                )}
+                                {demoStatus !== 'scheduled' && (
+                                  <button
+                                    onClick={() => handleDemoStatusChange(leadId, 'scheduled')}
+                                    className="w-full px-4 py-2.5 text-left text-sm text-blue-700 hover:bg-blue-50 flex items-center space-x-2 transition-colors duration-200"
+                                    disabled={isUpdatingStatus}
+                                  >
+                                    <FiCalendar className="text-base" />
+                                    <span>Mark as Scheduled</span>
+                                  </button>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )
-            })
+                </motion.div>
+                )
+              })}
+            </AnimatePresence>
           )}
         </div>
       </main>

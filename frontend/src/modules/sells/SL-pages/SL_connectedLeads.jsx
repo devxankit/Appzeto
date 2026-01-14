@@ -172,7 +172,20 @@ const SL_connectedLeads = () => {
     const categoryInfo = getCategoryInfo(lead.category)
     
     return (
-      <div className="flex items-center justify-between">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => {
+          if (lead.leadProfile) {
+            navigate(`/lead-profile/${lead._id}`)
+          } else {
+            toast({
+              title: 'Error',
+              description: 'This lead doesn\'t have a profile. Please connect to the lead first to create a profile.',
+              variant: 'destructive'
+            })
+          }
+        }}
+      >
         <div className="flex-1">
           <div className="flex items-center space-x-2 mb-1">
             <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.phone}</h3>
@@ -181,11 +194,8 @@ const SL_connectedLeads = () => {
             </span>
           </div>
           <div className="flex items-center space-x-2">
-            <span 
-              className="text-xs px-2 py-1 rounded-full text-white font-medium"
-              style={{ backgroundColor: categoryInfo.color }}
-            >
-              {categoryInfo.icon} {categoryInfo.name}
+            <span className="text-xs text-black">
+              {categoryInfo.name}
             </span>
             {lead.leadProfile && (
               <span className="text-xs text-green-600 font-medium">✓ Profile</span>
@@ -194,19 +204,28 @@ const SL_connectedLeads = () => {
         </div>
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => handleCall(lead.phone)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleCall(lead.phone)
+            }}
             className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
           >
             <FiPhone size={16} />
           </button>
           <button
-            onClick={() => handleWhatsApp(lead.phone)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleWhatsApp(lead.phone)
+            }}
             className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
           >
             <FiUserCheck size={16} />
           </button>
           <button
-            onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)
+            }}
             className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
           >
             <FiMoreVertical size={16} />

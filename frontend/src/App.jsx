@@ -34,9 +34,9 @@ import SL_meetings from './modules/sells/SL-pages/SL_meetings'
 import SL_hot_leads from './modules/sells/SL-pages/SL_hot_leads'
 import SL_converted from './modules/sells/SL-pages/SL_converted'
 import SL_not_picked from './modules/sells/SL-pages/SL_not_picked'
-import SL_today_followup from './modules/sells/SL-pages/SL_today_followup'
+import SL_followup from './modules/sells/SL-pages/SL_followup'
 import SL_quotation_sent from './modules/sells/SL-pages/SL_quotation_sent'
-import SL_dq_sent from './modules/sells/SL-pages/SL_dq_sent'
+import SL_demo_sent from './modules/sells/SL-pages/SL_demo_sent'
 import SL_app_client from './modules/sells/SL-pages/SL_app_client'
 import SL_web from './modules/sells/SL-pages/SL_web'
 import SL_lost from './modules/sells/SL-pages/SL_lost'
@@ -198,9 +198,9 @@ function App() {
               <SL_not_picked />
             </SalesProtectedRoute>
           } />
-          <Route path="/today-followup" element={
+          <Route path="/followup" element={
             <SalesProtectedRoute>
-              <SL_today_followup />
+              <SL_followup />
             </SalesProtectedRoute>
           } />
           <Route path="/quotation-sent" element={
@@ -208,9 +208,9 @@ function App() {
               <SL_quotation_sent />
             </SalesProtectedRoute>
           } />
-          <Route path="/dq-sent" element={
+          <Route path="/demo-sent" element={
             <SalesProtectedRoute>
-              <SL_dq_sent />
+              <SL_demo_sent />
             </SalesProtectedRoute>
           } />
           <Route path="/app-client" element={

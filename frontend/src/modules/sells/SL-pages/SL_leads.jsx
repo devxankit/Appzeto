@@ -7,7 +7,7 @@ import {
   FiPhoneOff,
   FiCalendar,
   FiFileText,
-  FiSend,
+  FiVideo,
   FiSmartphone,
   FiGlobe,
   FiCheckCircle,
@@ -45,7 +45,7 @@ const LeadDashboard = () => {
       not_picked: 0,
       followup: 0, // Changed from today_followup to followup to match backend
       quotation_sent: 0,
-      dq_sent: 0,
+      demo_sent: 0,
       app_client: 0,
       web: 0,
       converted: 0,
@@ -98,7 +98,7 @@ const LeadDashboard = () => {
           not_picked: 0,
           followup: 0, // Changed from today_followup to followup to match backend
           quotation_sent: 0,
-          dq_sent: 0,
+          demo_sent: 0,
           app_client: 0,
           web: 0,
           converted: 0,
@@ -126,7 +126,7 @@ const LeadDashboard = () => {
           not_picked: 0,
           followup: 0,
           quotation_sent: 0,
-          dq_sent: 0,
+          demo_sent: 0,
           app_client: 0,
           web: 0,
           converted: 0,
@@ -299,7 +299,7 @@ const LeadDashboard = () => {
     { title: "Not Picked", count: dashboardStats.statusCounts.not_picked, icon: FiPhoneOff, bgClass: "bg-rose-50", textClass: "text-rose-800", iconBgClass: "bg-rose-100", iconClass: "text-rose-600", borderClass: "border-rose-200/30", status: "not_picked" },
     { title: "Follow Up", count: dashboardStats.statusCounts.followup, icon: FiCalendar, bgClass: "bg-amber-50", textClass: "text-amber-800", iconBgClass: "bg-amber-100", iconClass: "text-amber-600", borderClass: "border-amber-200/30", status: "followup" },
     { title: "Quotation Sent", count: dashboardStats.statusCounts.quotation_sent, icon: FiFileText, bgClass: "bg-blue-50", textClass: "text-blue-800", iconBgClass: "bg-blue-100", iconClass: "text-blue-600", borderClass: "border-blue-200/30", status: "quotation_sent" },
-    { title: "D&Q Sent", count: dashboardStats.statusCounts.dq_sent, icon: FiSend, bgClass: "bg-purple-50", textClass: "text-purple-800", iconBgClass: "bg-purple-100", iconClass: "text-purple-600", borderClass: "border-purple-200/30", status: "dq_sent" },
+    { title: "Demo Sent", count: dashboardStats.statusCounts.demo_sent || 0, icon: FiVideo, bgClass: "bg-teal-50", textClass: "text-teal-800", iconBgClass: "bg-teal-100", iconClass: "text-teal-600", borderClass: "border-teal-200/30", status: "demo_sent" },
     { title: "App Client", count: dashboardStats.statusCounts.app_client, icon: FiSmartphone, bgClass: "bg-indigo-50", textClass: "text-indigo-800", iconBgClass: "bg-indigo-100", iconClass: "text-indigo-600", borderClass: "border-indigo-200/30", status: "app_client" },
     { title: "Web", count: dashboardStats.statusCounts.web, icon: FiGlobe, bgClass: "bg-cyan-50", textClass: "text-cyan-800", iconBgClass: "bg-cyan-100", iconClass: "text-cyan-600", borderClass: "border-cyan-200/30", status: "web" },
     { title: "Converted", count: dashboardStats.statusCounts.converted, icon: FiCheckCircle, bgClass: "bg-green-50", textClass: "text-green-800", iconBgClass: "bg-green-100", iconClass: "text-green-600", borderClass: "border-green-200/30", status: "converted" }
@@ -367,9 +367,9 @@ const LeadDashboard = () => {
                   to={
                     tile.title === "Connected" ? "/connected" :
                     tile.title === "Not Picked" ? "/not-picked" :
-                    tile.title === "Follow Up" ? "/today-followup" :
+                    tile.title === "Follow Up" ? "/followup" :
                     tile.title === "Quotation Sent" ? "/quotation-sent" :
-                    tile.title === "D&Q Sent" ? "/dq-sent" :
+                    tile.title === "Demo Sent" ? "/demo-sent" :
                     tile.title === "App Client" ? "/app-client" :
                     tile.title === "Web" ? "/web" :
                     tile.title === "Converted" ? "/converted" : "#"
@@ -437,7 +437,8 @@ const LeadDashboard = () => {
           </div>
         </div>
 
-          <div>
+        {/* Desktop layout */}
+        <div className="hidden lg:block">
               {/* Add New Lead Button */}
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
@@ -505,7 +506,7 @@ const LeadDashboard = () => {
                       to={
                         tile.title === "Connected" ? "/connected" :
                         tile.title === "Not Picked" ? "/not-picked" :
-                        tile.title === "Follow Up" ? "/today-followup" :
+                        tile.title === "Follow Up" ? "/followup" :
                         tile.title === "Quotation Sent" ? "/quotation-sent" :
                         tile.title === "D&Q Sent" ? "/dq-sent" :
                         tile.title === "App Client" ? "/app-client" :

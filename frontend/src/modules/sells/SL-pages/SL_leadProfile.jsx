@@ -27,6 +27,7 @@ import {
 } from 'react-icons/fi'
 import { FaRupeeSign } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
+import FollowUpDialog from '../SL-components/FollowUpDialog'
 import { salesLeadService } from '../SL-services'
 import { salesMeetingsService } from '../SL-services'
 import { useToast } from '../../../contexts/ToastContext'
@@ -61,12 +62,6 @@ const SL_leadProfile = () => {
     startDate: '',
     description: ''
   })
-  const [followUpForm, setFollowUpForm] = useState({
-    date: null,
-    time: '',
-    notes: '',
-    type: 'call'
-  })
   const [requestDemoForm, setRequestDemoForm] = useState({
     clientName: '',
     description: '',
@@ -90,7 +85,6 @@ const SL_leadProfile = () => {
     screenshot: null
   })
   const [lostReason, setLostReason] = useState('')
-  const [showTypeDropdown, setShowTypeDropdown] = useState(false)
   const [showTransferDialog, setShowTransferDialog] = useState(false)
   const [selectedTransferPerson, setSelectedTransferPerson] = useState('')
   const [showMeetingDialog, setShowMeetingDialog] = useState(false)
@@ -145,11 +139,11 @@ const SL_leadProfile = () => {
         setLeadProfile(response.leadProfile)
         setSelectedStatus(response.status)
         
-        // Update status checkboxes based on lead status
-        updateStatusFromLeadStatus(response.status)
-        
         // Update form data with lead information
         const lp = response.leadProfile
+        
+        // Update status checkboxes based on lead status and profile data
+        updateStatusFromLeadStatus(response.status, lp)
         setDemoData({
           clientName: lp?.name || response.name || '',
           mobileNumber: response.phone || '',
@@ -193,16 +187,8 @@ const SL_leadProfile = () => {
     }
   }
 
-  const updateStatusFromLeadStatus = (leadStatus) => {
-    const statusMap = {
-      'quotation_sent': { quotationSent: true },
-      'web': { web: true },
-      'hot': { hotLead: true },
-      'demo_requested': { demoSent: true },
-      'app_client': { app: true },
-      'taxi': { taxi: true }
-    }
-    
+  const updateStatusFromLeadStatus = (leadStatus, leadProfileData) => {
+    // Initialize with all false
     const newStatus = {
       quotationSent: false,
       web: false,
@@ -212,8 +198,40 @@ const SL_leadProfile = () => {
       taxi: false
     }
     
-    if (statusMap[leadStatus]) {
-      Object.assign(newStatus, statusMap[leadStatus])
+    // Set status flags from leadProfile (can be multiple)
+    if (leadProfileData) {
+      newStatus.quotationSent = leadProfileData.quotationSent || false
+      newStatus.demoSent = leadProfileData.demoSent || false
+      
+      // Set project type from leadProfile (only one at a time)
+      if (leadProfileData.projectType) {
+        newStatus.web = leadProfileData.projectType.web || false
+        newStatus.app = leadProfileData.projectType.app || false
+        newStatus.taxi = leadProfileData.projectType.taxi || false
+      }
+    }
+    
+    // Set status flags based on lead status
+    // Hot Lead: if status is 'hot', always set hotLead to true
+    if (leadStatus === 'hot') {
+      newStatus.hotLead = true
+    }
+    // Quotation Sent: if status is 'quotation_sent', set quotationSent flag
+    if (leadStatus === 'quotation_sent') {
+      newStatus.quotationSent = true
+    }
+    // Demo Sent: if status is 'demo_requested', set demoSent flag
+    if (leadStatus === 'demo_requested') {
+      newStatus.demoSent = true
+    }
+    
+    // Set project type based on lead status (if not already set from profile)
+    if (leadStatus === 'web' && !newStatus.web && !newStatus.app && !newStatus.taxi) {
+      newStatus.web = true
+    } else if (leadStatus === 'app_client' && !newStatus.app && !newStatus.web && !newStatus.taxi) {
+      newStatus.app = true
+    } else if (leadStatus === 'taxi' && !newStatus.taxi && !newStatus.web && !newStatus.app) {
+      newStatus.taxi = true
     }
     
     setStatus(newStatus)
@@ -231,18 +249,22 @@ const SL_leadProfile = () => {
 
   const handleStatusChange = (statusKey) => {
     setStatus(prev => {
-      // Reset all statuses to false first
-      const newStatus = {
-        quotationSent: false,
-        web: false,
-        hotLead: false,
-        demoSent: false,
-        app: false,
-        taxi: false
-      }
+      const newStatus = { ...prev }
       
-      // Set only the selected status to true
-      newStatus[statusKey] = true
+      // Project types (web, app, taxi) are mutually exclusive - radio button behavior
+      if (statusKey === 'web' || statusKey === 'app' || statusKey === 'taxi') {
+        // Reset all project types
+        newStatus.web = false
+        newStatus.app = false
+        newStatus.taxi = false
+        // Set the selected one (always true for radio buttons - can't unselect)
+        if (!prev[statusKey]) {
+          newStatus[statusKey] = true
+        }
+      } else {
+        // Status flags (quotationSent, demoSent, hotLead) can be multiple - checkbox behavior
+        newStatus[statusKey] = !prev[statusKey] // Toggle
+      }
       
       return newStatus
     })
@@ -253,44 +275,57 @@ const SL_leadProfile = () => {
     
     setIsLoading(true)
     try {
-      // Map status checkboxes to lead status
-      const statusMap = {
-        'quotationSent': 'quotation_sent',
-        'web': 'web',
-        'hotLead': 'hot',
-        'demoSent': 'demo_requested',
-        'app': 'app_client',
-        'taxi': 'taxi'
+      // Determine primary lead status based on priority:
+      // 1. Hot Lead takes highest priority (it's a status, not just a flag)
+      // 2. Then project type (web, app, taxi) 
+      // 3. Then status flags (quotation_sent, demo_requested)
+      // 4. Default to 'connected'
+      // Note: quotationSent and demoSent are stored as flags in leadProfile, allowing leads to appear in multiple pages
+      let newLeadStatus = 'connected'
+      
+      if (status.hotLead) {
+        // Hot lead is a status - takes priority over everything else
+        newLeadStatus = 'hot'
+      } else if (status.web) {
+        newLeadStatus = 'web'
+      } else if (status.app) {
+        newLeadStatus = 'app_client'
+      } else if (status.taxi) {
+        newLeadStatus = 'taxi'
+      } else if (status.quotationSent) {
+        newLeadStatus = 'quotation_sent'
+      } else if (status.demoSent) {
+        newLeadStatus = 'demo_requested'
       }
       
-      // Find the first checked status
-      const checkedStatus = Object.keys(status).find(key => status[key])
-      const newLeadStatus = checkedStatus ? statusMap[checkedStatus] : 'connected'
-      
-      console.log('Current lead status:', lead.status)
-      console.log('Checked status:', checkedStatus)
-      console.log('New lead status:', newLeadStatus)
-      console.log('Status object:', status)
-      
-      // Only update lead status if it's different from current status
+      // Update lead status (this determines which status-specific page the lead appears on)
+      // But quotationSent and demoSent flags allow leads to appear in multiple pages
+      // Always update status to ensure Hot Lead and other statuses are properly saved
       if (newLeadStatus !== lead.status) {
-        console.log('Updating lead status from', lead.status, 'to', newLeadStatus)
         await salesLeadService.updateLeadStatus(id, newLeadStatus)
         setSelectedStatus(newLeadStatus)
         
         // Update the lead object locally
         setLead(prev => ({ ...prev, status: newLeadStatus }))
-      } else {
-        console.log('Status is the same, skipping update')
       }
       
-      // If lead profile exists, update it
+      // Always update leadProfile with status flags and project type
+      // This allows leads to appear in multiple pages (quotation_sent, demo_sent) based on flags
       if (leadProfile) {
         const profileUpdateData = {
           quotationSent: status.quotationSent,
-          demoSent: status.demoSent
+          demoSent: status.demoSent,
+          projectType: {
+            web: status.web,
+            app: status.app,
+            taxi: status.taxi
+          }
         }
         await salesLeadService.updateLeadProfile(id, profileUpdateData)
+      } else {
+        // If no profile exists, we need to create one or at least update the lead
+        // For now, just update the status flags if possible
+        toast.error('Lead profile is required to set status flags. Please create a profile first.')
       }
       
       toast.success('Status updated successfully')
@@ -311,73 +346,41 @@ const SL_leadProfile = () => {
     setShowFollowUpDialog(true)
   }
 
-  const handleFollowUpFormChange = (field, value) => {
-    setFollowUpForm(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const handleFollowUpSubmit = async () => {
-    if (!followUpForm.date || !followUpForm.time) {
-      toast.error('Please select both date and time')
-      return
-    }
-
+  const handleFollowUpSubmit = async (followUpData) => {
     setIsLoading(true)
     try {
-      const followUpData = {
-        date: followUpForm.date,
-        time: followUpForm.time,
-        notes: followUpForm.notes,
-        type: followUpForm.type
+      // Convert FollowUpDialog format (followupDate/followupTime) to API format (date/time)
+      const followUpPayload = {
+        date: followUpData.followupDate,
+        time: followUpData.followupTime,
+        notes: followUpData.notes || '',
+        priority: followUpData.priority || 'medium'
       }
       
-      await salesLeadService.updateLeadStatus(id, 'followup', followUpData)
+      // Use addFollowUp instead of updateLeadStatus to avoid changing lead status
+      const updatedLead = await salesLeadService.addFollowUp(id, followUpPayload)
+      
+      // Update local state with the response data instead of full refresh
+      if (updatedLead) {
+        setLead(updatedLead)
+        if (updatedLead.leadProfile) {
+          setLeadProfile(updatedLead.leadProfile)
+        }
+      }
       
       toast.success('Follow-up scheduled successfully')
       setShowFollowUpDialog(false)
       
-      // Reset form
-      setFollowUpForm({
-        date: null,
-        time: '',
-        notes: '',
-        type: 'call'
-      })
-      
-      // Refresh data
-      fetchLeadData()
+      // Refresh dashboard stats if available (non-blocking)
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
     } catch (err) {
       console.error('Error scheduling follow-up:', err)
       toast.error('Failed to schedule follow-up')
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const followUpTypes = [
-    { value: 'call', label: 'Phone Call', icon: '📞' },
-    { value: 'email', label: 'Email', icon: '📧' },
-    { value: 'meeting', label: 'Meeting', icon: '🤝' },
-    { value: 'whatsapp', label: 'WhatsApp', icon: '💬' },
-    { value: 'visit', label: 'Site Visit', icon: '🏢' },
-    { value: 'demo', label: 'Demo', icon: '🎯' }
-  ]
-
-  const getTypeIcon = (type) => {
-    const typeObj = followUpTypes.find(t => t.value === type)
-    return typeObj ? typeObj.icon : '📞'
-  }
-
-  const getTypeLabel = (type) => {
-    const typeObj = followUpTypes.find(t => t.value === type)
-    return typeObj ? typeObj.label : 'Phone Call'
-  }
-
-  const handleCloseFollowUpDialog = () => {
-    setShowFollowUpDialog(false)
-    setShowTypeDropdown(false)
   }
 
   const handleAddNote = () => {
@@ -462,12 +465,26 @@ const SL_leadProfile = () => {
   }
 
   const handleLost = () => {
+    // Pre-fill lost reason if lead is already lost
+    if (lead && lead.status === 'lost' && lead.lostReason) {
+      setLostReason(lead.lostReason)
+    }
     setShowLostDialog(true)
   }
 
   const handleLostSubmit = async () => {
     setIsLoading(true)
     try {
+      // Check if lead is already lost
+      if (lead && lead.status === 'lost') {
+        // Lead is already lost, just update the reason if needed
+        toast.info('Lead is already marked as lost')
+        setShowLostDialog(false)
+        setLostReason('')
+        setIsLoading(false)
+        return
+      }
+
       const lostData = {
         lostReason: lostReason.trim() || 'No reason provided'
       }
@@ -737,6 +754,7 @@ const SL_leadProfile = () => {
 
   // Show create profile CTA if no profile exists
   if (lead && !leadProfile) {
+    const isLostLead = lead.status === 'lost'
     return (
       <div className="min-h-screen bg-gray-50">
         <SL_navbar />
@@ -748,14 +766,55 @@ const SL_leadProfile = () => {
             className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200 text-center"
           >
             <div className="text-6xl mb-4">📝</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Create Lead Profile</h2>
-            <p className="text-gray-600 mb-6">This lead doesn't have a profile yet. Create one to manage all lead information.</p>
-            <button
-              onClick={() => navigate(`/connected-form/${id}`)}
-              className="bg-teal-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-teal-600 transition-colors"
-            >
-              Create Profile
-            </button>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              {isLostLead ? 'Recover Lead' : 'Create Lead Profile'}
+            </h2>
+            <p className="text-gray-600 mb-6">
+              {isLostLead 
+                ? 'This lost lead doesn\'t have a profile. Recover it to create a profile and move it back to active leads.'
+                : 'This lead doesn\'t have a profile yet. Create one to manage all lead information.'}
+            </p>
+            <div className="flex flex-col space-y-3">
+              {isLostLead ? (
+                <>
+                  <button
+                    onClick={() => navigate('/lost')}
+                    className="bg-teal-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-teal-600 transition-colors"
+                  >
+                    Go to Lost Leads
+                  </button>
+                  <button
+                    onClick={() => navigate(-1)}
+                    className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  >
+                    Go Back
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => navigate('/new-leads')}
+                    className="bg-teal-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-teal-600 transition-colors"
+                  >
+                    Go to New Leads
+                  </button>
+                  <button
+                    onClick={() => navigate(-1)}
+                    className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  >
+                    Go Back
+                  </button>
+                </>
+              )}
+            </div>
+            {/* Show basic lead info */}
+            <div className="mt-6 pt-6 border-t border-gray-200 text-left">
+              <h3 className="font-semibold text-gray-900 mb-2">Lead Information</h3>
+              <p className="text-sm text-gray-600"><strong>Name:</strong> {lead.name || 'N/A'}</p>
+              <p className="text-sm text-gray-600"><strong>Phone:</strong> {lead.phone || 'N/A'}</p>
+              <p className="text-sm text-gray-600"><strong>Company:</strong> {lead.company || 'N/A'}</p>
+              <p className="text-sm text-gray-600"><strong>Status:</strong> {lead.status || 'N/A'}</p>
+            </div>
           </motion.div>
         </main>
       </div>
@@ -775,8 +834,8 @@ const SL_leadProfile = () => {
       
       <main className="max-w-md mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
         
-        {/* Mobile Layout */}
-        <div className="lg:hidden">
+        {/* Layout - Same for mobile and desktop */}
+        <div>
 
           {/* Profile Card */}
           <motion.div 
@@ -849,66 +908,79 @@ const SL_leadProfile = () => {
               <div className="w-2 h-2 bg-teal-500 rounded-full mr-2"></div>
               Lead Status
             </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
-                <input
-                  type="checkbox"
-                  checked={status.quotationSent}
-                  onChange={() => handleStatusChange('quotationSent')}
-                  className="w-5 h-5 text-teal-600 border-teal-300 rounded focus:ring-teal-500 focus:ring-2"
-                />
-                <span className="text-sm font-medium text-teal-800">Quotation Sent</span>
-              </label>
-              
-              <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
-                <input
-                  type="checkbox"
-                  checked={status.web}
-                  onChange={() => handleStatusChange('web')}
-                  className="w-5 h-5 text-teal-600 border-teal-300 rounded focus:ring-teal-500 focus:ring-2"
-                />
-                <span className="text-sm font-medium text-teal-800">Web</span>
-              </label>
-              
-              <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
-                <input
-                  type="checkbox"
-                  checked={status.hotLead}
-                  onChange={() => handleStatusChange('hotLead')}
-                  className="w-5 h-5 text-teal-600 border-teal-300 rounded focus:ring-teal-500 focus:ring-2"
-                />
-                <span className="text-sm font-medium text-teal-800">Hot Lead</span>
-              </label>
-              
-              <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
-                <input
-                  type="checkbox"
-                  checked={status.demoSent}
-                  onChange={() => handleStatusChange('demoSent')}
-                  className="w-5 h-5 text-teal-600 border-teal-300 rounded focus:ring-teal-500 focus:ring-2"
-                />
-                <span className="text-sm font-medium text-teal-800">Demo Sent</span>
-              </label>
-              
-              <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
-                <input
-                  type="checkbox"
-                  checked={status.app}
-                  onChange={() => handleStatusChange('app')}
-                  className="w-5 h-5 text-teal-600 border-teal-300 rounded focus:ring-teal-500 focus:ring-2"
-                />
-                <span className="text-sm font-medium text-teal-800">App</span>
-              </label>
-              
-              <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
-                <input
-                  type="checkbox"
-                  checked={status.taxi}
-                  onChange={() => handleStatusChange('taxi')}
-                  className="w-5 h-5 text-teal-600 border-teal-300 rounded focus:ring-teal-500 focus:ring-2"
-                />
-                <span className="text-sm font-medium text-teal-800">Taxi</span>
-              </label>
+            {/* Status Flags - Can be multiple */}
+            <div className="mb-4">
+              <h4 className="text-sm font-semibold text-teal-800 mb-3">Status</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
+                  <input
+                    type="checkbox"
+                    checked={status.quotationSent}
+                    onChange={() => handleStatusChange('quotationSent')}
+                    className="w-5 h-5 text-teal-600 border-teal-300 rounded focus:ring-teal-500 focus:ring-2"
+                  />
+                  <span className="text-sm font-medium text-teal-800">Quotation Sent</span>
+                </label>
+                
+                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
+                  <input
+                    type="checkbox"
+                    checked={status.demoSent}
+                    onChange={() => handleStatusChange('demoSent')}
+                    className="w-5 h-5 text-teal-600 border-teal-300 rounded focus:ring-teal-500 focus:ring-2"
+                  />
+                  <span className="text-sm font-medium text-teal-800">Demo Sent</span>
+                </label>
+                
+                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
+                  <input
+                    type="checkbox"
+                    checked={status.hotLead}
+                    onChange={() => handleStatusChange('hotLead')}
+                    className="w-5 h-5 text-teal-600 border-teal-300 rounded focus:ring-teal-500 focus:ring-2"
+                  />
+                  <span className="text-sm font-medium text-teal-800">Hot Lead</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Project Type - Only one at a time */}
+            <div>
+              <h4 className="text-sm font-semibold text-teal-800 mb-3">Project Type</h4>
+              <div className="grid grid-cols-3 gap-3">
+                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
+                  <input
+                    type="radio"
+                    name="projectType"
+                    checked={status.web}
+                    onChange={() => handleStatusChange('web')}
+                    className="w-5 h-5 text-teal-600 border-teal-300 focus:ring-teal-500 focus:ring-2"
+                  />
+                  <span className="text-sm font-medium text-teal-800">Web</span>
+                </label>
+                
+                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
+                  <input
+                    type="radio"
+                    name="projectType"
+                    checked={status.app}
+                    onChange={() => handleStatusChange('app')}
+                    className="w-5 h-5 text-teal-600 border-teal-300 focus:ring-teal-500 focus:ring-2"
+                  />
+                  <span className="text-sm font-medium text-teal-800">App</span>
+                </label>
+                
+                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
+                  <input
+                    type="radio"
+                    name="projectType"
+                    checked={status.taxi}
+                    onChange={() => handleStatusChange('taxi')}
+                    className="w-5 h-5 text-teal-600 border-teal-300 focus:ring-teal-500 focus:ring-2"
+                  />
+                  <span className="text-sm font-medium text-teal-800">Taxi</span>
+                </label>
+              </div>
             </div>
           </motion.div>
 
@@ -963,9 +1035,14 @@ const SL_leadProfile = () => {
             
             <button
               onClick={handleLost}
-              className="bg-gradient-to-r from-red-500 to-red-600 text-white py-3 px-4 rounded-xl font-semibold text-sm hover:from-red-600 hover:to-red-700 transition-all duration-200"
+              disabled={lead?.status === 'lost'}
+              className={`py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-200 ${
+                lead?.status === 'lost'
+                  ? 'bg-gray-400 text-white cursor-not-allowed'
+                  : 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700'
+              }`}
             >
-              Lost
+              {lead?.status === 'lost' ? 'Already Lost' : 'Lost'}
             </button>
           </motion.div>
 
@@ -1269,141 +1346,13 @@ const SL_leadProfile = () => {
         )}
 
         {/* Follow-up Dialog */}
-        {showFollowUpDialog && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl"
-            >
-              {/* Dialog Header */}
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">Schedule Follow-up</h2>
-                <button
-                  onClick={handleCloseFollowUpDialog}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
-                >
-                  <FiX className="text-xl text-gray-600" />
-                </button>
-              </div>
-
-              {/* Form Fields */}
-              <div className="space-y-5">
-                {/* Date Field */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Date</label>
-                  <div className="relative">
-                    <DatePicker
-                      selected={followUpForm.date}
-                      onChange={(date) => handleFollowUpFormChange('date', date)}
-                      dateFormat="dd/MM/yyyy"
-                      minDate={new Date()}
-                      placeholderText="Select date"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                      wrapperClassName="w-full"
-                    />
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600 pointer-events-none">
-                      <FiCalendar className="text-lg" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Time Field */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Time</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
-                      <FiClock className="text-lg" />
-                    </div>
-                    <input
-                      type="time"
-                      value={followUpForm.time}
-                      onChange={(e) => handleFollowUpFormChange('time', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                    />
-                  </div>
-                </div>
-
-                {/* Follow-up Type - Custom Dropdown */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Type</label>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowTypeDropdown(!showTypeDropdown)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 flex items-center justify-between"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <span className="text-lg">{getTypeIcon(followUpForm.type)}</span>
-                        <span>{getTypeLabel(followUpForm.type)}</span>
-                      </div>
-                      <FiArrowLeft className={`text-gray-400 transition-transform duration-200 ${showTypeDropdown ? 'rotate-90' : '-rotate-90'}`} />
-                    </button>
-                    
-                    {showTypeDropdown && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto"
-                      >
-                        {followUpTypes.map((type) => (
-                          <button
-                            key={type.value}
-                            type="button"
-                            onClick={() => {
-                              handleFollowUpFormChange('type', type.value)
-                              setShowTypeDropdown(false)
-                            }}
-                            className={`w-full px-4 py-3 text-left hover:bg-teal-50 transition-colors duration-200 flex items-center space-x-3 ${
-                              followUpForm.type === type.value ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
-                            }`}
-                          >
-                            <span className="text-lg">{type.icon}</span>
-                            <span>{type.label}</span>
-                            {followUpForm.type === type.value && (
-                              <FiCheck className="ml-auto text-teal-600" />
-                            )}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Notes Field */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Notes (Optional)</label>
-                  <textarea
-                    value={followUpForm.notes}
-                    onChange={(e) => handleFollowUpFormChange('notes', e.target.value)}
-                    placeholder="Add any notes about this follow-up..."
-                    className="w-full p-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 resize-none"
-                    rows={3}
-                  />
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className="mt-6">
-                <button
-                  onClick={handleFollowUpSubmit}
-                  disabled={isLoading}
-                  className="w-full bg-gradient-to-r from-teal-500 to-teal-600 text-white py-4 px-6 rounded-xl font-semibold flex items-center justify-center space-x-2 hover:from-teal-600 hover:to-teal-700 transition-all duration-200 disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <FiCalendar className="text-lg" />
-                  )}
-                  <span>{isLoading ? 'Scheduling...' : 'Schedule Follow-up'}</span>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
+        <FollowUpDialog
+          isOpen={showFollowUpDialog}
+          onClose={() => setShowFollowUpDialog(false)}
+          onSubmit={handleFollowUpSubmit}
+          title="Schedule Follow-up"
+          submitText="Schedule Follow-up"
+        />
 
         {/* Request Demo Dialog */}
         {showRequestDemoDialog && (

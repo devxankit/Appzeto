@@ -160,11 +160,16 @@ const SL_hot_leads = () => {
   // Handle follow-up form submission
   const handleFollowUpSubmit = async (followUpData) => {
     try {
-      await salesLeadService.updateLeadStatus(selectedLeadForFollowup, 'followup', followUpData)
+      // Convert FollowUpDialog format (followupDate/followupTime) to API format (date/time)
+      const followUpPayload = {
+        date: followUpData.followupDate,
+        time: followUpData.followupTime,
+        notes: followUpData.notes || '',
+        priority: followUpData.priority || 'medium'
+      }
+      // Use addFollowUp instead of updateLeadStatus to avoid changing lead status
+      await salesLeadService.addFollowUp(selectedLeadForFollowup, followUpPayload)
       toast.success('Follow-up scheduled successfully')
-      
-      // Remove lead from current list
-      setLeadsData(prev => prev.filter(lead => lead._id !== selectedLeadForFollowup))
       
       // Refresh dashboard stats
       if (window.refreshDashboardStats) {
@@ -184,7 +189,9 @@ const SL_hot_leads = () => {
       await salesLeadService.updateLeadStatus(leadId, newStatus)
       toast.success('Status updated successfully')
       
-      // Remove lead from current list
+      // Remove lead from hot leads list when status changes (lead is no longer "hot")
+      // Note: Lead will still appear in connected leads page if status is not excluded
+      // (not_interested, not_picked, converted are excluded from connected leads)
       setLeadsData(prev => prev.filter(lead => lead._id !== leadId))
       
       // Refresh dashboard stats
@@ -219,7 +226,16 @@ const SL_hot_leads = () => {
     const categoryInfo = getCategoryInfo(lead.category)
     
     return (
-      <div className="flex items-center justify-between">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => {
+          if (lead.leadProfile) {
+            handleProfile(lead._id)
+          } else {
+            toast.error('This lead doesn\'t have a profile. Please connect to the lead first to create a profile.')
+          }
+        }}
+      >
         {/* Left Section - Avatar & Info */}
         <div className="flex items-center space-x-3 flex-1 min-w-0">
           {/* Avatar */}
@@ -237,11 +253,8 @@ const SL_hot_leads = () => {
             <p className="text-sm text-gray-600 truncate">{lead.phone || 'No phone'}</p>
             {/* Category Tag */}
             <div className="flex items-center space-x-1 mt-1">
-              <span 
-                className="text-xs text-gray-500"
-                style={{ color: categoryInfo.color }}
-              >
-                {categoryInfo.icon} {categoryInfo.name}
+              <span className="text-xs text-black">
+                {categoryInfo.name}
               </span>
             </div>
           </div>
@@ -251,7 +264,10 @@ const SL_hot_leads = () => {
         <div className="flex items-center space-x-3">
           {/* Call Button */}
           <button
-            onClick={() => handleCall(lead.phone)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleCall(lead.phone)
+            }}
             className="bg-white text-red-600 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-all duration-200 text-xs font-medium"
           >
             Call
@@ -259,7 +275,10 @@ const SL_hot_leads = () => {
 
           {/* WhatsApp Button */}
           <button
-            onClick={() => handleWhatsApp(lead.phone)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleWhatsApp(lead.phone)
+            }}
             className="bg-green-500 text-white p-1.5 rounded-lg hover:bg-green-600 transition-all duration-200"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -270,7 +289,6 @@ const SL_hot_leads = () => {
           {/* Profile Button */}
           <button
             onClick={(e) => {
-              e.preventDefault()
               e.stopPropagation()
               handleProfile(lead._id)
             }}
@@ -282,7 +300,10 @@ const SL_hot_leads = () => {
           {/* More Options */}
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)
+              }}
               className="text-gray-400 hover:text-gray-600 p-1"
             >
               <FiMoreVertical className="text-lg" />
@@ -326,7 +347,16 @@ const SL_hot_leads = () => {
     const categoryInfo = getCategoryInfo(lead.category)
     
     return (
-      <div className="flex items-center justify-between">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => {
+          if (lead.leadProfile) {
+            handleProfile(lead._id)
+          } else {
+            toast.error('This lead doesn\'t have a profile. Please connect to the lead first to create a profile.')
+          }
+        }}
+      >
         {/* Left Section - Avatar & Info */}
         <div className="flex-1 flex items-center space-x-4">
           {/* Avatar */}
@@ -344,11 +374,8 @@ const SL_hot_leads = () => {
             <p className="text-gray-600">{lead.phone || 'No phone'}</p>
             {/* Category Tag */}
             <div className="flex items-center space-x-2 mt-1">
-              <span 
-                className="text-xs text-gray-500"
-                style={{ color: categoryInfo.color }}
-              >
-                {categoryInfo.icon} {categoryInfo.name}
+              <span className="text-xs text-black">
+                {categoryInfo.name}
               </span>
             </div>
           </div>
@@ -357,14 +384,20 @@ const SL_hot_leads = () => {
         {/* Actions Section */}
         <div className="flex items-center space-x-4">
           <button
-            onClick={() => handleCall(lead.phone)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleCall(lead.phone)
+            }}
             className="bg-white text-red-600 border border-red-200 px-3.5 py-1.5 rounded-lg hover:bg-red-50 transition-all duration-200 text-sm font-medium"
           >
             Call
           </button>
           
           <button
-            onClick={() => handleWhatsApp(lead.phone)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleWhatsApp(lead.phone)
+            }}
             className="bg-green-500 text-white px-3.5 py-1.5 rounded-lg hover:bg-green-600 transition-all duration-200 flex items-center space-x-2"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -375,7 +408,6 @@ const SL_hot_leads = () => {
 
           <button
             onClick={(e) => {
-              e.preventDefault()
               e.stopPropagation()
               handleProfile(lead._id)
             }}
@@ -387,7 +419,10 @@ const SL_hot_leads = () => {
 
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)
+              }}
               className="bg-gray-100 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-200 transition-all duration-200"
             >
               <FiMoreVertical className="text-lg" />

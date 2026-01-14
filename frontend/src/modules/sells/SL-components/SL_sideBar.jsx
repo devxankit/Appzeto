@@ -72,7 +72,7 @@ const SL_sideBar = ({ isOpen, onClose }) => {
       icon: FiHome
     },
     { 
-      path: '/today-followup', 
+      path: '/followup', 
       label: 'Today follow-ups', 
       icon: FiPhone
     },
