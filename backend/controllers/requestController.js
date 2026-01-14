@@ -9,17 +9,24 @@ const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 
 // Helper to get user info from request (works for all user types)
+// Priority order: Admin > PM > Sales > Employee > Client
+// This ensures sales employees are identified correctly even if client is also set
 const getUserInfo = (req) => {
   if (req.admin) {
-    return { id: req.admin.id, model: 'Admin', module: 'admin' };
-  } else if (req.client) {
-    return { id: req.client.id, model: 'Client', module: 'client' };
-  } else if (req.employee) {
-    return { id: req.employee.id, model: 'Employee', module: 'employee' };
+    const id = req.admin._id || req.admin.id;
+    return id ? { id: String(id), model: 'Admin', module: 'admin' } : null;
   } else if (req.pm) {
-    return { id: req.pm.id, model: 'PM', module: 'pm' };
+    const id = req.pm._id || req.pm.id;
+    return id ? { id: String(id), model: 'PM', module: 'pm' } : null;
   } else if (req.sales) {
-    return { id: req.sales.id, model: 'Sales', module: 'sales' };
+    const id = req.sales._id || req.sales.id;
+    return id ? { id: String(id), model: 'Sales', module: 'sales' } : null;
+  } else if (req.employee) {
+    const id = req.employee._id || req.employee.id;
+    return id ? { id: String(id), model: 'Employee', module: 'employee' } : null;
+  } else if (req.client) {
+    const id = req.client._id || req.client.id;
+    return id ? { id: String(id), model: 'Client', module: 'client' } : null;
   }
   return null;
 };
@@ -59,7 +66,18 @@ const populateRequest = async (request) => {
 // @access  Private (All authenticated users)
 const createRequest = asyncHandler(async (req, res, next) => {
   const user = getUserInfo(req);
-  if (!user) {
+  
+  // Debug logging
+  if (!user || !user.id) {
+    console.error('createRequest - getUserInfo failed:', {
+      hasAdmin: !!req.admin,
+      hasClient: !!req.client,
+      hasEmployee: !!req.employee,
+      hasPM: !!req.pm,
+      hasSales: !!req.sales,
+      salesId: req.sales ? (req.sales._id || req.sales.id) : null,
+      userInfo: user
+    });
     return next(new ErrorResponse('Authentication required', 401));
   }
 
@@ -114,7 +132,7 @@ const createRequest = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Amount is required for payment-recovery requests', 400));
   }
 
-  // Create request
+  // Create request - ensure IDs are properly formatted
   const request = await Request.create({
     module: user.module,
     type,
@@ -122,13 +140,13 @@ const createRequest = asyncHandler(async (req, res, next) => {
     description,
     category: category || '',
     priority: priority || 'normal',
-    requestedBy: user.id,
+    requestedBy: user.id.toString(),
     requestedByModel: user.model,
-    recipient,
+    recipient: recipient.toString(),
     recipientModel,
-    project: project || undefined,
-    client: client || undefined,
-    amount: type === 'payment-recovery' ? amount : undefined,
+    project: project ? project.toString() : undefined,
+    client: client ? client.toString() : undefined,
+    amount: type === 'payment-recovery' ? parseFloat(amount) : undefined,
     status: 'pending'
   });
 

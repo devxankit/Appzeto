@@ -3417,10 +3417,10 @@ const getClientProfile = async (req, res) => {
       
       // Save project to persist the recalculated financials
       try {
-        await primaryProject.save();
-      } catch (updateError) {
+          await primaryProject.save();
+        } catch (updateError) {
         console.error('Error saving project financials in getClientProfile:', updateError);
-        // Continue with calculated values even if save fails
+          // Continue with calculated values even if save fails
       }
       
       workProgress = primaryProject.progress || 0;

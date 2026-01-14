@@ -26,6 +26,18 @@ const getAuthHeaders = () => {
 
 // Base API request helper
 export const apiRequest = async (url, options = {}) => {
+  // Check if this is a public endpoint that doesn't require authentication
+  const publicEndpoints = ['/sales/login', '/sales/create-demo', '/sales/forgot-password', '/sales/reset-password'];
+  const isPublicEndpoint = publicEndpoints.some(endpoint => url.includes(endpoint));
+  
+  // Only require token for authenticated endpoints
+  if (!isPublicEndpoint) {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error('Authentication token not found. Please log in again.');
+    }
+  }
+
   try {
     const primaryUrl = getApiUrl(url);
     const response = await fetch(primaryUrl, {
@@ -37,35 +49,77 @@ export const apiRequest = async (url, options = {}) => {
       credentials: 'include' // Include cookies for CORS
     });
 
-    const data = await response.json();
+    // Handle response parsing safely
+    let data;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      try {
+        data = JSON.parse(text);
+      } catch {
+        // If response is not JSON, create error message based on status
+        if (response.status === 401) {
+          throw new Error('Authentication required. Please log in again.');
+        }
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+    }
 
     if (!response.ok) {
-      throw new Error(data.message || 'Something went wrong');
+      // Handle 401 specifically - clear token and provide helpful message
+      if (response.status === 401) {
+        removeAuthToken();
+        throw new Error(data.message || 'Authentication required. Please log in again.');
+      }
+      throw new Error(data.message || data.error || 'Something went wrong');
     }
 
     return data;
   } catch (error) {
+    // If it's already a handled error, re-throw it
+    if (error.message && (error.message.includes('Authentication') || error.message.includes('Server error'))) {
+      throw error;
+    }
+
     // Fallback: if direct host failed (e.g., backend not running on 5000), try same-origin /api path
-    try {
-      if (error && (error.name === 'TypeError' || String(error).includes('Failed to fetch'))) {
-        const sameOriginUrl = `/api${url.startsWith('/') ? url : `/${url}`}`;
-        const response = await fetch(sameOriginUrl, {
-          ...options,
-          headers: {
-            ...getAuthHeaders(),
-            ...options.headers
-          },
-          credentials: 'include'
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.message || 'Something went wrong');
+    if (error && (error.name === 'TypeError' || String(error).includes('Failed to fetch'))) {
+      const sameOriginUrl = `/api${url.startsWith('/') ? url : `/${url}`}`;
+      const response = await fetch(sameOriginUrl, {
+        ...options,
+        headers: {
+          ...getAuthHeaders(),
+          ...options.headers
+        },
+        credentials: 'include'
+      });
+      
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          if (response.status === 401) {
+            removeAuthToken();
+            throw new Error('Authentication required. Please log in again.');
+          }
+          throw new Error(`Server error: ${response.status} ${response.statusText}`);
         }
-        return data;
       }
-    } catch (fallbackError) {
-      // Don't log here - let the calling component handle error logging
-      throw fallbackError;
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          removeAuthToken();
+          throw new Error(data.message || 'Authentication required. Please log in again.');
+        }
+        throw new Error(data.message || data.error || 'Something went wrong');
+      }
+      return data;
     }
     // Don't log here - let the calling component handle error logging
     throw error;
@@ -87,7 +141,7 @@ export const tokenUtils = {
       const currentTime = Date.now() / 1000;
       
       return payload.exp > currentTime;
-    } catch (error) {
+    } catch {
       // If token is invalid, remove it
       removeAuthToken();
       return false;

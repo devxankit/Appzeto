@@ -19,22 +19,22 @@ paymentReceiptSchema.index({ status: 1, createdAt: -1 });
 // Post-save hook to update project financials and create finance transaction when PaymentReceipt is approved
 // Also handles rejection by restoring remainingAmount
 paymentReceiptSchema.post('save', async function(doc) {
-  try {
-    const Project = require('./Project');
-    const project = await Project.findById(doc.project);
-    
+    try {
+      const Project = require('./Project');
+      const project = await Project.findById(doc.project);
+      
     if (!project) return;
 
-    // Initialize financialDetails if not present
-    if (!project.financialDetails) {
-      project.financialDetails = {
-        totalCost: project.budget || 0,
-        advanceReceived: 0,
-        includeGST: false,
-        remainingAmount: project.budget || 0
-      };
-    }
-
+        // Initialize financialDetails if not present
+        if (!project.financialDetails) {
+          project.financialDetails = {
+            totalCost: project.budget || 0,
+            advanceReceived: 0,
+            includeGST: false,
+            remainingAmount: project.budget || 0
+          };
+        }
+        
     // Handle rejection: recalculate financials (this will restore remainingAmount since receipt is not approved)
     if (doc.status === 'rejected') {
       // Use shared utility to recalculate financials for consistency
@@ -51,9 +51,9 @@ paymentReceiptSchema.post('save', async function(doc) {
       // Use shared utility to recalculate financials for consistency
       const { recalculateProjectFinancials } = require('../utils/projectFinancialHelper');
       await recalculateProjectFinancials(project);
-      
-      // Save project (this will trigger the post-save hook for incentive movement if remainingAmount is 0)
-      await project.save();
+        
+        // Save project (this will trigger the post-save hook for incentive movement if remainingAmount is 0)
+        await project.save();
       console.log(`Updated project ${project._id} financials after payment receipt approval: advanceReceived=${project.financialDetails.advanceReceived}, remainingAmount=${project.financialDetails.remainingAmount}`);
       
       // Create finance transaction
@@ -105,10 +105,10 @@ paymentReceiptSchema.post('save', async function(doc) {
         // Log error but don't fail the save
         console.error('Error creating finance transaction for payment receipt:', error);
       }
-    }
-  } catch (error) {
-    // Log error but don't fail the save
-    console.error('Error updating project financials for payment receipt:', error);
+      }
+    } catch (error) {
+      // Log error but don't fail the save
+      console.error('Error updating project financials for payment receipt:', error);
   }
 });
 

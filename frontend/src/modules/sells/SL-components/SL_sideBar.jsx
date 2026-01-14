@@ -8,7 +8,8 @@ import {
   FiFileText, 
   FiLogOut,
   FiX,
-  FiCreditCard
+  FiCreditCard,
+  FiInbox
 } from 'react-icons/fi'
 import { colors, gradients } from '../../../lib/colors'
 import { getStoredSalesData, logoutSales, clearSalesData } from '../SL-services/salesAuthService'
@@ -80,6 +81,11 @@ const SL_sideBar = ({ isOpen, onClose }) => {
       path: '/hot-leads', 
       label: 'Hot leads', 
       icon: FiZap
+    },
+    { 
+      path: '/requests', 
+      label: 'Requests', 
+      icon: FiInbox
     },
     { 
       path: '/notice-board', 

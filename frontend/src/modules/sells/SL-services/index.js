@@ -23,6 +23,12 @@ export { default as salesTasksService } from './salesTasksService';
 // Meetings
 export { default as salesMeetingsService } from './salesMeetingsService';
 
+// Client Management
+export { default as salesClientService } from './salesClientService';
+
+// Requests
+export { default as salesRequestService } from './salesRequestService';
+
 // Notices
 export { default as salesNoticeService } from './salesNoticeService';
 
