@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
+import HR_sidebar from '../admin-components/HR_sidebar'
+import { adminStorage } from '../admin-services/baseApiService'
 import { 
   Users, 
   UserCheck,
@@ -2563,11 +2565,19 @@ const Admin_hr_management = () => {
     { value: 'on-leave', label: 'On Leave', icon: Clock }
   ]
 
+  // Get admin data to check role
+  const adminData = adminStorage.get()
+  const isHR = adminData?.role === 'hr'
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
-        <Admin_sidebar />
+        {isHR ? (
+          <HR_sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+        ) : (
+          <Admin_sidebar />
+        )}
         <div className="ml-64 pt-20 p-8">
           <div className="max-w-7xl mx-auto">
             <Loading size="large" className="h-96" />
@@ -2580,7 +2590,11 @@ const Admin_hr_management = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Admin_navbar />
-      <Admin_sidebar />
+      {isHR ? (
+        <HR_sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      ) : (
+        <Admin_sidebar />
+      )}
       
       {/* Main Content */}
       <div className="ml-64 pt-20 p-6">

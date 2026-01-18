@@ -7,6 +7,9 @@ export { default as adminAuthService } from './adminAuthService';
 // User Management Service
 export { default as adminUserService } from './adminUserService';
 
+// Channel Partner Management Service
+export { default as adminChannelPartnerService } from './adminChannelPartnerService';
+
 // Project Management Service
 export { default as adminProjectService } from './adminProjectService';
 

@@ -2,10 +2,12 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import ErrorBoundary from './components/ui/error-boundary'
 import NotFound from './components/ui/not-found'
 import ProtectedRoute from './components/ui/ProtectedRoute'
+import HRProtectedRoute from './components/ui/HRProtectedRoute'
 import PMProtectedRoute from './components/ui/PMProtectedRoute'
 import SalesProtectedRoute from './components/ui/SalesProtectedRoute'
 import EmployeeProtectedRoute from './components/ui/EmployeeProtectedRoute'
 import ClientProtectedRoute from './components/ui/ClientProtectedRoute'
+import CPProtectedRoute from './components/ui/CPProtectedRoute'
 import { ToastProvider } from './contexts/ToastContext'
 
 //SL pages start here //
@@ -16,6 +18,7 @@ import Employee_login from './modules/dev/DEV-pages/Employee-pages/Employee_logi
 import PM_login from './modules/dev/DEV-pages/PM-pages/PM_login'
 import Client_login from './modules/dev/DEV-pages/Client-pages/Client_login'
 import Admin_login from './modules/admin/admin-pages/Admin_login'
+import CP_login from './modules/channel-partner/CP-pages/CP_login'
 import SL_dashboard from './modules/sells/SL-pages/SL_dashboard'
 import SL_leads from './modules/sells/SL-pages/SL_leads'
 import SL_profile from './modules/sells/SL-pages/SL_profile'
@@ -90,6 +93,19 @@ import Client_explore from './modules/dev/DEV-pages/Client-pages/Client_explore'
 import Client_profile from './modules/dev/DEV-pages/Client-pages/Client_profile'
 import Client_notification from './modules/dev/DEV-pages/Client-pages/Client_notification'
 
+//Channel Partner pages start here //
+import CP_dashboard from './modules/channel-partner/CP-pages/CP_dashboard'
+import CP_profile from './modules/channel-partner/CP-pages/CP_profile'
+import CP_rewards from './modules/channel-partner/CP-pages/CP_rewards'
+import CP_leads from './modules/channel-partner/CP-pages/CP_leads'
+import CP_lead_management from './modules/channel-partner/CP-pages/CP_lead_management'
+import CP_lead_profile from './modules/channel-partner/CP-pages/CP_lead_profile'
+import CP_converted from './modules/channel-partner/CP-pages/CP_converted'
+import CP_client_profile from './modules/channel-partner/CP-pages/CP_client_profile'
+import CP_wallet from './modules/channel-partner/CP-pages/CP_wallet'
+import CP_payment_recovery from './modules/channel-partner/CP-pages/CP_payment_recovery'
+import CP_notifications from './modules/channel-partner/CP-pages/CP_notifications'
+
 //Admin pages start here //
 import Admin_dashboard from './modules/admin/admin-pages/Admin_dashboard'
 import Admin_project_management from './modules/admin/admin-pages/Admin_project_management'
@@ -100,6 +116,7 @@ import Admin_requests_management from './modules/admin/admin-pages/Admin_request
 import Admin_sales_management from './modules/admin/admin-pages/Admin_sales_management'
 import Admin_user_management from './modules/admin/admin-pages/Admin_user_management'
 import Admin_hr_management from './modules/admin/admin-pages/Admin_hr_management'
+import Admin_channel_partner_management from './modules/admin/admin-pages/Admin_channel_partner_management'
 import Admin_notice_board from './modules/admin/admin-pages/Admin_notice_board'
 import ResetPassword from './components/auth/ResetPassword'
 
@@ -115,6 +132,7 @@ function App() {
           <Route path="/employee-login" element={<Employee_login />} />
           <Route path="/pm-login" element={<PM_login />} />
           <Route path="/client-login" element={<Client_login />} />
+          <Route path="/cp-login" element={<CP_login />} />
           <Route path="/admin-login" element={<Admin_login />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           
@@ -456,6 +474,63 @@ function App() {
           </ClientProtectedRoute>
         } />
 
+          //Channel Partner pages start here //
+        <Route path="/cp-dashboard" element={
+          <CPProtectedRoute>
+            <CP_dashboard />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-rewards" element={
+          <CPProtectedRoute>
+            <CP_rewards />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-leads" element={
+          <CPProtectedRoute>
+            <CP_leads />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-lead-management" element={
+          <CPProtectedRoute>
+            <CP_lead_management />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-lead-profile/:id" element={
+          <CPProtectedRoute>
+            <CP_lead_profile />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-converted" element={
+          <CPProtectedRoute>
+            <CP_converted />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-client-profile/:id" element={
+          <CPProtectedRoute>
+            <CP_client_profile />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-wallet" element={
+          <CPProtectedRoute>
+            <CP_wallet />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-payment-recovery" element={
+          <CPProtectedRoute>
+            <CP_payment_recovery />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-notifications" element={
+          <CPProtectedRoute>
+            <CP_notifications />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-profile" element={
+          <CPProtectedRoute>
+            <CP_profile />
+          </CPProtectedRoute>
+        } />
+
           //Admin pages start here //
           <Route path="/admin-dashboard" element={
             <ProtectedRoute>
@@ -498,8 +573,13 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="/admin-hr-management" element={
-            <ProtectedRoute>
+            <HRProtectedRoute>
               <Admin_hr_management />
+            </HRProtectedRoute>
+          } />
+          <Route path="/admin-channel-partner-management" element={
+            <ProtectedRoute>
+              <Admin_channel_partner_management />
             </ProtectedRoute>
           } />
           <Route path="/admin-notice-board" element={

@@ -10,13 +10,23 @@ import {
   MessageSquare,
   Users,
   UserCheck,
-  FileText
+  FileText,
+  Handshake
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
+import { adminStorage } from '../admin-services/baseApiService'
 
 const Admin_sidebar = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  
+  // Get admin data to check role
+  const adminData = adminStorage.get()
+  
+  // Only show sidebar for admin role, not HR
+  if (adminData?.role === 'hr') {
+    return null
+  }
 
   const menuItems = [
     {
@@ -42,6 +52,12 @@ const Admin_sidebar = () => {
       label: 'HR Management',
       path: '/admin-hr-management',
       icon: UserCheck
+    },
+    {
+      id: 'channel-partner-management',
+      label: 'Channel Partner',
+      path: '/admin-channel-partner-management',
+      icon: Handshake
     },
     {
       id: 'sales-management',

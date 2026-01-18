@@ -4,6 +4,7 @@ const PM = require('../models/PM');
 const Sales = require('../models/Sales');
 const Employee = require('../models/Employee');
 const Client = require('../models/Client');
+const ChannelPartner = require('../models/ChannelPartner');
 
 // @desc    Protect routes - verify JWT token
 // @access  Private
@@ -41,8 +42,8 @@ const protect = async (req, res, next) => {
       if (admin && admin.isActive) {
         req.admin = admin;
         req.user = admin;
-        req.userType = 'admin';
-        req.user.role = 'admin';
+        req.userType = admin.role === 'hr' ? 'hr' : 'admin';
+        req.user.role = admin.role; // Use actual role from database
         return next();
       }
 
@@ -83,6 +84,16 @@ const protect = async (req, res, next) => {
         req.user = client;
         req.userType = 'client';
         req.user.role = 'client';
+        return next();
+      }
+
+      // Try to find Channel Partner if not admin, PM, Sales, Employee, or Client
+      let channelPartner = await ChannelPartner.findById(decoded.id);
+      if (channelPartner && channelPartner.isActive) {
+        req.channelPartner = channelPartner;
+        req.user = channelPartner;
+        req.userType = 'channel-partner';
+        req.user.role = 'channel-partner';
         return next();
       }
 

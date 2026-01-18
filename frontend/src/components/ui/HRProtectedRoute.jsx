@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { isAdminAuthenticated } from '../../modules/admin/admin-services/adminAuthService'
 import { adminStorage } from '../../modules/admin/admin-services/baseApiService'
 
-const ProtectedRoute = ({ children, requiredRole = 'admin' }) => {
+const HRProtectedRoute = ({ children }) => {
   const location = useLocation()
   
   // Check if user is authenticated
@@ -14,19 +14,18 @@ const ProtectedRoute = ({ children, requiredRole = 'admin' }) => {
     return <Navigate to="/admin-login" state={{ from: location }} replace />
   }
   
-  // Check user role
+  // Check if user is HR
   const adminData = adminStorage.get()
-  if (adminData) {
-    // If HR user tries to access any admin-only route, redirect to HR management
-    // HR users can ONLY access HR management page
-    if (adminData.role === 'hr' && requiredRole === 'admin') {
-      return <Navigate to="/admin-hr-management" replace />
+  if (!adminData || adminData.role !== 'hr') {
+    // If not HR, redirect to appropriate page
+    if (adminData?.role === 'admin') {
+      return <Navigate to="/admin-dashboard" replace />
     }
-    // Admin users can access everything, so no restriction needed
+    return <Navigate to="/admin-login" replace />
   }
   
-  // If authenticated and role matches, render the protected component
+  // If authenticated and is HR, render the protected component
   return children
 }
 
-export default ProtectedRoute
+export default HRProtectedRoute

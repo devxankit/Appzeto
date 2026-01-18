@@ -26,6 +26,7 @@ const pmRoutes = require('./routes/pmRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const clientRoutes = require('./routes/clientRoutes');
+const cpAuthRoutes = require('./routes/cpAuthRoutes');
 
 // Import new PM module routes
 const projectRoutes = require('./routes/projectRoutes');
@@ -42,6 +43,7 @@ const adminFinanceRoutes = require('./routes/adminFinanceRoutes');
 const adminProjectExpenseRoutes = require('./routes/adminProjectExpenseRoutes');
 const adminRewardRoutes = require('./routes/adminRewardRoutes');
 const adminNoticeRoutes = require('./routes/adminNoticeRoutes');
+const channelPartnerRoutes = require('./routes/channelPartnerRoutes');
 const employeeProjectRoutes = require('./routes/employeeProjectRoutes');
 const employeeTaskRoutes = require('./routes/employeeTaskRoutes');
 const employeeAnalyticsRoutes = require('./routes/employeeAnalyticsRoutes');
@@ -54,6 +56,7 @@ const clientWalletRoutes = require('./routes/clientWalletRoutes');
 const clientNotificationRoutes = require('./routes/clientNotificationRoutes');
 const clientExploreRoutes = require('./routes/clientExploreRoutes');
 const requestRoutes = require('./routes/requestRoutes');
+const cpRoutes = require('./routes/cpRoutes');
 
 // Import socket service
 const socketService = require('./services/socketService');
@@ -213,6 +216,8 @@ app.use('/api/pm', pmRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use('/api/client', clientRoutes);
+app.use('/api/channel-partner', cpAuthRoutes);
+app.use('/api/cp', cpRoutes);
 
 // API routes without /api prefix (for reverse proxy compatibility)
 // This allows frontend to call /admin/login instead of /api/admin/login
@@ -223,6 +228,8 @@ app.use('/pm', pmRoutes);
 app.use('/sales', salesRoutes);
 app.use('/employee', employeeRoutes);
 app.use('/client', clientRoutes);
+app.use('/channel-partner', cpAuthRoutes);
+app.use('/cp', cpRoutes);
 
 // Universal API routes with /api prefix (available to all authenticated users)
 app.use('/api/requests', requestRoutes);
@@ -253,6 +260,7 @@ app.use('/api/admin/finance', adminFinanceRoutes);
 app.use('/api/admin/project-expenses', adminProjectExpenseRoutes);
 app.use('/api/admin/rewards', adminRewardRoutes);
 app.use('/api/admin/notices', adminNoticeRoutes);
+app.use('/api/admin/channel-partners', channelPartnerRoutes);
 
 // Employee routes
 app.use('/api/employee/projects', employeeProjectRoutes);
@@ -278,6 +286,7 @@ app.use('/admin/finance', adminFinanceRoutes);
 app.use('/admin/project-expenses', adminProjectExpenseRoutes);
 app.use('/admin/rewards', adminRewardRoutes);
 app.use('/admin/notices', adminNoticeRoutes);
+app.use('/admin/channel-partners', channelPartnerRoutes);
 
 // Employee routes
 app.use('/employee/projects', employeeProjectRoutes);

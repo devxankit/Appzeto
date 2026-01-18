@@ -56,7 +56,13 @@ const Admin_login = () => {
   // Check if user is already authenticated
   useEffect(() => {
     if (isAdminAuthenticated()) {
-      navigate('/admin-dashboard')
+      const adminData = JSON.parse(localStorage.getItem('adminUser') || '{}')
+      // Redirect HR users to HR management page, admin users to dashboard
+      if (adminData.role === 'hr') {
+        navigate('/admin-hr-management')
+      } else {
+        navigate('/admin-dashboard')
+      }
     }
   }, [navigate])
 
@@ -88,7 +94,12 @@ const Admin_login = () => {
         
         // Small delay to show the toast before redirect
         setTimeout(() => {
-          navigate('/admin-dashboard')
+          // Redirect HR users to HR management page, admin users to dashboard
+          if (response.data.admin.role === 'hr') {
+            navigate('/admin-hr-management')
+          } else {
+            navigate('/admin-dashboard')
+          }
         }, 1000)
       }
     } catch (error) {
