@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { 
@@ -9,7 +9,8 @@ import {
   FiLogOut,
   FiX,
   FiCreditCard,
-  FiInbox
+  FiInbox,
+  FiUsers
 } from 'react-icons/fi'
 import { colors, gradients } from '../../../lib/colors'
 import { getStoredSalesData, logoutSales, clearSalesData } from '../SL-services/salesAuthService'
@@ -25,7 +26,8 @@ const SL_sideBar = ({ isOpen, onClose }) => {
     name: '',
     email: '',
     avatar: '',
-    balance: 0
+    balance: 0,
+    isTeamLead: false
   })
   
   // Load user data and wallet balance
@@ -43,7 +45,8 @@ const SL_sideBar = ({ isOpen, onClose }) => {
             ...prev,
             name: salesData.name || '',
             email: salesData.email || '',
-            avatar: avatar || 'U'
+            avatar: avatar || 'U',
+            isTeamLead: salesData.isTeamLead || false
           }))
         }
         
@@ -66,7 +69,8 @@ const SL_sideBar = ({ isOpen, onClose }) => {
     }
   }, [isOpen])
 
-  const navItems = [
+  // Calculate navItems based on user.isTeamLead - use useMemo to recalculate when isTeamLead changes
+  const navItems = useMemo(() => [
     { 
       path: '/dashboard', 
       label: 'Home', 
@@ -91,8 +95,14 @@ const SL_sideBar = ({ isOpen, onClose }) => {
       path: '/notice-board', 
       label: 'Notice Board', 
       icon: FiFileText
-    }
-  ]
+    },
+    // Only show "My Team" for team leads
+    ...(user.isTeamLead ? [{
+      path: '/my-team',
+      label: 'My Team',
+      icon: FiUsers
+    }] : [])
+  ], [user.isTeamLead])
 
   const handleLogout = async () => {
     try {

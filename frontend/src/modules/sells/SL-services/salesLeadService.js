@@ -419,6 +419,19 @@ export const getSalesTeam = async () => {
   }
 };
 
+// Get my team data (for team leads only)
+export const getMyTeam = async () => {
+  try {
+    const response = await apiRequest('/sales/my-team', {
+      method: 'GET'
+    });
+    return response.data || { teamLead: null, teamMembers: [], teamStats: {} };
+  } catch (error) {
+    console.error('Error fetching my team:', error);
+    throw error;
+  }
+};
+
 // Request demo for lead
 export const requestDemo = async (leadId, demoData) => {
   try {
@@ -478,6 +491,7 @@ const salesLeadService = {
   getValidStatusTransitions,
   getLeadActivities,
   getSalesTeam,
+  getMyTeam,
   requestDemo,
   transferLead,
   addNoteToLead,

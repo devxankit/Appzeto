@@ -29,21 +29,8 @@ class SocketService {
     this.setupMiddleware();
     this.setupEventHandlers();
     
-    // Beautiful WebSocket initialization display
-    console.log('');
-    console.log('📡 ' + '='.repeat(50));
-    console.log('   🔌 WEBSOCKET SERVER INITIALIZED');
-    console.log('📡 ' + '='.repeat(50));
-    console.log('   ✅ Socket.io Server: ACTIVE');
-    console.log('   ✅ CORS Configuration: ENABLED');
-    console.log('   ✅ Authentication Middleware: LOADED');
-    console.log('   ✅ Event Handlers: REGISTERED');
-    console.log('   🌐 Allowed Origins:');
-    console.log('      • http://localhost:3000 (React)');
-    console.log('      • http://localhost:5173 (Vite)');
-    console.log('   🔄 Real-time Features: READY');
-    console.log('📡 ' + '='.repeat(50));
-    console.log('');
+    // Clean WebSocket initialization display
+    console.log('📡 WebSocket: ACTIVE | Real-time updates enabled');
   }
 
   // Setup authentication middleware

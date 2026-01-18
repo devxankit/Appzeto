@@ -845,7 +845,9 @@ const loginSales = async (req, res) => {
             currentSales: sales.currentSales,
             commissionRate: sales.commissionRate,
             experience: sales.experience,
-            skills: sales.skills
+            skills: sales.skills,
+            isTeamLead: sales.isTeamLead || false,
+            teamMembers: sales.teamMembers || []
           },
           token
         }
@@ -894,6 +896,8 @@ const getSalesProfile = async (req, res) => {
           skills: sales.skills,
           leadsManaged: sales.leadsManaged,
           clientsManaged: sales.clientsManaged,
+          isTeamLead: sales.isTeamLead || false,
+          teamMembers: sales.teamMembers || [],
           createdAt: sales.createdAt
         }
       }
@@ -1277,8 +1281,8 @@ const getDashboardHeroStats = async (req, res) => {
     const Project = require('../models/Project');
     const Lead = require('../models/Lead');
     
-    // Get sales employee data
-    const sales = await Sales.findById(salesId).select('name salesTarget reward incentivePerClient');
+    // Get sales employee data (including multiple targets and team lead info)
+    const sales = await Sales.findById(salesId).select('name salesTarget salesTargets reward incentivePerClient isTeamLead teamMembers teamLeadTarget teamLeadTargetReward');
     if (!sales) {
       return res.status(404).json({ success: false, message: 'Sales employee not found' });
     }
@@ -1356,9 +1360,87 @@ const getDashboardHeroStats = async (req, res) => {
     });
     const todaysIncentive = todaysIncentives.reduce((sum, inc) => sum + (inc.amount || 0), 0);
     
-    // Calculate progress to target
-    const target = sales.salesTarget || 0;
-    const progressToTarget = target > 0 ? Math.round((monthlySales / target) * 100) : 0;
+    // Handle multiple targets - find current active target (not achieved yet)
+    let activeTarget = null;
+    let activeTargetNumber = null;
+    let progressToTarget = 0;
+    let allTargets = [];
+    
+    if (sales.salesTargets && sales.salesTargets.length > 0) {
+      // Sort targets by targetNumber (1, 2, 3)
+      const sortedTargets = [...sales.salesTargets].sort((a, b) => a.targetNumber - b.targetNumber);
+      
+      // Calculate cumulative progress: each target's progress is relative to previous achieved targets
+      let previousAchievedAmount = 0;
+      
+      // Find first unachieved target (where monthlySales < target amount)
+      for (let i = 0; i < sortedTargets.length; i++) {
+        const target = sortedTargets[i];
+        const targetAmount = Number(target.amount || 0);
+        const targetDate = new Date(target.targetDate);
+        const now = new Date();
+        
+        // Check if target deadline has passed
+        const isDeadlinePassed = targetDate < now;
+        
+        // Calculate progress for this target relative to previous targets
+        // If this is not the first target, calculate relative to previous target's amount
+        const targetRange = i === 0 ? targetAmount : (targetAmount - previousAchievedAmount);
+        const salesInThisTarget = i === 0 ? monthlySales : Math.max(0, monthlySales - previousAchievedAmount);
+        const targetProgress = targetRange > 0 ? Math.min((salesInThisTarget / targetRange) * 100, 100) : 0;
+        const isAchieved = monthlySales >= targetAmount;
+        
+        // For display in allTargets, show cumulative progress
+        const cumulativeProgress = targetAmount > 0 ? Math.min((monthlySales / targetAmount) * 100, 100) : 0;
+        
+        allTargets.push({
+          targetNumber: target.targetNumber,
+          amount: targetAmount,
+          targetDate: target.targetDate,
+          deadline: target.targetDate,
+          progress: Math.round(cumulativeProgress),
+          isAchieved: isAchieved,
+          isDeadlinePassed: isDeadlinePassed
+        });
+        
+        // Set as active if not achieved yet and not passed
+        if (!activeTarget && !isAchieved && !isDeadlinePassed) {
+          activeTarget = targetAmount;
+          activeTargetNumber = target.targetNumber;
+          // Progress relative to this target only (reset from 0% for this target)
+          progressToTarget = Math.round(targetProgress);
+        }
+        
+        // Update previous achieved amount for next iteration
+        if (isAchieved) {
+          previousAchievedAmount = targetAmount;
+        }
+      }
+      
+      // If all targets achieved, use the last one with 100% progress
+      if (!activeTarget && sortedTargets.length > 0) {
+        const lastTarget = sortedTargets[sortedTargets.length - 1];
+        activeTarget = Number(lastTarget.amount || 0);
+        activeTargetNumber = lastTarget.targetNumber;
+        progressToTarget = 100;
+      }
+      
+      // Fallback to first target if no active target found
+      if (!activeTarget && sortedTargets.length > 0) {
+        const firstTarget = sortedTargets[0];
+        activeTarget = Number(firstTarget.amount || 0);
+        activeTargetNumber = firstTarget.targetNumber;
+        const firstProgress = activeTarget > 0 ? Math.min((monthlySales / activeTarget) * 100, 100) : 0;
+        progressToTarget = Math.round(firstProgress);
+      }
+    } else {
+      // Legacy: single target
+      activeTarget = sales.salesTarget || 0;
+      progressToTarget = activeTarget > 0 ? Math.round((monthlySales / activeTarget) * 100) : 0;
+    }
+    
+    // Cap progress at 100%
+    progressToTarget = Math.min(progressToTarget, 100);
     
     // Get total leads count
     const totalLeads = await Lead.countDocuments({ assignedTo: salesId });
@@ -1368,6 +1450,81 @@ const getDashboardHeroStats = async (req, res) => {
     
     // Get reward
     const reward = sales.reward || 0;
+    
+    // Calculate team lead target progress if user is a team lead (optimized with aggregation)
+    let teamLeadTarget = 0;
+    let teamLeadTargetReward = 0;
+    let teamMonthlySales = 0;
+    let teamLeadProgress = 0;
+    
+    if (sales.isTeamLead && sales.teamMembers && sales.teamMembers.length > 0) {
+      teamLeadTarget = sales.teamLeadTarget || 0;
+      teamLeadTargetReward = sales.teamLeadTargetReward || 0;
+      
+      try {
+        // Optimized: Use aggregation pipeline for faster calculation
+        const teamMemberIds = sales.teamMembers.map(id => {
+          try {
+            return mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id;
+          } catch {
+            return id;
+          }
+        });
+        
+        // Filter valid ObjectIds
+        const validTeamMemberIds = teamMemberIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+        
+        if (validTeamMemberIds.length > 0) {
+          // Optimized single aggregation query: Join projects with clients and filter
+          const teamSalesAggregation = await Project.aggregate([
+            {
+              $lookup: {
+                from: 'clients',
+                localField: 'client',
+                foreignField: '_id',
+                as: 'clientData'
+              }
+            },
+            {
+              $unwind: {
+                path: '$clientData',
+                preserveNullAndEmptyArrays: false
+              }
+            },
+            {
+              $match: {
+                'clientData.convertedBy': { $in: validTeamMemberIds },
+                'clientData.conversionDate': {
+                  $gte: monthStart,
+                  $lte: monthEnd
+                }
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                totalSales: {
+                  $sum: {
+                    $ifNull: ['$financialDetails.totalCost', { $ifNull: ['$budget', 0] }]
+                  }
+                }
+              }
+            }
+          ]);
+          
+          teamMonthlySales = teamSalesAggregation.length > 0 ? (Number(teamSalesAggregation[0].totalSales) || 0) : 0;
+        }
+      } catch (error) {
+        console.error('Error calculating team monthly sales:', error);
+        // Fallback to 0 if calculation fails
+        teamMonthlySales = 0;
+      }
+      
+      // Calculate progress to team target
+      if (teamLeadTarget > 0) {
+        teamLeadProgress = Math.min((teamMonthlySales / teamLeadTarget) * 100, 100);
+      }
+    }
     
     // Extract first name from full name
     const getFirstName = (fullName) => {
@@ -1381,14 +1538,22 @@ const getDashboardHeroStats = async (req, res) => {
       data: {
         employeeName: getFirstName(sales.name),
         monthlySales: Math.round(monthlySales),
-        target: target,
-        progressToTarget: Math.min(progressToTarget, 100), // Cap at 100%
+        target: activeTarget, // Current active target amount
+        targetNumber: activeTargetNumber, // Current active target number (1, 2, or 3)
+        progressToTarget: progressToTarget,
+        allTargets: allTargets, // All targets with their details
         reward: reward,
         todaysSales: Math.round(todaysSales),
         todaysIncentive: Math.round(todaysIncentive),
         monthlyIncentive: Math.round(monthlyIncentive),
         totalLeads: totalLeads,
-        totalClients: totalClients
+        totalClients: totalClients,
+        // Team lead specific data
+        isTeamLead: sales.isTeamLead || false,
+        teamLeadTarget: teamLeadTarget,
+        teamLeadTargetReward: teamLeadTargetReward,
+        teamMonthlySales: Math.round(teamMonthlySales),
+        teamLeadProgress: Math.round(teamLeadProgress)
       }
     });
   } catch (error) {
@@ -3166,39 +3331,43 @@ const convertLeadToClient = async (req, res) => {
           isActive: true
         });
 
-        // If team lead exists, create team lead incentive
-        if (teamLead && teamLead.teamLeadSharePercentage > 0) {
-          const teamLeadSharePercentage = Number(teamLead.teamLeadSharePercentage || 10);
-          const teamLeadIncentiveAmount = (totalAmount * teamLeadSharePercentage) / 100;
-          const teamLeadCurrentBalance = teamLeadIncentiveAmount * 0.5;
-          const teamLeadPendingBalance = teamLeadIncentiveAmount * 0.5;
+        // If team lead exists, automatically create team lead incentive (50% of team member's incentive)
+        if (teamLead && teamMemberIncentive) {
+          // Auto-calculate team lead incentive as 50% of team member's incentive
+          const teamMemberIncentiveAmount = Number(teamMemberIncentive.amount || incentivePerClient || 0);
+          const teamLeadIncentiveAmount = teamMemberIncentiveAmount * 0.5; // 50% of team member's incentive
+          
+          if (teamLeadIncentiveAmount > 0) {
+            // Split 50/50: half current, half pending (same as team member)
+            const teamLeadCurrentBalance = teamLeadIncentiveAmount * 0.5;
+            const teamLeadPendingBalance = teamLeadIncentiveAmount * 0.5;
 
-          // Create team lead incentive
-          await Incentive.create({
-            salesEmployee: teamLead._id,
-            amount: teamLeadIncentiveAmount,
-            currentBalance: teamLeadCurrentBalance,
-            pendingBalance: teamLeadPendingBalance,
-            reason: 'Team member lead conversion',
-            description: `Team lead incentive for ${sales.name || 'Team Member'}'s conversion: ${client.name || 'Client'}`,
-            dateAwarded: new Date(),
-            status: 'conversion-current',
-            isConversionBased: true,
-            projectId: newProject._id,
-            clientId: client._id,
-            leadId: lead._id,
-            isTeamLeadIncentive: true,
-            isTeamMemberIncentive: false,
-            teamLeadId: teamLead._id,
-            teamMemberId: req.sales.id,
-            teamLeadSharePercentage: teamLeadSharePercentage,
-            originalIncentiveId: teamMemberIncentive._id
-          });
+            // Create team lead incentive
+            await Incentive.create({
+              salesEmployee: teamLead._id,
+              amount: teamLeadIncentiveAmount,
+              currentBalance: teamLeadCurrentBalance,
+              pendingBalance: teamLeadPendingBalance,
+              reason: 'Team member lead conversion',
+              description: `Team lead incentive for ${sales.name || 'Team Member'}'s conversion: ${client.name || 'Client'}`,
+              dateAwarded: new Date(),
+              status: 'conversion-current',
+              isConversionBased: true,
+              projectId: newProject._id,
+              clientId: client._id,
+              leadId: lead._id,
+              isTeamLeadIncentive: true,
+              isTeamMemberIncentive: false,
+              teamLeadId: teamLead._id,
+              teamMemberId: req.sales.id,
+              originalIncentiveId: teamMemberIncentive._id
+            });
 
-          // Update team member incentive to mark it
-          teamMemberIncentive.isTeamMemberIncentive = true;
-          teamMemberIncentive.teamLeadId = teamLead._id;
-          await teamMemberIncentive.save();
+            // Update team member incentive to mark it
+            teamMemberIncentive.isTeamMemberIncentive = true;
+            teamMemberIncentive.teamLeadId = teamLead._id;
+            await teamMemberIncentive.save();
+          }
         }
       } catch (incentiveError) {
         // Log error but don't fail the conversion
@@ -4278,10 +4447,13 @@ const getWalletSummary = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
 
-    // Load sales employee for salary and per-client incentive
-    const me = await Sales.findById(salesId).select('fixedSalary incentivePerClient name');
+    // Load sales employee for salary, per-client incentive, and team lead info
+    const me = await Sales.findById(salesId).select('fixedSalary incentivePerClient name isTeamLead teamLeadTarget teamLeadTargetReward');
     const perClient = Number(me?.incentivePerClient || 0);
     const fixedSalary = Number(me?.fixedSalary || 0);
+    const isTeamLead = me?.isTeamLead || false;
+    const teamLeadTarget = Number(me?.teamLeadTarget || 0);
+    const teamLeadTargetReward = Number(me?.teamLeadTargetReward || 0);
 
     // Get conversion-based incentives from Incentive model
     const Incentive = require('../models/Incentive');
@@ -4294,10 +4466,16 @@ const getWalletSummary = async (req, res) => {
       .populate('leadId', 'phone')
       .sort({ dateAwarded: -1 });
 
-    // Calculate totals from actual incentive records
+    // Calculate totals from actual incentive records - separate regular and team lead incentives
     let totalIncentive = 0;
     let current = 0;
     let pending = 0;
+    
+    // Team lead incentive totals (separate)
+    let teamLeadTotalIncentive = 0;
+    let teamLeadCurrent = 0;
+    let teamLeadPending = 0;
+    
     const breakdown = [];
 
     // Populate team member and team lead names
@@ -4311,9 +4489,19 @@ const getWalletSummary = async (req, res) => {
     const teamLeadMap = new Map(teamLeads.map(tl => [tl._id.toString(), tl.name]));
 
     conversionIncentives.forEach(incentive => {
-      totalIncentive += incentive.amount;
-      current += incentive.currentBalance || 0;
-      pending += incentive.pendingBalance || 0;
+      const isTeamLeadIncentive = incentive.isTeamLeadIncentive || false;
+      
+      if (isTeamLeadIncentive) {
+        // Team lead incentives - separate totals
+        teamLeadTotalIncentive += incentive.amount;
+        teamLeadCurrent += incentive.currentBalance || 0;
+        teamLeadPending += incentive.pendingBalance || 0;
+      } else {
+        // Regular incentives (own conversions)
+        totalIncentive += incentive.amount;
+        current += incentive.currentBalance || 0;
+        pending += incentive.pendingBalance || 0;
+      }
 
       breakdown.push({
         incentiveId: incentive._id,
@@ -4334,17 +4522,18 @@ const getWalletSummary = async (req, res) => {
       });
     });
 
-    // Calculate monthly incentive (based on incentives created in current month)
+    // Calculate monthly incentive (based on incentives created in current month) - regular incentives only
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
     const monthlyIncentives = conversionIncentives.filter(inc => {
       const dateAwarded = new Date(inc.dateAwarded);
-      return dateAwarded >= monthStart && dateAwarded <= monthEnd;
+      const isTeamLeadInc = inc.isTeamLeadIncentive || false;
+      return dateAwarded >= monthStart && dateAwarded <= monthEnd && !isTeamLeadInc;
     });
     const monthly = monthlyIncentives.reduce((sum, inc) => sum + (inc.amount || 0), 0);
 
-    const allTime = totalIncentive;
+    const allTime = totalIncentive; // Regular incentives only
 
     // Transactions view: incentive records + salary (current month)
     const transactions = breakdown
@@ -4355,7 +4544,11 @@ const getWalletSummary = async (req, res) => {
         date: b.convertedAt || me?.createdAt || new Date(),
         clientName: b.clientName,
         currentBalance: b.currentBalance,
-        pendingBalance: b.pendingBalance
+        pendingBalance: b.pendingBalance,
+        isTeamLeadIncentive: b.isTeamLeadIncentive || false,
+        isTeamMemberIncentive: b.isTeamMemberIncentive || false,
+        teamMemberName: b.teamMemberName || null,
+        teamLeadName: b.teamLeadName || null
       }))
       .sort((a, b) => new Date(b.date) - new Date(a.date));
     
@@ -4376,12 +4569,22 @@ const getWalletSummary = async (req, res) => {
         salary: { fixedSalary },
         incentive: {
           perClient, // Keep for backward compatibility
-          current,
-          pending,
-          monthly,
-          allTime,
+          current, // Regular incentives only
+          pending, // Regular incentives only
+          monthly, // Regular incentives only
+          allTime, // Regular incentives only
           breakdown
         },
+        isTeamLead: isTeamLead, // Include team lead status
+        teamLeadIncentive: {
+          total: teamLeadTotalIncentive,
+          current: teamLeadCurrent,
+          pending: teamLeadPending
+        },
+        teamTargetReward: isTeamLead ? {
+          target: teamLeadTarget,
+          reward: teamLeadTargetReward
+        } : null,
         transactions
       }
     });
@@ -4473,9 +4676,113 @@ const resetPassword = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get my team data (for team leads only)
+// @route   GET /api/sales/my-team
+// @access  Private (Sales Team Lead only)
+const getMyTeam = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    
+    // Find the sales employee and check if they are a team lead
+    const sales = await Sales.findById(salesId);
+    if (!sales) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sales employee not found'
+      });
+    }
+
+    if (!sales.isTeamLead) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only team leads can access this endpoint'
+      });
+    }
+
+    // Get team members
+    const teamMemberIds = sales.teamMembers || [];
+    const teamMembers = await Sales.find({ _id: { $in: teamMemberIds } })
+      .select('name email phone employeeId salesTarget currentSales isActive createdAt')
+      .lean();
+
+    // Get performance metrics for each team member
+    const teamWithPerformance = await Promise.all(
+      teamMembers.map(async (member) => {
+        const leadStats = await Lead.aggregate([
+          { $match: { assignedTo: member._id } },
+          {
+            $group: {
+              _id: '$status',
+              count: { $sum: 1 },
+              totalValue: { $sum: '$value' }
+            }
+          }
+        ]);
+
+        const totalLeads = leadStats.reduce((sum, stat) => sum + stat.count, 0);
+        const convertedLeads = leadStats.find(stat => stat._id === 'converted')?.count || 0;
+        const totalValue = leadStats.reduce((sum, stat) => sum + stat.totalValue, 0);
+        const convertedValue = leadStats.find(stat => stat._id === 'converted')?.totalValue || 0;
+
+        return {
+          ...member,
+          performance: {
+            totalLeads,
+            convertedLeads,
+            conversionRate: totalLeads > 0 ? ((convertedLeads / totalLeads) * 100).toFixed(2) : 0,
+            totalValue,
+            convertedValue,
+            targetAchievement: member.salesTarget > 0 ? 
+              ((member.currentSales / member.salesTarget) * 100).toFixed(2) : 0
+          }
+        };
+      })
+    );
+
+    // Calculate team totals
+    const teamTotals = teamWithPerformance.reduce((totals, member) => {
+      totals.totalLeads += member.performance.totalLeads;
+      totals.convertedLeads += member.performance.convertedLeads;
+      totals.totalValue += member.performance.totalValue;
+      totals.convertedValue += member.performance.convertedValue;
+      return totals;
+    }, { totalLeads: 0, convertedLeads: 0, totalValue: 0, convertedValue: 0 });
+
+    const teamConversionRate = teamTotals.totalLeads > 0 
+      ? ((teamTotals.convertedLeads / teamTotals.totalLeads) * 100).toFixed(2)
+      : 0;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        teamLead: {
+          id: sales._id,
+          name: sales.name,
+          email: sales.email,
+          teamMembersCount: teamMembers.length
+        },
+        teamMembers: teamWithPerformance,
+        teamStats: {
+          ...teamTotals,
+          conversionRate: teamConversionRate,
+          memberCount: teamMembers.length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get my team error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching team data'
+    });
+  }
+};
+
 module.exports = {
   loginSales,
   getSalesProfile,
+  getMyTeam,
   logoutSales,
   createDemoSales,
   createLeadBySales,

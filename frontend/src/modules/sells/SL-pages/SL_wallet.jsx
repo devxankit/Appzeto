@@ -8,7 +8,8 @@ import {
   FiActivity,
   FiUsers,
   FiLoader,
-  FiAlertCircle
+  FiAlertCircle,
+  FiTarget
 } from 'react-icons/fi'
 import { FaRupeeSign } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
@@ -38,41 +39,47 @@ const SL_wallet = () => {
       hasErrorShownRef.current = false
 
       const data = await salesWalletService.getWalletSummary()
+      
+      // Regular incentives (from own conversions) - separated from team lead incentives
       const current = Number(data?.incentive?.current || 0)
       const pending = Number(data?.incentive?.pending || 0)
       const monthly = Number(data?.incentive?.monthly || 0)
       const allTime = Number(data?.incentive?.allTime || 0)
       const fixedSalary = Number(data?.salary?.fixedSalary || 0)
-      const breakdown = data?.incentive?.breakdown || []
-
-      // Calculate team lead incentive totals from breakdown
-      let teamLeadIncentiveTotal = 0
-      let teamLeadIncentiveCurrent = 0
-      let teamLeadIncentivePending = 0
       
-      breakdown.forEach(inc => {
-        if (inc.isTeamLeadIncentive) {
-          teamLeadIncentiveTotal += Number(inc.amount || 0)
-          teamLeadIncentiveCurrent += Number(inc.currentBalance || 0)
-          teamLeadIncentivePending += Number(inc.pendingBalance || 0)
-        }
-      })
+      // Team lead incentives (from team member conversions) - separate field
+      const teamLeadIncentiveTotal = Number(data?.teamLeadIncentive?.total || 0)
+      const teamLeadIncentiveCurrent = Number(data?.teamLeadIncentive?.current || 0)
+      const teamLeadIncentivePending = Number(data?.teamLeadIncentive?.pending || 0)
 
-      // Use backend values directly (backend already handles 50% split)
-      const currentBalance = current
-      const pendingIncentive = pending
+      // Team target reward (for team leads only)
+      const teamTargetReward = data?.teamTargetReward || null
+      const teamTargetRewardAmount = teamTargetReward ? Number(teamTargetReward.reward || 0) : 0
+      const teamTarget = teamTargetReward ? Number(teamTargetReward.target || 0) : 0
+
+      // Check if user is a team lead
+      const isTeamLead = data?.isTeamLead || false
+
+      // Use backend values directly (backend separates regular and team lead incentives)
+      const currentBalance = current // Only regular incentives
+      const pendingIncentive = pending // Only regular incentives
 
       setWallet({
-        currentBalance: currentBalance,
-        pendingIncentive: pendingIncentive,
-        monthlyEarning: monthly,
-        totalEarning: allTime,
+        currentBalance: currentBalance, // Regular incentives only
+        pendingIncentive: pendingIncentive, // Regular incentives only
+        monthlyEarning: monthly, // Regular incentives only
+        totalEarning: allTime, // Regular incentives only
         monthlySalary: fixedSalary,
+        isTeamLead: isTeamLead, // Store team lead status
         teamLeadIncentive: {
-          total: teamLeadIncentiveTotal,
-          current: teamLeadIncentiveCurrent,
-          pending: teamLeadIncentivePending
+          total: teamLeadIncentiveTotal || 0,
+          current: teamLeadIncentiveCurrent || 0,
+          pending: teamLeadIncentivePending || 0
         },
+        teamTargetReward: teamTargetReward ? {
+          target: teamTarget,
+          reward: teamTargetRewardAmount
+        } : null,
         transactions: (data?.transactions || []).map(t => ({
           id: t.id || `${t.type}-${t.date}`,
           amount: Number(t.amount || 0),
@@ -318,36 +325,113 @@ const SL_wallet = () => {
               </motion.div>
             </motion.div>
 
-            {/* Team Lead Incentive Section - Only show if team lead incentive exists */}
-            {!loading && wallet?.teamLeadIncentive && wallet.teamLeadIncentive.total > 0 && (
+            {/* Team Lead Incentive Metrics - Separate boxes with custom layout - Only for Team Leads */}
+            {!loading && wallet?.isTeamLead && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.7 }}
+                className="space-y-3 mb-3"
+              >
+                {/* Team Lead Total Incentive - Full width */}
+                <motion.div 
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  className="bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-purple-300/50 hover:border-purple-400/70 transition-all duration-300 shadow-sm"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-purple-800 text-xs font-semibold">Team Lead Total Incentive</span>
+                    <FiUsers className="text-purple-600 text-xs" />
+                  </div>
+                  {loading ? (
+                    <>
+                      <SkeletonLoader className="h-4 w-20 mb-1" />
+                      <SkeletonLoader className="h-3 w-16" />
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet?.teamLeadIncentive?.total || 0)}</p>
+                      <p className="text-purple-600 text-xs">All Time</p>
+                    </>
+                  )}
+                </motion.div>
+
+                {/* Team Lead Current and Pending - Side by side */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Team Lead Current Incentive */}
+                  <motion.div 
+                    whileHover={{ scale: 1.02, y: -1 }}
+                    className="bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-emerald-300/50 hover:border-emerald-400/70 transition-all duration-300 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-emerald-800 text-xs font-semibold">Team Lead Current Incentive</span>
+                      <FiTrendingUp className="text-emerald-600 text-xs" />
+                    </div>
+                    {loading ? (
+                      <>
+                        <SkeletonLoader className="h-4 w-20 mb-1" />
+                        <SkeletonLoader className="h-3 w-16" />
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet?.teamLeadIncentive?.current || 0)}</p>
+                        <p className="text-emerald-600 text-xs">Available</p>
+                      </>
+                    )}
+                  </motion.div>
+
+                  {/* Team Lead Pending Incentive */}
+                  <motion.div 
+                    whileHover={{ scale: 1.02, y: -1 }}
+                    className="bg-gradient-to-br from-yellow-50 to-amber-50 backdrop-blur-sm rounded-lg p-3 border border-yellow-300/50 hover:border-yellow-400/70 transition-all duration-300 shadow-sm relative group"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-yellow-800 text-xs font-semibold">Team Lead Pending Incentive</span>
+                      <FiCalendar className="text-yellow-600 text-xs" />
+                    </div>
+                    {loading ? (
+                      <>
+                        <SkeletonLoader className="h-4 w-20 mb-1" />
+                        <SkeletonLoader className="h-3 w-24" />
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet?.teamLeadIncentive?.pending || 0)}</p>
+                        <p className="text-yellow-600 text-xs">Awaiting Recovery</p>
+                      </>
+                    )}
+                    
+                    {/* Hover Tooltip */}
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-20">
+                      You can withdraw this amount after full payment recovery
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-gray-900"></div>
+                    </div>
+                  </motion.div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Team Target Reward Card - Only for Team Leads */}
+            {!loading && wallet?.teamTargetReward && wallet.teamTargetReward.target > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.75 }}
                 className="mb-3"
               >
-                <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-lg p-3 border border-teal-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-teal-800 text-xs font-semibold flex items-center">
-                      <FiUsers className="mr-1" />
-                      Team Lead Incentive
-                    </span>
+                <motion.div 
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  className="bg-gradient-to-br from-emerald-50 to-teal-50 backdrop-blur-sm rounded-lg p-3 border border-emerald-300/50 hover:border-emerald-400/70 transition-all duration-300 shadow-sm"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-emerald-800 text-xs font-semibold">Team Target Reward</span>
+                    <FiTarget className="text-emerald-600 text-xs" />
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <p className="text-gray-600 text-xs">Total</p>
-                      <p className="text-teal-800 text-sm font-bold">{formatCurrency(wallet.teamLeadIncentive.total)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600 text-xs">Current</p>
-                      <p className="text-teal-800 text-sm font-bold">{formatCurrency(wallet.teamLeadIncentive.current)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600 text-xs">Pending</p>
-                      <p className="text-teal-800 text-sm font-bold">{formatCurrency(wallet.teamLeadIncentive.pending)}</p>
-                    </div>
-                  </div>
-                </div>
+                  <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet.teamTargetReward.reward)}</p>
+                  <p className="text-emerald-600 text-xs mt-0.5">Reward for achieving team target</p>
+                  {wallet.teamTargetReward.target > 0 && (
+                    <p className="text-emerald-700 text-xs mt-1">Target: ₹{wallet.teamTargetReward.target.toLocaleString()}</p>
+                  )}
+                </motion.div>
               </motion.div>
             )}
 

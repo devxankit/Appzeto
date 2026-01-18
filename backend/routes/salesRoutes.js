@@ -2,6 +2,7 @@ const express = require('express');
 const {
   loginSales,
   getSalesProfile,
+  getMyTeam,
   logoutSales,
   createDemoSales,
   createLeadBySales,
@@ -88,6 +89,7 @@ router.post('/leads/:id/convert', upload.single('screenshot'), convertLeadToClie
 
 // Team Management
 router.get('/team', getSalesTeam);
+router.get('/my-team', getMyTeam);
 
 // Lead Actions
 router.post('/leads/:id/request-demo', requestDemo);

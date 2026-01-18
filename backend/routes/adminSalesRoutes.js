@@ -30,8 +30,12 @@ const {
 
   // Incentive Management
   setIncentive,
+  setTeamLeadIncentive,
   getIncentiveHistory,
   updateIncentiveRecord,
+
+  // Team Lead Target Management
+  setTeamLeadTarget,
 
   // Analytics
   getSalesOverview,
@@ -156,6 +160,16 @@ router.delete('/team/:id', deleteSalesMember);
 // @desc    Set incentive for sales team member
 // @access  Private (Admin/HR only)
 router.post('/team/:id/incentive', setIncentive);
+
+// @route   POST /api/admin/sales/team-leads/:id/incentive
+// @desc    Set incentive for team lead
+// @access  Private (Admin/HR only)
+router.post('/team-leads/:id/incentive', setTeamLeadIncentive);
+
+// @route   PUT /api/admin/sales/team-leads/:id/team-target
+// @desc    Set team target and reward for team lead
+// @access  Private (Admin/HR only)
+router.put('/team-leads/:id/team-target', setTeamLeadTarget);
 
 // @route   GET /api/admin/sales/team/:id/incentives
 // @desc    Get incentive history for team member

@@ -20,6 +20,7 @@ import SL_dashboard from './modules/sells/SL-pages/SL_dashboard'
 import SL_leads from './modules/sells/SL-pages/SL_leads'
 import SL_profile from './modules/sells/SL-pages/SL_profile'
 import SL_wallet from './modules/sells/SL-pages/SL_wallet'
+import SL_team_management from './modules/sells/SL-pages/SL_team_management'
 import SL_newLeads from './modules/sells/SL-pages/SL_newLeads'
 import SL_connected from './modules/sells/SL-pages/SL_connected'
 import SL_leadProfile from './modules/sells/SL-pages/SL_leadProfile'
@@ -191,6 +192,11 @@ function App() {
           <Route path="/converted" element={
             <SalesProtectedRoute>
               <SL_converted />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/my-team" element={
+            <SalesProtectedRoute>
+              <SL_team_management />
             </SalesProtectedRoute>
           } />
           <Route path="/not-picked" element={

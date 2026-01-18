@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 
+// Suppress Mongoose warnings (duplicate indexes are non-critical)
+if (process.env.NODE_ENV === 'production') {
+  mongoose.set('debug', false);
+}
+
 const connectDB = async () => {
   try {
     // Validate MongoDB URI before attempting connection
@@ -9,22 +14,11 @@ const connectDB = async () => {
 
     const conn = await mongoose.connect(process.env.MONGODB_URI);
 
-    // Beautiful database connection display
-    console.log('');
-    console.log('🗄️ ' + '='.repeat(50));
-    console.log('   🎯 DATABASE CONNECTION ESTABLISHED');
-    console.log('🗄️ ' + '='.repeat(50));
-    console.log(`   🌐 Host: ${conn.connection.host}`);
-    console.log(`   📊 Database: ${conn.connection.name}`);
-    console.log(`   🔗 Connection State: ${conn.connection.readyState === 1 ? 'CONNECTED' : 'CONNECTING'}`);
-    console.log(`   ⚡ Mongoose Version: ${mongoose.version}`);
-    console.log('🗄️ ' + '='.repeat(50));
-    console.log('');
+    // Clean database connection display
+    const dbHost = conn.connection.host.split('.')[0]; // Get first part of host
+    console.log(`🗄️  Database: CONNECTED | ${conn.connection.name} @ ${dbHost}`);
     
-    // Connection event listeners
-    mongoose.connection.on('connected', () => {
-      console.log('   ✅ Database: CONNECTED');
-    });
+    // Connection event listeners (silent in production)
 
     mongoose.connection.on('error', (err) => {
       console.log('');

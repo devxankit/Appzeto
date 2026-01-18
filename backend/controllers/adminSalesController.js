@@ -715,11 +715,7 @@ const getSalesTeamMember = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/admin/sales/team/:id/target
 // @access  Private (Admin/HR only)
 const setSalesTarget = asyncHandler(async (req, res, next) => {
-  const { target } = req.body;
-
-  if (!target || target < 0) {
-    return next(new ErrorResponse('Valid target amount is required', 400));
-  }
+  const { target, targets } = req.body;
 
   const member = await Sales.findById(req.params.id);
 
@@ -727,18 +723,93 @@ const setSalesTarget = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Sales team member not found', 404));
   }
 
-  member.salesTarget = target;
-  await member.save();
-
-  res.status(200).json({
-    success: true,
-    message: 'Sales target updated successfully',
-    data: {
-      id: member._id,
-      name: member.name,
-      salesTarget: member.salesTarget
+  // Support both old single target and new multiple targets
+  if (target !== undefined) {
+    // Legacy: single target
+    if (target < 0) {
+      return next(new ErrorResponse('Valid target amount is required', 400));
     }
-  });
+    member.salesTarget = target;
+    await member.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Sales target updated successfully',
+      data: {
+        id: member._id,
+        name: member.name,
+        salesTarget: member.salesTarget
+      }
+    });
+  }
+
+  // New: Multiple targets with dates
+  if (targets && Array.isArray(targets)) {
+    // Validate targets
+    for (const t of targets) {
+      if (!t.targetNumber || !t.amount || !t.targetDate) {
+        return next(new ErrorResponse('Each target must have targetNumber (1-3), amount, and targetDate', 400));
+      }
+      if (![1, 2, 3].includes(t.targetNumber)) {
+        return next(new ErrorResponse('Target number must be 1, 2, or 3', 400));
+      }
+      if (t.amount < 0) {
+        return next(new ErrorResponse('Target amount cannot be negative', 400));
+      }
+      if (new Date(t.targetDate) < new Date()) {
+        return next(new ErrorResponse('Target date cannot be in the past', 400));
+      }
+    }
+
+    // Update or create targets
+    if (!member.salesTargets) {
+      member.salesTargets = [];
+    }
+
+    targets.forEach(newTarget => {
+      const existingIndex = member.salesTargets.findIndex(
+        t => t.targetNumber === newTarget.targetNumber
+      );
+
+      if (existingIndex >= 0) {
+        // Update existing target
+        member.salesTargets[existingIndex].amount = newTarget.amount;
+        member.salesTargets[existingIndex].targetDate = new Date(newTarget.targetDate);
+        member.salesTargets[existingIndex].updatedAt = new Date();
+      } else {
+        // Add new target
+        member.salesTargets.push({
+          targetNumber: newTarget.targetNumber,
+          amount: newTarget.amount,
+          targetDate: new Date(newTarget.targetDate),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+      }
+    });
+
+    // Sort by target number
+    member.salesTargets.sort((a, b) => a.targetNumber - b.targetNumber);
+
+    // Update legacy salesTarget to highest target amount
+    const maxTarget = Math.max(...member.salesTargets.map(t => t.amount), 0);
+    member.salesTarget = maxTarget;
+
+    await member.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Sales targets updated successfully',
+      data: {
+        id: member._id,
+        name: member.name,
+        salesTargets: member.salesTargets,
+        salesTarget: member.salesTarget
+      }
+    });
+  }
+
+  return next(new ErrorResponse('Either target or targets array is required', 400));
 });
 
 // @desc    Update sales team member team assignment
@@ -959,6 +1030,90 @@ const setIncentive = asyncHandler(async (req, res, next) => {
       member: updatedMember,
       incentivePerClient: amount,
       note: 'This amount will be applied to future lead conversions only'
+    }
+  });
+});
+
+// @desc    Set per-conversion incentive amount for team lead
+// @route   POST /api/admin/sales/team-leads/:id/incentive
+// @access  Private (Admin/HR only)
+const setTeamLeadIncentive = asyncHandler(async (req, res, next) => {
+  const { amount } = req.body;
+
+  if (!amount || amount <= 0) {
+    return next(new ErrorResponse('Valid incentive amount is required', 400));
+  }
+
+  const teamLead = await Sales.findById(req.params.id);
+
+  if (!teamLead) {
+    return next(new ErrorResponse('Team lead not found', 404));
+  }
+
+  if (!teamLead.isTeamLead) {
+    return next(new ErrorResponse('Selected member is not a team lead', 400));
+  }
+
+  // Update the per-conversion incentive amount for team lead (applies to future conversions only)
+  const updatedTeamLead = await Sales.findByIdAndUpdate(
+    req.params.id,
+    { teamLeadIncentivePerClient: amount },
+    { new: true, runValidators: true }
+  ).select('name email teamLeadIncentivePerClient isTeamLead');
+
+  res.status(200).json({
+    success: true,
+    message: 'Per-conversion incentive amount for team lead set successfully',
+    data: {
+      teamLead: updatedTeamLead,
+      teamLeadIncentivePerClient: amount,
+      note: 'This amount will be applied to future team member lead conversions only'
+    }
+  });
+});
+
+// @desc    Set team lead target and reward
+// @route   PUT /api/admin/sales/team-leads/:id/team-target
+// @access  Private (Admin/HR only)
+const setTeamLeadTarget = asyncHandler(async (req, res, next) => {
+  const { target, reward } = req.body;
+
+  const teamLead = await Sales.findById(req.params.id);
+
+  if (!teamLead) {
+    return next(new ErrorResponse('Team lead not found', 404));
+  }
+
+  if (!teamLead.isTeamLead) {
+    return next(new ErrorResponse('Selected member is not a team lead', 400));
+  }
+
+  // Update team lead target if provided
+  if (target !== undefined) {
+    if (target < 0) {
+      return next(new ErrorResponse('Valid target amount is required', 400));
+    }
+    teamLead.teamLeadTarget = target;
+  }
+
+  // Update team lead reward if provided
+  if (reward !== undefined) {
+    if (reward < 0) {
+      return next(new ErrorResponse('Valid reward amount is required', 400));
+    }
+    teamLead.teamLeadTargetReward = reward;
+  }
+
+  await teamLead.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Team lead target and reward updated successfully',
+    data: {
+      id: teamLead._id,
+      name: teamLead.name,
+      teamLeadTarget: teamLead.teamLeadTarget,
+      teamLeadTargetReward: teamLead.teamLeadTargetReward
     }
   });
 });
@@ -1365,18 +1520,38 @@ const deleteSalesMember = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Sales team member not found', 404));
   }
 
-  // Check if member has assigned leads
-  const assignedLeadsCount = await Lead.countDocuments({ assignedTo: member._id });
-  
-  if (assignedLeadsCount > 0) {
-    return next(new ErrorResponse(`Cannot delete sales team member "${member.name}" because they have ${assignedLeadsCount} assigned leads. Please reassign or delete the leads first.`, 400));
+  // If this is a team lead, unassign all their team members first
+  if (member.isTeamLead && member.teamMembers && member.teamMembers.length > 0) {
+    const teamMemberIds = member.teamMembers;
+    
+    // Clear teamMembers from the team lead before deletion
+    member.teamMembers = [];
+    await member.save();
+    
+    // Also remove these team members from any other team leads' arrays (in case of duplicates)
+    // This ensures team members are completely unassigned
+    await Sales.updateMany(
+      { 
+        _id: { $ne: member._id },
+        teamMembers: { $in: teamMemberIds }
+      },
+      { 
+        $pull: { teamMembers: { $in: teamMemberIds } }
+      }
+    );
   }
+
+  // Allow deletion even if member has assigned leads
+  // The leads will remain assigned but the member will be deleted
+  // Admin can reassign leads later if needed
 
   await Sales.findByIdAndDelete(req.params.id);
 
   res.status(200).json({
     success: true,
-    message: 'Sales team member deleted successfully'
+    message: member.isTeamLead 
+      ? 'Team lead deleted successfully. Team members have been unassigned.'
+      : 'Sales team member deleted successfully'
   });
 });
 
@@ -1410,8 +1585,12 @@ module.exports = {
 
   // Incentive Management
   setIncentive,
+  setTeamLeadIncentive,
   getIncentiveHistory,
   updateIncentiveRecord,
+
+  // Team Lead Target Management
+  setTeamLeadTarget,
 
   // Analytics
   getSalesOverview,

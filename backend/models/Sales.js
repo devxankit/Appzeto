@@ -84,6 +84,31 @@ const salesSchema = new mongoose.Schema({
     min: 0,
     default: 0
   },
+  // Multiple targets with dates
+  salesTargets: [{
+    targetNumber: {
+      type: Number,
+      required: true,
+      enum: [1, 2, 3] // Target 1, Target 2, Target 3
+    },
+    amount: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    targetDate: {
+      type: Date,
+      required: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   currentSales: {
     type: Number,
     min: 0,
@@ -146,11 +171,11 @@ const salesSchema = new mongoose.Schema({
     min: 0,
     default: 0
   },
-  teamLeadSharePercentage: {
+  // Fixed incentive amount per client conversion for team leads (admin-set)
+  teamLeadIncentivePerClient: {
     type: Number,
     min: 0,
-    max: 100,
-    default: 10
+    default: 0
   },
   // Lead statistics
   leadStats: {
@@ -174,6 +199,17 @@ const salesSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Sales'
   }],
+  // Team lead specific target and reward
+  teamLeadTarget: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  teamLeadTargetReward: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
   resetPasswordToken: {
     type: String,
     select: false

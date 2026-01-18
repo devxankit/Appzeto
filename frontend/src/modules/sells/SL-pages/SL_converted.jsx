@@ -202,9 +202,9 @@ const SL_converted = () => {
           {/* Client Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-semibold text-gray-900 truncate">
-                {displayName}
-              </h3>
+            <h3 className="text-base font-semibold text-gray-900 truncate">
+              {displayName}
+            </h3>
               {isTransferred && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
                   Transferred

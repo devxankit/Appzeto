@@ -16,7 +16,10 @@ class EmailService {
       }
     });
     
-    console.log('Email Service initialized with user:', emailUser);
+    // Silent initialization - only log in development if needed
+    if (process.env.NODE_ENV === 'development' && process.env.VERBOSE_LOGS === 'true') {
+      console.log('📧 Email Service initialized');
+    }
   }
 
   /**

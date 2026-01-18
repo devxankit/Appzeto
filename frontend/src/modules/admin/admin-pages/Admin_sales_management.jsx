@@ -11,7 +11,6 @@ import {
   FiPlus,
   FiUsers,
   FiUser,
-  FiHome,
   FiTrendingUp,
   FiCreditCard,
   FiTarget,
@@ -48,6 +47,11 @@ const Admin_sales_management = () => {
     if (typeof value === 'object') return fallback
     return String(value)
   }
+
+  // Skeleton Loader Component
+  const SkeletonLoader = ({ className = '', rounded = 'rounded' }) => (
+    <div className={`animate-pulse bg-gray-200 ${rounded} ${className}`}></div>
+  )
   
   // State management
   const [loading, setLoading] = useState(true)
@@ -66,14 +70,12 @@ const Admin_sales_management = () => {
   const [totalAllLeadsCount, setTotalAllLeadsCount] = useState(0) // Total count of all leads from API
   const [assignedLeads, setAssignedLeads] = useState([]) // Assigned leads for category performance
   const [salesTeam, setSalesTeam] = useState([])
-  const [clients, setClients] = useState([])
   
   // Loading states for different data types
   const [loadingStatistics, setLoadingStatistics] = useState(false)
   const [loadingCategories, setLoadingCategories] = useState(false)
   const [loadingLeads, setLoadingLeads] = useState(false)
   const [loadingSalesTeam, setLoadingSalesTeam] = useState(false)
-  const [loadingClients, setLoadingClients] = useState(false)
   const [creatingCategory, setCreatingCategory] = useState(false)
   const [deletingCategory, setDeletingCategory] = useState(false)
   const [loadingTarget, setLoadingTarget] = useState(false)
@@ -95,6 +97,12 @@ const Admin_sales_management = () => {
   const [showCategoryEditModal, setShowCategoryEditModal] = useState(false)
   const [showCategoryDeleteModal, setShowCategoryDeleteModal] = useState(false)
   const [showAssignTeamModal, setShowAssignTeamModal] = useState(false)
+  const [showTeamMembersModal, setShowTeamMembersModal] = useState(false)
+  const [showSetTeamTargetModal, setShowSetTeamTargetModal] = useState(false)
+  const [selectedTeamLeadForTarget, setSelectedTeamLeadForTarget] = useState(null)
+  const [teamTargetAmount, setTeamTargetAmount] = useState('')
+  const [teamTargetReward, setTeamTargetReward] = useState('')
+  const [selectedTeamLeadForMembers, setSelectedTeamLeadForMembers] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null)
   const [modalType, setModalType] = useState('')
   const [selectedLeadCategory, setSelectedLeadCategory] = useState('')
@@ -104,6 +112,8 @@ const Admin_sales_management = () => {
   const [alreadyAssignedMembers, setAlreadyAssignedMembers] = useState([])
   const [assigningMembers, setAssigningMembers] = useState(false)
   const [salesLeadToggle, setSalesLeadToggle] = useState(false)
+  const [selectedEmployeeForTeamLead, setSelectedEmployeeForTeamLead] = useState(null)
+  const [teamLeadCreationStep, setTeamLeadCreationStep] = useState(1) // 1: Select employee, 2: Confirm team lead, 3: Assign team
   const [paymentDetails, setPaymentDetails] = useState({
     pendingIncentive: 0,
     paidIncentive: 0,
@@ -118,6 +128,12 @@ const Admin_sales_management = () => {
   const [uploadedFile, setUploadedFile] = useState(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [targetAmount, setTargetAmount] = useState('')
+  // Multiple targets state
+  const [targets, setTargets] = useState([
+    { targetNumber: 1, amount: '', date: '', time: '' },
+    { targetNumber: 2, amount: '', date: '', time: '' },
+    { targetNumber: 3, amount: '', date: '', time: '' }
+  ])
   const [leadsToAssign, setLeadsToAssign] = useState('')
   const [incentiveAmount, setIncentiveAmount] = useState('')
   const [distributingLeads, setDistributingLeads] = useState(false)
@@ -272,21 +288,6 @@ const Admin_sales_management = () => {
     }
   }
 
-  const loadClients = async () => {
-    try {
-      setLoadingClients(true)
-      const response = await adminSalesService.getAllClients()
-      if (response.success) {
-        setClients(response.data)
-      }
-    } catch (error) {
-      console.error('Error loading clients:', error)
-      toast.error('Failed to load clients')
-    } finally {
-      setLoadingClients(false)
-    }
-  }
-
   // Initial data load
   useEffect(() => {
     const loadInitialData = async () => {
@@ -321,13 +322,6 @@ const Admin_sales_management = () => {
   useEffect(() => {
     if (activeTab === 'sales-team' && salesTeam.length === 0) {
       loadSalesTeam()
-    }
-  }, [activeTab])
-
-  // Load clients when switching to clients tab
-  useEffect(() => {
-    if (activeTab === 'clients' && clients.length === 0) {
-      loadClients()
     }
   }, [activeTab])
  
@@ -571,12 +565,17 @@ const Admin_sales_management = () => {
     )
   }
 
+  // Get team leads (sales team members with isTeamLead = true)
+  const teamLeads = useMemo(() => {
+    return salesTeam.filter(member => member.isTeamLead === true)
+  }, [salesTeam])
+
   // Get current data based on active tab
   const getCurrentData = () => {
     switch (activeTab) {
       case 'leads': return leads
       case 'sales-team': return salesTeam
-      case 'clients': return clients
+      case 'team-leads': return teamLeads
       default: return leads
     }
   }
@@ -630,7 +629,7 @@ const Admin_sales_management = () => {
       
       return matchesSearch && matchesFilter && matchesCategory
     })
-  }, [activeTab, searchTerm, selectedFilter, selectedCategory, leads, salesTeam, clients])
+  }, [activeTab, searchTerm, selectedFilter, selectedCategory, leads, salesTeam, teamLeads])
 
   // Pagination
   const paginatedData = useMemo(() => {
@@ -808,7 +807,7 @@ const Admin_sales_management = () => {
     }
   }
 
-  const handleAssignTeam = async (item) => {
+  const handleAssignTeam = async (item = null) => {
     setSelectedItem(item)
     
     // Ensure sales team is loaded before opening modal
@@ -863,11 +862,17 @@ const Admin_sales_management = () => {
   }
 
   const handleConfirmAssignment = async () => {
-    if (!selectedItem) return
+    // For create mode, use selectedEmployeeForTeamLead if selectedItem is not set
+    const itemToUse = selectedItem || selectedEmployeeForTeamLead
+    
+    if (!itemToUse) {
+      toast.error('Please select a sales team member to make a team lead')
+      return
+    }
     
     try {
       setAssigningMembers(true)
-      const itemId = selectedItem._id || selectedItem.id
+      const itemId = itemToUse._id || itemToUse.id
       
       if (!itemId) {
         toast.error('Team leader ID not found')
@@ -877,8 +882,8 @@ const Admin_sales_management = () => {
       // Check if it's a sales team member (team leader) - NOT a lead
       // Sales team members have: department, team, email, etc.
       // Leads have: phone, category, status, etc.
-      const isSalesTeamMember = selectedItem.department === 'sales' || selectedItem.team === 'sales' || (selectedItem.email && !selectedItem.phone)
-      const isLead = selectedItem.category !== undefined || (selectedItem.phone && !selectedItem.department)
+      const isSalesTeamMember = itemToUse.department === 'sales' || itemToUse.team === 'sales' || (itemToUse.email && !itemToUse.phone)
+      const isLead = itemToUse.category !== undefined || (itemToUse.phone && !itemToUse.department)
       
       if (isSalesTeamMember && !isLead) {
         // Handle sales team member (team leader) - save as team lead with assigned team members
@@ -954,6 +959,11 @@ const Admin_sales_management = () => {
       setSelectedTeamMembers([])
       setAlreadyAssignedMembers([])
       setSalesLeadToggle(false)
+      setSelectedEmployeeForTeamLead(null)
+      setTeamLeadCreationStep(1)
+      
+      // Reload sales team to reflect changes
+      await loadSalesTeam()
       
     } catch (error) {
       console.error('Error assigning team member:', error)
@@ -961,6 +971,53 @@ const Admin_sales_management = () => {
       toast.error(errorMessage)
     } finally {
       setAssigningMembers(false)
+    }
+  }
+
+  const handleSetTeamTarget = (teamLead) => {
+    setSelectedTeamLeadForTarget(teamLead)
+    setTeamTargetAmount(teamLead.teamLeadTarget || '')
+    setTeamTargetReward(teamLead.teamLeadTargetReward || '')
+    setShowSetTeamTargetModal(true)
+  }
+
+  const handleSaveTeamTarget = async () => {
+    if (!selectedTeamLeadForTarget) {
+      toast.error('Team lead not selected')
+      return
+    }
+
+    const targetAmount = parseFloat(teamTargetAmount) || 0
+    const rewardAmount = parseFloat(teamTargetReward) || 0
+
+    if (targetAmount < 0) {
+      toast.error('Target amount must be non-negative')
+      return
+    }
+
+    if (rewardAmount < 0) {
+      toast.error('Reward amount must be non-negative')
+      return
+    }
+
+    try {
+      const teamLeadId = selectedTeamLeadForTarget._id || selectedTeamLeadForTarget.id
+      const response = await adminSalesService.setTeamLeadTarget(teamLeadId, targetAmount, rewardAmount)
+      
+      if (response && response.success) {
+        toast.success('Team target and reward updated successfully')
+        setShowSetTeamTargetModal(false)
+        setSelectedTeamLeadForTarget(null)
+        setTeamTargetAmount('')
+        setTeamTargetReward('')
+        // Refresh sales team data
+        await loadSalesTeam()
+      } else {
+        toast.error(response?.message || 'Failed to update team target')
+      }
+    } catch (error) {
+      console.error('Error setting team target:', error)
+      toast.error(error?.message || 'Failed to update team target')
     }
   }
 
@@ -996,9 +1053,41 @@ const Admin_sales_management = () => {
         } else {
           toast.error(response.message || 'Failed to delete category')
         }
+      } else if (modalType === 'team-lead') {
+        // Remove team lead status instead of deleting the user
+        setDeletingMember(true)
+        const memberId = selectedItem._id || selectedItem.id
+        
+        // Check if this is actually a team lead
+        if (selectedItem.isTeamLead) {
+          // Remove team lead status and clear team members
+          const response = await adminSalesService.updateTeamMembers(memberId, {
+            teamMembers: [],
+            isTeamLead: false
+          })
+          
+          if (response && response.success) {
+            toast.success('Team lead status removed successfully. The employee is now a regular sales team member.')
+            await loadSalesTeam() // Refresh sales team list
+            await loadStatistics() // Refresh statistics
+          } else {
+            toast.error(response?.message || 'Failed to remove team lead status')
+          }
+        } else {
+          toast.error('This employee is not a team lead')
+        }
+        setDeletingMember(false)
       } else if (modalType === 'sales-team') {
         setDeletingMember(true)
         const memberId = selectedItem._id || selectedItem.id
+        
+        // Check if this is a team lead - if so, don't allow deletion
+        if (selectedItem.isTeamLead) {
+          toast.error('Cannot delete a team lead. Please remove team lead status first.')
+          setDeletingMember(false)
+          return
+        }
+        
         const response = await adminSalesService.deleteSalesMember(memberId)
         if (response.success) {
           toast.success('Sales team member deleted successfully')
@@ -1087,8 +1176,15 @@ const Admin_sales_management = () => {
     setShowViewModal(false)
     setShowDeleteModal(false)
     setShowAddLeadModal(false)
+    setShowCategoryEditModal(false)
+    setShowCategoryDeleteModal(false)
     setShowBulkLeadModal(false)
     setShowTargetModal(false)
+    setTargets([
+      { targetNumber: 1, amount: '', date: '', time: '' },
+      { targetNumber: 2, amount: '', date: '', time: '' },
+      { targetNumber: 3, amount: '', date: '', time: '' }
+    ])
     setShowAssignLeadModal(false)
     setShowLeadListModal(false)
     setShowIncentiveModal(false)
@@ -1481,42 +1577,123 @@ const Admin_sales_management = () => {
   const handleEditTarget = (member) => {
     setSelectedItem(member)
     setTargetAmount((member.salesTarget || 0).toString())
+    
+    // Initialize targets from member data or defaults
+    if (member.salesTargets && member.salesTargets.length > 0) {
+      const memberTargets = member.salesTargets
+      setTargets([
+        {
+          targetNumber: 1,
+          amount: memberTargets.find(t => t.targetNumber === 1)?.amount?.toString() || '',
+          date: memberTargets.find(t => t.targetNumber === 1)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 1).targetDate).toISOString().split('T')[0] : '',
+          time: memberTargets.find(t => t.targetNumber === 1)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 1).targetDate).toTimeString().slice(0, 5) : ''
+        },
+        {
+          targetNumber: 2,
+          amount: memberTargets.find(t => t.targetNumber === 2)?.amount?.toString() || '',
+          date: memberTargets.find(t => t.targetNumber === 2)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 2).targetDate).toISOString().split('T')[0] : '',
+          time: memberTargets.find(t => t.targetNumber === 2)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 2).targetDate).toTimeString().slice(0, 5) : ''
+        },
+        {
+          targetNumber: 3,
+          amount: memberTargets.find(t => t.targetNumber === 3)?.amount?.toString() || '',
+          date: memberTargets.find(t => t.targetNumber === 3)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 3).targetDate).toISOString().split('T')[0] : '',
+          time: memberTargets.find(t => t.targetNumber === 3)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 3).targetDate).toTimeString().slice(0, 5) : ''
+        }
+      ])
+    } else {
+      // Reset to defaults
+      setTargets([
+        { targetNumber: 1, amount: '', date: '', time: '' },
+        { targetNumber: 2, amount: '', date: '', time: '' },
+        { targetNumber: 3, amount: '', date: '', time: '' }
+      ])
+    }
+    
     setShowTargetModal(true)
   }
 
   const handleSaveTarget = async () => {
-    if (!targetAmount || !selectedItem) {
-      toast.error('Please enter a valid target amount')
+    if (!selectedItem) {
+      toast.error('No member selected')
       return
     }
-    
-    const newTarget = parseFloat(targetAmount)
-    if (isNaN(newTarget) || newTarget < 0) {
-      toast.error('Please enter a valid target amount')
+
+    // Validate at least one target is set
+    const validTargets = targets.filter(t => t.amount && t.date && t.time)
+    if (validTargets.length === 0) {
+      toast.error('Please set at least one target with amount, date, and time')
       return
+    }
+
+    // Validate all targets
+    for (const target of validTargets) {
+      const amount = parseFloat(target.amount)
+      if (isNaN(amount) || amount < 0) {
+        toast.error(`Target ${target.targetNumber}: Please enter a valid amount`)
+        return
+      }
+
+      const targetDateTime = new Date(`${target.date}T${target.time}`)
+      if (isNaN(targetDateTime.getTime())) {
+        toast.error(`Target ${target.targetNumber}: Please enter a valid date and time`)
+        return
+      }
+
+      if (targetDateTime < new Date()) {
+        toast.error(`Target ${target.targetNumber}: Date and time cannot be in the past`)
+        return
+      }
     }
 
     try {
       setLoadingTarget(true)
       const memberId = selectedItem._id || selectedItem.id
-      const response = await adminSalesService.setSalesTarget(memberId, newTarget)
+      
+      // Prepare targets array for API
+      const targetsToSend = validTargets.map(t => ({
+        targetNumber: t.targetNumber,
+        amount: parseFloat(t.amount),
+        targetDate: new Date(`${t.date}T${t.time}`).toISOString()
+      }))
+
+      const response = await adminSalesService.setMultipleTargets(memberId, targetsToSend)
       
       if (response.success) {
-        toast.success('Target set successfully')
+        toast.success(`${validTargets.length} target(s) set successfully`)
         await loadSalesTeam()
         await loadStatistics()
         setShowTargetModal(false)
+    setTargets([
+      { targetNumber: 1, amount: '', date: '', time: '' },
+      { targetNumber: 2, amount: '', date: '', time: '' },
+      { targetNumber: 3, amount: '', date: '', time: '' }
+    ])
         setSelectedItem(null)
         setTargetAmount('')
+        setTargets([
+          { targetNumber: 1, amount: '', date: '', time: '' },
+          { targetNumber: 2, amount: '', date: '', time: '' },
+          { targetNumber: 3, amount: '', date: '', time: '' }
+        ])
       } else {
-        toast.error(response.message || 'Failed to set target')
+        toast.error(response.message || 'Failed to set targets')
       }
     } catch (error) {
-      console.error('Error setting target:', error)
-      toast.error(error.message || 'Failed to set target')
+      console.error('Error setting targets:', error)
+      toast.error(error.message || 'Failed to set targets')
     } finally {
       setLoadingTarget(false)
     }
+  }
+
+  const handleTargetChange = (index, field, value) => {
+    const updatedTargets = [...targets]
+    updatedTargets[index] = {
+      ...updatedTargets[index],
+      [field]: value
+    }
+    setTargets(updatedTargets)
   }
 
   // Handle lead assignment
@@ -1712,7 +1889,11 @@ const Admin_sales_management = () => {
       if (response.success) {
         toast.success('Category created successfully')
         await loadCategories() // Refresh categories list
-    closeModals()
+        // Reset form
+        setCategoryName('')
+        setCategoryDescription('')
+        setCategoryColor('#3B82F6')
+        setShowCategoryModal(false)
       } else {
         // Handle specific error cases
         if (response.message && response.message.includes('already exists')) {
@@ -1789,7 +1970,8 @@ const Admin_sales_management = () => {
       if (response.success) {
         toast.success('Category updated successfully')
         await loadCategories() // Refresh categories list
-    closeModals()
+        setShowCategoryEditModal(false)
+        setSelectedItem(null)
       } else {
         // Handle specific error cases
         if (response.message && response.message.includes('already exists')) {
@@ -1950,89 +2132,97 @@ const Admin_sales_management = () => {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"
           >
-            {/* Total Leads */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-blue-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-blue-400/20 to-indigo-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-blue-500/10">
-                    <FiUsers className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-blue-700">+{statistics?.leads?.new || 0}</p>
-                    <p className="text-xs text-blue-600">this month</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-blue-700 mb-1">Total Leads</p>
-                  <p className="text-lg font-bold text-blue-800">
-                    {totalLeadsCount > 0 ? totalLeadsCount : (statistics?.leads?.unassigned ?? 0)}
-                  </p>
-                </div>
+            {loadingStatistics ? (
+              <div className="col-span-full flex items-center justify-center py-8">
+                <Loading size="medium" />
               </div>
-            </div>
+            ) : (
+              <>
+                {/* Total Leads */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-blue-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-blue-400/20 to-indigo-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-blue-500/10">
+                        <FiUsers className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-blue-700">+{statistics?.leads?.new || 0}</p>
+                        <p className="text-xs text-blue-600">this month</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-blue-700 mb-1">Total Leads</p>
+                      <p className="text-lg font-bold text-blue-800">
+                        {totalLeadsCount > 0 ? totalLeadsCount : (statistics?.leads?.unassigned ?? 0)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Total Sales */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-emerald-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-emerald-400/20 to-green-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-emerald-500/10">
-                    <FiCreditCard className="h-4 w-4 text-emerald-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-emerald-700">{Math.round(statistics?.sales?.conversion || 0)}%</p>
-                    <p className="text-xs text-emerald-600">conversion</p>
+                {/* Total Sales */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-emerald-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-emerald-400/20 to-green-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-emerald-500/10">
+                        <FiCreditCard className="h-4 w-4 text-emerald-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-emerald-700">{Math.round(statistics?.sales?.conversion || 0)}%</p>
+                        <p className="text-xs text-emerald-600">conversion</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-emerald-700 mb-1">Total Sales</p>
+                      <p className="text-lg font-bold text-emerald-800">
+                        {formatCurrency(statistics?.sales?.total || 0)}
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-emerald-700 mb-1">Total Sales</p>
-                  <p className="text-lg font-bold text-emerald-800">
-                    {loadingStatistics ? '...' : formatCurrency(statistics?.sales?.total || 0)}
-                  </p>
-                </div>
-              </div>
-            </div>
 
-            {/* Earnings Collected */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-50 to-violet-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-purple-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-purple-400/20 to-violet-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-purple-500/10">
-                    <FiTrendingUp className="h-4 w-4 text-purple-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-purple-700">{formatCurrency(statistics?.earnings?.pending || 0)}</p>
-                    <p className="text-xs text-purple-600">pending</p>
+                {/* Earnings Collected */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-50 to-violet-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-purple-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-purple-400/20 to-violet-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-purple-500/10">
+                        <FiTrendingUp className="h-4 w-4 text-purple-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-purple-700">{formatCurrency(statistics?.earnings?.pending || 0)}</p>
+                        <p className="text-xs text-purple-600">pending</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-purple-700 mb-1">Earnings Collected</p>
+                      <p className="text-lg font-bold text-purple-800">{formatCurrency(statistics?.earnings?.collected || 0)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-purple-700 mb-1">Earnings Collected</p>
-                  <p className="text-lg font-bold text-purple-800">{formatCurrency(statistics?.earnings?.collected || 0)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* Sales Team */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-orange-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-orange-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-orange-500/10">
-                    <FiUser className="h-4 w-4 text-orange-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-orange-700">{statistics?.team?.performance || 0}%</p>
-                    <p className="text-xs text-orange-600">performance</p>
+                {/* Sales Team */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-orange-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-orange-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-orange-500/10">
+                        <FiUser className="h-4 w-4 text-orange-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-orange-700">{statistics?.team?.performance || 0}%</p>
+                        <p className="text-xs text-orange-600">performance</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-orange-700 mb-1">Sales Team</p>
+                      <p className="text-lg font-bold text-orange-800">{statistics?.team?.total || 0}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-orange-700 mb-1">Sales Team</p>
-                  <p className="text-lg font-bold text-orange-800">{statistics?.team?.total || 0}</p>
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </motion.div>
 
           {/* Statistics Cards - Row 2 */}
@@ -2042,85 +2232,73 @@ const Admin_sales_management = () => {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
           >
-            {/* New Leads */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-green-500/10">
-                    <FiPlus className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-green-700">Fresh</p>
-                    <p className="text-xs text-green-600">prospects</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-green-700 mb-1">New Leads</p>
-                  <p className="text-lg font-bold text-green-800">{statistics?.leads?.new || 0}</p>
-                </div>
+            {loadingStatistics ? (
+              <div className="col-span-full flex items-center justify-center py-8">
+                <Loading size="medium" />
               </div>
-            </div>
+            ) : (
+              <>
+                {/* New Leads */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-green-500/10">
+                        <FiPlus className="h-4 w-4 text-green-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-green-700">Fresh</p>
+                        <p className="text-xs text-green-600">prospects</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-green-700 mb-1">New Leads</p>
+                      <p className="text-lg font-bold text-green-800">{statistics?.leads?.new || 0}</p>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Connected Leads */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-50 to-blue-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-indigo-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-indigo-400/20 to-blue-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-indigo-500/10">
-                    <FiPhone className="h-4 w-4 text-indigo-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-indigo-700">In contact</p>
-                    <p className="text-xs text-indigo-600">active</p>
+                {/* Connected Leads */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-50 to-blue-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-indigo-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-indigo-400/20 to-blue-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-indigo-500/10">
+                        <FiPhone className="h-4 w-4 text-indigo-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-indigo-700">In contact</p>
+                        <p className="text-xs text-indigo-600">active</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-indigo-700 mb-1">Connected</p>
+                      <p className="text-lg font-bold text-indigo-800">{statistics?.leads?.connected || 0}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-indigo-700 mb-1">Connected</p>
-                  <p className="text-lg font-bold text-indigo-800">{statistics?.leads?.connected || 0}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* Hot Leads */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-rose-50 to-pink-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-rose-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-400/20 to-pink-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-rose-500/10">
-                    <FiStar className="h-4 w-4 text-rose-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-rose-700">High priority</p>
-                    <p className="text-xs text-rose-600">urgent</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-rose-700 mb-1">Hot Leads</p>
-                  <p className="text-lg font-bold text-rose-800">{statistics?.leads?.hot || 0}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Total Clients */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-teal-50 to-cyan-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-teal-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-teal-400/20 to-cyan-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-teal-500/10">
-                    <FiHome className="h-4 w-4 text-teal-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-teal-700">{statistics?.clients?.retention || 0}%</p>
-                    <p className="text-xs text-teal-600">retention</p>
+                {/* Hot Leads */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-rose-50 to-pink-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-rose-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-400/20 to-pink-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-rose-500/10">
+                        <FiStar className="h-4 w-4 text-rose-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-rose-700">High priority</p>
+                        <p className="text-xs text-rose-600">urgent</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-rose-700 mb-1">Hot Leads</p>
+                      <p className="text-lg font-bold text-rose-800">{statistics?.leads?.hot || 0}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-teal-700 mb-1">Total Clients</p>
-                  <p className="text-lg font-bold text-teal-800">{statistics?.clients?.total || 0}</p>
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </motion.div>
 
           {/* Navigation Tabs */}
@@ -2128,8 +2306,9 @@ const Admin_sales_management = () => {
             <nav className="flex space-x-8 px-6">
               {[
                 { key: 'leads', label: 'Leads', icon: FiUsers },
+                { key: 'lead-management', label: 'Lead Management', icon: FiTarget },
                 { key: 'sales-team', label: 'Sales Team', icon: FiUser },
-                { key: 'clients', label: 'Clients', icon: FiHome },
+                { key: 'team-leads', label: 'Team Leads', icon: FiUserPlus },
                 { key: 'category-performance', label: 'Category Performance', icon: FiTrendingUp }
               ].map((tab) => (
                 <button
@@ -2151,6 +2330,7 @@ const Admin_sales_management = () => {
           {/* Tab Content */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             {/* Search and Filter */}
+            {activeTab !== 'lead-management' && (
             <div className="p-6 border-b border-gray-200">
                <div className="flex flex-col lg:flex-row gap-4 items-center">
                 <div className="w-full lg:w-80 relative">
@@ -2192,12 +2372,12 @@ const Admin_sales_management = () => {
                            onChange={(e) => setSelectedCategory(e.target.value)}
                            className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white appearance-none cursor-pointer hover:border-gray-400 transition-colors shadow-sm"
                          >
-                           <option value="">🏷️ All Categories</option>
-                           {leadCategories.map((category, index) => (
-                             <option key={category._id || category.id || `category-${index}`} value={category._id || category.id}>
-                               {safeRender(category.icon, '📋')} {safeRender(category.name, 'Category')}
-                             </option>
-                           ))}
+                          <option value="">🏷️ All Categories</option>
+                          {leadCategories.map((category, index) => (
+                            <option key={category._id || category.id || `category-${index}`} value={category._id || category.id}>
+                              {safeRender(category.name, 'Category')}
+                            </option>
+                          ))}
                          </select>
                          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                            <FiTarget className="h-4 w-4 text-gray-400" />
@@ -2218,12 +2398,6 @@ const Admin_sales_management = () => {
                              <option value="inactive">Inactive</option>
                            </>
                          )}
-                         {activeTab === 'clients' && (
-                           <>
-                             <option value="active">Active</option>
-                             <option value="inactive">Inactive</option>
-                           </>
-                         )}
                        </select>
                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                          <FiFilter className="h-4 w-4 text-gray-400" />
@@ -2233,53 +2407,15 @@ const Admin_sales_management = () => {
                  </div>
                </div>
              </div>
+            )}
 
             {/* Content based on active tab */}
             <div className="p-6">
               {activeTab === 'leads' && (
                 <div className="space-y-6">
-                  {/* Leads Management Header */}
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">Lead Management</h3>
-                        <p className="text-gray-600 text-sm mt-1">Organize and manage your leads with categories</p>
-                      </div>
-                      <div className="flex items-center">
-                        <button
-                          onClick={() => setShowCategoryModal(true)}
-                          className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
-                        >
-                          <FiTarget className="h-4 w-4" />
-                          <span>Manage Categories</span>
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Category Overview */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                      {leadCategories.map((category, index) => (
-                        <div key={category._id || category.id || `category-${index}`} className="bg-white rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow">
-                          <div className="flex items-center space-x-2">
-                            <div 
-                              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-                              style={{ backgroundColor: category.color }}
-                            >
-                              {safeRender(category.icon, '📋')}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-semibold text-gray-900 truncate">{category.name}</div>
-                              <div className="text-xs text-gray-500">{category.leadCount} leads</div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* Leads List */}
-                  <div className="bg-white rounded-lg border border-gray-200">
-                    <div className="p-4 border-b border-gray-200">
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+                    <div className="p-4 border-b border-gray-200 min-w-[600px]">
                       <div className="flex items-center justify-between">
                         <h3 className="text-lg font-semibold text-gray-900">All Leads</h3>
                         <div className="text-sm text-gray-500">
@@ -2288,8 +2424,15 @@ const Admin_sales_management = () => {
                         </div>
                       </div>
                       
-                    <div className="divide-y divide-gray-200">
-                      {paginatedData.length > 0 ? paginatedData.map((lead, index) => (
+                    <div className="divide-y divide-gray-200 min-w-[600px]">
+                      {loadingLeads ? (
+                        <div className="p-8">
+                          <div className="flex flex-col items-center justify-center space-y-4">
+                            <Loading size="medium" />
+                            <p className="text-sm text-gray-500">Loading leads...</p>
+                          </div>
+                        </div>
+                      ) : paginatedData.length > 0 ? paginatedData.map((lead, index) => (
                         <div key={lead._id || lead.id || `lead-${index}`} className="p-4 hover:bg-gray-50 transition-colors">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-4">
@@ -2315,7 +2458,7 @@ const Admin_sales_management = () => {
                                   className="inline-flex px-2 py-1 text-xs font-bold rounded-full text-white"
                                   style={{ backgroundColor: lead.category?.color || '#6B7280' }}
                                 >
-                                  {safeRender(lead.category?.icon, '📋')} {safeRender(lead.category?.name, 'N/A')}
+                                  {safeRender(lead.category?.name, 'N/A')}
                                 </span>
                               )}
                           <button 
@@ -2349,363 +2492,522 @@ const Admin_sales_management = () => {
                 </div>
               )}
 
-              {activeTab === 'sales-team' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {paginatedData.length > 0 ? paginatedData.map((member, index) => (
-                    <div key={member._id || member.id || `member-${index}`} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
-                      {/* Header Section */}
-                      <div className="flex items-center space-x-3 mb-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-dark text-white rounded-full flex items-center justify-center font-bold text-sm shadow-md">
-                          {member?.avatar || 'S'}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-bold text-gray-900 truncate">{member?.name || 'Unknown Member'}</h3>
-                          <p className="text-xs text-gray-600 font-medium">{member?.position || 'Sales Rep'}</p>
-                          <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border mt-1 ${getStatusColor(member?.status || 'active')}`}>
-                            {member?.status || 'active'}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {/* Key Metrics */}
-                      <div className="grid grid-cols-2 gap-2 mb-3">
-                        <div className="bg-blue-50 rounded-lg p-2">
-                          <div className="text-xs text-blue-600 font-medium mb-1">Leads</div>
-                          <div className="text-xs font-bold text-blue-800">
-                            {member?.performance?.totalLeads || 0}
-                          </div>
-                        </div>
-                        <div className="bg-purple-50 rounded-lg p-2">
-                          <div className="text-xs text-purple-600 font-medium mb-1">Converted</div>
-                          <div className="text-xs font-bold text-purple-800">
-                            {member?.performance?.convertedLeads || 0}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Revenue Metrics */}
-                      <div className="grid grid-cols-2 gap-2 mb-3">
-                        <div className="bg-orange-50 rounded-lg p-2">
-                          <div className="text-xs text-orange-600 font-medium mb-1">Revenue</div>
-                          <div className="text-xs font-bold text-orange-800">
-                            {formatCurrency(member?.performance?.totalValue || 0)}
-                          </div>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-2">
-                          <div className="text-xs text-gray-600 font-medium mb-1">Target</div>
-                          <div className="text-xs font-bold text-gray-800">
-                            {formatCurrency(member?.salesTarget || 0)}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Incentive Metrics */}
-                      <div className="bg-green-50 rounded-lg p-2 mb-2">
-                        <div className="text-xs text-green-600 font-medium mb-1">Per Conversion</div>
-                        <div className="text-xs font-bold text-green-800">
-                          {formatCurrency(member?.incentivePerClient || 0)}
-                        </div>
-                      </div>
-                      <div className="bg-blue-50 rounded-lg p-2 mb-3">
-                        <div className="text-xs text-blue-600 font-medium mb-1">Total Earned</div>
-                        <div className="text-xs font-bold text-blue-800">
-                          {formatCurrency(member?.currentIncentive || 0)}
-                        </div>
-                      </div>
-
-                      {/* Footer */}
-                      <div className="flex items-center justify-center pt-3 border-t border-gray-100">
-                        <div className="flex items-center space-x-1">
-                          <button 
-                            onClick={() => handleView(member, 'sales-team')}
-                            className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all duration-200 group-hover:text-primary"
-                            title="View Details"
-                          >
-                            <FiEye className="h-3 w-3" />
-                          </button>
-                          <button 
-                            onClick={() => handleAssignTeam(member)}
-                            className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
-                            title="Assign Team Members"
-                          >
-                            <FiUserPlus className="h-3 w-3" />
-                          </button>
-                          <button 
-                            onClick={() => handleEditTarget(member)}
-                            className="text-gray-400 hover:text-orange-600 p-1.5 rounded hover:bg-orange-50 transition-all duration-200 group-hover:text-orange-600"
-                            title="Edit Target"
-                          >
-                            <FiTarget className="h-3 w-3" />
-                          </button>
-                          <button 
-                            onClick={() => handleAssignLead(member)}
-                            className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
-                            title="Assign Leads"
-                          >
-                            <FiUsers className="h-3 w-3" />
-                          </button>
-                          <button 
-                            onClick={() => handleEditIncentive(member)}
-                            className="text-gray-400 hover:text-green-600 p-1.5 rounded hover:bg-green-50 transition-all duration-200 group-hover:text-green-600"
-                            title="Set Incentive"
-                          >
-                            <FiCreditCard className="h-3 w-3" />
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(member, 'sales-team')}
-                            className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all duration-200 group-hover:text-red-600"
-                            title="Delete Member"
-                          >
-                            <FiTrash2 className="h-3 w-3" />
-                          </button>
-                        </div>
-                      </div>
+              {activeTab === 'lead-management' && (
+                <div className="space-y-6">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">Lead Management</h3>
+                      <p className="text-gray-600 text-sm mt-1">Organize and manage your leads with categories</p>
                     </div>
-                  )) : (
-                    <div className="col-span-full flex flex-col items-center justify-center py-12 text-gray-500">
-                      <FiUser className="h-12 w-12 mb-4 text-gray-300" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No Sales Team Found</h3>
-                      <p className="text-sm text-gray-600 text-center max-w-md">
-                        No sales team members are available at the moment. Sales team members will appear here once they are added to the system.
-                      </p>
+                    <button
+                      onClick={() => setShowCategoryModal(true)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      <FiTarget className="h-4 w-4" />
+                      <span>Add Category</span>
+                    </button>
+                  </div>
+
+                  {/* Simple List */}
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+                    <div className="divide-y divide-gray-200 min-w-[600px]">
+                      {loadingCategories ? (
+                        <div className="p-8">
+                          <div className="flex flex-col items-center justify-center space-y-4">
+                            <Loading size="medium" />
+                            <p className="text-sm text-gray-500">Loading categories...</p>
+                          </div>
+                        </div>
+                      ) : leadCategories.length > 0 ? (
+                        leadCategories.map((category, index) => {
+                          // Calculate total leads for this category
+                          const allLeadsCombined = [...allLeads, ...assignedLeads]
+                          const uniqueLeadIds = new Set()
+                          const allCategoryLeads = allLeadsCombined.filter(lead => {
+                            const leadId = lead._id || lead.id
+                            if (!leadId || uniqueLeadIds.has(leadId)) return false
+                            if (!lead.category) return false
+                            const categoryMatch = (lead.category._id || lead.category.id) === (category._id || category.id)
+                            if (categoryMatch) uniqueLeadIds.add(leadId)
+                            return categoryMatch
+                          })
+                          const totalLeads = allCategoryLeads.length || category.leadCount || 0
+                          
+                          return (
+                            <div 
+                              key={category._id || category.id || `category-${index}`} 
+                              className="px-6 py-4 hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-4 flex-1">
+                                  <div 
+                                    className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-base"
+                                    style={{ backgroundColor: category.color }}
+                                  >
+                                    {safeRender(category.icon, '📋')}
+                                  </div>
+                                  <div className="flex-1">
+                                    <h4 className="text-base font-semibold text-gray-900">{category.name}</h4>
+                                    {category.description && (
+                                      <p className="text-sm text-gray-500 mt-0.5">{category.description}</p>
+                                    )}
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-lg font-bold text-gray-900">{totalLeads}</div>
+                                    <div className="text-xs text-gray-500">leads</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-2 ml-4">
+                                  <button
+                                    onClick={() => handleEditCategory(category)}
+                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                    title="Edit Category"
+                                  >
+                                    <FiEdit3 className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteCategory(category)}
+                                    disabled={deletingCategory}
+                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Delete Category"
+                                  >
+                                    <FiTrash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                          <FiTarget className="h-12 w-12 mb-4 text-gray-300" />
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Categories Found</h3>
+                          <p className="text-sm text-gray-600 text-center max-w-md mb-4">
+                            Get started by creating your first lead category.
+                          </p>
+                          <button
+                            onClick={() => setShowCategoryModal(true)}
+                            className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                          >
+                            <FiPlus className="h-4 w-4" />
+                            <span>Create Category</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
 
-              {activeTab === 'clients' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {paginatedData.length > 0 ? paginatedData.map((client) => (
-                    <div key={client.id} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
-                      {/* Header Section */}
-                      <div className="flex items-center space-x-3 mb-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-md">
-                          {client?.avatar || 'C'}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-bold text-gray-900 truncate">{client?.name || 'Unknown Client'}</h3>
-                          <p className="text-xs text-gray-600 font-medium">{client?.contactPerson || 'N/A'}</p>
-                          <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border mt-1 ${getStatusColor(client?.status || 'active')}`}>
-                            {client?.status || 'active'}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {/* Revenue Highlight */}
-                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-2 mb-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-green-700">Total Spent</span>
-                          <span className="text-sm font-bold text-green-600">{formatCurrency(client?.totalSpent || 0)}</span>
-                        </div>
-                      </div>
-                      
-                      {/* Key Metrics */}
-                      <div className="grid grid-cols-2 gap-2 mb-3">
-                        <div className="bg-blue-50 rounded-lg p-2">
-                          <div className="text-xs text-blue-600 font-medium mb-1">Projects</div>
-                          <div className="text-xs font-bold text-blue-800">{client?.projectsCompleted || 0}</div>
-                        </div>
-                        <div className="bg-purple-50 rounded-lg p-2">
-                          <div className="text-xs text-purple-600 font-medium mb-1">Industry</div>
-                          <div className="text-xs font-bold text-purple-800">{client?.industry || 'N/A'}</div>
-                        </div>
-                      </div>
-                      
-                      {/* Location & Contact Info */}
-                      <div className="grid grid-cols-2 gap-2 mb-3">
-                        <div className="bg-orange-50 rounded-lg p-2">
-                          <div className="text-xs text-orange-600 font-medium mb-1">Location</div>
-                          <div className="text-xs font-bold text-orange-800">{client?.location || 'N/A'}</div>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-2">
-                          <div className="text-xs text-gray-600 font-medium mb-1">Joined</div>
-                          <div className="text-xs font-bold text-gray-800">{formatDate(client?.joinDate || new Date())}</div>
-                        </div>
-                      </div>
+              {activeTab === 'sales-team' && (
+                <div className="space-y-3">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-bold text-gray-900">Sales Team</h3>
+                    <span className="text-xs text-gray-500">{paginatedData.length} members</span>
+                  </div>
 
-                      {/* Footer */}
-                      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                        <div className="flex items-center space-x-1">
-                          <button 
-                            onClick={() => handleView(client, 'clients')}
-                            className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all duration-200 group-hover:text-primary"
-                            title="View Details"
-                          >
-                            <FiEye className="h-3 w-3" />
-                          </button>
-                          <button 
-                            onClick={() => handleEdit(client, 'clients')}
-                            className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
-                            title="Edit Client"
-                          >
-                            <FiEdit3 className="h-3 w-3" />
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(client, 'clients')}
-                            className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all duration-200 group-hover:text-red-600"
-                            title="Delete Client"
-                          >
-                            <FiTrash2 className="h-3 w-3" />
-                          </button>
-                        </div>
-                        <div className="text-xs text-gray-400 font-medium">
-                          {formatDate(client?.lastContact || new Date())}
-                        </div>
+                  {/* Sales Team List */}
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+                    {/* Table Header */}
+                    <div className="px-3 py-2 border-b border-gray-200 bg-gray-50 min-w-[900px]">
+                      <div className="grid grid-cols-7 gap-3 items-center text-xs font-semibold text-gray-700">
+                        <div>Member</div>
+                        <div className="text-center">Status</div>
+                        <div className="text-center">Leads</div>
+                        <div className="text-center">Converted</div>
+                        <div className="text-center">Revenue</div>
+                        <div className="text-center">Earned</div>
+                        <div className="text-center">Actions</div>
                       </div>
                     </div>
-                  )) : (
-                    <div className="col-span-full flex flex-col items-center justify-center py-12 text-gray-500">
-                      <FiHome className="h-12 w-12 mb-4 text-gray-300" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No Clients Found</h3>
-                      <p className="text-sm text-gray-600 text-center max-w-md">
-                        No clients are available at the moment. Clients will appear here once they are added to the system.
-                      </p>
+
+                    {/* Team Members List */}
+                    <div className="divide-y divide-gray-200 min-w-[900px]">
+                      {loadingSalesTeam ? (
+                        <div className="p-8">
+                          <div className="flex flex-col items-center justify-center space-y-4">
+                            <Loading size="medium" />
+                            <p className="text-sm text-gray-500">Loading sales team...</p>
+                          </div>
+                        </div>
+                      ) : paginatedData.length > 0 ? (
+                        paginatedData.map((member, index) => (
+                          <div 
+                            key={member._id || member.id || `member-${index}`} 
+                            className="px-3 py-2 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="grid grid-cols-7 gap-3 items-center">
+                              {/* Member Info */}
+                              <div className="flex items-center space-x-2 min-w-0">
+                                <div className="w-7 h-7 bg-gradient-to-br from-primary to-primary-dark text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                  {member?.avatar || 'S'}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="text-xs font-semibold text-gray-900 truncate">{member?.name || 'Unknown Member'}</h4>
+                                  <span className="text-xs text-gray-500 truncate">{member?.position || 'Sales Rep'}</span>
+                                </div>
+                              </div>
+
+                              {/* Status */}
+                              <div className="text-center">
+                                <span className={`inline-flex px-2 py-0.5 text-xs font-bold rounded-full ${getStatusColor(member?.status || 'active')}`}>
+                                  {member?.status || 'active'}
+                                </span>
+                              </div>
+
+                              {/* Leads */}
+                              <div className="text-center">
+                                <span className="text-xs font-bold text-gray-900">{member?.performance?.totalLeads || 0}</span>
+                              </div>
+
+                              {/* Converted */}
+                              <div className="text-center">
+                                <span className="text-xs font-bold text-green-600">{member?.performance?.convertedLeads || 0}</span>
+                              </div>
+
+                              {/* Revenue */}
+                              <div className="text-center">
+                                <span className="text-xs font-bold text-blue-600">{formatCurrency(member?.performance?.totalValue || 0)}</span>
+                              </div>
+
+                              {/* Earned */}
+                              <div className="text-center">
+                                <span className="text-xs font-bold text-green-600">{formatCurrency(member?.currentIncentive || 0)}</span>
+                              </div>
+
+                              {/* Actions */}
+                              <div className="text-center">
+                                <div className="flex items-center justify-center space-x-0.5">
+                                  <button 
+                                    onClick={() => handleView(member, 'sales-team')}
+                                    className="p-1 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors"
+                                    title="View"
+                                  >
+                                    <FiEye className="h-3 w-3" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleEditTarget(member)}
+                                    className="p-1 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors"
+                                    title="Target"
+                                  >
+                                    <FiTarget className="h-3 w-3" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleAssignLead(member)}
+                                    className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                    title="Assign"
+                                  >
+                                    <FiUsers className="h-3 w-3" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleEditIncentive(member)}
+                                    className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                                    title="Incentive"
+                                  >
+                                    <FiCreditCard className="h-3 w-3" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDelete(member, 'sales-team')}
+                                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    title="Delete"
+                                  >
+                                    <FiTrash2 className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-10 text-gray-500">
+                          <FiUser className="h-8 w-8 mb-2 text-gray-300" />
+                          <h3 className="text-sm font-semibold text-gray-900 mb-1">No Sales Team Found</h3>
+                          <p className="text-xs text-gray-600 text-center max-w-sm">
+                            Sales team members will appear here once they are added.
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'team-leads' && (
+                <div className="space-y-4">
+                  {/* Header with Create Button */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Team Leads Management</h3>
+                      <p className="text-sm text-gray-500 mt-1">Create and manage team leads with assigned team members</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedItem(null)
+                        setSelectedTeamMembers([])
+                        setAlreadyAssignedMembers([])
+                        setSalesLeadToggle(false)
+                        setSelectedEmployeeForTeamLead(null)
+                        setTeamLeadCreationStep(1)
+                        setShowAssignTeamModal(true)
+                      }}
+                      className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      <FiUserPlus className="h-4 w-4" />
+                      <span>Create Team Lead</span>
+                    </button>
+                  </div>
+
+                  {/* Team Leads List */}
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    {/* Table Header */}
+                    <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-purple-100">
+                      <div className="grid grid-cols-5 gap-4 items-center text-sm font-semibold text-gray-700">
+                        <div>Team Lead</div>
+                        <div className="text-center">Team Members</div>
+                        <div className="text-center">Status</div>
+                        <div className="text-center">Performance</div>
+                        <div className="text-center">Actions</div>
+                      </div>
+                    </div>
+
+                    {/* Team Leads List Items */}
+                    <div className="divide-y divide-gray-200">
+                      {loadingSalesTeam ? (
+                        <div className="p-8">
+                          <div className="flex flex-col items-center justify-center space-y-4">
+                            <Loading size="medium" />
+                            <p className="text-sm text-gray-500">Loading team leads...</p>
+                          </div>
+                        </div>
+                      ) : paginatedData.length > 0 ? (
+                        paginatedData.map((teamLead, index) => {
+                          const teamMemberIds = teamLead.teamMembers || []
+                          const teamMemberCount = Array.isArray(teamMemberIds) ? teamMemberIds.length : 0
+                          
+                          // Extract IDs from teamMembers (handle both populated objects and IDs)
+                          const extractedTeamMemberIds = teamMemberIds.map(tm => {
+                            if (typeof tm === 'object' && tm !== null) {
+                              return String(tm._id || tm.id || tm)
+                            }
+                            return String(tm)
+                          })
+                          
+                          const teamMembersList = salesTeam.filter(m => {
+                            const mId = String(m._id || m.id)
+                            return extractedTeamMemberIds.includes(mId)
+                          })
+
+                          return (
+                            <div 
+                              key={teamLead._id || teamLead.id || `team-lead-${index}`} 
+                              className="px-6 py-5 hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="grid grid-cols-5 gap-4 items-center">
+                                {/* Team Lead Info */}
+                                <div className="flex items-center space-x-3 min-w-0">
+                                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-base flex-shrink-0 shadow-md ring-2 ring-purple-200">
+                                    {teamLead?.avatar || teamLead?.name?.charAt(0)?.toUpperCase() || 'TL'}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <h4 className="text-base font-semibold text-gray-900 truncate">
+                                      {teamLead?.name || 'Unknown Team Lead'}
+                                    </h4>
+                                    <p className="text-xs text-gray-500 truncate">
+                                      {teamLead?.email || teamLead?.position || 'Team Lead'}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Team Members - Clickable count */}
+                                <div className="text-center">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedTeamLeadForMembers({ teamLead, teamMembersList })
+                                      setShowTeamMembersModal(true)
+                                    }}
+                                    className="inline-flex flex-col items-center space-y-1 hover:opacity-80 transition-opacity cursor-pointer group"
+                                    disabled={teamMemberCount === 0}
+                                  >
+                                    <div className="flex items-center space-x-2">
+                                      <span className="text-lg font-bold text-purple-600 group-hover:text-purple-700">{teamMemberCount}</span>
+                                      <span className="text-xs text-gray-500">members</span>
+                                    </div>
+                                    {teamMemberCount > 0 && (
+                                      <span className="text-xs text-purple-600 group-hover:underline">Click to view</span>
+                                    )}
+                                    {teamMemberCount === 0 && (
+                                      <span className="text-xs text-gray-400 italic">No members</span>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {/* Status */}
+                                <div className="text-center">
+                                  <span className={`inline-flex px-3 py-1.5 text-xs font-bold rounded-full ${
+                                    teamLead?.isTeamLead 
+                                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                                      : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                  }`}>
+                                    {teamLead?.isTeamLead ? 'Active' : 'Inactive'}
+                                  </span>
+                                </div>
+
+                                {/* Performance */}
+                                <div className="text-center">
+                                  <div className="flex flex-col items-center space-y-1">
+                                    <div className="flex items-center space-x-1">
+                                      <FiBarChart className="w-3 h-3 text-gray-400" />
+                                      <span className="text-xs text-gray-600">Leads: <span className="font-bold text-gray-900">{teamLead?.performance?.totalLeads || 0}</span></span>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                      <FiCheckCircle className="w-3 h-3 text-green-500" />
+                                      <span className="text-xs text-gray-600">Conv: <span className="font-bold text-green-600">{teamLead?.performance?.convertedLeads || 0}</span></span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="text-center">
+                                  <div className="flex items-center justify-center space-x-1">
+                                    <button 
+                                      onClick={() => handleView(teamLead, 'sales-team')}
+                                      className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors"
+                                      title="View Details"
+                                    >
+                                      <FiEye className="h-4 w-4" />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleAssignTeam(teamLead)}
+                                      className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                                      title="Edit Team Lead"
+                                    >
+                                      <FiEdit3 className="h-4 w-4" />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleSetTeamTarget(teamLead)}
+                                      className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                                      title="Set Team Target & Reward"
+                                    >
+                                      <FiTarget className="h-4 w-4" />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDelete(teamLead, 'team-lead')}
+                                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                      title="Remove Team Lead Status"
+                                    >
+                                      <FiTrash2 className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                          <FiUserPlus className="h-12 w-12 mb-3 text-gray-300" />
+                          <h3 className="text-base font-semibold text-gray-900 mb-1">No Team Leads Found</h3>
+                          <p className="text-xs text-gray-600 text-center max-w-sm mb-4">
+                            Team leads will appear here once they are created. Click "Create Team Lead" to get started.
+                          </p>
+                          <button
+                            onClick={() => {
+                              setSelectedItem(null)
+                              setSelectedTeamMembers([])
+                              setAlreadyAssignedMembers([])
+                              setSalesLeadToggle(true)
+                              setShowAssignTeamModal(true)
+                            }}
+                            className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                          >
+                            <FiUserPlus className="h-4 w-4" />
+                            <span>Create Team Lead</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
               {activeTab === 'category-performance' && (
-                <div className="space-y-6">
-                  {/* Overall Performance Header */}
-                  <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-6 border border-purple-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">Category Performance Breakdown</h3>
-                        <p className="text-gray-600 text-sm mt-1">Analyze lead conversion rates and performance by category</p>
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        <span className="font-semibold">{categoryPerformance.length}</span> categories analyzed
-                      </div>
-                    </div>
-                    
-                    {/* Overall Performance Metrics */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-white rounded-lg p-4 border border-gray-200">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <FiUsers className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-600">Total Leads</div>
-                            <div className="text-lg font-bold text-gray-900">{categoryPerformanceMetrics.totalLeads}</div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-white rounded-lg p-4 border border-gray-200">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                            <FiCheckCircle className="h-5 w-5 text-green-600" />
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-600">Converted</div>
-                            <div className="text-lg font-bold text-gray-900">{categoryPerformanceMetrics.totalConverted}</div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-white rounded-lg p-4 border border-gray-200">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                            <FiTrendingUp className="h-5 w-5 text-purple-600" />
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-600">Conversion Rate</div>
-                            <div className="text-lg font-bold text-gray-900">{categoryPerformanceMetrics.overallConversionRate}%</div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-white rounded-lg p-4 border border-gray-200">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                            <FiCreditCard className="h-5 w-5 text-yellow-600" />
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-600">Avg Deal Value</div>
-                            <div className="text-lg font-bold text-gray-900">{formatCurrency(categoryPerformanceMetrics.avgDealValue)}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                <div className="space-y-4">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-gray-900">Category Performance</h3>
+                    <span className="text-sm text-gray-500">{categoryPerformance.length} categories</span>
                   </div>
 
-                  {/* Category Performance Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                    {categoryPerformance.map((category, index) => (
-                      <div key={category._id || category.id || `category-${index}`} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all duration-200 hover:scale-105">
-                        {/* Category Header */}
-                        <div className="flex items-center space-x-2 mb-3">
+                  {/* Category Performance List */}
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+                    {/* Table Header */}
+                    <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 min-w-[700px]">
+                      <div className="grid grid-cols-5 gap-4 items-center text-sm font-semibold text-gray-700">
+                        <div>Category</div>
+                        <div className="text-center">Leads</div>
+                        <div className="text-center">Converted</div>
+                        <div className="text-center">Rate</div>
+                        <div className="text-center">Revenue</div>
+                      </div>
+                    </div>
+
+                    {/* Category List Items */}
+                    <div className="divide-y divide-gray-200 min-w-[700px]">
+                      {categoryPerformance.length > 0 ? (
+                        categoryPerformance.map((category, index) => (
                           <div 
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-                            style={{ backgroundColor: category.color }}
+                            key={category._id || category.id || `category-${index}`} 
+                            className="px-4 py-3 hover:bg-gray-50 transition-colors"
                           >
-                            {category.icon}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-bold text-gray-900 truncate">{category.name}</h4>
-                            <p className="text-xs text-gray-600 truncate">{category.description}</p>
-                          </div>
-                        </div>
+                            <div className="grid grid-cols-5 gap-4 items-center">
+                              {/* Category Info */}
+                              <div className="flex items-center space-x-2 min-w-0">
+                                <div 
+                                  className="w-8 h-8 rounded flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                                  style={{ backgroundColor: category.color }}
+                                >
+                                  {safeRender(category.icon, '📋')}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="text-sm font-semibold text-gray-900 truncate">{category.name}</h4>
+                                </div>
+                              </div>
 
-                        {/* Key Metrics */}
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          <div className="bg-blue-50 rounded-lg p-2">
-                            <div className="text-xs text-blue-600 font-medium mb-1">Total Leads</div>
-                            <div className="text-lg font-bold text-blue-800">{category.totalLeads}</div>
-                          </div>
-                          <div className="bg-green-50 rounded-lg p-2">
-                            <div className="text-xs text-green-600 font-medium mb-1">Converted</div>
-                            <div className="text-lg font-bold text-green-800">{category.convertedLeads}</div>
-                          </div>
-                        </div>
+                              {/* Total Leads */}
+                              <div className="text-center">
+                                <span className="text-sm font-bold text-gray-900">{category.totalLeads}</span>
+                              </div>
 
-                        {/* Conversion Rate */}
-                        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-3 mb-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-xs text-purple-600 font-medium">Conversion Rate</div>
-                              <div className="text-lg font-bold text-purple-800">{category.conversionRate}%</div>
-                            </div>
-                            <div className="w-12 h-12 relative">
-                              <svg className="w-12 h-12 transform -rotate-90" viewBox="0 0 36 36">
-                                <path
-                                  className="text-gray-200"
-                                  stroke="currentColor"
-                                  strokeWidth="3"
-                                  fill="none"
-                                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                                />
-                                <path
-                                  className="text-purple-600"
-                                  stroke="currentColor"
-                                  strokeWidth="3"
-                                  strokeDasharray={`${category.conversionRate}, 100`}
-                                  fill="none"
-                                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                                />
-                              </svg>
-                            </div>
-                          </div>
-                        </div>
+                              {/* Converted */}
+                              <div className="text-center">
+                                <span className="text-sm font-bold text-green-600">{category.convertedLeads}</span>
+                              </div>
 
-                        {/* Total Revenue */}
-                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3">
-                          <div className="flex items-center space-x-2">
-                            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                              <FiCreditCard className="h-4 w-4 text-green-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs text-green-600 font-medium">Total Revenue</div>
-                              <div className="text-sm font-bold text-green-800 truncate">{formatCurrency(category.totalRevenue)}</div>
+                              {/* Conversion Rate */}
+                              <div className="text-center">
+                                <span className="text-sm font-bold text-purple-600">{category.conversionRate}%</span>
+                              </div>
+
+                              {/* Revenue */}
+                              <div className="text-center">
+                                <span className="text-sm font-bold text-blue-600">{formatCurrency(category.totalRevenue)}</span>
+                              </div>
                             </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                          <FiTrendingUp className="h-10 w-10 mb-3 text-gray-300" />
+                          <h3 className="text-base font-semibold text-gray-900 mb-1">No Data Available</h3>
+                          <p className="text-xs text-gray-600 text-center max-w-sm">
+                            Category performance data will appear here once categories have leads.
+                          </p>
                         </div>
-                      </div>
-                    ))}
+                      )}
+                    </div>
                   </div>
-
                 </div>
               )}
 
@@ -2757,13 +3059,24 @@ const Admin_sales_management = () => {
               className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Delete</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {modalType === 'team-lead' ? 'Remove Team Lead Status' : 'Confirm Delete'}
+              </h3>
               <p className="text-gray-600 mb-4">
-                {modalType === 'sales-team' 
-                  ? `Are you sure you want to delete "${selectedItem?.name}" from the sales team? This action cannot be undone.`
-                  : `Are you sure you want to delete this ${modalType}? This action cannot be undone.`
+                {modalType === 'team-lead'
+                  ? `Are you sure you want to remove team lead status from "${selectedItem?.name}"? They will become a regular sales team member and their team members will be unassigned.`
+                  : modalType === 'sales-team'
+                    ? `Are you sure you want to delete "${selectedItem?.name}" from the sales team? This action cannot be undone.`
+                    : `Are you sure you want to delete this ${modalType}? This action cannot be undone.`
                 }
               </p>
+              {modalType === 'team-lead' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-blue-800">
+                    <strong>Note:</strong> The employee will remain in the system as a regular sales team member. Only their team lead status and assigned team members will be removed.
+                  </p>
+                </div>
+              )}
               {modalType === 'sales-team' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                   <p className="text-sm text-yellow-800">
@@ -2782,17 +3095,21 @@ const Admin_sales_management = () => {
                 <button
                   onClick={confirmDelete}
                   disabled={deletingMember}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  className={`px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 ${
+                    modalType === 'team-lead' 
+                      ? 'bg-orange-600 hover:bg-orange-700' 
+                      : 'bg-red-600 hover:bg-red-700'
+                  }`}
                 >
                   {deletingMember ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Deleting...</span>
+                      <span>{modalType === 'team-lead' ? 'Removing...' : 'Deleting...'}</span>
                     </>
                   ) : (
                     <>
                       <FiTrash2 className="h-4 w-4" />
-                      <span>Delete</span>
+                      <span>{modalType === 'team-lead' ? 'Remove Team Lead' : 'Delete'}</span>
                     </>
                   )}
                 </button>
@@ -3464,6 +3781,105 @@ const Admin_sales_management = () => {
                 )}
               </div>
 
+              {/* Team Members Section - Only show if team lead */}
+              {selectedItem?.isTeamLead && (() => {
+                // Handle both populated objects and IDs
+                const teamMemberIds = (selectedItem?.teamMembers || []).map(tm => {
+                  if (typeof tm === 'object' && tm !== null) {
+                    return String(tm._id || tm.id || tm)
+                  }
+                  return String(tm)
+                })
+                
+                const teamMembersList = salesTeam.filter(member => {
+                  const mId = String(member._id || member.id)
+                  return teamMemberIds.includes(mId)
+                })
+                
+                return (
+                <div className="mt-6 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-bold text-gray-700 flex items-center">
+                      <FiUsers className="h-4 w-4 mr-2 text-purple-600" />
+                      Team Members ({teamMembersList.length})
+                    </h4>
+                    {teamMembersList.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setSelectedTeamLeadForMembers({ teamLead: selectedItem, teamMembersList })
+                          setShowViewModal(false)
+                          setShowTeamMembersModal(true)
+                        }}
+                        className="text-xs text-purple-600 hover:text-purple-800 font-medium"
+                      >
+                        View All →
+                      </button>
+                    )}
+                  </div>
+                  {teamMembersList.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {teamMembersList.slice(0, 6).map((member) => {
+                        const memberPerformance = member.performance || {}
+                        return (
+                          <div
+                            key={member._id || member.id}
+                            className="bg-white rounded-lg p-3 border border-purple-100 hover:border-purple-300 hover:shadow-sm transition-all"
+                          >
+                            <div className="flex items-center space-x-2 mb-2">
+                              <div className="w-8 h-8 bg-gradient-to-br from-purple-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm">
+                                {member?.avatar || member?.name?.charAt(0)?.toUpperCase() || 'M'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h6 className="text-sm font-semibold text-gray-900 truncate">
+                                  {member.name || 'Unknown'}
+                                </h6>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {member.email || member.employeeId || 'Member'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1 pt-2 border-t border-gray-100 text-xs">
+                              <div className="text-center">
+                                <p className="text-gray-500">Leads</p>
+                                <p className="font-bold text-gray-900">{memberPerformance.totalLeads || 0}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-gray-500">Conv</p>
+                                <p className="font-bold text-green-600">{memberPerformance.convertedLeads || 0}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-gray-500">Rate</p>
+                                <p className="font-bold text-purple-600">{memberPerformance.conversionRate?.toFixed(1) || 0}%</p>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {teamMembersList.length > 6 && (
+                        <div className="bg-white rounded-lg p-3 border border-purple-100 flex items-center justify-center">
+                          <button
+                            onClick={() => {
+                              setSelectedTeamLeadForMembers({ teamLead: selectedItem, teamMembersList })
+                              setShowViewModal(false)
+                              setShowTeamMembersModal(true)
+                            }}
+                            className="text-sm text-purple-600 hover:text-purple-800 font-medium"
+                          >
+                            +{teamMembersList.length - 6} more
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-gray-500">
+                      <FiUsers className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm">No team members assigned</p>
+                    </div>
+                  )}
+                </div>
+                )
+              })()}
+
               {/* Team Lead Incentive Section - Only show if team lead */}
               {selectedItem?.isTeamLead && selectedItem?.teamLeadIncentiveSummary && (
                 <div className="mt-6 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-lg p-4 border border-teal-200">
@@ -3539,154 +3955,6 @@ const Admin_sales_management = () => {
           </motion.div>
         )}
 
-        {/* Client View Details Modal */}
-        {showViewModal && modalType === 'clients' && selectedItem && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-            onClick={closeModals}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900">Client Details</h3>
-                  <p className="text-gray-600 text-sm mt-1">Complete information about the client</p>
-                </div>
-                <button
-                  onClick={closeModals}
-                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  <FiX className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Client Overview */}
-              <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-6 mb-6 border border-teal-200">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-16 h-16 bg-gradient-to-br from-teal-500 to-cyan-600 text-white rounded-full flex items-center justify-center font-bold text-xl shadow-md">
-                      {selectedItem.avatar}
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="text-xl font-bold text-gray-900 mb-1">{selectedItem.name}</h4>
-                      <p className="text-gray-600 font-medium mb-1">{selectedItem.contactPerson}</p>
-                      <p className="text-gray-500">{selectedItem.industry}</p>
-                    </div>
-                  </div>
-                  <span className={`inline-flex px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedItem.status)}`}>
-                    {selectedItem.status}
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white rounded-lg p-3">
-                    <div className="text-sm text-green-600 font-medium mb-1">Total Spent</div>
-                    <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem.totalSpent)}</div>
-                  </div>
-                  <div className="bg-white rounded-lg p-3">
-                    <div className="text-sm text-blue-600 font-medium mb-1">Projects</div>
-                    <div className="text-lg font-bold text-blue-800">{selectedItem.projectsCompleted}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Client Information */}
-              <div className="mb-6">
-                <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <FiHome className="h-5 w-5 mr-2 text-teal-600" />
-                  Client Information
-                </h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Company Name</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.name}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Contact Person</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.contactPerson}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Email</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.email}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Phone</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.phone}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Industry</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.industry}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Location</div>
-                    <div className="text-base font-semibold text-gray-900">{selectedItem.location}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Join Date</div>
-                    <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.joinDate)}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Last Contact</div>
-                    <div className="text-base font-semibold text-gray-900">{formatDate(selectedItem.lastContact)}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Business Metrics */}
-              <div className="mb-6">
-                <h5 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <FiTrendingUp className="h-5 w-5 mr-2 text-green-600" />
-                  Business Metrics
-                </h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                    <div className="text-sm text-green-600 font-medium mb-1">Total Revenue</div>
-                    <div className="text-lg font-bold text-green-700">{formatCurrency(selectedItem.totalSpent)}</div>
-                  </div>
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                    <div className="text-sm text-blue-600 font-medium mb-1">Projects Completed</div>
-                    <div className="text-lg font-bold text-blue-700">{selectedItem.projectsCompleted}</div>
-                  </div>
-                </div>
-                <div className="mt-4 bg-gray-50 rounded-lg p-4">
-                  <div className="text-sm text-gray-600 font-medium mb-2">Average Project Value</div>
-                  <div className="text-lg font-bold text-gray-900">
-                    {formatCurrency(selectedItem.totalSpent / selectedItem.projectsCompleted)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
-                <button
-                  onClick={closeModals}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => {
-                    setShowViewModal(false)
-                    setShowEditModal(true)
-                  }}
-                  className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold flex items-center space-x-2"
-                >
-                  <FiEdit3 className="h-4 w-4" />
-                  <span>Edit Client</span>
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-
         {/* Target Edit Modal */}
         {showTargetModal && selectedItem && (
           <motion.div
@@ -3700,13 +3968,13 @@ const Admin_sales_management = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 max-w-md w-full mx-4"
+              className="bg-white rounded-xl p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900">Set Target</h3>
-                  <p className="text-gray-600 text-sm mt-1">Set revenue target for {selectedItem.name}</p>
+                  <h3 className="text-xl font-bold text-gray-900">Set Multiple Targets</h3>
+                  <p className="text-gray-600 text-sm mt-1">Set up to 3 revenue targets with dates and times for {selectedItem.name}</p>
                 </div>
                 <button
                   onClick={closeModals}
@@ -3725,27 +3993,96 @@ const Admin_sales_management = () => {
                   <div className="flex-1">
                     <h4 className="font-semibold text-gray-900">{selectedItem.name}</h4>
                     <p className="text-sm text-gray-600">{selectedItem.position}</p>
-                    <div className="text-sm text-orange-700 font-medium">
-                      Current Target: {formatCurrency(selectedItem.salesTarget || 0)}
-                    </div>
+                    {selectedItem.salesTargets && selectedItem.salesTargets.length > 0 ? (
+                      <div className="mt-2 space-y-1">
+                        {selectedItem.salesTargets.map((t, idx) => (
+                          <div key={idx} className="text-xs text-orange-700">
+                            Target {t.targetNumber}: {formatCurrency(t.amount)} - {new Date(t.targetDate).toLocaleDateString()} {new Date(t.targetDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-orange-700 font-medium">
+                        Current Target: {formatCurrency(selectedItem.salesTarget || 0)}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Target Input */}
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">New Target Amount</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
-                  <input
-                    type="number"
-                    value={targetAmount}
-                    onChange={(e) => setTargetAmount(e.target.value)}
-                    placeholder="Enter target amount"
-                    className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-lg font-semibold"
-                  />
+              {/* Multiple Targets Input */}
+              <div className="space-y-6 mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">Set Multiple Targets</h3>
+                  <p className="text-xs text-gray-500">Set up to 3 targets with specific dates and times</p>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Enter the revenue target for this sales team member</p>
+
+                {targets.map((target, index) => (
+                  <div key={target.targetNumber} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                        {target.targetNumber}
+                      </div>
+                      <h4 className="font-semibold text-gray-900">Target {target.targetNumber}</h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Amount Input */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Target Amount</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">₹</span>
+                          <input
+                            type="number"
+                            value={target.amount}
+                            onChange={(e) => handleTargetChange(index, 'amount', e.target.value)}
+                            placeholder="Enter amount"
+                            className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm font-semibold"
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Date Input */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Target Date</label>
+                        <input
+                          type="date"
+                          value={target.date}
+                          onChange={(e) => handleTargetChange(index, 'date', e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                        />
+                      </div>
+
+                      {/* Time Input */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Target Time</label>
+                        <input
+                          type="time"
+                          value={target.time}
+                          onChange={(e) => handleTargetChange(index, 'time', e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {target.amount && target.date && target.time && (
+                      <div className="mt-3 text-xs text-gray-600 bg-white rounded p-2 border border-gray-200">
+                        <span className="font-medium">Target Deadline: </span>
+                        {new Date(`${target.date}T${target.time}`).toLocaleString('en-IN', {
+                          weekday: 'short',
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
 
               {/* Action Buttons */}
@@ -4208,6 +4545,7 @@ const Admin_sales_management = () => {
           </motion.div>
         )}
 
+
         {/* Category Management Modal */}
         {showCategoryModal && (
           <motion.div
@@ -4221,144 +4559,116 @@ const Admin_sales_management = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900">Manage Lead Categories</h3>
-                  <p className="text-gray-600 text-sm mt-1">Create and manage categories for organizing leads</p>
-                </div>
-                <button
-                  onClick={closeModals}
-                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  <FiX className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Add New Category Form */}
-              <div className="bg-gray-50 rounded-lg p-6 mb-6">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">Add New Category</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-gray-200">
+                <div className="flex items-center justify-between">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Category Name</label>
-                    <input
-                      type="text"
-                      value={categoryName}
-                      onChange={(e) => setCategoryName(e.target.value)}
-                      placeholder="Enter category name"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                    />
+                    <h3 className="text-xl font-bold text-gray-900">Add New Category</h3>
+                    <p className="text-gray-500 text-sm mt-1">Create a category to organize your leads</p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
-                    <input
-                      type="text"
-                      value={categoryDescription}
-                      onChange={(e) => setCategoryDescription(e.target.value)}
-                      placeholder="Enter description"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Color</label>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="color"
-                        value={categoryColor}
-                        onChange={(e) => setCategoryColor(e.target.value)}
-                        className="w-12 h-10 border border-gray-300 rounded-lg cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={categoryColor}
-                        onChange={(e) => setCategoryColor(e.target.value)}
-                        placeholder="#3B82F6"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 flex justify-end">
                   <button
-                    onClick={handleCreateCategory}
-                    disabled={!categoryName.trim() || creatingCategory}
-                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    onClick={closeModals}
+                    className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full transition-colors"
                   >
-                    {creatingCategory ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Creating...</span>
-                      </>
-                    ) : (
-                      <>
-                    <FiPlus className="h-4 w-4" />
-                    <span>Add Category</span>
-                      </>
-                    )}
+                    <FiX className="h-5 w-5" />
                   </button>
                 </div>
               </div>
 
-              {/* Categories List */}
-              <div className="space-y-3">
-                <h4 className="text-lg font-semibold text-gray-900">Existing Categories</h4>
-                {leadCategories.map((category, index) => (
-                  <div key={category._id || category.id || `category-${index}`} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div 
-                          className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-lg"
-                          style={{ backgroundColor: category.color }}
-                        >
-                          {category.icon}
-                        </div>
-                        <div>
-                          <h5 className="font-semibold text-gray-900">{category.name}</h5>
-                          <p className="text-sm text-gray-600">{category.description}</p>
-                          <div className="flex items-center space-x-4 mt-1">
-                            <span className="text-xs text-gray-500">
-                              {category.leadCount} leads
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              Created: {formatDate(category.createdAt)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleEditCategory(category)}
-                          className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50 transition-colors"
-                          title="Edit Category"
-                        >
-                          <FiEdit3 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCategory(category)}
-                          disabled={deletingCategory}
-                          className="text-red-600 hover:text-red-800 p-2 rounded hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Delete Category"
-                        >
-                          {deletingCategory ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
-                          ) : (
-                          <FiTrash2 className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
+              {/* Form */}
+              <div className="px-6 py-6 space-y-5">
+                {/* Category Name */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Category Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={categoryName}
+                    onChange={(e) => setCategoryName(e.target.value)}
+                    placeholder="e.g., Apps, Website, Taxi"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900 placeholder-gray-400"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Description <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <textarea
+                    value={categoryDescription}
+                    onChange={(e) => setCategoryDescription(e.target.value)}
+                    placeholder="Brief description about this category"
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900 placeholder-gray-400 resize-none"
+                  />
+                </div>
+
+                {/* Color Picker */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Color <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center space-x-3">
+                    <div className="relative">
+                      <input
+                        type="color"
+                        value={categoryColor}
+                        onChange={(e) => setCategoryColor(e.target.value)}
+                        className="w-16 h-12 border-2 border-gray-300 rounded-lg cursor-pointer appearance-none"
+                        style={{ backgroundColor: categoryColor }}
+                      />
+                      <div 
+                        className="absolute inset-0 border-2 border-white rounded-lg pointer-events-none shadow-sm"
+                        style={{ backgroundColor: categoryColor }}
+                      />
                     </div>
+                    <input
+                      type="text"
+                      value={categoryColor}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        if (value.match(/^#[0-9A-Fa-f]{0,6}$/) || value === '') {
+                          setCategoryColor(value || '#3B82F6')
+                        }
+                      }}
+                      placeholder="#3B82F6"
+                      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-gray-900 placeholder-gray-400 font-mono"
+                    />
                   </div>
-                ))}
+                  <p className="text-xs text-gray-500 mt-2">Choose a color to identify this category</p>
+                </div>
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200 mt-6">
+              {/* Footer */}
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 rounded-b-xl flex items-center justify-end space-x-3">
                 <button
                   onClick={closeModals}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                 >
-                  Close
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateCategory}
+                  disabled={!categoryName.trim() || creatingCategory}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 shadow-sm"
+                >
+                  {creatingCategory ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiPlus className="h-4 w-4" />
+                      <span>Create Category</span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>
@@ -4571,8 +4881,18 @@ const Admin_sales_management = () => {
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-xl font-bold">Sales Team Lead</h3>
-                    <p className="text-blue-100 text-sm mt-1">Select team members to assign</p>
+                    <h3 className="text-xl font-bold">
+                      {selectedItem ? 'Edit Team Lead' : 'Create Team Lead'}
+                    </h3>
+                    <p className="text-blue-100 text-sm mt-1">
+                      {selectedItem 
+                        ? 'Update team lead and assigned members' 
+                        : teamLeadCreationStep === 1 
+                          ? 'Step 1: Select a sales employee to make team lead'
+                          : teamLeadCreationStep === 2
+                            ? 'Step 2: Confirm team lead status'
+                            : 'Step 3: Assign team members'}
+                    </p>
                   </div>
                   <button
                     onClick={() => {
@@ -4580,6 +4900,8 @@ const Admin_sales_management = () => {
                       setSelectedItem(null)
                       setSelectedTeamMembers([])
                       setSalesLeadToggle(false)
+                      setSelectedEmployeeForTeamLead(null)
+                      setTeamLeadCreationStep(1)
                     }}
                     className="text-white hover:text-gray-200 transition-colors"
                   >
@@ -4590,49 +4912,77 @@ const Admin_sales_management = () => {
 
               {/* Content */}
               <div className="p-6 max-h-[60vh] overflow-y-auto">
-                {/* Sales Lead Toggle Section */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Sales Lead
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setSalesLeadToggle(!salesLeadToggle)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        salesLeadToggle ? 'bg-blue-600' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          salesLeadToggle ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
+                {selectedItem ? (
+                  /* Edit Mode - Show existing flow */
+                  <>
+                    {/* Sales Lead Toggle Section */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Sales Lead
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setSalesLeadToggle(!salesLeadToggle)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                            salesLeadToggle ? 'bg-blue-600' : 'bg-gray-300'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              salesLeadToggle ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
 
-                {/* Unassigned Team Members Dropdown - Only show when Sales Lead toggle is ON */}
-                {salesLeadToggle && (
+                    {/* Unassigned Team Members Dropdown - Only show when Sales Lead toggle is ON */}
+                    {salesLeadToggle && (
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Unassigned Team Members
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Unassigned Team Members
+                      </label>
+                      <span className="text-xs text-gray-500 italic">
+                        Team leads excluded
+                      </span>
+                    </div>
+                    <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-800 flex items-center space-x-1">
+                        <FiAlertCircle className="w-3 h-3 flex-shrink-0" />
+                        <span>Team leads cannot be added as team members to themselves or other team leads.</span>
+                      </p>
+                    </div>
                     <div className="border border-gray-300 rounded-lg max-h-64 overflow-y-auto">
                       {salesTeam.length > 0 ? (
                         <div className="divide-y divide-gray-200">
                           {salesTeam
                             .filter((member) => {
-                              // Show all sales team members except the currently selected item and already assigned ones
                               const memberId = member._id || member.id
                               const selectedItemId = selectedItem?._id || selectedItem?.id
-                              // Check if member is already assigned (handle both object and string IDs)
-                              const isAlreadyAssigned = alreadyAssignedMembers.some(assignedId => {
-                                const assignedIdStr = typeof assignedId === 'object' ? String(assignedId._id || assignedId.id) : String(assignedId)
-                                return String(memberId) === assignedIdStr
-                              })
-                              // Exclude only if it's the currently selected item or if it's already assigned
-                              return String(memberId) !== String(selectedItemId) && !isAlreadyAssigned
+                              
+                              // Determine if we're editing a team lead or creating/editing a lead
+                              const isEditingTeamLead = selectedItem && (selectedItem.department === 'sales' || selectedItem.team === 'sales') && !selectedItem.category
+                              const isCreatingOrEditingLead = !selectedItem || (selectedItem.category !== undefined || (selectedItem.phone && !selectedItem.department))
+                              
+                              if (isEditingTeamLead) {
+                                // When editing a team lead: exclude the team lead itself and already assigned members
+                                const isAlreadyAssigned = alreadyAssignedMembers.some(assignedId => {
+                                  const assignedIdStr = typeof assignedId === 'object' ? String(assignedId._id || assignedId.id) : String(assignedId)
+                                  return String(memberId) === assignedIdStr
+                                })
+                                const isTeamLead = member.isTeamLead === true
+                                return String(memberId) !== String(selectedItemId) && !isAlreadyAssigned && !isTeamLead
+                              } else if (isCreatingOrEditingLead) {
+                                // When creating/editing a lead: show all non-team-lead members (they can be assigned leads regardless of team assignment)
+                                const isTeamLead = member.isTeamLead === true
+                                return !isTeamLead
+                              } else {
+                                // Default: show all non-team-lead members
+                                const isTeamLead = member.isTeamLead === true
+                                return !isTeamLead
+                              }
                             })
                             .map((member) => {
                             const memberId = member._id || member.id
@@ -4758,38 +5108,596 @@ const Admin_sales_management = () => {
                     </div>
                   </div>
                 )}
+                  </>
+                ) : (
+                  /* Create Mode - Step by step flow */
+                  <>
+                    {/* Step 1: Select Sales Employee */}
+                    {teamLeadCreationStep === 1 && (
+                      <div className="space-y-4">
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Select Sales Employee to Make Team Lead
+                          </label>
+                          <p className="text-xs text-gray-500 mb-3">
+                            Choose a sales employee who will become the team lead. They cannot already be a team lead.
+                          </p>
+                          <div className="border border-gray-300 rounded-lg max-h-64 overflow-y-auto">
+                            {salesTeam.length > 0 ? (
+                              <div className="divide-y divide-gray-200">
+                                {salesTeam
+                                  .filter((member) => !member.isTeamLead)
+                                  .map((member) => {
+                                    const memberId = member._id || member.id
+                                    const isSelected = selectedEmployeeForTeamLead && (selectedEmployeeForTeamLead._id || selectedEmployeeForTeamLead.id) === memberId
+                                    return (
+                                      <div
+                                        key={memberId}
+                                        onClick={() => setSelectedEmployeeForTeamLead(member)}
+                                        className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+                                          isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center space-x-3">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                                              isSelected ? 'bg-blue-600' : 'bg-gray-400'
+                                            }`}>
+                                              {member?.avatar || member?.name?.charAt(0) || 'S'}
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-semibold text-gray-900">
+                                                {member?.name || 'Unknown Member'}
+                                              </p>
+                                              <p className="text-xs text-gray-500">
+                                                {member?.email || member?.employeeId || 'Sales Rep'}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                            isSelected 
+                                              ? 'bg-blue-600 border-blue-600' 
+                                              : 'border-gray-300'
+                                          }`}>
+                                            {isSelected && (
+                                              <FiCheckCircle className="h-4 w-4 text-white" />
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                              </div>
+                            ) : (
+                              <div className="p-4 text-center text-gray-500 text-sm">
+                                No sales employees available
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 2: Confirm Team Lead Status */}
+                    {teamLeadCreationStep === 2 && selectedEmployeeForTeamLead && (
+                      <div className="space-y-4">
+                        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center space-x-3 mb-3">
+                            <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+                              {selectedEmployeeForTeamLead?.avatar || selectedEmployeeForTeamLead?.name?.charAt(0) || 'S'}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900">
+                                {selectedEmployeeForTeamLead?.name || 'Unknown'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {selectedEmployeeForTeamLead?.email || selectedEmployeeForTeamLead?.employeeId || 'Sales Employee'}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-600">
+                            This employee will be promoted to Team Lead status.
+                          </p>
+                        </div>
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Enable Team Lead Status
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setSalesLeadToggle(!salesLeadToggle)}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                                salesLeadToggle ? 'bg-blue-600' : 'bg-gray-300'
+                              }`}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                  salesLeadToggle ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Toggle ON to make this employee a team lead
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 3: Assign Team Members */}
+                    {teamLeadCreationStep === 3 && selectedEmployeeForTeamLead && salesLeadToggle && (
+                      <div className="mb-4">
+                        <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                              {selectedEmployeeForTeamLead?.avatar || selectedEmployeeForTeamLead?.name?.charAt(0) || 'TL'}
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-purple-900">Team Lead</p>
+                              <p className="text-xs text-purple-700">{selectedEmployeeForTeamLead?.name}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Assign Team Members
+                          </label>
+                          <span className="text-xs text-gray-500 italic">
+                            Team leads excluded
+                          </span>
+                        </div>
+                        <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs text-blue-800 flex items-center space-x-1">
+                            <FiAlertCircle className="w-3 h-3 flex-shrink-0" />
+                            <span>Team leads cannot be added as team members.</span>
+                          </p>
+                        </div>
+                        <div className="border border-gray-300 rounded-lg max-h-64 overflow-y-auto">
+                          {salesTeam.length > 0 ? (
+                            <div className="divide-y divide-gray-200">
+                              {salesTeam
+                                .filter((member) => {
+                                  const memberId = member._id || member.id
+                                  const selectedEmployeeId = selectedEmployeeForTeamLead?._id || selectedEmployeeForTeamLead?.id
+                                  const isTeamLead = member.isTeamLead === true
+                                  return String(memberId) !== String(selectedEmployeeId) && !isTeamLead
+                                })
+                                .map((member) => {
+                                  const memberId = member._id || member.id
+                                  const isSelected = selectedTeamMembers.includes(memberId)
+                                  return (
+                                    <div
+                                      key={memberId}
+                                      className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+                                        isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                                      }`}
+                                      onClick={() => handleTeamMemberToggle(memberId)}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-3">
+                                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                                            isSelected ? 'bg-blue-600' : 'bg-gray-400'
+                                          }`}>
+                                            {member?.avatar || member?.name?.charAt(0) || 'S'}
+                                          </div>
+                                          <div>
+                                            <p className="text-sm font-semibold text-gray-900">
+                                              {member?.name || 'Unknown Member'}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                              {member?.position || member?.email || 'Sales Rep'}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                          isSelected 
+                                            ? 'bg-blue-600 border-blue-600' 
+                                            : 'border-gray-300'
+                                        }`}>
+                                          {isSelected && (
+                                            <FiCheckCircle className="h-4 w-4 text-white" />
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                            </div>
+                          ) : (
+                            <div className="p-4 text-center text-gray-500 text-sm">
+                              No team members available
+                            </div>
+                          )}
+                        </div>
+                        {selectedTeamMembers.length > 0 && (
+                          <div className="mt-3">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Selected Members ({selectedTeamMembers.length})
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedTeamMembers.map((memberId) => {
+                                const member = salesTeam.find(m => (m._id || m.id) === memberId)
+                                return (
+                                  <div
+                                    key={memberId}
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
+                                  >
+                                    <span className="text-xs">{member?.name || `Member`}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               {/* Footer */}
-              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-end space-x-3">
+              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  {!selectedItem && (
+                    <>
+                      {teamLeadCreationStep > 1 && (
+                        <button
+                          onClick={() => {
+                            if (teamLeadCreationStep === 3) {
+                              setTeamLeadCreationStep(2)
+                            } else if (teamLeadCreationStep === 2) {
+                              setTeamLeadCreationStep(1)
+                              setSalesLeadToggle(false)
+                            }
+                          }}
+                          className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Back
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => {
+                      setShowAssignTeamModal(false)
+                      setSelectedItem(null)
+                      setSelectedTeamMembers([])
+                      setAlreadyAssignedMembers([])
+                      setSelectedEmployeeForTeamLead(null)
+                      setTeamLeadCreationStep(1)
+                      setSalesLeadToggle(false)
+                    }}
+                    disabled={assigningMembers}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                  {!selectedItem ? (
+                    /* Create Mode Buttons */
+                    <>
+                      {teamLeadCreationStep === 1 && (
+                        <button
+                          onClick={() => {
+                            if (selectedEmployeeForTeamLead) {
+                              setTeamLeadCreationStep(2)
+                            } else {
+                              toast.error('Please select a sales employee first')
+                            }
+                          }}
+                          disabled={!selectedEmployeeForTeamLead}
+                          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                        >
+                          <span>Next</span>
+                          <FiCheckCircle className="h-4 w-4" />
+                        </button>
+                      )}
+                      {teamLeadCreationStep === 2 && (
+                        <button
+                          onClick={() => {
+                            if (salesLeadToggle) {
+                              setTeamLeadCreationStep(3)
+                            } else {
+                              toast.error('Please enable team lead status')
+                            }
+                          }}
+                          disabled={!salesLeadToggle}
+                          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                        >
+                          <span>Next</span>
+                          <FiCheckCircle className="h-4 w-4" />
+                        </button>
+                      )}
+                      {teamLeadCreationStep === 3 && (
+                        <button
+                          onClick={() => {
+                            if (selectedEmployeeForTeamLead) {
+                              // Set selectedItem to the employee and proceed with assignment
+                              setSelectedItem(selectedEmployeeForTeamLead)
+                              handleConfirmAssignment()
+                            }
+                          }}
+                          disabled={assigningMembers || !selectedEmployeeForTeamLead}
+                          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                        >
+                          {assigningMembers ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              <span>Creating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FiCheckCircle className="h-4 w-4" />
+                              <span>Create Team Lead</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    /* Edit Mode Button */
+                    <button
+                      onClick={handleConfirmAssignment}
+                      disabled={assigningMembers}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    >
+                      {assigningMembers ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Assigning...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiCheckCircle className="h-4 w-4" />
+                          <span>Confirm</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Team Members Modal */}
+        {showTeamMembersModal && selectedTeamLeadForMembers && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowTeamMembersModal(false)
+              setSelectedTeamLeadForMembers(null)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <FiUsers className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">
+                        Team Members
+                      </h3>
+                      <p className="text-purple-100 text-sm mt-1">
+                        {selectedTeamLeadForMembers.teamLead?.name || 'Team Lead'} - {selectedTeamLeadForMembers.teamMembersList?.length || 0} members
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowTeamMembersModal(false)
+                      setSelectedTeamLeadForMembers(null)
+                    }}
+                    className="text-white hover:text-gray-200 transition-colors p-2 hover:bg-white/10 rounded-full"
+                  >
+                    <FiX className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+                {selectedTeamLeadForMembers.teamMembersList && selectedTeamLeadForMembers.teamMembersList.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedTeamLeadForMembers.teamMembersList.map((member, index) => {
+                      const memberPerformance = member.performance || {}
+                      return (
+                        <motion.div
+                          key={member._id || member.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="bg-white rounded-lg p-4 border border-gray-200 hover:border-purple-300 hover:shadow-sm transition-all"
+                        >
+                          <div className="flex items-center justify-between">
+                            {/* Member Info */}
+                            <div className="flex items-center space-x-4 flex-1 min-w-0">
+                              <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-base shadow-sm flex-shrink-0">
+                                {member?.avatar || member?.name?.charAt(0)?.toUpperCase() || 'M'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h6 className="text-base font-semibold text-gray-900 truncate">
+                                  {member.name || 'Unknown'}
+                                </h6>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {member.email || member.employeeId || 'Member'}
+                                </p>
+                                {member.employeeId && (
+                                  <p className="text-xs text-gray-400 mt-0.5">ID: {member.employeeId}</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Performance Metrics */}
+                            <div className="flex items-center space-x-6 flex-shrink-0">
+                              <div className="text-center">
+                                <div className="flex items-center justify-center space-x-1 mb-1">
+                                  <FiBarChart className="w-3 h-3 text-gray-400" />
+                                  <p className="text-xs text-gray-500">Leads</p>
+                                </div>
+                                <p className="text-sm font-bold text-gray-900">{memberPerformance.totalLeads || 0}</p>
+                              </div>
+                              <div className="text-center">
+                                <div className="flex items-center justify-center space-x-1 mb-1">
+                                  <FiCheckCircle className="w-3 h-3 text-green-500" />
+                                  <p className="text-xs text-gray-500">Converted</p>
+                                </div>
+                                <p className="text-sm font-bold text-green-600">{memberPerformance.convertedLeads || 0}</p>
+                              </div>
+                              <div className="text-center">
+                                <div className="flex items-center justify-center space-x-1 mb-1">
+                                  <FiTrendingUp className="w-3 h-3 text-purple-500" />
+                                  <p className="text-xs text-gray-500">Rate</p>
+                                </div>
+                                <p className="text-sm font-bold text-purple-600">{memberPerformance.conversionRate?.toFixed(1) || 0}%</p>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                    <FiUsers className="h-16 w-16 mb-4 text-gray-300" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Team Members</h3>
+                    <p className="text-sm text-gray-600 text-center max-w-sm">
+                      This team lead doesn't have any assigned team members yet.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-end">
                 <button
                   onClick={() => {
-                    setShowAssignTeamModal(false)
-                    setSelectedItem(null)
-                    setSelectedTeamMembers([])
-                    setAlreadyAssignedMembers([])
+                    setShowTeamMembersModal(false)
+                    setSelectedTeamLeadForMembers(null)
                   }}
-                  disabled={assigningMembers}
-                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Set Team Target Modal */}
+        {showSetTeamTargetModal && selectedTeamLeadForTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowSetTeamTargetModal(false)
+              setSelectedTeamLeadForTarget(null)
+              setTeamTargetAmount('')
+              setTeamTargetReward('')
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl shadow-xl max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <FiTarget className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">Set Team Target & Reward</h3>
+                      <p className="text-emerald-100 text-sm mt-1">
+                        {selectedTeamLeadForTarget?.name || 'Team Lead'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowSetTeamTargetModal(false)
+                      setSelectedTeamLeadForTarget(null)
+                      setTeamTargetAmount('')
+                      setTeamTargetReward('')
+                    }}
+                    className="text-white hover:text-gray-200 transition-colors p-2 hover:bg-white/10 rounded-full"
+                  >
+                    <FiX className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Team Target (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={teamTargetAmount}
+                    onChange={(e) => setTeamTargetAmount(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    placeholder="Enter team target amount"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Team Target Reward (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={teamTargetReward}
+                    onChange={(e) => setTeamTargetReward(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    placeholder="Enter reward amount for achieving target"
+                  />
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowSetTeamTargetModal(false)
+                    setSelectedTeamLeadForTarget(null)
+                    setTeamTargetAmount('')
+                    setTeamTargetReward('')
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleConfirmAssignment}
-                  disabled={assigningMembers}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  onClick={handleSaveTeamTarget}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium flex items-center space-x-2"
                 >
-                  {assigningMembers ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Assigning...</span>
-                    </>
-                  ) : (
-                    <>
-                      <FiCheckCircle className="h-4 w-4" />
-                      <span>Confirm</span>
-                    </>
-                  )}
+                  <FiCheckCircle className="h-4 w-4" />
+                  <span>Save</span>
                 </button>
               </div>
             </motion.div>

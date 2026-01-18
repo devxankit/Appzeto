@@ -293,7 +293,39 @@ class AdminSalesService {
       });
       return response;
     } catch (error) {
+      throw error;
+    }
+  }
+
+  async setMultipleTargets(memberId, targets) {
+    try {
+      const response = await apiRequest(`/admin/sales/team/${memberId}/target`, {
+        method: 'PUT',
+        body: JSON.stringify({ targets }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response;
+    } catch (error) {
       console.error('Error setting sales target:', error);
+      throw error;
+    }
+  }
+
+  // Set team lead target and reward
+  async setTeamLeadTarget(teamLeadId, target, reward) {
+    try {
+      const response = await apiRequest(`/admin/sales/team-leads/${teamLeadId}/team-target`, {
+        method: 'PUT',
+        body: JSON.stringify({ target, reward }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response;
+    } catch (error) {
+      console.error('Error setting team lead target:', error);
       throw error;
     }
   }
@@ -388,6 +420,27 @@ class AdminSalesService {
       return response;
     } catch (error) {
       console.error('Error setting per-conversion incentive:', error);
+      throw error;
+    }
+  }
+
+  // Set per-conversion incentive amount for team lead
+  async setTeamLeadIncentive(teamLeadId, amount) {
+    try {
+      const requestData = {
+        amount
+      };
+
+      const response = await apiRequest(`/admin/sales/team-leads/${teamLeadId}/incentive`, {
+        method: 'POST',
+        body: JSON.stringify(requestData),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response;
+    } catch (error) {
+      console.error('Error setting team lead incentive:', error);
       throw error;
     }
   }

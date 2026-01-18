@@ -99,15 +99,23 @@ const SL_dashboard = () => {
     employeeName: 'Employee',
     monthlySales: 0,
     target: 0,
+    targetNumber: null,
     progressToTarget: 0,
+    allTargets: [],
     reward: 0,
     todaysSales: 0,
     todaysIncentive: 0,
     monthlyIncentive: 0,
     totalLeads: 0,
-    totalClients: 0
+    totalClients: 0,
+    isTeamLead: false,
+    teamLeadTarget: 0,
+    teamLeadTargetReward: 0,
+    teamMonthlySales: 0,
+    teamLeadProgress: 0
   })
   const [heroStatsLoading, setHeroStatsLoading] = useState(true)
+  const [showAllTargetsModal, setShowAllTargetsModal] = useState(false)
 
   useEffect(() => {
     // Check for duplicate instances in DOM after a short delay
@@ -184,13 +192,20 @@ const SL_dashboard = () => {
           employeeName: 'Employee',
           monthlySales: 0,
           target: 0,
+          targetNumber: null,
           progressToTarget: 0,
+          allTargets: [],
           reward: 0,
           todaysSales: 0,
           todaysIncentive: 0,
           monthlyIncentive: 0,
           totalLeads: 0,
-          totalClients: 0
+          totalClients: 0,
+          isTeamLead: false,
+          teamLeadTarget: 0,
+          teamLeadTargetReward: 0,
+          teamMonthlySales: 0,
+          teamLeadProgress: 0
         })
       } catch (e) {
         console.error('Failed to load hero stats:', e)
@@ -322,46 +337,68 @@ const SL_dashboard = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.4 }}
-              className="grid grid-cols-2 gap-4 mb-5"
+              className="grid grid-cols-2 gap-3 mb-5"
             >
               <motion.div 
-                whileHover={{ scale: 1.02, y: -2 }}
-                className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-teal-300/50 hover:border-teal-400/70 transition-all duration-300 shadow-xl"
-                style={{
-                  boxShadow: '0 10px 30px -6px rgba(20, 184, 166, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
-                }}
+                whileHover={{ scale: 1.01, y: -1 }}
+                className="bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-teal-300/50 hover:border-teal-400/70 transition-all duration-300 shadow-md"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-teal-800 text-sm font-semibold">Monthly Sales</p>
-                  <div className="w-7 h-7 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg flex items-center justify-center shadow-lg"
-                    style={{
-                      boxShadow: '0 6px 18px -3px rgba(20, 184, 166, 0.4), 0 3px 8px -2px rgba(0, 0, 0, 0.15), 0 1px 4px -1px rgba(0, 0, 0, 0.08)'
-                    }}
-                  >
-                    <FaChartLine className="text-white text-sm" />
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-teal-800 text-xs font-semibold">Monthly Sales</p>
+                  <div className="w-5 h-5 bg-gradient-to-br from-teal-500 to-teal-600 rounded-md flex items-center justify-center shadow-sm">
+                    <FaChartLine className="text-white text-[10px]" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-gray-900">₹{heroStats.monthlySales.toLocaleString()}</p>
+                <p className="text-lg font-bold text-gray-900">₹{heroStats.monthlySales.toLocaleString()}</p>
               </motion.div>
               
               <motion.div 
-                whileHover={{ scale: 1.02, y: -2 }}
-                className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-emerald-300/50 hover:border-emerald-400/70 transition-all duration-300 shadow-xl"
-                style={{
-                  boxShadow: '0 10px 30px -6px rgba(16, 185, 129, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                whileHover={{ scale: 1.01, y: -1 }}
+                onClick={() => {
+                  if (heroStats.allTargets && heroStats.allTargets.length > 0) {
+                    setShowAllTargetsModal(true);
+                  }
                 }}
+                className={`bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-emerald-300/50 hover:border-emerald-400/70 transition-all duration-300 shadow-md relative ${
+                  heroStats.allTargets && heroStats.allTargets.length > 0 ? 'cursor-pointer' : ''
+                }`}
+                title={heroStats.allTargets && heroStats.allTargets.length > 0 ? "Click to view all targets" : ""}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-emerald-800 text-sm font-semibold">Target</p>
-                  <div className="w-7 h-7 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center shadow-lg"
-                    style={{
-                      boxShadow: '0 6px 18px -3px rgba(16, 185, 129, 0.4), 0 3px 8px -2px rgba(0, 0, 0, 0.15), 0 1px 4px -1px rgba(0, 0, 0, 0.08)'
-                    }}
-                  >
-                    <FaStar className="text-white text-sm" />
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center space-x-1.5 flex-1 min-w-0">
+                    <p className="text-emerald-800 text-xs font-semibold truncate">
+                      {heroStats.targetNumber ? `Target ${heroStats.targetNumber}` : 'Target'}
+                    </p>
+                    {heroStats.allTargets && heroStats.allTargets.length > 1 && (
+                      <span className="text-[10px] text-emerald-600 flex-shrink-0">
+                        ({heroStats.allTargets.length})
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-5 h-5 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-md flex items-center justify-center shadow-sm flex-shrink-0 ml-1">
+                    <FaStar className="text-white text-[10px]" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-gray-900">₹{heroStats.target.toLocaleString()}</p>
+                <p className="text-lg font-bold text-gray-900 mb-0.5">₹{heroStats.target.toLocaleString()}</p>
+                {heroStats.allTargets && heroStats.allTargets.length > 0 && heroStats.targetNumber && (() => {
+                  const activeTargetData = heroStats.allTargets.find(t => t.targetNumber === heroStats.targetNumber);
+                  if (activeTargetData && activeTargetData.deadline) {
+                    const deadline = new Date(activeTargetData.deadline);
+                    const now = new Date();
+                    const daysLeft = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
+                    return (
+                      <p className="text-[10px] text-emerald-600 leading-tight">
+                        {deadline.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} 
+                        {daysLeft >= 0 && (
+                          <span className={`ml-1 font-semibold ${daysLeft <= 7 ? 'text-red-600' : 'text-emerald-600'}`}>
+                            ({daysLeft}d)
+                          </span>
+                        )}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </motion.div>
             </motion.div>
 
@@ -389,28 +426,40 @@ const SL_dashboard = () => {
               </div>
             </motion.div>
 
-            {/* Enhanced Reward Section */}
-            <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8, delay: 0.8 }}
-              className="flex justify-between items-center mb-5"
-            >
-              <div className="flex items-center space-x-2.5">
-                <div className="w-7 h-7 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg flex items-center justify-center shadow-lg"
-                  style={{
-                    boxShadow: '0 6px 18px -3px rgba(20, 184, 166, 0.4), 0 3px 8px -2px rgba(0, 0, 0, 0.15), 0 1px 4px -1px rgba(0, 0, 0, 0.08)'
-                  }}
-                >
-                  <FaGem className="text-white text-sm" />
+            {/* Team Lead Target Progress Section - Only for Team Leads */}
+            {heroStats.isTeamLead && heroStats.teamLeadTarget > 0 ? (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8, delay: 0.8 }}
+                className="mb-5"
+              >
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-teal-800 text-sm font-semibold">Team Target Progress</span>
+                  <span className="text-gray-900 font-bold text-lg">{Math.round(heroStats.teamLeadProgress)}%</span>
                 </div>
-                <span className="text-teal-800 text-sm font-semibold">Reward</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="text-gray-900 font-bold text-xl">{heroStats.reward >= 1000 ? `${(heroStats.reward / 1000).toFixed(heroStats.reward % 1000 === 0 ? 0 : 1)}k` : heroStats.reward}</span>
-                <FaRocket className="text-teal-600 text-base" />
-              </div>
-            </motion.div>
+                <div className="relative w-full bg-white/50 rounded-full h-2.5 overflow-hidden shadow-inner">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(heroStats.teamLeadProgress, 100)}%` }}
+                    transition={{ duration: 1.5, delay: 1.0, ease: "easeOut" }}
+                    className="bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-700 h-2.5 rounded-full relative shadow-sm"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
+                    <div className="absolute right-0 top-0 w-1 h-2.5 bg-white/90 rounded-full"></div>
+                  </motion.div>
+                </div>
+                <div className="flex justify-between items-center mt-2 text-xs text-teal-700">
+                  <span className="font-bold">Team Sales: ₹{heroStats.teamMonthlySales.toLocaleString()}</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold">Target: ₹{heroStats.teamLeadTarget.toLocaleString()}</span>
+                    {heroStats.teamLeadTargetReward > 0 && (
+                      <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">Reward: ₹{heroStats.teamLeadTargetReward.toLocaleString()}</span>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            ) : null}
 
             {/* Enhanced Sub-cards */}
             <motion.div 
@@ -885,9 +934,158 @@ const SL_dashboard = () => {
                  <p className="text-xs text-purple-600">12 months</p>
                </div>
              </div>
-           </motion.div>
-         </div>
+          </motion.div>
+        </div>
       </main>
+
+      {/* All Targets Modal */}
+      <AnimatePresence>
+        {showAllTargetsModal && heroStats.allTargets && heroStats.allTargets.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={() => setShowAllTargetsModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">All Targets</h3>
+                  <p className="text-gray-600 text-sm mt-1">View all your sales targets with deadlines and progress</p>
+                </div>
+                <button
+                  onClick={() => setShowAllTargetsModal(false)}
+                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {heroStats.allTargets.map((target, index) => {
+                  const deadline = new Date(target.deadline);
+                  const now = new Date();
+                  const daysLeft = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
+                  const isActive = target.targetNumber === heroStats.targetNumber;
+                  const isAchieved = target.isAchieved;
+                  const isDeadlinePassed = target.isDeadlinePassed;
+
+                  return (
+                    <motion.div
+                      key={target.targetNumber}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`rounded-lg p-4 border-2 transition-all ${
+                        isActive
+                          ? 'bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-400 shadow-lg'
+                          : isAchieved
+                          ? 'bg-gray-50 border-gray-300'
+                          : 'bg-white border-gray-200 hover:border-emerald-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+                            isActive
+                              ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+                              : isAchieved
+                              ? 'bg-gray-400 text-white'
+                              : 'bg-gray-300 text-gray-700'
+                          }`}>
+                            {target.targetNumber}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-gray-900 flex items-center space-x-2">
+                              <span>Target {target.targetNumber}</span>
+                              {isActive && (
+                                <span className="text-xs bg-emerald-500 text-white px-2 py-0.5 rounded-full">Active</span>
+                              )}
+                              {isAchieved && (
+                                <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">✓ Achieved</span>
+                              )}
+                              {!isAchieved && isDeadlinePassed && (
+                                <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">Deadline Passed</span>
+                              )}
+                            </h4>
+                            <p className="text-2xl font-bold text-emerald-800 mt-1">
+                              ₹{target.amount.toLocaleString('en-IN')}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-600 mb-1">Deadline</p>
+                          <p className={`text-sm font-semibold ${daysLeft <= 7 && !isAchieved ? 'text-red-600' : 'text-gray-700'}`}>
+                            {deadline.toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                          {!isAchieved && daysLeft >= 0 && (
+                            <p className={`text-xs mt-1 ${daysLeft <= 7 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                              {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {!isAchieved && (
+                        <div className="mt-3">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs text-gray-600">Progress</span>
+                            <span className="text-xs font-bold text-gray-900">{target.progress}%</span>
+                          </div>
+                          <div className="relative w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${target.progress}%` }}
+                              transition={{ duration: 1, delay: 0.3 }}
+                              className={`h-2 rounded-full ${
+                                isActive
+                                  ? 'bg-gradient-to-r from-emerald-500 to-emerald-600'
+                                  : 'bg-gray-400'
+                              }`}
+                            />
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1">
+                            ₹{heroStats.monthlySales.toLocaleString('en-IN')} / ₹{target.amount.toLocaleString('en-IN')}
+                          </p>
+                        </div>
+                      )}
+
+                      {heroStats.reward > 0 && (
+                        <div className="mt-3 flex items-center space-x-2 text-xs bg-amber-50 rounded p-2 border border-amber-200">
+                          <FaGem className="text-amber-600" />
+                          <span className="text-amber-800 font-semibold">Reward: ₹{heroStats.reward.toLocaleString('en-IN')}</span>
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowAllTargetsModal(false)}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-semibold"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -90,16 +90,8 @@ const allowedOrigins = [
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
-  // Always log ALL requests for debugging (especially OPTIONS)
-  console.log(`📥 ${req.method} ${req.path} | Origin: ${origin || 'none'}`);
-  
   // Handle OPTIONS preflight requests FIRST - respond immediately
   if (req.method === 'OPTIONS') {
-    console.log('🔍 OPTIONS preflight detected');
-    console.log('   Path:', req.path);
-    console.log('   Origin:', origin || 'none');
-    console.log('   Access-Control-Request-Method:', req.headers['access-control-request-method']);
-    console.log('   Access-Control-Request-Headers:', req.headers['access-control-request-headers']);
     
     // Check if origin is allowed
     if (origin && allowedOrigins.includes(origin)) {
@@ -108,16 +100,15 @@ app.use((req, res, next) => {
       res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
       res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
       res.header('Access-Control-Max-Age', '86400');
-      console.log('✅ OPTIONS response sent with CORS headers');
       return res.sendStatus(204);
     } else if (!origin) {
       // No origin (same-origin request) - allow it
-      console.log('✅ OPTIONS allowed (no origin - same origin)');
       return res.sendStatus(204);
     } else {
       // Origin not in allowed list
-      console.log('❌ OPTIONS blocked - origin not allowed:', origin);
-      console.log('   Allowed origins:', allowedOrigins);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`⚠️  CORS blocked: ${origin} not in allowed origins`);
+      }
       res.sendStatus(403);
       return;
     }
@@ -144,13 +135,11 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
-// Log CORS configuration on startup
-console.log('🔒 CORS Configuration:');
-console.log('   Allowed origins:', allowedOrigins.length, 'origins configured');
-console.log('   CORS_ORIGIN from .env:', process.env.CORS_ORIGIN || 'not set (using defaults)');
-if (process.env.NODE_ENV === 'development') {
-  console.log('   Allowed origins list:', allowedOrigins);
-}
+// Log CORS configuration on startup (cleaner format)
+const localOrigins = allowedOrigins.filter(o => o.includes('localhost')).length;
+const productionOrigins = allowedOrigins.filter(o => o.includes('https://')).length;
+console.log('🔒 CORS: ' + allowedOrigins.length + ' origins configured' + 
+  (localOrigins > 0 ? ` (${localOrigins} local, ${productionOrigins} production)` : ''));
 
 // Configure Helmet AFTER CORS - Helmet must not interfere with CORS headers
 app.use(helmet({
@@ -524,23 +513,13 @@ const startServer = async () => {
       console.log('🚀 ' + '='.repeat(60));
       console.log('');
       console.log('📊 SERVER STATUS:');
-      console.log('   ✅ Server Status: RUNNING');
+      console.log('   ✅ Server: RUNNING');
       console.log('   ✅ Database: CONNECTED');
-      console.log('   ✅ WebSocket: INITIALIZING...');
       console.log('');
       console.log('🔧 CONFIGURATION:');
       console.log(`   🌐 Port: ${PORT}`);
       console.log(`   🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`   🔗 API Base URL: http://localhost:${PORT}`);
-      console.log(`   ❤️  Health Check: http://localhost:${PORT}/health`);
-      console.log(`   📊 Server Status: http://localhost:${PORT}/status`);
-      console.log('');
-      console.log('📡 AVAILABLE MODULES:');
-      console.log('   👤 Admin Management    🔐 Authentication');
-      console.log('   📋 Project Management  🎯 Task Management');
-      console.log('   📊 Analytics & Stats   💰 Payment Tracking');
-      console.log('   👥 Team Management     📁 File Uploads');
-      console.log('   🔄 Real-time Updates   📱 WebSocket Integration');
       console.log('');
       console.log('🚀 ' + '='.repeat(60));
       console.log('   🎉 Server started successfully! Ready for connections.');
