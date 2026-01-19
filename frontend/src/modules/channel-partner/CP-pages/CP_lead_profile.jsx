@@ -20,7 +20,9 @@ import {
   FiActivity,
   FiTag,
   FiDollarSign,
-  FiFileText
+  FiFileText,
+  FiUserCheck,
+  FiMoreVertical
 } from 'react-icons/fi'
 import CP_navbar from '../CP-components/CP_navbar'
 import { cpLeadService } from '../CP-services'
@@ -65,8 +67,14 @@ const CP_lead_profile = () => {
   })
 
   const [connectFormData, setConnectFormData] = useState({
-    notes: '',
-    nextFollowUpDate: null
+    name: '',
+    description: '',
+    projectType: 'web',
+    estimatedPrice: '50000',
+    quotationSent: false,
+    demoSent: false,
+    nextFollowUpDate: null,
+    notes: ''
   })
 
   const [convertFormData, setConvertFormData] = useState({
@@ -235,35 +243,103 @@ const CP_lead_profile = () => {
     }
   }
 
-  const handleConnect = async () => {
+  const handleConnectFormChange = (field, value) => {
+    setConnectFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleConnect = async (e) => {
+    e.preventDefault()
     try {
       setSaving(true)
-      await handleUpdateStatus('connected')
-      if (connectFormData.nextFollowUpDate) {
-        await cpLeadService.addFollowUp(id, {
-          scheduledDate: connectFormData.nextFollowUpDate,
-          scheduledTime: '',
-          type: 'call',
-          notes: connectFormData.notes,
-          priority: 'medium'
-        })
+      
+      // First update lead status to connected
+      await cpLeadService.updateLeadStatus(id, 'connected')
+      
+      // Then create lead profile
+      const profileData = {
+        name: connectFormData.name,
+        businessName: connectFormData.name,
+        email: '',
+        projectType: {
+          web: connectFormData.projectType === 'web',
+          app: connectFormData.projectType === 'app',
+          taxi: connectFormData.projectType === 'taxi'
+        },
+        estimatedCost: parseInt(connectFormData.estimatedPrice) || 0,
+        description: connectFormData.description,
+        quotationSent: connectFormData.quotationSent,
+        demoSent: connectFormData.demoSent
       }
-      toast.success?.('Lead connected successfully!', {
+      
+      await cpLeadService.createLeadProfile(id, profileData)
+      
+      // If there's a follow-up date, add it
+      if (connectFormData.nextFollowUpDate) {
+        try {
+          await cpLeadService.addFollowUp(id, {
+            scheduledDate: connectFormData.nextFollowUpDate,
+            scheduledTime: '',
+            type: 'call',
+            notes: connectFormData.notes || '',
+            priority: 'medium'
+          })
+        } catch (followUpError) {
+          console.error('Error adding follow-up:', followUpError)
+        }
+      }
+      
+      toast.success?.('Lead marked as connected and profile created', {
         title: 'Success',
         duration: 3000
       })
+      
       setShowConnectForm(false)
-      setConnectFormData({ notes: '', nextFollowUpDate: null })
+      setConnectFormData({
+        name: '',
+        description: '',
+        projectType: 'web',
+        estimatedPrice: '50000',
+        quotationSent: false,
+        demoSent: false,
+        nextFollowUpDate: null,
+        notes: ''
+      })
       loadLeadData()
     } catch (error) {
-      console.error('Failed to connect lead:', error)
-      toast.error?.(error.message || 'Failed to connect lead', {
+      console.error('Error creating lead profile:', error)
+      toast.error?.('Failed to create lead profile', {
         title: 'Error',
         duration: 4000
       })
     } finally {
       setSaving(false)
     }
+  }
+
+  const closeConnectForm = () => {
+    setShowConnectForm(false)
+    setConnectFormData({
+      name: '',
+      description: '',
+      projectType: 'web',
+      estimatedPrice: '50000',
+      quotationSent: false,
+      demoSent: false,
+      nextFollowUpDate: null,
+      notes: ''
+    })
+  }
+
+  const handleCall = (phone) => {
+    window.open(`tel:${phone}`, '_self')
+  }
+
+  const handleWhatsApp = (phone) => {
+    const message = encodeURIComponent("Hello! I'm calling about your inquiry regarding our services. How can I help you today?")
+    window.open(`https://wa.me/91${phone}?text=${message}`, '_blank')
   }
 
   const handleConvert = async () => {
@@ -423,9 +499,15 @@ const CP_lead_profile = () => {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between"
+            className="flex items-center justify-between flex-wrap gap-4"
           >
             <div className="flex items-center space-x-2">
+              <button
+                onClick={() => navigate('/cp-leads')}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <FiArrowLeft className="h-5 w-5 text-gray-600" />
+              </button>
               <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(lead.status)}`}>
                 {lead.status.replace('_', ' ')}
               </span>
@@ -435,26 +517,49 @@ const CP_lead_profile = () => {
                 </span>
               )}
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-3">
+              {/* Call Button */}
+              <button
+                onClick={() => handleCall(lead.phone)}
+                className="bg-white text-blue-600 border border-blue-200 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all duration-200 text-sm font-medium flex items-center space-x-2"
+              >
+                <FiPhone className="h-4 w-4" />
+                <span>Call</span>
+              </button>
+
+              {/* WhatsApp Button */}
+              <button
+                onClick={() => handleWhatsApp(lead.phone)}
+                className="bg-green-500 text-white p-2 rounded-lg hover:bg-green-600 transition-all duration-200"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/>
+                </svg>
+              </button>
+
+              {/* Connect Button - Only show if not connected */}
+              {lead.status !== 'connected' && lead.status !== 'converted' && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowConnectForm(true)}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                >
+                  <FiUserCheck className="h-4 w-4" />
+                  <span>Connect</span>
+                </motion.button>
+              )}
+
+              {/* Convert Button */}
               {lead.status !== 'converted' && (
-                <>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowConnectForm(true)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    Connect
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowConvertForm(true)}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    Convert
-                  </motion.button>
-                </>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowConvertForm(true)}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  Convert
+                </motion.button>
               )}
             </div>
           </motion.div>
@@ -767,44 +872,59 @@ const CP_lead_profile = () => {
 
             {/* Sidebar */}
             <div className="space-y-6">
-              {/* Quick Actions */}
+              {/* Action Buttons */}
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
                 className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
               >
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => handleUpdateStatus('connected')}
-                    className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                  >
-                    Mark as Connected
-                  </button>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Actions</h3>
+                <div className="space-y-3">
+                  {lead.status !== 'connected' && lead.status !== 'converted' && (
+                    <button
+                      onClick={() => setShowConnectForm(true)}
+                      className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center justify-center space-x-2"
+                    >
+                      <FiUserCheck className="h-4 w-4" />
+                      <span>Connect Lead</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => handleUpdateStatus('followup')}
-                    className="w-full px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm"
+                    className="w-full px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium flex items-center justify-center space-x-2"
                   >
-                    Mark as Follow-up
+                    <FiCalendar className="h-4 w-4" />
+                    <span>Mark as Follow-up</span>
                   </button>
                   <button
                     onClick={() => handleUpdateStatus('not_converted')}
-                    className="w-full px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
+                    className="w-full px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium flex items-center justify-center space-x-2"
                   >
-                    Mark as Not Converted
+                    <FiX className="h-4 w-4" />
+                    <span>Not Interested</span>
                   </button>
                   <button
                     onClick={() => {
-                      const reason = prompt('Enter reason for marking as lost:')
+                      const reason = window.prompt('Enter reason for marking as lost:')
                       if (reason) {
                         handleUpdateStatus('lost', reason)
                       }
                     }}
-                    className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                    className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium flex items-center justify-center space-x-2"
                   >
-                    Mark as Lost
+                    <FiX className="h-4 w-4" />
+                    <span>Mark as Lost</span>
                   </button>
+                  {lead.status !== 'converted' && (
+                    <button
+                      onClick={() => setShowConvertForm(true)}
+                      className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium flex items-center justify-center space-x-2"
+                    >
+                      <FiCheckCircle className="h-4 w-4" />
+                      <span>Convert to Client</span>
+                    </button>
+                  )}
                 </div>
               </motion.div>
             </div>
@@ -820,61 +940,194 @@ const CP_lead_profile = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            onClick={() => setShowConnectForm(false)}
+            onClick={closeConnectForm}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+              className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">Connect Lead</h2>
+              <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                    <FiUserCheck className="text-green-600 text-lg" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900">Connect Lead</h2>
+                </div>
                 <button
-                  onClick={() => setShowConnectForm(false)}
+                  onClick={closeConnectForm}
                   className="p-2 hover:bg-gray-100 rounded-full transition-colors"
                 >
                   <FiX className="h-5 w-5 text-gray-500" />
                 </button>
               </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                  <textarea
-                    value={connectFormData.notes}
-                    onChange={(e) => setConnectFormData({ ...connectFormData, notes: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Add notes about the connection..."
-                  />
+
+              <form onSubmit={handleConnect} className="p-6 space-y-6">
+                {/* Name Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Name</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-600">
+                      <FiUser className="text-lg" />
+                    </div>
+                    <input
+                      type="text"
+                      value={connectFormData.name}
+                      onChange={(e) => handleConnectFormChange('name', e.target.value)}
+                      placeholder="Enter client name"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200"
+                      required
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Next Follow-up Date</label>
+
+                {/* Description Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Description</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-3 text-green-600">
+                      <FiFileText className="text-lg" />
+                    </div>
+                    <textarea
+                      value={connectFormData.description}
+                      onChange={(e) => handleConnectFormChange('description', e.target.value)}
+                      placeholder="Enter project description"
+                      rows={3}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200 resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Project Type */}
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-gray-700">Project Type</label>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleConnectFormChange('projectType', 'web')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        connectFormData.projectType === 'web'
+                          ? 'bg-green-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Web
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleConnectFormChange('projectType', 'app')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        connectFormData.projectType === 'app'
+                          ? 'bg-green-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      App
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleConnectFormChange('projectType', 'taxi')}
+                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
+                        connectFormData.projectType === 'taxi'
+                          ? 'bg-green-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Taxi
+                    </button>
+                  </div>
+                </div>
+
+                {/* Estimated Price */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Estimated Price</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-600">
+                      <span className="text-lg font-bold">₹</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={connectFormData.estimatedPrice}
+                      onChange={(e) => handleConnectFormChange('estimatedPrice', e.target.value)}
+                      placeholder="Enter amount (e.g., 50000)"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+
+                {/* Next Follow-up Date */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Next Follow-up Date</label>
                   <DatePicker
                     selected={connectFormData.nextFollowUpDate}
-                    onChange={(date) => setConnectFormData({ ...connectFormData, nextFollowUpDate: date })}
+                    onChange={(date) => handleConnectFormChange('nextFollowUpDate', date)}
                     dateFormat="MMM dd, yyyy"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
                     placeholderText="Select date"
                   />
                 </div>
+
+                {/* Notes */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Notes</label>
+                  <textarea
+                    value={connectFormData.notes}
+                    onChange={(e) => handleConnectFormChange('notes', e.target.value)}
+                    placeholder="Add notes about the connection..."
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200 resize-none"
+                  />
+                </div>
+
+                {/* Checkboxes */}
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="quotationSent"
+                      checked={connectFormData.quotationSent}
+                      onChange={(e) => handleConnectFormChange('quotationSent', e.target.checked)}
+                      className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
+                    />
+                    <label htmlFor="quotationSent" className="text-sm font-medium text-gray-700">
+                      Quotation sent
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="demoSent"
+                      checked={connectFormData.demoSent}
+                      onChange={(e) => handleConnectFormChange('demoSent', e.target.checked)}
+                      className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
+                    />
+                    <label htmlFor="demoSent" className="text-sm font-medium text-gray-700">
+                      Demo sent
+                    </label>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
                 <div className="flex space-x-3 pt-4">
                   <button
-                    onClick={() => setShowConnectForm(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                    type="button"
+                    onClick={closeConnectForm}
+                    className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200 font-medium"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={handleConnect}
+                    type="submit"
                     disabled={saving}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {saving ? 'Connecting...' : 'Connect'}
+                    {saving ? 'Connecting...' : 'Connect Lead'}
                   </button>
                 </div>
-              </div>
+              </form>
             </motion.div>
           </motion.div>
         )}

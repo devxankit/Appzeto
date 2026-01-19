@@ -15,7 +15,8 @@ import {
   FiArrowLeft,
   FiX,
   FiTag,
-  FiChevronDown
+  FiChevronDown,
+  FiUsers
 } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import { useToast } from '../../../contexts/ToastContext'
@@ -56,6 +57,8 @@ const LeadDashboard = () => {
     totalLeads: 0
   })
   const [isLoadingStats, setIsLoadingStats] = useState(false)
+  const [channelPartnerLeadsCount, setChannelPartnerLeadsCount] = useState(0)
+  const [isLoadingCPLeadsCount, setIsLoadingCPLeadsCount] = useState(false)
 
   // Handle clicks outside dropdown
   useEffect(() => {
@@ -71,12 +74,27 @@ const LeadDashboard = () => {
     }
   }, [])
 
+  // Fetch channel partner leads count
+  const fetchChannelPartnerLeadsCount = async () => {
+    setIsLoadingCPLeadsCount(true)
+    try {
+      const response = await salesLeadService.getChannelPartnerLeads({ limit: 1 })
+      setChannelPartnerLeadsCount(response.total || 0)
+    } catch (error) {
+      console.error('Error fetching channel partner leads count:', error)
+      setChannelPartnerLeadsCount(0)
+    } finally {
+      setIsLoadingCPLeadsCount(false)
+    }
+  }
+
   // Fetch categories and dashboard stats on component mount
   useEffect(() => {
     const token = localStorage.getItem('salesToken') || localStorage.getItem('token')
     if (token) {
       fetchCategories()
       fetchDashboardStats()
+      fetchChannelPartnerLeadsCount()
     }
   }, [])
 
@@ -353,6 +371,31 @@ const LeadDashboard = () => {
             </div>
           </Link>
 
+          {/* Channel Partner Leads Card */}
+          <Link to="/channel-partner-leads">
+            <div 
+              className="bg-purple-100 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 border border-purple-300/40 cursor-pointer mx-2 mt-4"
+              style={{
+                boxShadow: '0 8px 25px -5px rgba(147, 51, 234, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-purple-900 mb-1">Channel Partner Lead</h2>
+                  <p className="text-sm text-purple-700">Leads shared by channel partners</p>
+                </div>
+                <div 
+                  className="bg-purple-500 text-white rounded-full w-12 h-12 flex items-center justify-center shadow-lg border border-purple-400/30"
+                  style={{
+                    boxShadow: '0 4px 12px -2px rgba(147, 51, 234, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                >
+                  <span className="text-lg font-bold">{isLoadingCPLeadsCount ? '...' : channelPartnerLeadsCount}</span>
+                </div>
+              </div>
+            </div>
+          </Link>
+
           {/* Status Tiles Grid */}
           <div 
             ref={tilesRef}
@@ -485,6 +528,35 @@ const LeadDashboard = () => {
                       }}
                     >
                       <span className="text-2xl font-bold">{isLoadingStats ? '...' : dashboardStats.statusCounts.new}</span>
+                    </motion.div>
+                  </div>
+                </motion.div>
+              </Link>
+
+              {/* Channel Partner Leads Card */}
+              <Link to="/channel-partner-leads">
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
+                  className="bg-purple-100 rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all duration-300 mb-6 border border-purple-300/40 cursor-pointer"
+                  style={{
+                    boxShadow: '0 8px 25px -5px rgba(147, 51, 234, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h2 className="text-2xl font-bold text-purple-900 mb-2">Channel Partner Lead</h2>
+                      <p className="text-base text-purple-700">Leads shared by channel partners</p>
+                    </div>
+                    <motion.div 
+                      whileHover={{ scale: 1.05 }}
+                      className="bg-purple-500 text-white rounded-full w-16 h-16 flex items-center justify-center shadow-lg border border-purple-400/30"
+                      style={{
+                        boxShadow: '0 4px 12px -2px rgba(147, 51, 234, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
+                    >
+                      <span className="text-2xl font-bold">{isLoadingCPLeadsCount ? '...' : channelPartnerLeadsCount}</span>
                     </motion.div>
                   </div>
                 </motion.div>

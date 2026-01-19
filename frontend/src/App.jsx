@@ -25,6 +25,7 @@ import SL_profile from './modules/sells/SL-pages/SL_profile'
 import SL_wallet from './modules/sells/SL-pages/SL_wallet'
 import SL_team_management from './modules/sells/SL-pages/SL_team_management'
 import SL_newLeads from './modules/sells/SL-pages/SL_newLeads'
+import SL_channelPartnerLeads from './modules/sells/SL-pages/SL_channelPartnerLeads'
 import SL_connected from './modules/sells/SL-pages/SL_connected'
 import SL_leadProfile from './modules/sells/SL-pages/SL_leadProfile'
 import SL_ClientProfile from './modules/sells/SL-pages/SL_ClientProfile'
@@ -98,6 +99,10 @@ import CP_dashboard from './modules/channel-partner/CP-pages/CP_dashboard'
 import CP_profile from './modules/channel-partner/CP-pages/CP_profile'
 import CP_rewards from './modules/channel-partner/CP-pages/CP_rewards'
 import CP_leads from './modules/channel-partner/CP-pages/CP_leads'
+import CP_newLeads from './modules/channel-partner/CP-pages/CP_newLeads'
+import CP_connected from './modules/channel-partner/CP-pages/CP_connected'
+import CP_not_picked from './modules/channel-partner/CP-pages/CP_not_picked'
+import CP_followup from './modules/channel-partner/CP-pages/CP_followup'
 import CP_lead_management from './modules/channel-partner/CP-pages/CP_lead_management'
 import CP_lead_profile from './modules/channel-partner/CP-pages/CP_lead_profile'
 import CP_converted from './modules/channel-partner/CP-pages/CP_converted'
@@ -155,6 +160,11 @@ function App() {
           <Route path="/new-leads" element={
             <SalesProtectedRoute>
               <SL_newLeads />
+            </SalesProtectedRoute>
+          } />
+          <Route path="/channel-partner-leads" element={
+            <SalesProtectedRoute>
+              <SL_channelPartnerLeads />
             </SalesProtectedRoute>
           } />
           <Route path="/connected" element={
@@ -488,6 +498,26 @@ function App() {
         <Route path="/cp-leads" element={
           <CPProtectedRoute>
             <CP_leads />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-new-leads" element={
+          <CPProtectedRoute>
+            <CP_newLeads />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-connected" element={
+          <CPProtectedRoute>
+            <CP_connected />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-not-picked" element={
+          <CPProtectedRoute>
+            <CP_not_picked />
+          </CPProtectedRoute>
+        } />
+        <Route path="/cp-followup" element={
+          <CPProtectedRoute>
+            <CP_followup />
           </CPProtectedRoute>
         } />
         <Route path="/cp-lead-management" element={

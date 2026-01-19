@@ -15,6 +15,7 @@ const Project = require('../models/Project');
 const Client = require('../models/Client');
 const Request = require('../models/Request');
 const Admin = require('../models/Admin');
+const CPLead = require('../models/CPLead');
 // Ensure LeadProfile model is registered before any populate calls
 require('../models/LeadProfile');
 
@@ -2366,6 +2367,129 @@ const getLeadsByStatus = async (req, res) => {
       success: false,
       message: isDev ? `Server error while fetching leads by status: ${errMsg}` : 'Server error while fetching leads by status',
       error: isDev ? errMsg : undefined
+    });
+  }
+};
+
+// @desc    Get channel partner shared leads
+// @route   GET /api/sales/channel-partner-leads
+// @access  Private (Sales only)
+const getChannelPartnerLeads = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const { 
+      category, 
+      priority, 
+      search, 
+      timeFrame,
+      page = 1, 
+      limit = 12 
+    } = req.query;
+
+    // Build filter to find CPLeads shared with this sales employee
+    const filter = {
+      'sharedWithSales.salesId': new mongoose.Types.ObjectId(salesId)
+    };
+
+    // Add category filter if provided
+    if (category && category !== 'all') {
+      try {
+        filter.category = new mongoose.Types.ObjectId(category);
+      } catch (error) {
+        // Invalid category ID, ignore
+      }
+    }
+
+    // Add priority filter if provided
+    if (priority && priority !== 'all') {
+      filter.priority = priority;
+    }
+
+    // Add search filter if provided
+    if (search && search.trim() !== '') {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { company: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Add time frame filter if provided
+    if (timeFrame && timeFrame !== 'all') {
+      const now = new Date();
+      let startDate, endDate;
+      
+      switch(timeFrame) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          break;
+        case 'yesterday':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+          break;
+        case 'week':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          break;
+      }
+      
+      if (startDate) {
+        filter['sharedWithSales.sharedAt'] = { $gte: startDate };
+        if (endDate) {
+          filter['sharedWithSales.sharedAt'].$lte = endDate;
+        }
+      }
+    }
+
+    // Calculate pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Query CPLeads shared with this sales employee
+    const leads = await CPLead.find(filter)
+      .populate('category', 'name color icon')
+      .populate('assignedTo', 'name email phoneNumber companyName')
+      .populate('sharedWithSales.salesId', 'name email phoneNumber')
+      .populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent')
+      .sort({ 'sharedWithSales.sharedAt': -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    // Get total count
+    const total = await CPLead.countDocuments(filter);
+
+    // Format response similar to regular leads
+    const formattedLeads = leads.map(lead => {
+      const leadObj = lead.toObject();
+      // Find the specific share entry for this sales employee
+      const shareEntry = leadObj.sharedWithSales.find(
+        share => String(share.salesId._id) === String(salesId)
+      );
+      leadObj.sharedAt = shareEntry?.sharedAt || leadObj.createdAt;
+      leadObj.channelPartner = leadObj.assignedTo;
+      return leadObj;
+    });
+
+    res.status(200).json({
+      success: true,
+      data: formattedLeads,
+      count: formattedLeads.length,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum)
+    });
+  } catch (error) {
+    console.error('Get channel partner leads error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching channel partner leads'
     });
   }
 };
@@ -4796,6 +4920,7 @@ module.exports = {
   getMonthlyConversions,
   getMyLeads,
   getLeadsByStatus,
+  getChannelPartnerLeads,
   getLeadDetail,
   updateLeadStatus,
   addFollowUp,

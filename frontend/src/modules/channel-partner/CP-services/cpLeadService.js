@@ -133,6 +133,43 @@ export const cpLeadService = {
   // Get client details
   getClientDetails: async (clientId) => {
     return await apiRequest(`/cp/clients/${clientId}`, { method: 'GET' });
+  },
+
+  // Add note to lead
+  addNoteToLead: async (leadId, noteData) => {
+    return await apiRequest(`/cp/leads/${leadId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(noteData)
+    });
+  },
+
+  // Request demo
+  requestDemo: async (leadId, demoData) => {
+    return await apiRequest(`/cp/leads/${leadId}/request-demo`, {
+      method: 'POST',
+      body: JSON.stringify(demoData)
+    });
+  },
+
+  // Transfer lead (if needed for CP)
+  transferLead: async (leadId, transferData) => {
+    return await apiRequest(`/cp/leads/${leadId}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify(transferData)
+    });
+  },
+
+  // Get sales team (for sharing/transferring)
+  getSalesTeam: async () => {
+    try {
+      const response = await apiRequest('/cp/sales-team', {
+        method: 'GET'
+      });
+      return response.data || [];
+    } catch (error) {
+      console.error('Error fetching sales team:', error);
+      return [];
+    }
   }
 };
 

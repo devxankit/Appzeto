@@ -406,6 +406,39 @@ export const getLeadActivities = (lead) => {
   return activities;
 };
 
+// Get channel partner shared leads
+export const getChannelPartnerLeads = async (params = {}) => {
+  try {
+    const queryParams = new URLSearchParams();
+    
+    // Add parameters if they exist
+    if (params.category) queryParams.append('category', params.category);
+    if (params.priority) queryParams.append('priority', params.priority);
+    if (params.search) queryParams.append('search', params.search);
+    if (params.timeFrame) queryParams.append('timeFrame', params.timeFrame);
+    if (params.page) queryParams.append('page', params.page);
+    if (params.limit) queryParams.append('limit', params.limit);
+
+    const url = `/sales/channel-partner-leads${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    
+    const response = await apiRequest(url, {
+      method: 'GET'
+    });
+    
+    return response;
+  } catch (error) {
+    console.error('Error fetching channel partner leads:', error);
+    // Return empty response if API fails
+    return {
+      data: [],
+      count: 0,
+      total: 0,
+      page: 1,
+      pages: 0
+    };
+  }
+};
+
 // Get all sales team members
 export const getSalesTeam = async () => {
   try {
@@ -479,6 +512,7 @@ const salesLeadService = {
   getDashboardStatistics,
   getMyLeads,
   getLeadsByStatus,
+  getChannelPartnerLeads,
   getLeadDetail,
   updateLeadStatus,
   createLeadProfile,

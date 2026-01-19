@@ -14,6 +14,7 @@ const {
   getWalletSummary,
   getMyLeads,
   getLeadsByStatus,
+  getChannelPartnerLeads,
   getLeadDetail,
   updateLeadStatus,
   addFollowUp,
@@ -71,6 +72,7 @@ router.get('/analytics/conversions/monthly', getMonthlyConversions);
 // Lead Management
 router.get('/leads', getMyLeads);
 router.get('/leads/status/:status', getLeadsByStatus);
+router.get('/channel-partner-leads', getChannelPartnerLeads);
 router.get('/leads/:id', getLeadDetail);
 router.patch('/leads/:id/status', updateLeadStatus);
 
