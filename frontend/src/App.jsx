@@ -99,17 +99,21 @@ import CP_dashboard from './modules/channel-partner/CP-pages/CP_dashboard.jsx'
 import CP_profile from './modules/channel-partner/CP-pages/CP_profile'
 import CP_rewards from './modules/channel-partner/CP-pages/CP_rewards'
 import CP_leads from './modules/channel-partner/CP-pages/CP_leads'
-import CP_newLeads from './modules/channel-partner/CP-pages/CP_newLeads'
-import CP_connected from './modules/channel-partner/CP-pages/CP_connected'
-import CP_not_picked from './modules/channel-partner/CP-pages/CP_not_picked'
-import CP_followup from './modules/channel-partner/CP-pages/CP_followup'
-import CP_lead_management from './modules/channel-partner/CP-pages/CP_lead_management'
-import CP_lead_profile from './modules/channel-partner/CP-pages/CP_lead_profile'
-import CP_converted from './modules/channel-partner/CP-pages/CP_converted'
-import CP_client_profile from './modules/channel-partner/CP-pages/CP_client_profile'
+import CP_lead_details from './modules/channel-partner/CP-pages/CP_lead_details'
 import CP_wallet from './modules/channel-partner/CP-pages/CP_wallet'
-import CP_payment_recovery from './modules/channel-partner/CP-pages/CP_payment_recovery'
+import CP_converted from './modules/channel-partner/CP-pages/CP_converted'
+import CP_project_progress from './modules/channel-partner/CP-pages/CP_project_progress'
+import CP_resources from './modules/channel-partner/CP-pages/CP_resources'
+import CP_resource_details from './modules/channel-partner/CP-pages/CP_resource_details'
+import CP_quotations from './modules/channel-partner/CP-pages/CP_quotations'
+import CP_quotation_details from './modules/channel-partner/CP-pages/CP_quotation_details'
+import CP_tutorials from './modules/channel-partner/CP-pages/CP_tutorials'
+import CP_tutorial_details from './modules/channel-partner/CP-pages/CP_tutorial_details'
+import CP_notice_board from './modules/channel-partner/CP-pages/CP_notice_board'
+import CP_my_team from './modules/channel-partner/CP-pages/CP_my_team'
 import CP_notifications from './modules/channel-partner/CP-pages/CP_notifications'
+import CP_public_profile from './modules/channel-partner/CP-pages/CP_public_profile'
+
 
 //Admin pages start here //
 import Admin_dashboard from './modules/admin/admin-pages/Admin_dashboard'
@@ -192,6 +196,10 @@ function App() {
                 <SL_notes />
               </SalesProtectedRoute>
             } />
+            {/* Public Route - No Protection */}
+            <Route path="/p/:id" element={<CP_public_profile />} />
+
+            {/* Admin Routes */}
             <Route path="/payments-recovery" element={
               <SalesProtectedRoute>
                 <SL_payments_recovery />
@@ -500,44 +508,9 @@ function App() {
                 <CP_leads />
               </CPProtectedRoute>
             } />
-            <Route path="/cp-new-leads" element={
+            <Route path="/cp-lead-details/:id" element={
               <CPProtectedRoute>
-                <CP_newLeads />
-              </CPProtectedRoute>
-            } />
-            <Route path="/cp-connected" element={
-              <CPProtectedRoute>
-                <CP_connected />
-              </CPProtectedRoute>
-            } />
-            <Route path="/cp-not-picked" element={
-              <CPProtectedRoute>
-                <CP_not_picked />
-              </CPProtectedRoute>
-            } />
-            <Route path="/cp-followup" element={
-              <CPProtectedRoute>
-                <CP_followup />
-              </CPProtectedRoute>
-            } />
-            <Route path="/cp-lead-management" element={
-              <CPProtectedRoute>
-                <CP_lead_management />
-              </CPProtectedRoute>
-            } />
-            <Route path="/cp-lead-profile/:id" element={
-              <CPProtectedRoute>
-                <CP_lead_profile />
-              </CPProtectedRoute>
-            } />
-            <Route path="/cp-converted" element={
-              <CPProtectedRoute>
-                <CP_converted />
-              </CPProtectedRoute>
-            } />
-            <Route path="/cp-client-profile/:id" element={
-              <CPProtectedRoute>
-                <CP_client_profile />
+                <CP_lead_details />
               </CPProtectedRoute>
             } />
             <Route path="/cp-wallet" element={
@@ -545,9 +518,54 @@ function App() {
                 <CP_wallet />
               </CPProtectedRoute>
             } />
-            <Route path="/cp-payment-recovery" element={
+            <Route path="/cp-converted" element={
               <CPProtectedRoute>
-                <CP_payment_recovery />
+                <CP_converted />
+              </CPProtectedRoute>
+            } />
+            <Route path="/cp-project-progress/:id" element={
+              <CPProtectedRoute>
+                <CP_project_progress />
+              </CPProtectedRoute>
+            } />
+            <Route path="/cp-resources" element={
+              <CPProtectedRoute>
+                <CP_resources />
+              </CPProtectedRoute>
+            } />
+            <Route path="/cp-resources/:id" element={
+              <CPProtectedRoute>
+                <CP_resource_details />
+              </CPProtectedRoute>
+            } />
+            <Route path="/cp-quotations" element={
+              <CPProtectedRoute>
+                <CP_quotations />
+              </CPProtectedRoute>
+            } />
+            <Route path="/cp-quotation-details/:id" element={
+              <CPProtectedRoute>
+                <CP_quotation_details />
+              </CPProtectedRoute>
+            } />
+            <Route path="/cp-tutorials" element={
+              <CPProtectedRoute>
+                <CP_tutorials />
+              </CPProtectedRoute>
+            } />
+            <Route path="/cp-tutorial-details/:id" element={
+              <CPProtectedRoute>
+                <CP_tutorial_details />
+              </CPProtectedRoute>
+            } />
+            <Route path="/cp-notice-board" element={
+              <CPProtectedRoute>
+                <CP_notice_board />
+              </CPProtectedRoute>
+            } />
+            <Route path="/cp-my-team" element={
+              <CPProtectedRoute>
+                <CP_my_team />
               </CPProtectedRoute>
             } />
             <Route path="/cp-notifications" element={
@@ -555,6 +573,7 @@ function App() {
                 <CP_notifications />
               </CPProtectedRoute>
             } />
+
             <Route path="/cp-profile" element={
               <CPProtectedRoute>
                 <CP_profile />

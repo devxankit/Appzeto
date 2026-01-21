@@ -1,597 +1,253 @@
-import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import CP_navbar from '../CP-components/CP_navbar'
-import { 
-  FiUser as User, 
-  FiMail as Mail, 
-  FiSave as Save, 
-  FiX as X, 
-  FiCalendar as Calendar, 
-  FiPhone as Phone,
-  FiEdit2 as Edit
-} from 'react-icons/fi'
-import { FiBriefcase as Building, FiMapPin as MapPin, FiLogOut as LogOut } from 'react-icons/fi'
-import { getProfile, updateProfile, logoutCP } from '../CP-services/cpAuthService'
-import { useToast } from '../../../contexts/ToastContext'
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+    Shield, ChevronRight, Share2, LogOut,
+    Phone, Briefcase, Users, Wallet, ExternalLink,
+    CheckCircle, ArrowLeft, Settings, Bell
+} from 'lucide-react';
+import CP_navbar from '../CP-components/CP_navbar';
+import { useToast } from '../../../contexts/ToastContext';
+import { logoutCP } from '../CP-services/cpAuthService';
 
 const CP_profile = () => {
-  const navigate = useNavigate()
-  const { toast } = useToast()
-  const [isEditing, setIsEditing] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [loggingOut, setLoggingOut] = useState(false)
-  const [originalProfile, setOriginalProfile] = useState(null)
-  const [profileData, setProfileData] = useState({
-    fullName: '',
-    email: '',
-    company: '',
-    phone: '',
-    joinDate: '',
-    avatar: '',
-    dateOfBirth: '',
-    gender: '',
-    address: {
-      street: '',
-      city: '',
-      state: '',
-      country: 'India',
-      zipCode: ''
-    }
-  })
+    const navigate = useNavigate();
+    const { toast } = useToast();
 
-  const deriveAvatar = (name) => {
-    if (!name) return 'CP'
-    const initials = name
-      .split(' ')
-      .filter(Boolean)
-      .map((part) => part[0]?.toUpperCase())
-      .join('')
-    return initials.slice(0, 2) || 'CP'
-  }
-
-  const calculateAge = (dateOfBirth) => {
-    if (!dateOfBirth) return null
-    const today = new Date()
-    const birthDate = new Date(dateOfBirth)
-    let age = today.getFullYear() - birthDate.getFullYear()
-    const monthDiff = today.getMonth() - birthDate.getMonth()
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--
-    }
-    return age
-  }
-
-  const formatGender = (gender) => {
-    if (!gender) return 'Not specified'
-    const genderMap = {
-      'male': 'Male',
-      'female': 'Female',
-      'other': 'Other',
-      'prefer-not-to-say': 'Prefer not to say'
-    }
-    return genderMap[gender] || gender
-  }
-
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        setLoading(true)
-        const response = await getProfile()
-        const cp = response?.data || {}
-
-        const formattedProfile = {
-          fullName: cp.name || 'Channel Partner',
-          email: cp.email || 'Not provided',
-          company: cp.companyName || 'Not specified',
-          phone: cp.phoneNumber || 'Not provided',
-          joinDate: (cp.joiningDate || cp.createdAt || new Date().toISOString()),
-          avatar: deriveAvatar(cp.name),
-          dateOfBirth: cp.dateOfBirth || '',
-          gender: cp.gender || '',
-          address: cp.address || {
-            street: '',
-            city: '',
-            state: '',
-            country: 'India',
-            zipCode: ''
-          }
+    // Mock User Data
+    const USER = {
+        name: 'Iron Man',
+        id: 'CP-2024-STARK',
+        role: 'Titanium Partner',
+        initials: 'IM',
+        company: 'Stark Industries',
+        stats: {
+            leads: 124,
+            converted: 89,
+            earnings: '₹ 5.45L'
+        },
+        contact: {
+            phone: '+91 98765 00000',
+            email: 'tony@stark.com',
+            website: 'stark.com'
         }
+    };
 
-        setProfileData(formattedProfile)
-        setOriginalProfile({ ...formattedProfile })
-      } catch (error) {
-        console.error('Failed to load channel partner profile:', error)
+    const handleCopyLink = () => {
+        navigator.clipboard.writeText(`https://${USER.contact.website}`);
+        toast.success("Public profile link copied");
+    };
 
-        if (error?.status === 401 || error?.isUnauthorized) {
-          toast.info('Session expired. Please log in again.', {
-            title: 'Session Ended',
-            duration: 4000
-          })
-          navigate('/cp-login', { replace: true })
-          return
+    const handleLogout = async () => {
+        try {
+            await logoutCP();
+            toast.success("Logged out successfully");
+            navigate('/cp-login');
+        } catch (error) {
+            console.error("Logout failed", error);
         }
+    };
 
-        toast.error('Unable to load profile. Please try again later.', {
-          title: 'Profile Error',
-          duration: 4000
-        })
-      } finally {
-        setLoading(false)
-      }
-    }
+    // Animation Variants
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: {
+            opacity: 1,
+            transition: { staggerChildren: 0.1 }
+        }
+    };
 
-    loadProfile()
-  }, [navigate, toast])
+    const itemVariants = {
+        hidden: { opacity: 0, y: 20 },
+        visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+    };
 
-  const handleProfileUpdate = (field, value) => {
-    setProfileData(prev => ({ ...prev, [field]: value }))
-  }
-
-  const handleAddressUpdate = (field, value) => {
-    setProfileData(prev => ({
-      ...prev,
-      address: { ...prev.address, [field]: value }
-    }))
-  }
-
-  const handleSave = async () => {
-    try {
-      setSaving(true)
-      
-      const updateData = {
-        name: profileData.fullName,
-        email: profileData.email,
-        companyName: profileData.company,
-        address: profileData.address
-      }
-
-      const response = await updateProfile(updateData)
-      
-      if (response?.success) {
-        setOriginalProfile({ ...profileData })
-        setIsEditing(false)
-        toast.success('Profile updated successfully!', {
-          title: 'Success',
-          duration: 3000
-        })
-      }
-    } catch (error) {
-      console.error('Failed to update profile:', error)
-      toast.error(error.message || 'Failed to update profile. Please try again.', {
-        title: 'Update Failed',
-        duration: 4000
-      })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleCancel = () => {
-    setProfileData({ ...originalProfile })
-    setIsEditing(false)
-  }
-
-  const handleLogout = async () => {
-    try {
-      setLoggingOut(true)
-      await logoutCP()
-      toast.logout?.('You have been logged out successfully.', {
-        title: 'Logged Out',
-        duration: 3000
-      })
-      navigate('/cp-login')
-    } catch (error) {
-      console.error('Channel Partner logout failed:', error)
-      toast.error?.('Unable to logout. Please try again.', {
-        title: 'Logout Failed',
-        duration: 4000
-      })
-      // Still navigate to login even if logout fails
-      navigate('/cp-login')
-    } finally {
-      setLoggingOut(false)
-    }
-  }
-
-  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <CP_navbar />
-        <div className="pt-14 pb-20 lg:pb-8 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-4xl mx-auto pt-6">
-            <div className="flex items-center justify-center h-96">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading profile...</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+        <div className="min-h-screen bg-white flex flex-col font-sans selection:bg-teal-500 selection:text-white">
+            <CP_navbar />
 
-  const age = calculateAge(profileData.dateOfBirth)
+            <main className="flex-1 relative overflow-x-hidden pb-28">
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-indigo-50/30">
-      <CP_navbar />
-      
-      <div className="pt-14 pb-20 lg:pb-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto pt-6">
-          {/* Main Profile Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-shadow duration-300"
-          >
-            {/* Header: Avatar, Name, and Edit Button on same level */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="flex items-center justify-between mb-8 pb-8 border-b border-gray-200"
-            >
-              <div className="flex items-center space-x-4">
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-2xl shadow-lg ring-4 ring-blue-100">
-                    {profileData.avatar}
-                  </div>
-                </motion.div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">{profileData.fullName}</h3>
-                  <p className="text-sm text-gray-600">{profileData.email || 'No email provided'}</p>
+                {/* 1. Header - PURE TEAL Gradient Only */}
+                <div className="absolute top-0 left-0 right-0 h-[320px] z-0 overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-teal-700 via-teal-600 to-teal-500 rounded-b-[50px] shadow-lg"></div>
+                    {/* Subtle Texture - No White */}
+                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay"></div>
                 </div>
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => {
-                  if (isEditing) {
-                    handleCancel()
-                  } else {
-                    setIsEditing(true)
-                  }
-                }}
-                className={`p-2.5 rounded-lg transition-all duration-200 ${
-                  isEditing 
-                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' 
-                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
-                }`}
-                title={isEditing ? 'Cancel' : 'Edit Profile'}
-              >
-                {isEditing ? (
-                  <X className="h-5 w-5" />
-                ) : (
-                  <Edit className="h-5 w-5" />
-                )}
-              </motion.button>
-            </motion.div>
 
-            {/* Profile Fields */}
-            <div className="space-y-6">
-              {/* Personal Information Section */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.2 }}
-              >
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                    <User className="h-5 w-5 text-blue-600" />
-                  </div>
-                  Personal Information
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Full Name */}
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={profileData.fullName}
-                        onChange={(e) => handleProfileUpdate('fullName', e.target.value)}
-                        className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                      />
-                    ) : (
-                      <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 rounded-lg border border-gray-100 hover:border-blue-200 transition-all">
-                        <User className="h-4 w-4 text-blue-500" />
-                        <span className="text-sm font-medium text-gray-900">{profileData.fullName}</span>
-                      </div>
-                    )}
-                  </motion.div>
+                <div className="relative z-10 pt-24 px-6 md:pt-28 max-w-lg mx-auto">
 
-                  {/* Email */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                    {isEditing ? (
-                      <input
-                        type="email"
-                        value={profileData.email}
-                        onChange={(e) => handleProfileUpdate('email', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                      />
-                    ) : (
-                      <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg">
-                        <Mail className="h-4 w-4 text-gray-400" />
-                        <span className="text-sm font-medium text-gray-900">{profileData.email || 'Not provided'}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Phone Number (Read-only) */}
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-                    <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 rounded-lg border border-gray-100">
-                      <Phone className="h-4 w-4 text-blue-500" />
-                      <span className="text-sm font-medium text-gray-900">{profileData.phone}</span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Phone number cannot be changed</p>
-                  </motion.div>
-
-                  {/* Gender */}
-                  {profileData.gender && (
+                    {/* 2. Header Content */}
                     <motion.div
-                      whileHover={{ scale: 1.01 }}
-                      transition={{ duration: 0.2 }}
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6 }}
+                        className="flex items-center justify-between mb-8 text-white"
                     >
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Gender</label>
-                      <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 rounded-lg border border-gray-100">
-                        <User className="h-4 w-4 text-blue-500" />
-                        <span className="text-sm font-medium text-gray-900">{formatGender(profileData.gender)}</span>
-                      </div>
+                        <div>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-800/30 border border-teal-400/30 mb-3 shadow-sm backdrop-blur-sm">
+                                <Shield className="w-3.5 h-3.5 text-teal-200 fill-teal-200" />
+                                <span className="text-[10px] font-bold tracking-widest uppercase text-teal-50">Verified Partner</span>
+                            </div>
+                            <h1 className="text-4xl font-extrabold tracking-tight text-white">{USER.name}</h1>
+                            <p className="text-teal-100 text-sm font-medium mt-1 opacity-90">{USER.company}</p>
+                        </div>
+                        <motion.div
+                            whileHover={{ scale: 1.05, rotate: 5 }}
+                            className="w-16 h-16 rounded-2xl border-2 border-white/20 bg-teal-800/20 backdrop-blur-md flex items-center justify-center shadow-lg cursor-pointer group"
+                        >
+                            <span className="text-2xl font-bold text-white">{USER.initials}</span>
+                        </motion.div>
                     </motion.div>
-                  )}
 
-                  {/* Date of Birth */}
-                  {profileData.dateOfBirth && (
                     <motion.div
-                      whileHover={{ scale: 1.01 }}
-                      transition={{ duration: 0.2 }}
+                        variants={containerVariants}
+                        initial="hidden"
+                        animate="visible"
+                        className="space-y-6"
                     >
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Date of Birth</label>
-                      <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 rounded-lg border border-gray-100">
-                        <Calendar className="h-4 w-4 text-blue-500" />
-                        <span className="text-sm font-medium text-gray-900">
-                          {new Date(profileData.dateOfBirth).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
+                        {/* 3. HERO IDENTITY CARD - Pure White & Black Font */}
+                        <motion.div variants={itemVariants} className="relative group">
+                            <div className="relative bg-white rounded-[32px] p-7 shadow-xl shadow-teal-900/10 border border-gray-100 overflow-hidden">
+                                {/* Card Content */}
+                                <div className="relative z-10">
+                                    <div className="flex justify-between items-start border-b border-gray-100 pb-5 mb-5">
+                                        <div>
+                                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1.5">Partner ID</p>
+                                            <p className="text-xl font-mono font-bold text-black tracking-tight">{USER.id}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1.5">Membership</p>
+                                            <p className="text-lg font-bold text-teal-700">
+                                                {USER.role}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle className="w-4 h-4 text-teal-600" />
+                                            <span className="text-xs font-bold text-black">Active Status</span>
+                                        </div>
+                                        <span className="text-[10px] font-bold text-gray-400">Valid thru 12/28</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+
+                        {/* 4. STATS GRID - Minimalist */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <motion.div
+                                variants={itemVariants}
+                                className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between h-36 relative overflow-hidden active:scale-95 transition-transform"
+                            >
+                                <div className="w-11 h-11 rounded-full bg-gray-50 text-black flex items-center justify-center mb-2">
+                                    <Users className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-3xl font-black text-black tracking-tight">{USER.stats.leads}</h3>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mt-1">Total Leads</p>
+                                </div>
+                            </motion.div>
+
+                            <motion.div
+                                variants={itemVariants}
+                                onClick={() => navigate('/cp-wallet')}
+                                className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between h-36 relative overflow-hidden cursor-pointer active:scale-95 transition-transform"
+                            >
+                                <div className="absolute right-0 top-0 p-4 opacity-5">
+                                    <Wallet className="w-16 h-16 text-black" />
+                                </div>
+                                <div className="w-11 h-11 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center mb-2">
+                                    <Wallet className="w-5 h-5" />
+                                </div>
+                                <div className="relative z-10">
+                                    <h3 className="text-2xl font-black text-black tracking-tight truncate">{USER.stats.earnings}</h3>
+                                    <div className="flex items-center gap-1 mt-1 text-teal-700">
+                                        <p className="text-xs font-bold uppercase tracking-wide">Earnings</p>
+                                        <ChevronRight className="w-3 h-3" />
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
+
+                        {/* 5. MENU ACTIONS - Simple Black Text */}
+                        <motion.div variants={itemVariants} className="space-y-5 pt-2">
+
+                            <div className="bg-white rounded-[28px] shadow-sm border border-gray-200 overflow-hidden divide-y divide-gray-100">
+                                {/* Contact Row */}
+                                <div className="p-5 flex items-center gap-5 cursor-default">
+                                    <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-600 shrink-0">
+                                        <Phone className="w-5 h-5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Mobile Number</p>
+                                        <p className="text-sm font-bold text-black truncate font-mono">{USER.contact.phone}</p>
+                                    </div>
+                                </div>
+
+                                {/* My Team Row */}
+                                <motion.div
+                                    whileTap={{ backgroundColor: "#f9fafb" }}
+                                    onClick={() => navigate('/cp-my-team')}
+                                    className="p-5 flex items-center justify-between cursor-pointer group"
+                                >
+                                    <div className="flex items-center gap-5">
+                                        <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-600 shrink-0 group-hover:bg-black group-hover:text-white transition-colors">
+                                            <Briefcase className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-black">Assigned Sales Team</p>
+                                            <p className="text-[10px] font-medium text-gray-400 mt-0.5">Manage your POCs</p>
+                                        </div>
+                                    </div>
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center">
+                                        <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-black" />
+                                    </div>
+                                </motion.div>
+
+                                {/* Share Row */}
+                                <motion.div
+                                    whileTap={{ backgroundColor: "#f9fafb" }}
+                                    onClick={handleCopyLink}
+                                    className="p-5 flex items-center justify-between cursor-pointer group"
+                                >
+                                    <div className="flex items-center gap-5">
+                                        <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-600 shrink-0 group-hover:bg-black group-hover:text-white transition-colors">
+                                            <Share2 className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-black">Share Public Profile</p>
+                                            <p className="text-[10px] font-medium text-gray-400 mt-0.5">Increase your reach</p>
+                                        </div>
+                                    </div>
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center">
+                                        <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-black" />
+                                    </div>
+                                </motion.div>
+                            </div>
+
+                            <motion.button
+                                variants={itemVariants}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={handleLogout}
+                                className="w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-200 flex items-center justify-center gap-2 text-gray-500 font-bold text-sm hover:text-red-600 hover:bg-red-50 hover:border-red-100 transition-all mt-4"
+                            >
+                                <LogOut className="w-4 h-4" /> Sign Out
+                            </motion.button>
+                        </motion.div>
+                    </motion.div>
+
+                    {/* 6. MINIMAL FOOTER */}
+                    <div className="mt-12 mb-6 text-center">
+                        <span className="text-[10px] font-bold tracking-[0.2em] text-gray-300 uppercase font-mono">
+                            Appzeto • v2.5.0
                         </span>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Age */}
-                  {age && (
-                    <motion.div
-                      whileHover={{ scale: 1.01 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Age</label>
-                      <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 rounded-lg border border-gray-100">
-                        <Calendar className="h-4 w-4 text-blue-500" />
-                        <span className="text-sm font-medium text-gray-900">{age} years</span>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Joining Date (Read-only) */}
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Joining Date</label>
-                    <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 rounded-lg border border-gray-100">
-                      <Calendar className="h-4 w-4 text-blue-500" />
-                      <span className="text-sm font-medium text-gray-900">
-                        {new Date(profileData.joinDate).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })}
-                      </span>
                     </div>
-                  </motion.div>
+
                 </div>
-              </motion.div>
-
-              {/* Company Information Section */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.3 }}
-                className="pt-6 border-t border-gray-200"
-              >
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                    <Building className="h-5 w-5 text-purple-600" />
-                  </div>
-                  Company Information
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Company Name */}
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={profileData.company}
-                        onChange={(e) => handleProfileUpdate('company', e.target.value)}
-                        className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                      />
-                    ) : (
-                      <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-gray-50 to-purple-50/50 rounded-lg border border-gray-100 hover:border-purple-200 transition-all">
-                        <Building className="h-4 w-4 text-purple-500" />
-                        <span className="text-sm font-medium text-gray-900">{profileData.company || 'Not specified'}</span>
-                      </div>
-                    )}
-                  </motion.div>
-                </div>
-              </motion.div>
-
-              {/* Address Information Section */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.4 }}
-                className="pt-6 border-t border-gray-200"
-              >
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <div className="p-2 bg-green-100 rounded-lg mr-3">
-                    <MapPin className="h-5 w-5 text-green-600" />
-                  </div>
-                  Address Information
-                </h3>
-                {isEditing ? (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    transition={{ duration: 0.3 }}
-                    className="space-y-4"
-                  >
-                    {/* Street Address */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
-                      <input
-                        type="text"
-                        value={profileData.address?.street || ''}
-                        onChange={(e) => handleAddressUpdate('street', e.target.value)}
-                        className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                        placeholder="Enter street address"
-                      />
-                    </div>
-
-                    {/* City and State */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-                        <input
-                          type="text"
-                          value={profileData.address?.city || ''}
-                          onChange={(e) => handleAddressUpdate('city', e.target.value)}
-                          className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                          placeholder="Enter city"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
-                        <input
-                          type="text"
-                          value={profileData.address?.state || ''}
-                          onChange={(e) => handleAddressUpdate('state', e.target.value)}
-                          className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                          placeholder="Enter state"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Pin Code and Country */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Pin Code</label>
-                        <input
-                          type="text"
-                          value={profileData.address?.zipCode || ''}
-                          onChange={(e) => handleAddressUpdate('zipCode', e.target.value.replace(/\D/g, ''))}
-                          className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                          placeholder="Enter pin code"
-                          maxLength={6}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
-                        <input
-                          type="text"
-                          value={profileData.address?.country || ''}
-                          onChange={(e) => handleAddressUpdate('country', e.target.value)}
-                          className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                          placeholder="Enter country"
-                        />
-                      </div>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    transition={{ duration: 0.2 }}
-                    className="flex items-start space-x-2 p-3 bg-gradient-to-r from-gray-50 to-green-50/50 rounded-lg border border-gray-100 hover:border-green-200 transition-all"
-                  >
-                    <MapPin className="h-4 w-4 text-green-500 mt-0.5" />
-                    <span className="text-sm font-medium text-gray-900">
-                      {[
-                        profileData.address?.street,
-                        profileData.address?.city,
-                        profileData.address?.state,
-                        profileData.address?.zipCode,
-                        profileData.address?.country
-                      ].filter(Boolean).join(', ') || 'Not provided'}
-                    </span>
-                  </motion.div>
-                )}
-              </motion.div>
-            </div>
-
-            {/* Save Button */}
-            {isEditing && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="mt-8 pt-6 border-t border-gray-200 flex items-center justify-end"
-              >
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all font-medium flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>{saving ? 'Saving...' : 'Save Changes'}</span>
-                </motion.button>
-              </motion.div>
-            )}
-
-            {/* Logout Button at Bottom */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.5 }}
-              className="mt-8 pt-6 border-t border-gray-200"
-            >
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleLogout}
-                disabled={loggingOut}
-                className="w-full px-6 py-3 bg-gradient-to-r from-red-50 to-red-100/50 text-red-700 rounded-lg font-medium hover:from-red-100 hover:to-red-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border-2 border-red-200 hover:border-red-300 shadow-sm hover:shadow-md"
-              >
-                <LogOut className="h-5 w-5" />
-                <span>{loggingOut ? 'Logging out...' : 'Logout'}</span>
-              </motion.button>
-            </motion.div>
-          </motion.div>
+            </main>
         </div>
-      </div>
-    </div>
-  )
-}
+    );
+};
 
-export default CP_profile
+export default CP_profile;

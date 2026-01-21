@@ -1,287 +1,146 @@
-import React, { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts'
-import { 
-  FiAward,
-  FiTrendingUp,
-  FiDollarSign,
-  FiTarget,
-  FiCheckCircle,
-  FiArrowRight,
-  FiCalendar,
-  FiActivity,
-  FiUsers
-} from 'react-icons/fi'
-import CP_navbar from '../CP-components/CP_navbar'
-import { cpRewardService } from '../CP-services'
-import { useToast } from '../../../contexts/ToastContext'
+import React from 'react';
+import { motion } from 'framer-motion';
+import {
+  FiAward, FiStar, FiTrendingUp, FiLock, FiUnlock,
+  FiGift, FiCheckCircle
+} from 'react-icons/fi';
+import CP_navbar from '../CP-components/CP_navbar';
+
+// --- Mock Data ---
+const REWARDS_DATA = {
+  currentLevel: 'Silver Partner',
+  nextLevel: 'Gold Partner',
+  totalConversions: 8,
+  conversionsForNextLevel: 10,
+  progress: 80, // 8 out of 10
+  currentRewardValue: '$500',
+  milestones: [
+    { id: 1, title: 'First Sale', requirement: '1 Conversion', reward: '$150', status: 'unlocked' },
+    { id: 2, title: 'Rising Star', requirement: '5 Conversions', reward: '$350', status: 'unlocked' },
+    { id: 3, title: 'Pro Partner', requirement: '10 Conversions', reward: '$1,000', status: 'in-progress' },
+    { id: 4, title: 'Elite Club', requirement: '25 Conversions', reward: '$3,000', status: 'locked' },
+  ],
+  history: [
+    { id: 101, title: 'Rising Star Bonus', date: '2 days ago', amount: '+$350' },
+    { id: 102, title: 'First Sale Bonus', date: '15 Sep, 2023', amount: '+$150' },
+  ]
+};
 
 const CP_rewards = () => {
-  const navigate = useNavigate()
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(true)
-  const [rewards, setRewards] = useState([])
-  const [incentives, setIncentives] = useState([])
-  const [performance, setPerformance] = useState(null)
+  return (
+    <div className="min-h-screen bg-[#F3F4F6] pb-24 md:pb-0">
+      <CP_navbar />
 
-  useEffect(() => {
-    loadRewardsData()
-  }, [])
+      <div className="max-w-4xl mx-auto pt-20 px-4 md:px-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">Rewards & Achievements</h1>
+          <p className="text-gray-500 text-sm">Unlock bonuses as you grow.</p>
+        </div>
 
-  const loadRewardsData = async () => {
-    try {
-      setLoading(true)
-      const [rewardsRes, incentivesRes, performanceRes] = await Promise.all([
-        cpRewardService.getRewards({ limit: 20 }),
-        cpRewardService.getIncentives(),
-        cpRewardService.getPerformanceMetrics()
-      ])
+        {/* Level Progress Card */}
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-10 opacity-5">
+            <FiAward className="w-64 h-64 text-yellow-500" />
+          </div>
 
-      if (rewardsRes.success) {
-        setRewards(rewardsRes.data || [])
-      }
-      if (incentivesRes.success) {
-        setIncentives(incentivesRes.data || [])
-      }
-      if (performanceRes.success) {
-        setPerformance(performanceRes.data)
-      }
-    } catch (error) {
-      console.error('Failed to load rewards data:', error)
-      toast.error?.(error.message || 'Failed to load rewards data', {
-        title: 'Error',
-        duration: 4000
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+          <div className="relative z-10 flex flex-col md:flex-row gap-6 items-center">
+            {/* Badge */}
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-600 flex items-center justify-center shadow-lg shadow-yellow-200">
+              <FiStar className="w-10 h-10 text-white fill-white" />
+            </div>
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0
-    }).format(amount || 0)
-  }
+            {/* Stats */}
+            <div className="flex-1 text-center md:text-left w-full">
+              <div className="flex justify-between items-end mb-2">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">{REWARDS_DATA.currentLevel}</h2>
+                  <p className="text-sm text-gray-500">
+                    {REWARDS_DATA.conversionsForNextLevel - REWARDS_DATA.totalConversions} more sales to reach <span className="text-indigo-600 font-bold">{REWARDS_DATA.nextLevel}</span>
+                  </p>
+                </div>
+                <span className="text-2xl font-bold text-indigo-600">{REWARDS_DATA.progress}%</span>
+              </div>
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A'
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    })
-  }
-
-  const getTransactionTypeColor = (type) => {
-    const colors = {
-      commission: 'text-blue-600',
-      incentive: 'text-purple-600',
-      reward: 'text-green-600'
-    }
-    return colors[type] || 'text-gray-600'
-  }
-
-  const getTransactionTypeBg = (type) => {
-    const colors = {
-      commission: 'bg-blue-50 border-blue-200',
-      incentive: 'bg-purple-50 border-purple-200',
-      reward: 'bg-green-50 border-green-200'
-    }
-    return colors[type] || 'bg-gray-50 border-gray-200'
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-indigo-50/30">
-        <CP_navbar />
-        <div className="pt-14 pb-20 lg:pb-8 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-center h-96">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading...</p>
+              {/* Progress Bar */}
+              <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${REWARDS_DATA.progress}%` }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full relative"
+                >
+                  <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                </motion.div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    )
-  }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-indigo-50/30">
-      <CP_navbar />
-      
-      <div className="pt-14 pb-20 lg:pb-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto space-y-6 pt-6">
-          {/* Performance Metrics */}
-          {performance && (
-            <div className="grid grid-cols-2 gap-4">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <FiTarget className="h-5 w-5 text-blue-600" />
-                  </div>
+        {/* Milestones Grid */}
+        <h3 className="font-bold text-lg text-gray-800 mb-4">Milestones</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          {REWARDS_DATA.milestones.map((milestone) => (
+            <div
+              key={milestone.id}
+              className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${milestone.status === 'unlocked' ? 'bg-white border-green-200 shadow-sm' :
+                  milestone.status === 'in-progress' ? 'bg-white border-indigo-200 ring-4 ring-indigo-50/50' :
+                    'bg-gray-50 border-gray-200 opacity-75'
+                }`}
+            >
+              {milestone.status === 'unlocked' && (
+                <div className="absolute top-4 right-4 text-green-500 bg-green-50 p-1.5 rounded-full">
+                  <FiCheckCircle className="w-5 h-5" />
                 </div>
-                <h3 className="text-xs font-medium text-gray-600 mb-1">Total Leads</h3>
-                <p className="text-xl font-bold text-gray-900">
-                  {performance.leads?.total || 0}
-                </p>
-              </motion.div>
+              )}
+              {milestone.status === 'locked' && (
+                <div className="absolute top-4 right-4 text-gray-400">
+                  <FiLock className="w-5 h-5" />
+                </div>
+              )}
 
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <FiCheckCircle className="h-5 w-5 text-green-600" />
-                  </div>
-                </div>
-                <h3 className="text-xs font-medium text-gray-600 mb-1">Converted</h3>
-                <p className="text-xl font-bold text-gray-900">
-                  {performance.leads?.converted || 0}
-                </p>
-                <p className="text-xs text-green-600 mt-1">
-                  {performance.leads?.conversionRate || 0}% rate
-                </p>
-              </motion.div>
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${milestone.status === 'unlocked' ? 'bg-green-100 text-green-600' :
+                  milestone.status === 'in-progress' ? 'bg-indigo-100 text-indigo-600' :
+                    'bg-gray-200 text-gray-400'
+                }`}>
+                <FiGift className="w-6 h-6" />
+              </div>
 
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <FiUsers className="h-5 w-5 text-purple-600" />
-                  </div>
-                </div>
-                <h3 className="text-xs font-medium text-gray-600 mb-1">Total Clients</h3>
-                <p className="text-xl font-bold text-gray-900">
-                  {performance.clients?.total || 0}
-                </p>
-              </motion.div>
+              <h4 className="font-bold text-gray-900">{milestone.title}</h4>
+              <p className="text-sm text-gray-500 mb-3">{milestone.requirement}</p>
 
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 bg-indigo-100 rounded-lg">
-                    <FiDollarSign className="h-5 w-5 text-indigo-600" />
-                  </div>
-                </div>
-                <h3 className="text-xs font-medium text-gray-600 mb-1">Total Revenue</h3>
-                <p className="text-xl font-bold text-gray-900">
-                  {formatCurrency(performance.revenue?.total || 0)}
-                </p>
-              </motion.div>
+              <div className={`inline-block px-3 py-1 rounded-lg text-sm font-bold ${milestone.status === 'unlocked' ? 'bg-green-50 text-green-700' :
+                  milestone.status === 'in-progress' ? 'bg-indigo-50 text-indigo-700' :
+                    'bg-gray-200 text-gray-500'
+                }`}>
+                {milestone.status === 'unlocked' ? `Earned ${milestone.reward}` : `Reward: ${milestone.reward}`}
+              </div>
             </div>
-          )}
+          ))}
+        </div>
 
-          {/* Earnings Breakdown */}
-          {performance && performance.earnings && Object.keys(performance.earnings).length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
-            >
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Earnings Breakdown</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {Object.entries(performance.earnings).map(([type, amount]) => (
-                  <div key={type} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <p className="text-sm font-medium text-gray-600 mb-1 capitalize">
-                      {type.replace('_', ' ')}
-                    </p>
-                    <p className="text-xl font-bold text-gray-900">
-                      {formatCurrency(amount || 0)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Incentives Summary */}
-          {incentives.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900">Incentives Earned</h3>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-purple-600">
-                    {formatCurrency(incentives.reduce((sum, inv) => sum + (inv.amount || 0), 0))}
-                  </p>
-                  <p className="text-sm text-gray-600">{incentives.length} incentives</p>
+        {/* Recent History */}
+        <h3 className="font-bold text-lg text-gray-800 mb-4">Reward History</h3>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          {REWARDS_DATA.history.map((item, index) => (
+            <div key={item.id} className={`flex items-center justify-between p-4 ${index !== REWARDS_DATA.history.length - 1 ? 'border-b border-gray-50' : ''}`}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-yellow-50 text-yellow-600 flex items-center justify-center">
+                  <FiAward />
+                </div>
+                <div>
+                  <p className="font-bold text-sm text-gray-900">{item.title}</p>
+                  <p className="text-xs text-gray-500">{item.date}</p>
                 </div>
               </div>
-            </motion.div>
-          )}
-
-          {/* Recent Rewards */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
-          >
-            <h3 className="text-lg font-bold text-gray-900 mb-6">Recent Rewards & Incentives</h3>
-            {rewards.length > 0 ? (
-              <div className="space-y-3">
-                {rewards.map((reward) => (
-                  <div key={reward._id} className={`p-4 rounded-lg border ${getTransactionTypeBg(reward.transactionType)}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <FiAward className={`h-5 w-5 ${getTransactionTypeColor(reward.transactionType)}`} />
-                          <p className="font-medium text-gray-900 capitalize">
-                            {reward.transactionType?.replace('_', ' ')}
-                          </p>
-                        </div>
-                        <p className="text-sm text-gray-600">{reward.description || 'Reward'}</p>
-                        <p className="text-xs text-gray-500 mt-1">{formatDate(reward.createdAt)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-lg font-bold ${getTransactionTypeColor(reward.transactionType)}`}>
-                          +{formatCurrency(reward.amount)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <FiAward className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>No rewards yet</p>
-              </div>
-            )}
-          </motion.div>
+              <span className="font-bold text-green-600">{item.amount}</span>
+            </div>
+          ))}
         </div>
+
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default CP_rewards
+export default CP_rewards;

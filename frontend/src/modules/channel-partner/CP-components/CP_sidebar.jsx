@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { 
-  FiHome, 
+import {
+  FiHome,
   FiUser,
   FiLogOut,
   FiX,
@@ -66,47 +66,37 @@ const CP_sidebar = ({ isOpen, onClose }) => {
 
     loadProfile()
   }, [])
-  
+
   const navItems = [
-    { 
-      path: '/cp-dashboard', 
-      label: 'Home', 
+    {
+      path: '/cp-dashboard',
+      label: 'Home',
       icon: FiHome
     },
-    { 
-      path: '/cp-rewards', 
-      label: 'Rewards', 
+    {
+      path: '/cp-rewards',
+      label: 'Rewards',
       icon: FiAward
     },
-    { 
-      path: '/cp-leads', 
-      label: 'Leads', 
-      icon: FiUsers
-    },
-    { 
-      path: '/cp-converted', 
-      label: 'Converted', 
+    {
+      path: '/cp-converted',
+      label: 'Converted',
       icon: FiCheckCircle
     },
-    { 
-      path: '/cp-wallet', 
-      label: 'Wallet', 
-      icon: FiCreditCard
+    {
+      path: '/cp-leads',
+      label: 'Leads',
+      icon: FiUsers
     },
-    { 
-      path: '/cp-payment-recovery', 
-      label: 'Payment Recovery', 
-      icon: FiDollarSign
-    },
-    { 
-      path: '/cp-notifications', 
-      label: 'Notifications', 
-      icon: FiBell
-    },
-    { 
-      path: '/cp-profile', 
-      label: 'Profile', 
+    {
+      path: '/cp-profile',
+      label: 'Profile',
       icon: FiUser
+    },
+    {
+      path: '/cp-notice-board',
+      label: 'Notice Board',
+      icon: FiBell
     }
   ]
 
@@ -150,11 +140,11 @@ const CP_sidebar = ({ isOpen, onClose }) => {
             initial={{ x: '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
-            transition={{ 
-              type: 'spring', 
-              damping: 25, 
+            transition={{
+              type: 'spring',
+              damping: 25,
               stiffness: 200,
-              duration: 0.3 
+              duration: 0.3
             }}
             className="fixed top-14 left-0 w-72 bg-white shadow-2xl z-40 lg:hidden"
             style={{
@@ -174,7 +164,7 @@ const CP_sidebar = ({ isOpen, onClose }) => {
                   <FiX className="h-5 w-5" />
                 </button>
               </div>
-              
+
               {/* User Info */}
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-md">
@@ -195,17 +185,16 @@ const CP_sidebar = ({ isOpen, onClose }) => {
                 {navItems.map((item) => {
                   const Icon = item.icon
                   const isActive = location.pathname === item.path
-                  
+
                   return (
                     <Link
                       key={item.path}
                       to={item.path}
                       onClick={onClose}
-                      className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                        isActive
-                          ? 'bg-teal-50 text-teal-700 border border-teal-200'
-                          : 'text-gray-700 hover:bg-gray-50'
-                      }`}
+                      className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${isActive
+                        ? 'bg-teal-50 text-teal-700 border border-teal-200'
+                        : 'text-gray-700 hover:bg-gray-50'
+                        }`}
                     >
                       <Icon className={`h-5 w-5 ${isActive ? 'text-teal-600' : 'text-gray-500'}`} />
                       <span className="font-medium">{item.label}</span>

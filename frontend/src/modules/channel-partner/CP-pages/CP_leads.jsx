@@ -1,569 +1,571 @@
-// Channel Partner Leads Dashboard - Premium Mobile-First Design
-import React, { useRef, useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  FiPlus,
-  FiPhone,
-  FiPhoneOff,
-  FiCalendar,
-  FiUsers,
-  FiCheckCircle,
-  FiAlertCircle,
-  FiArrowRight,
-  FiX,
-  FiChevronDown,
-  FiSearch,
-  FiFilter,
-  FiActivity,
-  FiGrid,
-  FiTrendingUp
-} from 'react-icons/fi'
-import { Link } from 'react-router-dom'
-import { useToast } from '../../../contexts/ToastContext'
-import { cpLeadService } from '../CP-services'
-import CP_navbar from '../CP-components/CP_navbar'
+import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import {
+  FiSearch, FiFilter, FiPlus, FiPhone, FiMessageCircle,
+  FiShare2, FiMoreVertical, FiCalendar, FiClock, FiCheck,
+  FiX, FiUser, FiBriefcase, FiDollarSign, FiArrowRight
+} from 'react-icons/fi';
+import CP_navbar from '../CP-components/CP_navbar';
 
-const CP_leads = () => {
-  const { toast } = useToast()
-  
-  // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    phoneNumber: '',
-    categoryId: ''
-  })
-  const [categories, setCategories] = useState([])
-  const [isLoadingCategories, setIsLoadingCategories] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
-  const dropdownRef = useRef(null)
-  
-  // Dashboard statistics state
-  const [dashboardStats, setDashboardStats] = useState({
-    statusCounts: {
-      new: 0,
-      connected: 0,
-      not_picked: 0,
-      followup: 0,
-      not_converted: 0,
-      converted: 0,
-      lost: 0
-    },
-    totalLeads: 0
-  })
-  const [isLoadingStats, setIsLoadingStats] = useState(false)
-
-  // Handle clicks outside dropdown
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setShowCategoryDropdown(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [])
-
-  // Fetch categories and dashboard stats on component mount
-  useEffect(() => {
-    const token = localStorage.getItem('cpToken') || localStorage.getItem('token')
-    if (token) {
-      fetchCategories()
-      fetchDashboardStats()
-    }
-  }, [])
-
-  // Fetch dashboard statistics
-  const fetchDashboardStats = async () => {
-    setIsLoadingStats(true)
-    try {
-      const response = await cpLeadService.getLeads({ limit: 1000 })
-      const allLeads = response.data || []
-      
-      const statusCounts = {
-        new: allLeads.filter(l => l.status === 'new').length,
-        connected: allLeads.filter(l => l.status === 'connected').length,
-        not_picked: allLeads.filter(l => l.status === 'not_picked').length,
-        followup: allLeads.filter(l => l.status === 'followup').length,
-        not_converted: allLeads.filter(l => l.status === 'not_converted').length,
-        converted: allLeads.filter(l => l.status === 'converted').length,
-        lost: allLeads.filter(l => l.status === 'lost').length
-      }
-      
-      setDashboardStats({
-        statusCounts,
-        totalLeads: allLeads.length
-      })
-    } catch (error) {
-      console.error('Error fetching dashboard stats:', error)
-      toast.error?.('Failed to load dashboard statistics', { title: 'Error' })
-      setDashboardStats(prev => ({ ...prev, totalLeads: 0 }))
-    } finally {
-      setIsLoadingStats(false)
-    }
+// --- Mock Data ---
+const MOCK_LEADS = [
+  {
+    id: '1',
+    name: 'Sarah Williams',
+    projectType: 'E-commerce Website',
+    source: 'self',
+    status: 'Hot',
+    lastUpdated: '2h ago',
+    phone: '+1234567890',
+    email: 'sarah@example.com',
+    value: '$5,000'
+  },
+  {
+    id: '2',
+    name: 'TechSolutions Inc',
+    projectType: 'Mobile App',
+    source: 'sales',
+    status: 'Connected',
+    lastUpdated: '1d ago',
+    phone: '+1987654321',
+    email: 'contact@techsolutions.com',
+    value: '$12,000',
+    assignedSales: 'Alex Johnson'
+  },
+  {
+    id: '3',
+    name: 'David Brown',
+    projectType: 'Portfolio',
+    source: 'self',
+    status: 'Follow-up',
+    lastUpdated: '30m ago',
+    phone: '+1122334455',
+    email: 'david@example.com',
+    value: '$2,500'
+  },
+  {
+    id: '4',
+    name: 'Green Energy Co',
+    projectType: 'CRM System',
+    source: 'shared',
+    status: 'Shared',
+    lastUpdated: '3d ago',
+    phone: '+1555666777',
+    email: 'info@greenenergy.com',
+    value: '$20,000',
+    assignedSales: 'Maria Garcia',
+    sharedWith: 'Maria Garcia'
+  },
+  {
+    id: '5',
+    name: 'Local Bistro',
+    projectType: 'Landing Page',
+    source: 'self',
+    status: 'Converted',
+    lastUpdated: '1w ago',
+    phone: '+1444333222',
+    email: 'bistro@local.com',
+    value: '$1,500'
+  },
+  {
+    id: '6',
+    name: 'Startup Hub',
+    projectType: 'SaaS Platform',
+    source: 'sales',
+    status: 'Lost',
+    lastUpdated: '2w ago',
+    phone: '+1999888777',
+    email: 'hello@startuphub.com',
+    value: '$15,000',
+    assignedSales: 'Alex Johnson'
   }
+];
 
-  // Function to refresh stats
-  const refreshDashboardStats = () => {
-    fetchDashboardStats()
-  }
+const SALES_REPS = [
+  { id: 's1', name: 'Alex Johnson', role: 'Senior Sales' },
+  { id: 's2', name: 'Maria Garcia', role: 'Sales Lead' },
+  { id: 's3', name: 'Sam Smith', role: 'Sales Associate' }
+];
 
-  // Expose refresh function globally
-  useEffect(() => {
-    window.refreshCPDashboardStats = refreshDashboardStats
-    return () => {
-      delete window.refreshCPDashboardStats
-    }
-  }, [])
+// --- Components ---
 
-  const fetchCategories = async () => {
-    setIsLoadingCategories(true)
-    try {
-      const categoriesData = await cpLeadService.getLeadCategories()
-      if (categoriesData && Array.isArray(categoriesData.data)) {
-        setCategories(categoriesData.data)
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error)
-    } finally {
-      setIsLoadingCategories(false)
-    }
-  }
+const StatusBadge = ({ status }) => {
+  const styles = {
+    'Hot': 'bg-red-50 text-red-600 border-red-100',
+    'Connected': 'bg-blue-50 text-blue-600 border-blue-100',
+    'Follow-up': 'bg-amber-50 text-amber-600 border-amber-100',
+    'Converted': 'bg-green-50 text-green-600 border-green-100',
+    'Shared': 'bg-purple-50 text-purple-600 border-purple-100',
+    'Lost': 'bg-gray-50 text-gray-500 border-gray-100',
+    'default': 'bg-gray-50 text-gray-600 border-gray-100'
+  };
 
-  const getCategoryInfo = (categoryId) => {
-    const category = categories.find(cat => cat._id === categoryId)
-    return category || { name: 'Unknown Category', color: '#6B7280' }
-  }
-
-  // Modal functions
-  const openModal = () => setIsModalOpen(true)
-  const closeModal = () => {
-    setIsModalOpen(false)
-    setShowCategoryDropdown(false)
-    setFormData({ phoneNumber: '', categoryId: '' })
-  }
-  
-  // Form handlers
-  const handleInputChange = (e) => {
-    const { name, value } = e.target
-    if (name === 'phoneNumber') {
-      const numericValue = value.replace(/\D/g, '').slice(0, 10)
-      setFormData({ ...formData, [name]: numericValue })
-    } else {
-      setFormData({ ...formData, [name]: value })
-    }
-  }
-  
-  const handleCategoryChange = (categoryId) => {
-    setFormData({ ...formData, categoryId: categoryId })
-    setShowCategoryDropdown(false)
-  }
-  
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    
-    if (!formData.phoneNumber || !formData.categoryId) {
-      toast.error?.('Please fill in all fields')
-      return
-    }
-
-    if (!/^[0-9]{10}$/.test(formData.phoneNumber)) {
-      toast.error?.('Enter a valid 10-digit phone number')
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      const response = await cpLeadService.createLead({
-        phone: formData.phoneNumber,
-        category: formData.categoryId
-      })
-
-      if (response.success) {
-        toast.success?.('Lead created successfully!')
-        closeModal()
-        refreshDashboardStats()
-      } else {
-        toast.error?.(response.message || 'Failed to create lead')
-      }
-    } catch (error) {
-      toast.error?.(error.message || 'An error occurred')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  // Data for cards
-  const cardData = [
-    {
-      id: 'new',
-      title: 'New Leads',
-      count: dashboardStats.statusCounts.new,
-      icon: FiUsers,
-      color: 'blue',
-      route: '/cp-new-leads',
-      description: 'Requires action',
-      trend: 'high'
-    },
-    {
-      id: 'connected',
-      title: 'Connected',
-      count: dashboardStats.statusCounts.connected,
-      icon: FiPhone,
-      color: 'emerald',
-      route: '/cp-connected',
-      description: 'In conversation',
-      trend: 'neutral'
-    },
-    {
-      id: 'followup',
-      title: 'Follow Up',
-      count: dashboardStats.statusCounts.followup,
-      icon: FiCalendar,
-      color: 'amber',
-      route: '/cp-followup',
-      description: 'Scheduled later',
-      trend: 'high'
-    },
-    {
-      id: 'not_picked',
-      title: 'No Response',
-      count: dashboardStats.statusCounts.not_picked,
-      icon: FiPhoneOff,
-      color: 'rose',
-      route: '/cp-not-picked',
-      description: 'Call back later',
-      trend: 'low'
-    },
-    {
-      id: 'converted',
-      title: 'Converted',
-      count: dashboardStats.statusCounts.converted,
-      icon: FiCheckCircle,
-      color: 'violet',
-      route: '/cp-converted',
-      description: 'Successfully closed',
-      trend: 'high'
-    },
-    {
-      id: 'lost',
-      title: 'Lost',
-      count: dashboardStats.statusCounts.lost,
-      icon: FiAlertCircle,
-      color: 'slate',
-      route: '/cp-lost',
-      description: 'Closed opportunities',
-      trend: 'neutral'
-    }
-  ]
-
-  // Enhanced Color System
-  const colorStyles = {
-    blue: { 
-      bg: 'bg-blue-50', 
-      text: 'text-blue-700', 
-      iconBg: 'bg-blue-100',
-      icon: 'text-blue-600',
-      border: 'border-blue-100',
-      accent: 'bg-blue-500' 
-    },
-    emerald: { 
-      bg: 'bg-emerald-50', 
-      text: 'text-emerald-700', 
-      iconBg: 'bg-emerald-100',
-      icon: 'text-emerald-600',
-      border: 'border-emerald-100',
-      accent: 'bg-emerald-500'
-    },
-    amber: { 
-      bg: 'bg-amber-50', 
-      text: 'text-amber-700', 
-      iconBg: 'bg-amber-100',
-      icon: 'text-amber-600',
-      border: 'border-amber-100',
-      accent: 'bg-amber-500'
-    },
-    rose: { 
-      bg: 'bg-rose-50', 
-      text: 'text-rose-700', 
-      iconBg: 'bg-rose-100',
-      icon: 'text-rose-600',
-      border: 'border-rose-100',
-      accent: 'bg-rose-500'
-    },
-    violet: { 
-      bg: 'bg-violet-50', 
-      text: 'text-violet-700', 
-      iconBg: 'bg-violet-100',
-      icon: 'text-violet-600',
-      border: 'border-violet-100',
-      accent: 'bg-violet-500'
-    },
-    slate: { 
-      bg: 'bg-slate-50', 
-      text: 'text-slate-700', 
-      iconBg: 'bg-slate-100',
-      icon: 'text-slate-600',
-      border: 'border-slate-200',
-      accent: 'bg-slate-500'
-    }
-  }
+  const currentStyle = styles[status] || styles['default'];
 
   return (
-    <div className="min-h-screen bg-gray-50/30 font-sans pb-24">
-      <CP_navbar />
-      
-      <main className="max-w-7xl mx-auto px-4 pt-20 sm:px-6 lg:px-8">
-        {/* Modern Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+    <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${currentStyle} flex items-center gap-1`}>
+      <div className={`w-1.5 h-1.5 rounded-full ${status === 'Hot' ? 'bg-red-500 animate-pulse' : 'bg-current'}`} />
+      {status}
+    </span>
+  );
+};
+
+const LeadCard = ({ lead, onAction, onNavigate }) => {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      whileTap={{ scale: 0.99 }}
+      onClick={() => onNavigate(lead.id)}
+      className="bg-white rounded-2xl p-4 shadow-[0_2px_12px_rgb(0,0,0,0.04)] border border-gray-100 hover:shadow-[0_8px_24px_rgb(0,0,0,0.08)] transition-all relative group cursor-pointer"
+    >
+      {/* Header Section */}
+      <div className="flex justify-between items-start mb-3">
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${lead.source === 'self' ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white' : 'bg-gradient-to-br from-orange-400 to-red-500 text-white'}`}>
+            {lead.name.charAt(0)}
+          </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Lead Pipeline</h1>
-            <p className="text-slate-500 text-sm mt-1">Manage and track your lead conversions</p>
-          </div>
-          
-          <div className="hidden md:flex">
-            <button
-              onClick={openModal}
-              className="inline-flex items-center px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-xl shadow-lg shadow-slate-900/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <FiPlus className="w-4 h-4 mr-2" />
-              Add New Lead
-            </button>
+            <h3 className="font-bold text-gray-900 text-base leading-tight">{lead.name}</h3>
+            <p className="text-xs text-gray-500 font-medium">{lead.projectType}</p>
           </div>
         </div>
-
-        {/* Stats Overview - Clean & Minimal */}
-        <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide snap-x snap-mandatory mb-4">
-          <div className="snap-center min-w-[160px] bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between h-28 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-blue-50 rounded-bl-full -mr-4 -mt-4 opacity-50 group-hover:scale-110 transition-transform"></div>
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Leads</p>
-              <h3 className="text-3xl font-bold text-slate-900 mt-1">{dashboardStats.totalLeads}</h3>
-            </div>
-            <div className="flex items-center text-xs font-medium text-emerald-600 bg-emerald-50 w-fit px-2 py-1 rounded-full">
-              <FiTrendingUp className="mr-1" />
-              <span>Active</span>
-            </div>
-          </div>
-
-          <div className="snap-center min-w-[160px] bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between h-28 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-violet-50 rounded-bl-full -mr-4 -mt-4 opacity-50 group-hover:scale-110 transition-transform"></div>
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Conversion</p>
-              <h3 className="text-3xl font-bold text-slate-900 mt-1">
-                {dashboardStats.totalLeads > 0 
-                  ? ((dashboardStats.statusCounts.converted / dashboardStats.totalLeads) * 100).toFixed(0) 
-                  : 0}%
-              </h3>
-            </div>
-            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-              <div 
-                className="bg-violet-500 h-full rounded-full transition-all duration-1000" 
-                style={{ width: `${dashboardStats.totalLeads > 0 ? (dashboardStats.statusCounts.converted / dashboardStats.totalLeads) * 100 : 0}%` }}
-              ></div>
-            </div>
-          </div>
-
-          <div className="snap-center min-w-[160px] bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between h-28 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-amber-50 rounded-bl-full -mr-4 -mt-4 opacity-50 group-hover:scale-110 transition-transform"></div>
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pending</p>
-              <h3 className="text-3xl font-bold text-slate-900 mt-1">
-                {dashboardStats.statusCounts.new + dashboardStats.statusCounts.followup}
-              </h3>
-            </div>
-            <div className="text-xs text-slate-500">Requires attention</div>
-          </div>
-        </div>
-
-        {/* Main Grid - Bento Box Style */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
-          {cardData.map((card, index) => {
-            const styles = colorStyles[card.color]
-            return (
-              <motion.div
-                key={card.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <Link to={card.route} className="block h-full">
-                  <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] hover:shadow-lg hover:border-slate-200 transition-all duration-300 h-full flex flex-col justify-between group relative overflow-hidden">
-                    {/* Top Accent Line */}
-                    <div className={`absolute top-0 left-0 right-0 h-1 ${styles.accent} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
-                    
-                    <div className="flex justify-between items-start mb-4">
-                      <div className={`p-3 rounded-xl ${styles.iconBg} group-hover:scale-110 transition-transform duration-300`}>
-                        <card.icon className={`w-5 h-5 ${styles.icon}`} />
-                      </div>
-                      <div className={`text-2xl font-bold text-slate-900`}>
-                        {card.count}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-base font-bold text-slate-800 mb-1 group-hover:text-slate-900 transition-colors">
-                        {card.title}
-                      </h3>
-                      <p className="text-xs text-slate-500 font-medium">
-                        {card.description}
-                      </p>
-                    </div>
-
-                    {/* Hover Arrow */}
-                    <div className="absolute bottom-4 right-4 opacity-0 transform translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
-                      <FiArrowRight className={`w-4 h-4 ${styles.text}`} />
-                    </div>
-                  </div>
-                </Link>
-              </motion.div>
-            )
-          })}
-        </div>
-      </main>
-
-      {/* Premium Floating Action Button (Mobile) */}
-      <div className="md:hidden fixed bottom-20 right-6 z-[60]">
-        <motion.button
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={openModal}
-          className="w-14 h-14 bg-slate-900 text-white rounded-2xl shadow-xl shadow-slate-900/30 flex items-center justify-center focus:outline-none"
-        >
-          <FiPlus className="w-6 h-6" />
-        </motion.button>
+        <StatusBadge status={lead.status} />
       </div>
 
-      {/* Refined Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-              onClick={closeModal}
-            />
-            
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 500 }}
-              className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden"
-            >
-              <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">New Lead</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Enter details to create a lead</p>
-                </div>
-                <button 
-                  onClick={closeModal} 
-                  className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                >
-                  <FiX className="w-5 h-5" />
-                </button>
-              </div>
+      {/* Info Grid */}
+      <div className="grid grid-cols-2 gap-2 mb-4 bg-gray-50/50 p-3 rounded-xl border border-gray-50">
+        <div className="flex items-center gap-1.5">
+          <FiDollarSign className="w-3.5 h-3.5 text-gray-400" />
+          <span className="text-xs font-semibold text-gray-700">{lead.value || 'N/A'}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <FiClock className="w-3.5 h-3.5 text-gray-400" />
+          <span className="text-xs text-gray-500">Updated {lead.lastUpdated}</span>
+        </div>
+        <div className="flex items-center gap-1.5 col-span-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+          <span className="text-xs text-gray-500">
+            Source: <span className="font-medium text-gray-700">{lead.source === 'self' ? 'My Lead' : 'Sales Team'}</span>
+          </span>
+        </div>
+      </div>
 
-              <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                    Phone Number
-                  </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <FiPhone className="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                    </div>
-                    <input
-                      type="tel"
-                      name="phoneNumber"
-                      value={formData.phoneNumber}
-                      onChange={handleInputChange}
-                      placeholder="98765 43210"
-                      maxLength={10}
-                      className="block w-full pl-11 pr-4 py-4 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl text-slate-900 font-semibold placeholder:text-slate-400 transition-all outline-none"
-                      required
-                    />
-                  </div>
-                </div>
+      {/* Action Footer - Minimalist */}
+      <div className="flex items-center justify-between pt-1">
+        <div className="flex gap-1">
+          <a href={`tel:${lead.phone}`} className="p-2 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
+            <FiPhone className="w-4 h-4" />
+          </a>
+          <a href={`https://wa.me/${lead.phone}`} className="p-2 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
+            <FiMessageCircle className="w-4 h-4" />
+          </a>
+          <button onClick={(e) => { e.stopPropagation(); onAction('share', lead); }} className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+            <FiShare2 className="w-4 h-4" />
+          </button>
+        </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                    Category
-                  </label>
-                  <div className="relative group" ref={dropdownRef}>
-                    <button
-                      type="button"
-                      onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                      className="w-full pl-4 pr-4 py-4 text-left bg-slate-50 border-2 border-transparent rounded-2xl focus:border-blue-500 focus:bg-white text-slate-900 font-semibold flex items-center justify-between outline-none transition-all"
-                    >
-                      <span className={formData.categoryId ? 'text-slate-900' : 'text-slate-400'}>
-                        {formData.categoryId 
-                          ? getCategoryInfo(formData.categoryId).name
-                          : 'Select Category'
-                        }
-                      </span>
-                      <FiChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`} />
-                    </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onAction('update', lead); }}
+          className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-all"
+        >
+          Update Status <FiArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+        </button>
+      </div>
+    </motion.div>
+  );
+};
 
-                    <AnimatePresence>
-                      {showCategoryDropdown && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 10 }}
-                          className="absolute z-10 w-full bottom-full mb-2 bg-white border border-slate-100 rounded-2xl shadow-xl max-h-60 overflow-y-auto"
-                        >
-                          {categories.map((category) => (
-                            <button
-                              key={category._id}
-                              type="button"
-                              onClick={() => handleCategoryChange(category._id)}
-                              className="w-full px-5 py-3.5 text-left hover:bg-slate-50 transition-colors flex items-center justify-between border-b border-slate-50 last:border-0"
-                            >
-                              <span className="text-slate-700 font-medium">{category.name}</span>
-                              <div 
-                                className="w-2.5 h-2.5 rounded-full"
-                                style={{ backgroundColor: category.color || '#6B7280' }}
-                              />
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
+// --- Main Page Component ---
 
-                <div className="pt-2 pb-safe">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`w-full py-4 rounded-2xl font-bold text-white text-lg shadow-xl transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 ${
-                      isSubmitting 
-                        ? 'bg-slate-400 cursor-not-allowed' 
-                        : 'bg-slate-900 hover:bg-slate-800 shadow-slate-900/20'
-                    }`}
-                  >
-                    {isSubmitting ? 'Creating...' : (
-                      <>
-                        <FiPlus className="w-5 h-5" />
-                        Create Lead
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
+const CP_leads = () => {
+  const navigate = useNavigate();
+  const [leads, setLeads] = useState(MOCK_LEADS);
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Modal Interaction States
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isAddSheetOpen, setIsAddSheetOpen] = useState(false); // Bottom Sheet State
+
+  const [selectedLead, setSelectedLead] = useState(null);
+
+  // New Lead Form State
+  // New Lead Form State
+  const [newLead, setNewLead] = useState({
+    name: '',
+    businessName: '',
+    phone: '',
+    email: '',
+    projectType: 'Web Development',
+    budget: '',
+    priority: 'Medium',
+    notes: ''
+  });
+
+  // Filters logic (Same as before)
+  const filteredLeads = useMemo(() => {
+    return leads.filter(lead => {
+      const matchesSearch = lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        lead.projectType.toLowerCase().includes(searchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+      if (activeTab === 'all') return true;
+      if (activeTab === 'my-leads') return lead.source === 'self';
+      if (activeTab === 'sales') return lead.source === 'sales';
+      if (activeTab === 'shared') return lead.status === 'Shared' || lead.source === 'shared';
+      if (activeTab === 'converted') return lead.status === 'Converted';
+      if (activeTab === 'lost') return lead.status === 'Lost';
+      return true;
+    });
+  }, [leads, activeTab, searchQuery]);
+
+  const handleAction = (type, lead) => {
+    setSelectedLead(lead);
+    if (type === 'share') setIsShareModalOpen(true);
+    if (type === 'update') setIsUpdateModalOpen(true);
+  };
+
+  const handleUpdateStatus = (newStatus) => {
+    if (!selectedLead) return;
+    setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, status: newStatus, lastUpdated: 'Just now' } : l));
+    setIsUpdateModalOpen(false);
+    setSelectedLead(null);
+  };
+
+  const handleShareLead = (salesRepId) => {
+    if (!selectedLead) return;
+    setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, status: 'Shared', sharedWith: SALES_REPS.find(s => s.id === salesRepId)?.name, lastUpdated: 'Just now' } : l));
+    setIsShareModalOpen(false);
+    setSelectedLead(null);
+  };
+
+  const handleAddLead = (e) => {
+    e.preventDefault();
+    if (!newLead.name || !newLead.phone) return;
+
+    const lead = {
+      id: Date.now().toString(),
+      ...newLead,
+      source: 'self',
+      status: 'Hot',
+      lastUpdated: 'Just now',
+      value: newLead.budget ? `$${newLead.budget}` : 'Pending'
+    };
+    setLeads([lead, ...leads]);
+    setIsAddSheetOpen(false);
+    setNewLead({
+      name: '',
+      businessName: '',
+      phone: '',
+      email: '',
+      projectType: 'Web Development',
+      budget: '',
+      priority: 'Medium',
+      notes: ''
+    });
+  };
+
+  const TABS = [
+    { id: 'all', label: 'All', count: leads.length },
+    { id: 'my-leads', label: 'My Leads', count: leads.filter(l => l.source === 'self').length },
+    { id: 'sales', label: 'Sales', count: leads.filter(l => l.source === 'sales').length },
+    { id: 'shared', label: 'Shared', count: leads.filter(l => l.status === 'Shared').length },
+    { id: 'converted', label: 'Converted', count: leads.filter(l => l.status === 'Converted').length },
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#F3F4F6] pb-24 md:pb-0">
+      <CP_navbar />
+
+      <div className="max-w-4xl mx-auto pt-20 px-4 md:px-8">
+        {/* Modern Header */}
+        <div className="flex justify-between items-end mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Leads</h1>
+            <p className="text-sm text-gray-500 font-medium">{filteredLeads.length} active opportunities</p>
           </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`p-2.5 rounded-xl border transition-all ${showFilters ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+          >
+            <FiFilter className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-6 relative group">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <FiSearch className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search by name or project..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="block w-full pl-11 pr-4 py-3.5 bg-white border-none rounded-2xl text-gray-900 shadow-[0_2px_15px_rgb(0,0,0,0.03)] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+          />
+        </div>
+
+        {/* Collapsible Filters */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden mb-6"
+            >
+              <div className="p-4 bg-white rounded-2xl shadow-sm grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Timeframe</label>
+                  <div className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl text-sm text-gray-700 font-medium border border-gray-100">
+                    <FiCalendar className="text-indigo-500" /> <span>Last 30 Days</span>
+                  </div>
+                </div>
+                {/* Add more filters as needed */}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Animated Tabs */}
+        <div className="flex overflow-x-auto pb-6 gap-3 hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap text-sm font-bold transition-all ${activeTab === tab.id
+                ? 'bg-gray-900 text-white shadow-lg shadow-gray-200'
+                : 'bg-white text-gray-500 border border-gray-100'
+                }`}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === tab.id ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-500'}`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Leads List */}
+        <AnimatePresence mode='popLayout'>
+          <div className="space-y-4">
+            {filteredLeads.length > 0 ? (
+              filteredLeads.map(lead => (
+                <LeadCard
+                  key={lead.id}
+                  lead={lead}
+                  onAction={handleAction}
+                  onNavigate={(id) => navigate(`/cp-lead-details/${id}`)}
+                />
+              ))
+            ) : (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-center py-16"
+              >
+                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-4xl shadow-sm">
+                  📪
+                </div>
+                <h3 className="text-gray-900 font-bold mb-1">No leads found</h3>
+                <p className="text-gray-500 text-sm">Clear filters or create a new lead.</p>
+              </motion.div>
+            )}
+          </div>
+        </AnimatePresence>
+      </div>
+
+      {/* Bottom Sheet Overlay */}
+      <AnimatePresence>
+        {isAddSheetOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsAddSheetOpen(false)}
+            className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50"
+          />
         )}
       </AnimatePresence>
-    </div>
-  )
-}
 
-export default CP_leads
+      {/* Bottom Sheet Content */}
+      <AnimatePresence>
+        {isAddSheetOpen && (
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl p-6 z-50 md:max-w-2xl md:mx-auto md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:rounded-3xl shadow-[0_-10px_40px_rgb(0,0,0,0.1)] max-h-[90vh] flex flex-col"
+          >
+            {/* Drag Handle for mobile vibe */}
+            <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 md:hidden" />
+
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-bold text-2xl text-gray-900 tracking-tight">New Lead</h3>
+              <button onClick={() => setIsAddSheetOpen(false)} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-500"><FiX /></button>
+            </div>
+
+            <form onSubmit={handleAddLead} className="flex flex-col h-full overflow-hidden">
+              <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2 -mr-2 pb-4">
+
+                {/* Personal Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Contact Name <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <FiUser className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text" required
+                        value={newLead.name}
+                        onChange={e => setNewLead({ ...newLead, name: e.target.value })}
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
+                        placeholder="e.g. John Doe"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Business Name</label>
+                    <div className="relative">
+                      <FiBriefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        value={newLead.businessName}
+                        onChange={e => setNewLead({ ...newLead, businessName: e.target.value })}
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
+                        placeholder="e.g. Acme Corp"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Phone <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <FiPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="tel" required
+                        value={newLead.phone}
+                        onChange={e => setNewLead({ ...newLead, phone: e.target.value })}
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
+                        placeholder="+1 (555) 000-0000"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Email</label>
+                    <div className="relative">
+                      <FiMessageCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="email"
+                        value={newLead.email}
+                        onChange={e => setNewLead({ ...newLead, email: e.target.value })}
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
+                        placeholder="john@example.com"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Project Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Project Type</label>
+                    <select
+                      value={newLead.projectType}
+                      onChange={e => setNewLead({ ...newLead, projectType: e.target.value })}
+                      className="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium appearance-none"
+                    >
+                      <option>Web Development</option>
+                      <option>Mobile App</option>
+                      <option>Digital Marketing</option>
+                      <option>Custom Software</option>
+                      <option>Consulting</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Budget Range</label>
+                    <div className="relative">
+                      <FiDollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        value={newLead.budget}
+                        onChange={e => setNewLead({ ...newLead, budget: e.target.value })}
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
+                        placeholder="e.g. 5,000 - 10,000"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase ml-1">Priority</label>
+                  <div className="flex gap-2">
+                    {['High', 'Medium', 'Low'].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setNewLead({ ...newLead, priority: p })}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all ${newLead.priority === p
+                            ? (p === 'High' ? 'bg-red-50 border-red-200 text-red-600 shadow-sm' : p === 'Medium' ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-sm' : 'bg-green-50 border-green-200 text-green-600 shadow-sm')
+                            : 'bg-white border-gray-100 text-gray-500 hover:bg-gray-50'
+                          }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase ml-1">Notes / Requirements</label>
+                  <textarea
+                    rows="3"
+                    value={newLead.notes}
+                    onChange={e => setNewLead({ ...newLead, notes: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400 resize-none"
+                    placeholder="Enter any specific requirements or details..."
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-100 mt-2 bg-white">
+                <button
+                  type="submit"
+                  className="w-full py-4 rounded-xl bg-gray-900 text-white font-bold text-lg shadow-xl shadow-gray-200 hover:bg-gray-800 transition-all active:scale-95"
+                >
+                  Create New Lead
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Premium FAB - Positioned higher to clear nav */}
+      <motion.button
+        onClick={() => setIsAddSheetOpen(true)}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        className="fixed bottom-24 right-5 md:bottom-10 md:right-10 px-5 py-4 bg-gray-900 text-white rounded-2xl shadow-xl shadow-gray-400/50 flex items-center gap-3 z-40 transition-all font-bold tracking-wide"
+      >
+        <FiPlus className="w-5 h-5" />
+        <span className="hidden md:inline">Add Lead</span>
+      </motion.button>
+
+      {/* ... Other Modals (Update/Share) can reuse the bottom sheet style or stay as modals ... */}
+    </div>
+  );
+};
+
+export default CP_leads;

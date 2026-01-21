@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { 
-  FiHome, 
+import {
+  FiHome,
   FiUser,
   FiBell,
   FiMenu,
@@ -20,7 +20,7 @@ function CP_navbar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { toast } = useToast()
-  
+
   // Sidebar state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [user, setUser] = useState({
@@ -35,7 +35,7 @@ function CP_navbar() {
       const firstName = stored.name?.split(' ')[0] || ''
       const lastName = stored.name?.split(' ')[1] || ''
       const avatar = firstName.charAt(0).toUpperCase() + (lastName ? lastName.charAt(0).toUpperCase() : '')
-      
+
       setUser({
         name: stored.name || 'Channel Partner',
         avatar: avatar || 'CP'
@@ -65,33 +65,33 @@ function CP_navbar() {
   }
 
   const navItems = [
-    { 
-      path: '/cp-dashboard', 
-      label: 'Home', 
+    {
+      path: '/cp-dashboard',
+      label: 'Home',
       icon: FiHome,
       iconWithPower: false
     },
-    { 
-      path: '/cp-rewards', 
-      label: 'Rewards', 
+    {
+      path: '/cp-rewards',
+      label: 'Rewards',
       icon: FiAward,
       iconWithPower: false
     },
-    { 
-      path: '/cp-leads', 
-      label: 'Leads', 
+    {
+      path: '/cp-leads',
+      label: 'Leads',
       icon: FiUsers,
       iconWithPower: false
     },
-    { 
-      path: '/cp-converted', 
-      label: 'Converted', 
+    {
+      path: '/cp-converted',
+      label: 'Converted',
       icon: FiCheckCircle,
       iconWithPower: false
     },
-    { 
-      path: '/cp-profile', 
-      label: 'Profile', 
+    {
+      path: '/cp-profile',
+      label: 'Profile',
       icon: FiUser,
       iconWithPower: false
     }
@@ -103,13 +103,13 @@ function CP_navbar() {
       <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm lg:hidden z-50">
         <div className="flex items-center justify-between h-14 px-4">
           <Link to="/cp-dashboard" className="flex items-center -ml-2">
-            <img 
-              src={logo} 
-              alt="Appzeto" 
+            <img
+              src={logo}
+              alt="Appzeto"
               className="h-9 w-auto"
             />
           </Link>
-          
+
           <div className="flex items-center space-x-2">
             {/* Notification Icon */}
             <Link
@@ -119,7 +119,7 @@ function CP_navbar() {
             >
               <FiBell className="text-lg" />
             </Link>
-            
+
             {/* Hamburger Menu Icon */}
             <button
               onClick={() => setIsSidebarOpen(true)}
@@ -137,7 +137,7 @@ function CP_navbar() {
           {navItems.map((item) => {
             const IconComponent = item.icon
             const isActive = location.pathname === item.path
-            
+
             return (
               <Link
                 key={item.path}
@@ -155,7 +155,7 @@ function CP_navbar() {
                     <IconComponent className="text-xl" />
                   )}
                 </div>
-                
+
                 {/* Label */}
                 <span className={`text-xs font-medium mt-1 ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>
                   {item.label}
@@ -179,7 +179,7 @@ function CP_navbar() {
               >
                 <FiMenu className="h-5 w-5" />
               </button>
-              
+
               <Link to="/cp-dashboard" className="flex items-center space-x-2">
                 <img src={logo} alt="Appzeto" className="h-8 w-auto" />
                 <span className="text-lg font-semibold text-gray-900">Channel Partner</span>

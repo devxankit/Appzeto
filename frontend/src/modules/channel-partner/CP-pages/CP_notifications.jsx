@@ -1,342 +1,230 @@
-import React, { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
-import { 
-  FiBell,
-  FiCheck,
-  FiCheckCircle,
-  FiX,
-  FiClock,
-  FiDollarSign,
-  FiUser,
-  FiAlertCircle,
-  FiInfo,
-  FiFilter,
-  FiArrowRight,
-  FiShare2
-} from 'react-icons/fi'
-import CP_navbar from '../CP-components/CP_navbar'
-import { cpNotificationService } from '../CP-services'
-import { useToast } from '../../../contexts/ToastContext'
-import Loading from '../../../components/ui/loading'
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    ArrowLeft, Bell, Check, Trash2,
+    TrendingUp, CreditCard, Award, Megaphone,
+    Clock, ChevronRight, AlertCircle
+} from 'lucide-react';
+import CP_navbar from '../CP-components/CP_navbar';
+
+// --- Mock Data ---
+const NOTIFICATIONS = [
+    {
+        id: 'n1',
+        type: 'payment',
+        title: 'Payment Pending',
+        message: 'Invoice #inv-2024-001 for TechCorp is pending. Amount: ₹25,000',
+        time: '2 hours ago',
+        isRead: false,
+        isPinned: true,
+        path: '/cp-wallet' // Deep link
+    },
+    {
+        id: 'n2',
+        type: 'lead',
+        title: 'New Lead Assigned',
+        message: 'A new lead "Green Valley Hospital" has been assigned to you.',
+        time: '5 hours ago',
+        isRead: false,
+        isPinned: false,
+        path: '/cp-leads'
+    },
+    {
+        id: 'n3',
+        type: 'admin',
+        title: 'System Maintenance',
+        message: 'Dashboard will be down for maintenance on 24th Jan, 2 AM - 4 AM.',
+        time: 'Yesterday',
+        isRead: true,
+        isPinned: false,
+        path: '/cp-notice-board'
+    },
+    {
+        id: 'n4',
+        type: 'reward',
+        title: 'Reward Unlocked!',
+        message: 'Congratulations! You have unlocked "Silver Partner" badge.',
+        time: '2 days ago',
+        isRead: true,
+        isPinned: false,
+        path: '/cp-rewards'
+    },
+    {
+        id: 'n5',
+        type: 'lead',
+        title: 'Follow-up Reminder',
+        message: 'Call with Mr. Rajesh (Sunrise Schools) is scheduled for today at 4 PM.',
+        time: 'Today, 9:00 AM',
+        isRead: false,
+        isPinned: true,
+        path: '/cp-leads'
+    }
+];
+
+const TABS = [
+    { id: 'all', label: 'All' },
+    { id: 'lead', label: 'Leads' },
+    { id: 'payment', label: 'Payments' },
+    { id: 'reward', label: 'Rewards' },
+    { id: 'admin', label: 'Admin' }
+];
 
 const CP_notifications = () => {
-  const navigate = useNavigate()
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(true)
-  const [notifications, setNotifications] = useState([])
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [typeFilter, setTypeFilter] = useState('all')
-  const [readFilter, setReadFilter] = useState('all')
+    const navigate = useNavigate();
+    const [activeTab, setActiveTab] = useState('all');
+    const [notifications, setNotifications] = useState(NOTIFICATIONS);
 
-  useEffect(() => {
-    loadNotifications()
-    loadUnreadCount()
-  }, [typeFilter, readFilter])
+    const filteredNotifications = notifications.filter(n => {
+        if (activeTab === 'all') return true;
+        return n.type === activeTab;
+    }).sort((a, b) => (b.isPinned === a.isPinned ? 0 : b.isPinned ? 1 : -1)); // Pinned first
 
-  const loadNotifications = async () => {
-    try {
-      setLoading(true)
-      const params = {}
-      if (typeFilter !== 'all') params.type = typeFilter
-      if (readFilter !== 'all') params.read = readFilter === 'unread'
+    const unreadCount = notifications.filter(n => !n.isRead).length;
 
-      const response = await cpNotificationService.getNotifications(params)
-      if (response.success) {
-        setNotifications(response.data || [])
-        setUnreadCount(response.unreadCount || 0)
-      }
-    } catch (error) {
-      console.error('Failed to load notifications:', error)
-      toast.error?.(error.message || 'Failed to load notifications', {
-        title: 'Error',
-        duration: 4000
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+    const markAllRead = () => {
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    };
 
-  const loadUnreadCount = async () => {
-    try {
-      const response = await cpNotificationService.getUnreadCount()
-      if (response.success) {
-        setUnreadCount(response.data?.unreadCount || 0)
-      }
-    } catch (error) {
-      console.error('Failed to load unread count:', error)
-    }
-  }
+    const handleNotificationClick = (id, path) => {
+        // Mark as read
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+        // Navigate
+        if (path) navigate(path);
+    };
 
-  const handleMarkAsRead = async (notificationId) => {
-    try {
-      const response = await cpNotificationService.markAsRead(notificationId)
-      if (response.success) {
-        loadNotifications()
-        loadUnreadCount()
-      }
-    } catch (error) {
-      console.error('Failed to mark as read:', error)
-    }
-  }
+    const getIcon = (type) => {
+        switch (type) {
+            case 'lead': return <TrendingUp className="w-5 h-5 text-blue-600" />;
+            case 'payment': return <CreditCard className="w-5 h-5 text-emerald-600" />;
+            case 'reward': return <Award className="w-5 h-5 text-amber-600" />;
+            case 'admin': return <Megaphone className="w-5 h-5 text-purple-600" />;
+            default: return <Bell className="w-5 h-5 text-gray-600" />;
+        }
+    };
 
-  const handleMarkAllAsRead = async () => {
-    try {
-      const response = await cpNotificationService.markAllAsRead()
-      if (response.success) {
-        toast.success?.('All notifications marked as read', {
-          title: 'Success',
-          duration: 3000
-        })
-        loadNotifications()
-        loadUnreadCount()
-      }
-    } catch (error) {
-      console.error('Failed to mark all as read:', error)
-      toast.error?.(error.message || 'Failed to mark all as read', {
-        title: 'Error',
-        duration: 4000
-      })
-    }
-  }
+    const getBgColor = (type) => {
+        switch (type) {
+            case 'lead': return 'bg-blue-100';
+            case 'payment': return 'bg-emerald-100';
+            case 'reward': return 'bg-amber-100';
+            case 'admin': return 'bg-purple-100';
+            default: return 'bg-gray-100';
+        }
+    };
 
-  const formatRelativeTime = (dateString) => {
-    if (!dateString) return 'Just now'
-    const eventDate = new Date(dateString)
-    const now = new Date()
-    const diffMs = now.getTime() - eventDate.getTime()
-    const diffMinutes = Math.floor(diffMs / (1000 * 60))
-
-    if (diffMinutes < 1) return 'Just now'
-    if (diffMinutes < 60) return `${diffMinutes} min ago`
-
-    const diffHours = Math.floor(diffMinutes / 60)
-    if (diffHours < 24) return `${diffHours} hr${diffHours === 1 ? '' : 's'} ago`
-
-    const diffDays = Math.floor(diffHours / 24)
-    if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
-
-    return eventDate.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
-  }
-
-  const getNotificationIcon = (type) => {
-    const icons = {
-      lead_update: FiUser,
-      lead_assigned: FiUser,
-      lead_shared: FiShare2,
-      lead_unshared: FiShare2,
-      lead_converted: FiCheckCircle,
-      payment_received: FiDollarSign,
-      payment_pending: FiClock,
-      wallet_credit: FiDollarSign,
-      wallet_debit: FiDollarSign,
-      withdrawal_approved: FiCheckCircle,
-      withdrawal_rejected: FiX,
-      reward_earned: FiCheckCircle,
-      incentive_earned: FiDollarSign,
-      system: FiInfo,
-      other: FiBell
-    }
-    return icons[type] || FiBell
-  }
-
-  const getNotificationColor = (type) => {
-    const colors = {
-      lead_update: 'bg-blue-100 text-blue-600',
-      lead_assigned: 'bg-blue-100 text-blue-600',
-      lead_shared: 'bg-purple-100 text-purple-600',
-      lead_unshared: 'bg-purple-100 text-purple-600',
-      lead_converted: 'bg-green-100 text-green-600',
-      payment_received: 'bg-green-100 text-green-600',
-      payment_pending: 'bg-yellow-100 text-yellow-600',
-      wallet_credit: 'bg-green-100 text-green-600',
-      wallet_debit: 'bg-red-100 text-red-600',
-      withdrawal_approved: 'bg-green-100 text-green-600',
-      withdrawal_rejected: 'bg-red-100 text-red-600',
-      reward_earned: 'bg-purple-100 text-purple-600',
-      incentive_earned: 'bg-indigo-100 text-indigo-600',
-      system: 'bg-gray-100 text-gray-600',
-      other: 'bg-gray-100 text-gray-600'
-    }
-    return colors[type] || 'bg-gray-100 text-gray-600'
-  }
-
-  const handleNotificationClick = (notification) => {
-    if (!notification.read) {
-      handleMarkAsRead(notification._id)
-    }
-    
-    if (notification.actionUrl) {
-      navigate(notification.actionUrl)
-    } else if (notification.reference?.id) {
-      if (notification.reference.type === 'lead') {
-        navigate(`/cp-lead-profile/${notification.reference.id}`)
-      } else if (notification.reference.type === 'client') {
-        navigate(`/cp-client-profile/${notification.reference.id}`)
-      } else if (notification.reference.type === 'wallet') {
-        navigate('/cp-wallet')
-      }
-    }
-  }
-
-  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-indigo-50/30">
-        <CP_navbar />
-        <div className="pt-14 pb-20 lg:pb-8 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-center h-96">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading...</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+        <div className="min-h-screen bg-gray-50/50 pb-20 font-sans">
+            <CP_navbar />
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-indigo-50/30">
-      <CP_navbar />
-      
-      <div className="pt-14 pb-20 lg:pb-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto space-y-6 pt-6">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-end space-x-2"
-          >
-            {unreadCount > 0 && (
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleMarkAllAsRead}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-              >
-                Mark All Read
-              </motion.button>
-            )}
-          </motion.div>
-
-          {/* Filters */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                <select
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="all">All Types</option>
-                  <option value="lead_update">Lead Updates</option>
-                  <option value="lead_shared">Lead Sharing</option>
-                  <option value="lead_converted">Lead Conversions</option>
-                  <option value="payment_received">Payments</option>
-                  <option value="wallet_credit">Wallet</option>
-                  <option value="withdrawal_approved">Withdrawals</option>
-                  <option value="reward_earned">Rewards</option>
-                  <option value="system">System</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                <select
-                  value={readFilter}
-                  onChange={(e) => setReadFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="all">All</option>
-                  <option value="unread">Unread</option>
-                  <option value="read">Read</option>
-                </select>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Notifications List */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
-          >
-            {notifications.length > 0 ? (
-              <div className="divide-y divide-gray-200">
-                {notifications.map((notification, index) => {
-                  const IconComponent = getNotificationIcon(notification.type)
-                  const iconColor = getNotificationColor(notification.type)
-                  
-                  return (
-                    <motion.div
-                      key={notification._id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 + index * 0.05 }}
-                      className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                        !notification.read ? 'bg-blue-50/50' : ''
-                      }`}
-                      onClick={() => handleNotificationClick(notification)}
+            {/* Sticky Header */}
+            <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-sm">
+                <div className="max-w-xl mx-auto px-4 py-3 pt-14 md:pt-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors">
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+                        <div>
+                            <h1 className="text-lg font-bold text-gray-900 leading-tight">Notifications</h1>
+                            {unreadCount > 0 && (
+                                <p className="text-xs text-indigo-600 font-semibold">{unreadCount} unread updates</p>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        onClick={markAllRead}
+                        className="text-xs font-bold text-gray-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"
                     >
-                      <div className="flex items-start space-x-4">
-                        <div className={`p-3 rounded-lg ${iconColor}`}>
-                          <IconComponent className="h-5 w-5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between mb-1">
-                            <h3 className={`text-base font-semibold ${!notification.read ? 'text-gray-900' : 'text-gray-700'}`}>
-                              {notification.title}
-                            </h3>
-                            {!notification.read && (
-                              <div className="w-2 h-2 bg-blue-600 rounded-full ml-2 flex-shrink-0 mt-2"></div>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-gray-500">
-                              {formatRelativeTime(notification.createdAt)}
-                            </p>
-                            {!notification.read && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleMarkAsRead(notification._id)
-                                }}
-                                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                              >
-                                Mark as read
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="p-12 text-center">
-                <FiBell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">No notifications found</p>
-              </div>
-            )}
-          </motion.div>
-        </div>
-      </div>
-    </div>
-  )
-}
+                        <Check className="w-4 h-4" /> Mark All Read
+                    </button>
+                </div>
 
-export default CP_notifications
+                {/* Tabs */}
+                <div className="max-w-xl mx-auto px-4 pb-0 overflow-hidden">
+                    <div className="flex gap-2 overflow-x-auto hide-scrollbar py-3">
+                        {TABS.map(tab => {
+                            const count = notifications.filter(n => !n.isRead && (tab.id === 'all' || n.type === tab.id)).length;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex-none px-4 py-1.5 rounded-full text-xs font-bold transition-all border flex items-center gap-2 ${activeTab === tab.id
+                                            ? 'bg-gray-900 text-white border-gray-900 shadow-sm'
+                                            : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    {tab.label}
+                                    {count > 0 && (
+                                        <span className={`w-1.5 h-1.5 rounded-full ${activeTab === tab.id ? 'bg-red-400' : 'bg-red-500'}`}></span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            <main className="max-w-xl mx-auto px-4 py-4 space-y-3">
+                <AnimatePresence mode='popLayout'>
+                    {filteredNotifications.length > 0 ? (
+                        filteredNotifications.map(notification => (
+                            <motion.div
+                                layout
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                key={notification.id}
+                                onClick={() => handleNotificationClick(notification.id, notification.path)}
+                                className={`relative p-4 rounded-2xl border transition-all cursor-pointer group ${notification.isRead
+                                        ? 'bg-white border-gray-100'
+                                        : 'bg-white border-indigo-100 shadow-md shadow-indigo-100/50'
+                                    }`}
+                            >
+                                {/* Pinned Indicator */}
+                                {notification.isPinned && !notification.isRead && (
+                                    <div className="absolute top-0 right-0 p-3">
+                                        <AlertCircle className="w-4 h-4 text-red-500 fill-red-50" />
+                                    </div>
+                                )}
+                                {!notification.isRead && !notification.isPinned && (
+                                    <div className="absolute top-4 right-4 w-2 h-2 bg-indigo-500 rounded-full"></div>
+                                )}
+
+                                <div className="flex gap-4">
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${getBgColor(notification.type)}`}>
+                                        {getIcon(notification.type)}
+                                    </div>
+                                    <div className="flex-1 pr-4">
+                                        <h3 className={`text-sm font-bold mb-1 leading-tight ${notification.isRead ? 'text-gray-700' : 'text-gray-900'}`}>
+                                            {notification.title}
+                                        </h3>
+                                        <p className={`text-xs leading-relaxed line-clamp-2 ${notification.isRead ? 'text-gray-400' : 'text-gray-600'}`}>
+                                            {notification.message}
+                                        </p>
+                                        <p className="text-[10px] text-gray-400 font-medium mt-2 flex items-center gap-1">
+                                            <Clock className="w-3 h-3" /> {notification.time}
+                                        </p>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ))
+                    ) : (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="text-center py-20"
+                        >
+                            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-4xl shadow-sm border border-gray-100">
+                                🎉
+                            </div>
+                            <h3 className="text-gray-900 font-bold mb-1">You're all caught up!</h3>
+                            <p className="text-gray-500 text-sm">No new notifications for now.</p>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </main>
+        </div>
+    );
+};
+
+export default CP_notifications;
