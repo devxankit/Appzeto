@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Shield, ChevronRight, Share2, LogOut,
     Phone, Briefcase, Users, Wallet, ExternalLink,
-    CheckCircle, ArrowLeft, Settings, Bell
+    CheckCircle, ArrowLeft, Settings, Bell, User,
+    CreditCard, MapPin, Headphones, QrCode
 } from 'lucide-react';
 import CP_navbar from '../CP-components/CP_navbar';
 import { useToast } from '../../../contexts/ToastContext';
@@ -13,6 +14,10 @@ import { logoutCP } from '../CP-services/cpAuthService';
 const CP_profile = () => {
     const navigate = useNavigate();
     const { toast } = useToast();
+    const [isFlipped, setIsFlipped] = useState(false);
+    const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
+    const longPressTimer = useRef(null);
+    const isLongPressing = useRef(false);
 
     // Mock User Data
     const USER = {
@@ -21,6 +26,10 @@ const CP_profile = () => {
         role: 'Titanium Partner',
         initials: 'IM',
         company: 'Stark Industries',
+        location: 'Indore',
+        licenseNo: 'LIC-2024-001',
+        issuedDate: '15 Jan 2026',
+        validThru: '12/28',
         stats: {
             leads: 124,
             converted: 89,
@@ -48,6 +57,34 @@ const CP_profile = () => {
         }
     };
 
+    // Long press handlers for share sheet
+    const handleCardPressStart = () => {
+        isLongPressing.current = true;
+        longPressTimer.current = setTimeout(() => {
+            if (isLongPressing.current) {
+                setIsShareSheetOpen(true);
+                isLongPressing.current = false;
+            }
+        }, 2000); // 2 seconds
+    };
+
+    const handleCardPressEnd = () => {
+        isLongPressing.current = false;
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
+    };
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (longPressTimer.current) {
+                clearTimeout(longPressTimer.current);
+            }
+        };
+    }, []);
+
     // Animation Variants
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -63,7 +100,7 @@ const CP_profile = () => {
     };
 
     return (
-        <div className="min-h-screen bg-white flex flex-col font-sans selection:bg-teal-500 selection:text-white">
+        <div className="min-h-screen bg-[#F9F9F9] flex flex-col font-sans text-[#1E1E1E] selection:bg-teal-500 selection:text-white">
             <CP_navbar />
 
             <main className="flex-1 relative overflow-x-hidden pb-28">
@@ -77,28 +114,6 @@ const CP_profile = () => {
 
                 <div className="relative z-10 pt-24 px-6 md:pt-28 max-w-lg mx-auto">
 
-                    {/* 2. Header Content */}
-                    <motion.div
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.6 }}
-                        className="flex items-center justify-between mb-8 text-white"
-                    >
-                        <div>
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-800/30 border border-teal-400/30 mb-3 shadow-sm backdrop-blur-sm">
-                                <Shield className="w-3.5 h-3.5 text-teal-200 fill-teal-200" />
-                                <span className="text-[10px] font-bold tracking-widest uppercase text-teal-50">Verified Partner</span>
-                            </div>
-                            <h1 className="text-4xl font-extrabold tracking-tight text-white">{USER.name}</h1>
-                            <p className="text-teal-100 text-sm font-medium mt-1 opacity-90">{USER.company}</p>
-                        </div>
-                        <motion.div
-                            whileHover={{ scale: 1.05, rotate: 5 }}
-                            className="w-16 h-16 rounded-2xl border-2 border-white/20 bg-teal-800/20 backdrop-blur-md flex items-center justify-center shadow-lg cursor-pointer group"
-                        >
-                            <span className="text-2xl font-bold text-white">{USER.initials}</span>
-                        </motion.div>
-                    </motion.div>
 
                     <motion.div
                         variants={containerVariants}
@@ -106,31 +121,152 @@ const CP_profile = () => {
                         animate="visible"
                         className="space-y-6"
                     >
-                        {/* 3. HERO IDENTITY CARD - Pure White & Black Font */}
-                        <motion.div variants={itemVariants} className="relative group">
-                            <div className="relative bg-white rounded-[32px] p-7 shadow-xl shadow-teal-900/10 border border-gray-100 overflow-hidden">
-                                {/* Card Content */}
-                                <div className="relative z-10">
-                                    <div className="flex justify-between items-start border-b border-gray-100 pb-5 mb-5">
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1.5">Partner ID</p>
-                                            <p className="text-xl font-mono font-bold text-black tracking-tight">{USER.id}</p>
+                        {/* 3. FLIPPABLE IDENTITY CARD */}
+                        <motion.div 
+                            variants={itemVariants} 
+                            className="relative"
+                        >
+                            <div
+                                onClick={() => {
+                                    if (!isLongPressing.current) {
+                                        setIsFlipped(!isFlipped);
+                                    }
+                                }}
+                                onMouseDown={handleCardPressStart}
+                                onMouseUp={handleCardPressEnd}
+                                onMouseLeave={handleCardPressEnd}
+                                onTouchStart={handleCardPressStart}
+                                onTouchEnd={handleCardPressEnd}
+                                className="relative w-full h-[420px] cursor-pointer"
+                                style={{ perspective: '1000px' }}
+                            >
+                                <motion.div
+                                    animate={{ rotateY: isFlipped ? 180 : 0 }}
+                                    transition={{ duration: 0.6, ease: 'easeInOut' }}
+                                    className="relative w-full h-full"
+                                    style={{ transformStyle: 'preserve-3d' }}
+                                >
+                                {/* Front of Card */}
+                                <div
+                                    className="absolute inset-0 w-full h-full"
+                                    style={{ 
+                                        backfaceVisibility: 'hidden',
+                                        WebkitBackfaceVisibility: 'hidden'
+                                    }}
+                                >
+                                    <div className="relative bg-white rounded-[32px] p-6 shadow-xl border-2 border-gray-200 h-full flex flex-col">
+                                        {/* Header - Logo and Verified Badge */}
+                                        <div className="flex items-center justify-between mb-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-xl bg-teal-700 flex items-center justify-center shadow-md">
+                                                    <User className="w-7 h-7 text-white" />
+                                                </div>
+                                                <div>
+                                                    <h2 className="text-lg font-bold text-teal-800">Appzeto</h2>
+                                                    <p className="text-xs text-gray-600 font-medium">Official Partner Identification</p>
+                                                </div>
+                                            </div>
+                                            <div className="px-3 py-1.5 rounded-full bg-green-100 border border-green-300 flex items-center gap-1.5">
+                                                <CheckCircle className="w-3.5 h-3.5 text-green-700" />
+                                                <span className="text-[10px] font-bold text-green-700">Verified</span>
+                                            </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1.5">Membership</p>
-                                            <p className="text-lg font-bold text-teal-700">
-                                                {USER.role}
-                                            </p>
+
+                                        {/* Profile Section */}
+                                        <div className="flex items-start gap-4 mb-6">
+                                            {/* Profile Picture */}
+                                            <div className="w-24 h-28 rounded-2xl bg-white border-2 border-green-200 flex items-center justify-center shadow-md flex-shrink-0">
+                                                <div className="w-20 h-24 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center">
+                                                    <span className="text-3xl font-bold text-white">{USER.initials}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Details */}
+                                            <div className="flex-1 space-y-3">
+                                                <div>
+                                                    <h3 className="text-2xl font-bold text-gray-900 mb-3">{USER.name}</h3>
+                                                    
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-start gap-2">
+                                                            <CreditCard className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                                                            <div>
+                                                                <p className="text-[10px] text-gray-500 font-medium">Partner ID</p>
+                                                                <p className="text-sm font-bold text-gray-900">{USER.id}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-start gap-2">
+                                                            <Shield className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                                                            <div>
+                                                                <p className="text-[10px] text-gray-500 font-medium">License No.</p>
+                                                                <p className="text-sm font-bold text-gray-900">{USER.licenseNo}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-start gap-2">
+                                                            <Phone className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                                                            <div>
+                                                                <p className="text-[10px] text-gray-500 font-medium">Phone</p>
+                                                                <p className="text-sm font-bold text-gray-900">{USER.contact.phone}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-start gap-2">
+                                                            <MapPin className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                                                            <div>
+                                                                <p className="text-[10px] text-gray-500 font-medium">Location</p>
+                                                                <p className="text-sm font-bold text-gray-900">{USER.location}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle className="w-4 h-4 text-teal-600" />
-                                            <span className="text-xs font-bold text-black">Active Status</span>
+
+                                        {/* Footer */}
+                                        <div className="mt-auto pt-4 border-t border-green-200/50 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Shield className="w-4 h-4 text-green-700" />
+                                                <span className="text-xs text-gray-600 font-medium">Authorized Partner - Appzeto</span>
+                                            </div>
+                                            <span className="text-[10px] text-gray-500">Issued: {USER.issuedDate}</span>
                                         </div>
-                                        <span className="text-[10px] font-bold text-gray-400">Valid thru 12/28</span>
                                     </div>
                                 </div>
+
+                                {/* Back of Card */}
+                                <div
+                                    className="absolute inset-0 w-full h-full"
+                                    style={{ 
+                                        backfaceVisibility: 'hidden',
+                                        WebkitBackfaceVisibility: 'hidden',
+                                        transform: 'rotateY(180deg)'
+                                    }}
+                                >
+                                    <div className="relative bg-white rounded-[32px] p-6 shadow-xl border-2 border-gray-200 h-full flex flex-col items-center justify-between">
+                                        {/* Header */}
+                                        <div className="text-center w-full">
+                                            <h2 className="text-xl font-bold text-teal-800 mb-1">Appzeto</h2>
+                                            <p className="text-sm text-gray-600 font-medium">Partner Verification</p>
+                                        </div>
+
+                                        {/* QR Code */}
+                                        <div className="flex-1 flex items-center justify-center w-full py-6">
+                                            <div className="bg-white rounded-2xl p-6 border-2 border-green-200 shadow-lg">
+                                                <div className="w-48 h-48 bg-gray-900 rounded-xl flex items-center justify-center">
+                                                    <QrCode className="w-32 h-32 text-white" />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Footer */}
+                                        <div className="w-full space-y-2">
+                                            <div className="flex items-center justify-center gap-2 text-gray-700">
+                                                <Headphones className="w-4 h-4 text-teal-700" />
+                                                <span className="text-xs font-medium">support@appzeto.com</span>
+                                            </div>
+                                            <p className="text-center text-[10px] text-gray-500">Issued: {USER.issuedDate}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                </motion.div>
                             </div>
                         </motion.div>
 
@@ -160,8 +296,8 @@ const CP_profile = () => {
                                 <div className="w-11 h-11 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center mb-2">
                                     <Wallet className="w-5 h-5" />
                                 </div>
-                                <div className="relative z-10">
-                                    <h3 className="text-2xl font-black text-black tracking-tight truncate">{USER.stats.earnings}</h3>
+                                <div className="relative z-10 flex-1 flex flex-col justify-end">
+                                    <h3 className="text-2xl font-black text-black tracking-tight break-words leading-tight">{USER.stats.earnings}</h3>
                                     <div className="flex items-center gap-1 mt-1 text-teal-700">
                                         <p className="text-xs font-bold uppercase tracking-wide">Earnings</p>
                                         <ChevronRight className="w-3 h-3" />
@@ -230,7 +366,7 @@ const CP_profile = () => {
                                 variants={itemVariants}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={handleLogout}
-                                className="w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-200 flex items-center justify-center gap-2 text-gray-500 font-bold text-sm hover:text-red-600 hover:bg-red-50 hover:border-red-100 transition-all mt-4"
+                                className="w-full bg-red-50 rounded-2xl p-4 shadow-sm border border-red-100 flex items-center justify-center gap-2 text-red-600 font-bold text-sm hover:text-red-700 hover:bg-red-100 hover:border-red-200 transition-all mt-4"
                             >
                                 <LogOut className="w-4 h-4" /> Sign Out
                             </motion.button>
@@ -239,13 +375,136 @@ const CP_profile = () => {
 
                     {/* 6. MINIMAL FOOTER */}
                     <div className="mt-12 mb-6 text-center">
-                        <span className="text-[10px] font-bold tracking-[0.2em] text-gray-300 uppercase font-mono">
+                        <span className="text-sm font-bold tracking-[0.2em] text-gray-700 uppercase font-mono">
                             Appzeto • v2.5.0
                         </span>
                     </div>
 
                 </div>
             </main>
+
+            {/* Share Profile Bottom Sheet */}
+            <AnimatePresence>
+                {isShareSheetOpen && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsShareSheetOpen(false)}
+                            className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50"
+                        />
+                        <motion.div
+                            initial={{ y: "100%" }}
+                            animate={{ y: 0 }}
+                            exit={{ y: "100%" }}
+                            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl p-6 z-50 md:max-w-md md:mx-auto md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:rounded-3xl shadow-[0_-10px_40px_rgb(0,0,0,0.1)]"
+                        >
+                            <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 md:hidden" />
+                            
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-xl text-gray-900 tracking-tight">Share Profile</h3>
+                                <button 
+                                    onClick={() => setIsShareSheetOpen(false)} 
+                                    className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+                                >
+                                    <ChevronRight className="w-5 h-5 rotate-90" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                {/* Copy Profile Link */}
+                                <motion.button
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => {
+                                        handleCopyLink();
+                                        setIsShareSheetOpen(false);
+                                    }}
+                                    className="w-full p-4 bg-gray-50 rounded-2xl flex items-center gap-4 hover:bg-gray-100 transition-colors"
+                                >
+                                    <div className="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center">
+                                        <Share2 className="w-6 h-6 text-teal-700" />
+                                    </div>
+                                    <div className="flex-1 text-left">
+                                        <p className="font-bold text-gray-900">Copy Profile Link</p>
+                                        <p className="text-xs text-gray-500 mt-0.5">Share your profile link</p>
+                                    </div>
+                                    <ExternalLink className="w-5 h-5 text-gray-400" />
+                                </motion.button>
+
+                                {/* Share via WhatsApp */}
+                                <motion.button
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => {
+                                        const message = encodeURIComponent(`Check out my profile on Appzeto: ${USER.name} - ${USER.id}`);
+                                        window.open(`https://wa.me/?text=${message}`, '_blank');
+                                        setIsShareSheetOpen(false);
+                                    }}
+                                    className="w-full p-4 bg-green-50 rounded-2xl flex items-center gap-4 hover:bg-green-100 transition-colors"
+                                >
+                                    <div className="w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center">
+                                        <Share2 className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div className="flex-1 text-left">
+                                        <p className="font-bold text-gray-900">Share via WhatsApp</p>
+                                        <p className="text-xs text-gray-500 mt-0.5">Share with contacts</p>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                                </motion.button>
+
+                                {/* Share via Email */}
+                                <motion.button
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => {
+                                        const subject = encodeURIComponent(`My Appzeto Partner Profile - ${USER.name}`);
+                                        const body = encodeURIComponent(`Hi,\n\nCheck out my partner profile on Appzeto:\n\nName: ${USER.name}\nPartner ID: ${USER.id}\nRole: ${USER.role}\n\nProfile Link: https://${USER.contact.website}`);
+                                        window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+                                        setIsShareSheetOpen(false);
+                                    }}
+                                    className="w-full p-4 bg-blue-50 rounded-2xl flex items-center gap-4 hover:bg-blue-100 transition-colors"
+                                >
+                                    <div className="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center">
+                                        <Share2 className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div className="flex-1 text-left">
+                                        <p className="font-bold text-gray-900">Share via Email</p>
+                                        <p className="text-xs text-gray-500 mt-0.5">Send profile via email</p>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                                </motion.button>
+
+                                {/* Download QR Code */}
+                                <motion.button
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => {
+                                        toast.success("QR code download feature coming soon");
+                                        setIsShareSheetOpen(false);
+                                    }}
+                                    className="w-full p-4 bg-purple-50 rounded-2xl flex items-center gap-4 hover:bg-purple-100 transition-colors"
+                                >
+                                    <div className="w-12 h-12 rounded-xl bg-purple-500 flex items-center justify-center">
+                                        <QrCode className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div className="flex-1 text-left">
+                                        <p className="font-bold text-gray-900">Download QR Code</p>
+                                        <p className="text-xs text-gray-500 mt-0.5">Save QR code image</p>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                                </motion.button>
+                            </div>
+
+                            <motion.button
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => setIsShareSheetOpen(false)}
+                                className="w-full mt-6 py-3.5 rounded-xl bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 transition-colors"
+                            >
+                                Cancel
+                            </motion.button>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

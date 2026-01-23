@@ -1,30 +1,18 @@
-import { useNavigate, useLocation } from 'react-router-dom';
-import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FiSearch, FiFilter, FiPlus, FiPhone, FiMessageCircle,
-  FiShare2, FiMoreVertical, FiCalendar, FiClock, FiCheck,
-  FiX, FiUser, FiBriefcase, FiDollarSign, FiArrowRight,
-  FiArrowUp, FiArrowDown, FiFileText, FiFolder
+  FiSearch, FiFilter, FiPhone, FiShare2, FiMoreVertical, 
+  FiCalendar, FiClock, FiCheck, FiX, FiUser, FiBriefcase, 
+  FiDollarSign, FiArrowRight, FiFileText, FiFolder
 } from 'react-icons/fi';
 import { FaWhatsapp, FaRupeeSign } from 'react-icons/fa';
 import CP_navbar from '../CP-components/CP_navbar';
 
 // --- Mock Data ---
-const MOCK_LEADS = [
+const RECEIVED_LEADS = [
   {
     id: '1',
-    name: 'Sarah Williams',
-    projectType: 'E-commerce Website',
-    source: 'self',
-    status: 'Hot',
-    lastUpdated: '2h ago',
-    phone: '+1234567890',
-    email: 'sarah@example.com',
-    value: '₹5,000'
-  },
-  {
-    id: '2',
     name: 'TechSolutions Inc',
     projectType: 'Mobile App',
     source: 'sales',
@@ -36,51 +24,40 @@ const MOCK_LEADS = [
     assignedSales: 'Alex Johnson'
   },
   {
-    id: '3',
-    name: 'David Brown',
-    projectType: 'Portfolio',
-    source: 'self',
-    status: 'Follow-up',
-    lastUpdated: '30m ago',
-    phone: '+1122334455',
-    email: 'david@example.com',
-    value: '₹2,500'
-  },
-  {
-    id: '4',
-    name: 'Green Energy Co',
-    projectType: 'CRM System',
-    source: 'shared',
-    status: 'Shared',
-    lastUpdated: '3d ago',
-    phone: '+1555666777',
-    email: 'info@greenenergy.com',
-    value: '₹20,000',
-    assignedSales: 'Maria Garcia',
-    sharedWith: 'Maria Garcia'
-  },
-  {
-    id: '5',
-    name: 'Local Bistro',
-    projectType: 'Landing Page',
-    source: 'self',
-    status: 'Converted',
-    lastUpdated: '1w ago',
-    phone: '+1444333222',
-    email: 'bistro@local.com',
-    value: '₹1,500'
-  },
-  {
-    id: '6',
+    id: '2',
     name: 'Startup Hub',
     projectType: 'SaaS Platform',
     source: 'sales',
-    status: 'Lost',
-    lastUpdated: '2w ago',
+    status: 'Hot',
+    lastUpdated: '2h ago',
     phone: '+1999888777',
     email: 'hello@startuphub.com',
     value: '₹15,000',
     assignedSales: 'Alex Johnson'
+  },
+  {
+    id: '3',
+    name: 'Digital Marketing Pro',
+    projectType: 'Web Development',
+    source: 'sales',
+    status: 'Connected',
+    lastUpdated: '3d ago',
+    phone: '+1444333222',
+    email: 'info@digitalpro.com',
+    value: '₹8,500',
+    assignedSales: 'Maria Garcia'
+  },
+  {
+    id: '4',
+    name: 'Cloud Services Co',
+    projectType: 'Cloud Migration',
+    source: 'sales',
+    status: 'Lost',
+    lastUpdated: '1w ago',
+    phone: '+1555666777',
+    email: 'contact@cloudservices.com',
+    value: '₹20,000',
+    assignedSales: 'Sam Smith'
   }
 ];
 
@@ -91,13 +68,11 @@ const SALES_REPS = [
 ];
 
 // --- Components ---
-
 const StatusBadge = ({ status }) => {
   const styles = {
     'Hot': 'bg-red-50 text-red-600 border-red-100',
     'Connected': 'bg-blue-50 text-blue-600 border-blue-100',
     'Converted': 'bg-green-50 text-green-600 border-green-100',
-    'Shared': 'bg-purple-50 text-purple-600 border-purple-100',
     'Lost': 'bg-gray-50 text-gray-500 border-gray-100',
     'default': 'bg-gray-50 text-gray-600 border-gray-100'
   };
@@ -112,7 +87,7 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const LeadCard = ({ lead, onAction, onNavigate }) => {
+const ReceivedLeadCard = ({ lead, onAction, onNavigate }) => {
   return (
     <motion.div
       layout
@@ -126,7 +101,7 @@ const LeadCard = ({ lead, onAction, onNavigate }) => {
       {/* Header Section */}
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${lead.source === 'self' ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white' : 'bg-gradient-to-br from-orange-400 to-red-500 text-white'}`}>
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${lead.source === 'sales' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white' : 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'}`}>
             {lead.name.charAt(0)}
           </div>
           <div>
@@ -147,23 +122,34 @@ const LeadCard = ({ lead, onAction, onNavigate }) => {
           <span className="text-xs text-gray-500">Updated {lead.lastUpdated}</span>
         </div>
         <div className="flex items-center gap-1.5 col-span-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+          <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
           <span className="text-xs text-gray-500">
-            Source: <span className="font-medium text-gray-700">{lead.source === 'self' ? 'My Lead' : 'Sales Team'}</span>
+            From: <span className="font-medium text-gray-700">{lead.assignedSales || 'Sales Team'}</span>
           </span>
         </div>
       </div>
 
-      {/* Action Footer - Minimalist */}
+      {/* Action Footer */}
       <div className="flex items-center justify-between pt-1">
         <div className="flex gap-1">
-          <a href={`tel:${lead.phone}`} className="p-2 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
+          <a 
+            href={`tel:${lead.phone}`} 
+            onClick={(e) => e.stopPropagation()}
+            className="p-2 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+          >
             <FiPhone className="w-4 h-4" />
           </a>
-          <a href={`https://wa.me/${lead.phone}`} className="p-2 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
+          <a 
+            href={`https://wa.me/${lead.phone}`} 
+            onClick={(e) => e.stopPropagation()}
+            className="p-2 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+          >
             <FaWhatsapp className="w-4 h-4" />
           </a>
-          <button onClick={(e) => { e.stopPropagation(); onAction('share', lead); }} className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onAction('share', lead); }} 
+            className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          >
             <FiShare2 className="w-4 h-4" />
           </button>
         </div>
@@ -180,25 +166,18 @@ const LeadCard = ({ lead, onAction, onNavigate }) => {
 };
 
 // --- Main Page Component ---
-
-const CP_leads = () => {
+const CP_received_leads = () => {
   const navigate = useNavigate();
-  const location = useLocation(); // Add useLocation
-  const [leads, setLeads] = useState(MOCK_LEADS);
-
-  // Initialize state from location if available, otherwise default
-  const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'all');
-  const [searchQuery, setSearchQuery] = useState(location.state?.searchQuery || '');
-
-  const [timeFilter, setTimeFilter] = useState('all-time'); // all-time, yesterday, this-week, last-30-days
+  const [leads, setLeads] = useState(RECEIVED_LEADS);
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [timeFilter, setTimeFilter] = useState('all-time');
   const [showFilters, setShowFilters] = useState(false);
 
   // Modal Interaction States
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const [isAddSheetOpen, setIsAddSheetOpen] = useState(false); // Bottom Sheet State
   const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
-
   const [selectedLead, setSelectedLead] = useState(null);
 
   // Convert to Client Form State
@@ -213,70 +192,43 @@ const CP_leads = () => {
     screenshot: null
   });
 
-  // New Lead Form State
-  const [newLead, setNewLead] = useState({
-    name: '',
-    businessName: '',
-    phone: '',
-    email: '',
-    projectType: 'Web Development',
-    budget: '',
-    priority: 'Medium',
-    notes: ''
-  });
+  const TABS = [
+    { id: 'all', label: 'All', count: leads.length },
+    { id: 'hot', label: 'Hot', count: leads.filter(l => l.status === 'Hot').length },
+    { id: 'connected', label: 'Connected', count: leads.filter(l => l.status === 'Connected').length },
+    { id: 'converted', label: 'Converted', count: leads.filter(l => l.status === 'Converted').length },
+    { id: 'lost', label: 'Lost', count: leads.filter(l => l.status === 'Lost').length },
+    { id: 'active', label: 'Active', count: leads.filter(l => l.status !== 'Converted' && l.status !== 'Lost').length },
+  ];
 
-  // Calculate counts for shared and received leads
-  const sharedLeadsCount = useMemo(() => {
-    return leads.filter(l => l.source === 'self' && (l.status === 'Shared' || l.sharedWith)).length;
-  }, [leads]);
-
-  const receivedLeadsCount = useMemo(() => {
-    return leads.filter(l => l.source === 'sales' || l.assignedSales).length;
-  }, [leads]);
-
-  // Filters logic - Only show own leads (not shared, not received from sales team)
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
-      // Only show leads that are:
-      // 1. Added by channel partner (source === 'self')
-      // 2. NOT shared with sales team (status !== 'Shared' && !sharedWith)
-      // 3. NOT received from sales team (source !== 'sales' && !assignedSales)
-      const isOwnLead = lead.source === 'self' && 
-                       lead.status !== 'Shared' && 
-                       !lead.sharedWith && 
-                       lead.source !== 'sales' && 
-                       !lead.assignedSales;
-
-      if (!isOwnLead) return false;
-
       const matchesSearch = lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         lead.projectType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.status.toLowerCase().includes(searchQuery.toLowerCase());
+        lead.status.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (lead.assignedSales && lead.assignedSales.toLowerCase().includes(searchQuery.toLowerCase()));
 
       if (!matchesSearch) return false;
 
-      // Time Filter Logic (Mock Data Parsing)
+      // Time Filter Logic
       let matchesTime = true;
       if (timeFilter !== 'all-time') {
-        const timeStr = lead.lastUpdated; // e.g., '2h ago', '1d ago', '1w ago'
+        const timeStr = lead.lastUpdated;
         if (timeFilter === 'yesterday') {
           matchesTime = timeStr.includes('1d ago');
         } else if (timeFilter === 'this-week') {
-          // Matches 'm ago', 'h ago', 'd ago' (excluding > 6d potentially, but simple check for now)
           matchesTime = timeStr.includes('m ago') || timeStr.includes('h ago') || (timeStr.includes('d ago') && parseInt(timeStr) < 7);
         } else if (timeFilter === 'last-30-days') {
-          // Matches anything except months/years if we assume mock data is recent. 
-          // Let's filter out 'mo ago', 'y ago' if they existed, but for now accept w, d, h, m.
           matchesTime = !timeStr.includes('mo ago') && !timeStr.includes('y ago');
         }
       }
       if (!matchesTime) return false;
 
       if (activeTab === 'all') return true;
-      if (activeTab === 'my-leads') return lead.source === 'self';
+      if (activeTab === 'hot') return lead.status === 'Hot';
+      if (activeTab === 'connected') return lead.status === 'Connected';
       if (activeTab === 'converted') return lead.status === 'Converted';
       if (activeTab === 'lost') return lead.status === 'Lost';
-      if (activeTab === 'hot') return lead.status === 'Hot';
       if (activeTab === 'active') return lead.status !== 'Converted' && lead.status !== 'Lost';
       return true;
     });
@@ -298,6 +250,13 @@ const CP_leads = () => {
       setIsUpdateModalOpen(false);
       setSelectedLead(null);
     }
+  };
+
+  const handleShareLead = (salesRepId) => {
+    if (!selectedLead) return;
+    setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, sharedWith: SALES_REPS.find(s => s.id === salesRepId)?.name, lastUpdated: 'Just now' } : l));
+    setIsShareModalOpen(false);
+    setSelectedLead(null);
   };
 
   const handleConvertToClient = () => {
@@ -338,59 +297,6 @@ const CP_leads = () => {
     navigate('/cp-converted');
   };
 
-  const handleShareLead = (salesRepId) => {
-    if (!selectedLead) return;
-    setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, status: 'Shared', sharedWith: SALES_REPS.find(s => s.id === salesRepId)?.name, lastUpdated: 'Just now' } : l));
-    setIsShareModalOpen(false);
-    setSelectedLead(null);
-  };
-
-  const handleAddLead = (e) => {
-    e.preventDefault();
-    if (!newLead.name || !newLead.phone) return;
-
-    const lead = {
-      id: Date.now().toString(),
-      ...newLead,
-      source: 'self',
-      status: 'Hot',
-      lastUpdated: 'Just now',
-      value: newLead.budget ? `₹${newLead.budget}` : 'Pending'
-    };
-    setLeads([lead, ...leads]);
-    setIsAddSheetOpen(false);
-    setNewLead({
-      name: '',
-      businessName: '',
-      phone: '',
-      email: '',
-      projectType: 'Web Development',
-      budget: '',
-      priority: 'Medium',
-      notes: ''
-    });
-  };
-
-  // Calculate own leads (for tabs count)
-  const ownLeads = useMemo(() => {
-    return leads.filter(lead => {
-      return lead.source === 'self' && 
-             lead.status !== 'Shared' && 
-             !lead.sharedWith && 
-             lead.source !== 'sales' && 
-             !lead.assignedSales;
-    });
-  }, [leads]);
-
-  const TABS = [
-    { id: 'all', label: 'All', count: ownLeads.length },
-    { id: 'my-leads', label: 'My Leads', count: ownLeads.filter(l => l.source === 'self').length },
-    { id: 'hot', label: 'Hot', count: ownLeads.filter(l => l.status === 'Hot').length },
-    { id: 'active', label: 'Active', count: ownLeads.filter(l => l.status !== 'Converted' && l.status !== 'Lost').length },
-    { id: 'converted', label: 'Converted', count: ownLeads.filter(l => l.status === 'Converted').length },
-    { id: 'lost', label: 'Lost', count: ownLeads.filter(l => l.status === 'Lost').length },
-  ];
-
   return (
     <div className="min-h-screen bg-[#F9F9F9] pb-24 md:pb-0 font-sans text-[#1E1E1E]">
       <CP_navbar />
@@ -403,7 +309,7 @@ const CP_leads = () => {
           </div>
           <input
             type="text"
-            placeholder="Search by name or project..."
+            placeholder="Search by name, project, or sales rep..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="block w-full pl-11 pr-12 py-3.5 bg-white border border-gray-100 rounded-[24px] text-gray-900 shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
@@ -472,50 +378,12 @@ const CP_leads = () => {
           ))}
         </div>
 
-        {/* Shared & Received Leads Cards */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            onClick={() => navigate('/cp-shared-leads')}
-            className="bg-purple-50 rounded-[24px] p-4 shadow-sm border border-purple-100 hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-                <FiArrowUp className="w-5 h-5 text-purple-600" />
-              </div>
-              <div className="text-right">
-                <p className="text-2xl font-bold text-gray-900">{sharedLeadsCount}</p>
-              </div>
-            </div>
-            <p className="text-xs text-gray-900 font-semibold">Shared Leads</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            onClick={() => navigate('/cp-received-leads')}
-            className="bg-blue-50 rounded-[24px] p-4 shadow-sm border border-blue-100 hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                <FiArrowDown className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="text-right">
-                <p className="text-2xl font-bold text-gray-900">{receivedLeadsCount}</p>
-              </div>
-            </div>
-            <p className="text-xs text-gray-900 font-semibold">Received Leads</p>
-          </motion.div>
-        </div>
-
         {/* Leads List */}
         <AnimatePresence mode='popLayout'>
           <div className="space-y-4">
             {filteredLeads.length > 0 ? (
               filteredLeads.map(lead => (
-                <LeadCard
+                <ReceivedLeadCard
                   key={lead.id}
                   lead={lead}
                   onAction={handleAction}
@@ -529,184 +397,15 @@ const CP_leads = () => {
                 className="text-center py-16"
               >
                 <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-4xl shadow-sm">
-                  📪
+                  📥
                 </div>
-                <h3 className="text-gray-900 font-bold mb-1">No leads found</h3>
-                <p className="text-gray-500 text-sm">Clear filters or create a new lead.</p>
+                <h3 className="text-gray-900 font-bold mb-1">No received leads found</h3>
+                <p className="text-gray-500 text-sm">Clear filters or wait for sales team to assign leads.</p>
               </motion.div>
             )}
           </div>
         </AnimatePresence>
       </main>
-
-      {/* Bottom Sheet Overlay */}
-      <AnimatePresence>
-        {isAddSheetOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsAddSheetOpen(false)}
-            className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50"
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Bottom Sheet Content */}
-      <AnimatePresence>
-        {isAddSheetOpen && (
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl p-6 z-50 md:max-w-2xl md:mx-auto md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:rounded-3xl shadow-[0_-10px_40px_rgb(0,0,0,0.1)] max-h-[90vh] flex flex-col"
-          >
-            {/* Drag Handle for mobile vibe */}
-            <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 md:hidden" />
-
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-2xl text-gray-900 tracking-tight">New Lead</h3>
-              <button onClick={() => setIsAddSheetOpen(false)} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-500"><FiX /></button>
-            </div>
-
-            <form onSubmit={handleAddLead} className="flex flex-col h-full overflow-hidden">
-              <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2 -mr-2 pb-4">
-
-                {/* Personal Info */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Contact Name <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <FiUser className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text" required
-                        value={newLead.name}
-                        onChange={e => setNewLead({ ...newLead, name: e.target.value })}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
-                        placeholder="e.g. John Doe"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Business Name</label>
-                    <div className="relative">
-                      <FiBriefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text"
-                        value={newLead.businessName}
-                        onChange={e => setNewLead({ ...newLead, businessName: e.target.value })}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
-                        placeholder="e.g. Acme Corp"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Contact Info */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Phone <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <FiPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="tel" required
-                        value={newLead.phone}
-                        onChange={e => setNewLead({ ...newLead, phone: e.target.value })}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
-                        placeholder="+1 (555) 000-0000"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Email</label>
-                    <div className="relative">
-                      <FiMessageCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="email"
-                        value={newLead.email}
-                        onChange={e => setNewLead({ ...newLead, email: e.target.value })}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
-                        placeholder="john@example.com"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Project Details */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Project Type</label>
-                    <select
-                      value={newLead.projectType}
-                      onChange={e => setNewLead({ ...newLead, projectType: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium appearance-none"
-                    >
-                      <option>Web Development</option>
-                      <option>Mobile App</option>
-                      <option>Digital Marketing</option>
-                      <option>Custom Software</option>
-                      <option>Consulting</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Budget Range</label>
-                    <div className="relative">
-                      <FiDollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text"
-                        value={newLead.budget}
-                        onChange={e => setNewLead({ ...newLead, budget: e.target.value })}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
-                        placeholder="e.g. 5,000 - 10,000"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-500 uppercase ml-1">Priority</label>
-                  <div className="flex gap-2">
-                    {['High', 'Medium', 'Low'].map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setNewLead({ ...newLead, priority: p })}
-                        className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all ${newLead.priority === p
-                          ? (p === 'High' ? 'bg-red-50 border-red-200 text-red-600 shadow-sm' : p === 'Medium' ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-sm' : 'bg-green-50 border-green-200 text-green-600 shadow-sm')
-                          : 'bg-white border-gray-100 text-gray-500 hover:bg-gray-50'
-                          }`}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-500 uppercase ml-1">Notes / Requirements</label>
-                  <textarea
-                    rows="3"
-                    value={newLead.notes}
-                    onChange={e => setNewLead({ ...newLead, notes: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400 resize-none"
-                    placeholder="Enter any specific requirements or details..."
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-gray-100 mt-2 bg-white">
-                <button
-                  type="submit"
-                  className="w-full py-4 rounded-xl bg-gray-900 text-white font-bold text-lg shadow-xl shadow-gray-200 hover:bg-gray-800 transition-all active:scale-95"
-                >
-                  Create New Lead
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Share Lead Bottom Sheet */}
       <AnimatePresence>
@@ -770,9 +469,7 @@ const CP_leads = () => {
               className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl p-6 z-50 md:max-w-md md:mx-auto md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:rounded-3xl shadow-[0_-10px_40px_rgb(0,0,0,0.1)]"
             >
               <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 md:hidden" />
-
               <h3 className="font-bold text-xl text-gray-900 tracking-tight mb-4">Update Status</h3>
-
               <div className="space-y-2">
                 {['Hot', 'Connected', 'Converted', 'Lost'].map((status) => (
                   <button
@@ -790,7 +487,6 @@ const CP_leads = () => {
                   </button>
                 ))}
               </div>
-
               <button
                 onClick={() => setIsUpdateModalOpen(false)}
                 className="w-full mt-6 py-3.5 rounded-xl bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 transition-colors"
@@ -1043,20 +739,8 @@ const CP_leads = () => {
           </>
         )}
       </AnimatePresence>
-
-      {/* Premium FAB - Positioned higher to clear nav */}
-      <motion.button
-        onClick={() => setIsAddSheetOpen(true)}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        className="fixed bottom-24 right-5 md:bottom-10 md:right-10 w-14 h-14 bg-blue-500 text-white rounded-full shadow-lg shadow-blue-500/30 flex items-center justify-center z-40 transition-all font-semibold"
-      >
-        <FiPlus className="w-6 h-6" />
-      </motion.button>
-
-      {/* ... Other Modals (Update/Share) can reuse the bottom sheet style or stay as modals ... */}
     </div>
   );
 };
 
-export default CP_leads;
+export default CP_received_leads;

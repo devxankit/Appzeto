@@ -37,7 +37,7 @@ const CP_tutorial_details = () => {
     const video = VIDEO_DETAILS[id] || VIDEO_DETAILS['crm-demo'];
 
     return (
-        <div className="min-h-screen bg-white pb-24 font-sans">
+        <div className="min-h-screen bg-[#F9F9F9] pb-24 font-sans text-[#1E1E1E]">
             <CP_navbar />
 
             {/* Sticky Header */}

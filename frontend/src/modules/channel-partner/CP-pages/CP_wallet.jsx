@@ -8,17 +8,17 @@ import CP_navbar from '../CP-components/CP_navbar';
 
 // --- Mock Data ---
 const WALLET_DATA = {
-    balance: '$2,450.00',
-    pending: '$850.00',
-    lifetime: '$15,200.00',
+    balance: '₹2,450.00',
+    pending: '₹850.00',
+    lifetime: '₹15,200.00',
     transactions: [
-        { id: 1, type: 'credit', amount: '+$500.00', source: 'Commission - TechSolutions', date: 'Today, 10:30 AM', status: 'Completed' },
-        { id: 2, type: 'credit', amount: '+$150.00', source: 'Reward - Silver Badge', date: 'Yesterday', status: 'Completed' },
-        { id: 3, type: 'pending', amount: '+$350.00', source: 'Commission - Green Energy', date: '20 Oct', status: 'Pending' },
-        { id: 4, type: 'debit', amount: '-$1,000.00', source: 'Withdrawal to Bank', date: '15 Oct', status: 'Completed' },
+        { id: 1, type: 'credit', amount: '+₹500.00', source: 'Commission - TechSolutions', date: 'Today, 10:30 AM', status: 'Completed' },
+        { id: 2, type: 'credit', amount: '+₹150.00', source: 'Reward - Silver Badge', date: 'Yesterday', status: 'Completed' },
+        { id: 3, type: 'pending', amount: '+₹350.00', source: 'Commission - Green Energy', date: '20 Oct', status: 'Pending' },
+        { id: 4, type: 'debit', amount: '-₹1,000.00', source: 'Withdrawal to Bank', date: '15 Oct', status: 'Completed' },
     ],
     dues: [
-        { id: 101, client: 'Local Bistro', amount: '$200.00', dueDate: '25 Oct', status: 'Overdue' }
+        { id: 101, client: 'Local Bistro', amount: '₹200.00', dueDate: '25 Oct', status: 'Overdue' }
     ]
 };
 
@@ -31,7 +31,7 @@ const TransactionItem = ({ item }) => {
         <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-100 shadow-sm mb-3">
             <div className="flex items-center gap-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${item.type === 'debit' ? 'bg-red-50 text-red-600' :
-                        item.type === 'pending' ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'
+                    item.type === 'pending' ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'
                     }`}>
                     {item.type === 'debit' ? <FiArrowUpRight /> : isCredit ? <FiArrowDownLeft /> : <FiClock />}
                 </div>
@@ -54,10 +54,10 @@ const CP_wallet = () => {
     const [activeTab, setActiveTab] = useState('transactions');
 
     return (
-        <div className="min-h-screen bg-[#F3F4F6] pb-24 md:pb-0">
+        <div className="min-h-screen bg-[#F9F9F9] pb-24 md:pb-0 font-sans text-[#1E1E1E]">
             <CP_navbar />
 
-            <div className="max-w-4xl mx-auto pt-20 px-4 md:px-8">
+            <main className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-8 space-y-8">
                 {/* Header */}
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-bold text-gray-900">Wallet</h1>
@@ -67,7 +67,7 @@ const CP_wallet = () => {
                 </div>
 
                 {/* Hero Card */}
-                <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900 rounded-3xl p-6 text-white shadow-xl shadow-indigo-200 mb-8 relative overflow-hidden">
+                <div className="bg-gradient-to-br from-[#1E1E1E] via-gray-900 to-gray-800 rounded-[28px] p-6 text-white shadow-xl shadow-indigo-900/10 mb-8 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-8 opacity-10">
                         <FiCreditCard className="w-48 h-48" />
                     </div>
@@ -105,7 +105,7 @@ const CP_wallet = () => {
                             <h3 className="font-bold text-gray-800">Pending Dues</h3>
                         </div>
                         {WALLET_DATA.dues.map(due => (
-                            <div key={due.id} className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center justify-between">
+                            <div key={due.id} className="bg-red-50 border border-red-100 p-6 rounded-[24px] flex items-center justify-between">
                                 <div>
                                     <p className="font-bold text-red-900">{due.client}</p>
                                     <p className="text-xs text-red-600">Due by {due.dueDate}</p>
@@ -174,7 +174,7 @@ const CP_wallet = () => {
                         </motion.div>
                     )}
                 </AnimatePresence>
-            </div>
+            </main>
         </div>
     );
 };

@@ -15,12 +15,12 @@ const CONVERTED_CLIENTS = [
         projectType: 'Mobile App Development',
         status: 'In Progress', // Planning, In Progress, Completed
         progress: 45,
-        totalValue: '$12,000',
-        paidAmount: '$5,000',
-        pendingAmount: '$7,000',
+        totalValue: '₹12,000',
+        paidAmount: '₹5,000',
+        pendingAmount: '₹7,000',
         paymentStatus: 'Partial Paid', // Fully Paid, Partial Paid, Payment Pending
         lastPayment: '20 Oct, 2023',
-        commissionEarned: '$1,200',
+        commissionEarned: '₹1,200',
         commissionStatus: 'Credited'
     },
     {
@@ -29,12 +29,12 @@ const CONVERTED_CLIENTS = [
         projectType: 'Website Redesign',
         status: 'Unpaid',
         progress: 100,
-        totalValue: '$3,500',
-        paidAmount: '$3,500',
-        pendingAmount: '$0',
+        totalValue: '₹3,500',
+        paidAmount: '₹3,500',
+        pendingAmount: '₹0',
         paymentStatus: 'Fully Paid',
         lastPayment: '15 Oct, 2023',
-        commissionEarned: '$350',
+        commissionEarned: '₹350',
         commissionStatus: 'Credited'
     },
     {
@@ -43,13 +43,13 @@ const CONVERTED_CLIENTS = [
         projectType: 'CRM Implementation',
         status: 'Planning',
         progress: 10,
-        totalValue: '$25,000',
-        paidAmount: '$0',
-        pendingAmount: '$25,000',
+        totalValue: '₹25,000',
+        paidAmount: '₹0',
+        pendingAmount: '₹25,000',
         paymentStatus: 'Payment Pending',
         lastPayment: '—',
         nextExpected: '25 Oct, 2023',
-        commissionEarned: '$2,500',
+        commissionEarned: '₹2,500',
         commissionStatus: 'Pending'
     }
 ];
@@ -62,16 +62,16 @@ const CP_converted = () => {
     // Insight Data
     const insights = {
         totalConverted: clients.length,
-        totalValue: '$40,500',
-        pendingAmount: '$32,000',
-        commissionEarned: '$4,050'
+        totalValue: '₹40,500',
+        pendingAmount: '₹32,000',
+        commissionEarned: '₹4,050'
     };
 
     return (
-        <div className="min-h-screen bg-[#F3F4F6] pb-24 md:pb-0">
+        <div className="min-h-screen bg-[#F9F9F9] pb-24 md:pb-0 font-sans text-[#1E1E1E]">
             <CP_navbar />
 
-            <div className="max-w-4xl mx-auto pt-20 px-4 md:px-8">
+            <main className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-8 space-y-8">
                 {/* Header */}
                 <div className="flex justify-between items-end mb-6">
                     <div>
@@ -88,28 +88,28 @@ const CP_converted = () => {
 
                 {/* 1. Summary Insight Bar (Horizontal Scroll) */}
                 <div className="flex overflow-x-auto gap-4 hide-scrollbar pb-2 mb-6 -mx-4 px-4 md:mx-0 md:px-0">
-                    <div className="flex-none w-40 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="flex-none w-40 bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
                         <div className="flex items-center gap-2 mb-2 text-indigo-600">
                             <FiCheckCircle />
                             <span className="text-xs font-bold uppercase">Converted</span>
                         </div>
                         <p className="text-2xl font-bold text-gray-900">{insights.totalConverted}</p>
                     </div>
-                    <div className="flex-none w-40 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="flex-none w-40 bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
                         <div className="flex items-center gap-2 mb-2 text-blue-600">
                             <FiBriefcase />
                             <span className="text-xs font-bold uppercase">Project Value</span>
                         </div>
                         <p className="text-2xl font-bold text-gray-900">{insights.totalValue}</p>
                     </div>
-                    <div className="flex-none w-40 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="flex-none w-40 bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
                         <div className="flex items-center gap-2 mb-2 text-orange-600">
                             <FiClock />
                             <span className="text-xs font-bold uppercase">Pending</span>
                         </div>
                         <p className="text-2xl font-bold text-gray-900">{insights.pendingAmount}</p>
                     </div>
-                    <div className="flex-none w-40 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="flex-none w-40 bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm">
                         <div className="flex items-center gap-2 mb-2 text-green-600">
                             <FiDollarSign />
                             <span className="text-xs font-bold uppercase">Commission</span>
@@ -127,7 +127,7 @@ const CP_converted = () => {
                             exit={{ height: 0, opacity: 0 }}
                             className="overflow-hidden mb-6"
                         >
-                            <div className="p-4 bg-white rounded-2xl shadow-sm grid grid-cols-2 gap-4">
+                            <div className="p-6 bg-white rounded-[24px] shadow-sm border border-gray-100 grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Project Status</label>
                                     <select className="w-full p-2 bg-gray-50 rounded-lg text-sm border-none focus:ring-0">
@@ -255,7 +255,7 @@ const CP_converted = () => {
                         </button>
                     </div>
                 )}
-            </div>
+            </main>
         </div>
     );
 };

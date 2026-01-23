@@ -63,7 +63,7 @@ const CP_quotation_details = () => {
     const quote = QUOTATION_DETAILS[id] || QUOTATION_DETAILS['web-basic']; // Fallback for demo
 
     return (
-        <div className="min-h-screen bg-gray-50/50 pb-24 font-sans">
+        <div className="min-h-screen bg-[#F9F9F9] pb-24 font-sans text-[#1E1E1E]">
             <CP_navbar />
 
             {/* Header */}
@@ -79,14 +79,14 @@ const CP_quotation_details = () => {
             <main className="max-w-md mx-auto px-4 py-6 space-y-6">
 
                 {/* Hero Card */}
-                <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 relative overflow-hidden">
+                <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mt-10 -mr-10 blur-2xl"></div>
 
                     <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">Quotation #{id.toUpperCase()}</p>
                     <h2 className="text-2xl font-bold text-gray-900 mb-2">{quote.title}</h2>
                     <p className="text-gray-500 text-sm mb-6 leading-relaxed">{quote.description}</p>
 
-                    <div className="flex items-end justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="flex items-end justify-between p-6 bg-white rounded-[24px] border border-gray-100 shadow-sm">
                         <div>
                             <p className="text-xs text-gray-400 font-medium mb-1">Estimated Cost</p>
                             <h3 className="text-3xl font-bold text-indigo-600 tracking-tight">{quote.price}</h3>
@@ -149,7 +149,7 @@ const CP_quotation_details = () => {
                         ))}
                     </ul>
 
-                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 flex gap-3">
+                    <div className="p-6 bg-amber-50 rounded-[24px] border border-amber-100 shadow-sm flex gap-3">
                         <HelpCircle className="w-5 h-5 text-amber-600 shrink-0" />
                         <p className="text-[10px] text-amber-700 leading-relaxed font-medium">
                             <strong>Note:</strong> Final pricing may vary based on specific client requirements and customizations requested during the discovery phase.

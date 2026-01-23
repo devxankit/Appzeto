@@ -60,7 +60,7 @@ const CP_resources = () => {
     });
 
     return (
-        <div className="min-h-screen bg-[#F3F4F6] pb-24 md:pb-0">
+        <div className="min-h-screen bg-[#F9F9F9] pb-24 md:pb-0 font-sans text-[#1E1E1E]">
             {/* 1. Header (Sticky) */}
             <div className="sticky top-0 bg-white border-b border-gray-200 z-40 px-4 py-3 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
@@ -115,7 +115,7 @@ const CP_resources = () => {
                                     animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.95 }}
                                     onClick={() => navigate(`/cp-resources/${project.id}`)}
-                                    className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 group cursor-pointer hover:shadow-lg transition-all"
+                                    className="bg-white rounded-[24px] overflow-hidden shadow-sm border border-gray-100 group cursor-pointer hover:shadow-md transition-all"
                                 >
                                     {/* Thumbnail */}
                                     <div className="h-48 bg-gray-200 relative overflow-hidden">

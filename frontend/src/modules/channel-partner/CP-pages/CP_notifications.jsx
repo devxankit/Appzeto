@@ -114,7 +114,7 @@ const CP_notifications = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50/50 pb-20 font-sans">
+        <div className="min-h-screen bg-[#F9F9F9] pb-20 font-sans text-[#1E1E1E]">
             <CP_navbar />
 
             {/* Sticky Header */}
@@ -175,7 +175,7 @@ const CP_notifications = () => {
                                 exit={{ opacity: 0, scale: 0.95 }}
                                 key={notification.id}
                                 onClick={() => handleNotificationClick(notification.id, notification.path)}
-                                className={`relative p-4 rounded-2xl border transition-all cursor-pointer group ${notification.isRead
+                                className={`relative p-6 rounded-[24px] border border-gray-100 shadow-sm transition-all cursor-pointer group ${notification.isRead
                                         ? 'bg-white border-gray-100'
                                         : 'bg-white border-indigo-100 shadow-md shadow-indigo-100/50'
                                     }`}

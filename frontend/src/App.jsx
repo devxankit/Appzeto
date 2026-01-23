@@ -102,6 +102,8 @@ import CP_leads from './modules/channel-partner/CP-pages/CP_leads'
 import CP_lead_details from './modules/channel-partner/CP-pages/CP_lead_details'
 import CP_wallet from './modules/channel-partner/CP-pages/CP_wallet'
 import CP_converted from './modules/channel-partner/CP-pages/CP_converted'
+import CP_shared_leads from './modules/channel-partner/CP-pages/CP_shared_leads'
+import CP_received_leads from './modules/channel-partner/CP-pages/CP_received_leads'
 import CP_project_progress from './modules/channel-partner/CP-pages/CP_project_progress'
 import CP_resources from './modules/channel-partner/CP-pages/CP_resources'
 import CP_resource_details from './modules/channel-partner/CP-pages/CP_resource_details'
@@ -522,6 +524,16 @@ function App() {
               <CPProtectedRoute>
                 <CP_converted />
               </CPProtectedRoute>
+            } />
+            <Route path="/cp-shared-leads" element={
+                <CPProtectedRoute>
+                    <CP_shared_leads />
+                </CPProtectedRoute>
+            } />
+            <Route path="/cp-received-leads" element={
+                <CPProtectedRoute>
+                    <CP_received_leads />
+                </CPProtectedRoute>
             } />
             <Route path="/cp-project-progress/:id" element={
               <CPProtectedRoute>

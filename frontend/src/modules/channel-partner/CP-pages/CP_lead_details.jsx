@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     FiArrowLeft, FiMoreVertical, FiPhone, FiMessageCircle, FiMail,
     FiBriefcase, FiUser, FiClock, FiCheck, FiShare2, FiCalendar,
-    FiDollarSign, FiActivity, FiFileText
+    FiDollarSign, FiActivity, FiFileText, FiX, FiFolder
 } from 'react-icons/fi';
+import { FaRupeeSign } from 'react-icons/fa';
 import CP_navbar from '../CP-components/CP_navbar';
 
 // --- Mock Data ---
@@ -18,7 +19,7 @@ const LEAD_DATA = {
     phone: '+1 234 567 8900',
     email: 'sarah.williams@example.com',
     createdOn: '20 Oct, 2023',
-    value: '$5,000',
+    value: '₹5,000',
     timeline: [
         { id: 1, type: 'status', status: 'Hot', date: '2 hours ago', user: 'You', note: 'Client is very interested, asked for quote.' },
         { id: 2, type: 'status', status: 'Connected', date: 'Yesterday', user: 'You', note: 'Initial call connected.' },
@@ -71,9 +72,22 @@ const CP_lead_details = () => {
     const [notes, setNotes] = useState('');
     const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
     const [isUpdateSheetOpen, setIsUpdateSheetOpen] = useState(false);
+    const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+
+    // Convert to Client Form State
+    const [conversionData, setConversionData] = useState({
+        projectName: '',
+        projectType: { web: false, app: false, taxi: false },
+        totalCost: '',
+        finishedDays: '',
+        advanceReceived: '',
+        includeGST: false,
+        description: '',
+        screenshot: null
+    });
 
     return (
-        <div className="min-h-screen bg-[#F3F4F6] pb-24">
+        <div className="min-h-screen bg-[#F9F9F9] pb-24 font-sans text-[#1E1E1E]">
             {/* Sticky Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-3">
@@ -93,10 +107,10 @@ const CP_lead_details = () => {
                 </button>
             </div>
 
-            <div className="max-w-3xl mx-auto p-4 space-y-4">
+            <main className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-8 space-y-8">
 
                 {/* Contact Card */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100">
                     <div className="flex gap-4 mb-6">
                         <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold shadow-md">
                             {lead.name.charAt(0)}
@@ -125,7 +139,7 @@ const CP_lead_details = () => {
                 </div>
 
                 {/* Project Info */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 grid grid-cols-2 gap-4">
+                <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                         <p className="text-xs text-gray-400 font-bold uppercase">Project Type</p>
                         <div className="flex items-center gap-2 font-semibold text-gray-900">
@@ -143,7 +157,7 @@ const CP_lead_details = () => {
                 </div>
 
                 {/* Timeline & Notes Tabs */}
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
                     <div className="flex border-b border-gray-100">
                         <button
                             onClick={() => setActiveTab('timeline')}
@@ -189,7 +203,7 @@ const CP_lead_details = () => {
                         )}
                     </div>
                 </div>
-            </div>
+            </main>
 
 
             {/* Sticky Bottom Actions */}
@@ -259,26 +273,306 @@ const CP_lead_details = () => {
                         className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl p-6 z-50 md:max-w-md md:mx-auto md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:rounded-3xl shadow-[0_-10px_40px_rgb(0,0,0,0.1)]"
                     >
                         <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 md:hidden" />
-                        <h3 className="font-bold text-xl text-gray-900 mb-4">Update Lead Status</h3>
-                        <div className="grid grid-cols-2 gap-3">
-                            {['Hot', 'Connected', 'Follow-up', 'Converted', 'Lost'].map((status) => (
+                        <h3 className="font-bold text-xl text-gray-900 mb-4 tracking-tight">Update Lead Status</h3>
+                        <div className="space-y-2">
+                            {['Hot', 'Connected', 'Converted', 'Lost'].map((status) => (
                                 <button
                                     key={status}
                                     onClick={() => {
-                                        // Update status logic here
-                                        setIsUpdateSheetOpen(false);
+                                        if (status === 'Converted') {
+                                            setIsUpdateSheetOpen(false);
+                                            setIsConvertModalOpen(true);
+                                        } else {
+                                            // Update status logic here - effectively a mock update for now
+                                            setIsUpdateSheetOpen(false);
+                                        }
                                     }}
-                                    className={`p-4 rounded-xl font-bold text-sm border-2 transition-all ${status === lead.status
-                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                        : 'border-transparent bg-gray-50 text-gray-600 hover:bg-gray-100'
+                                    className={`w-full p-4 rounded-xl flex items-center justify-between transition-all ${lead.status.toLowerCase() === status.toLowerCase()
+                                        ? 'bg-indigo-50 border border-indigo-200 text-indigo-700'
+                                        : 'bg-white border border-gray-100 text-gray-600 hover:bg-gray-50'
                                         }`}
                                 >
-                                    {status}
+                                    <div className="flex items-center gap-3">
+                                        <span className="font-semibold">{status}</span>
+                                    </div>
+                                    {lead.status.toLowerCase() === status.toLowerCase() && <FiCheck className="w-5 h-5 text-indigo-600" />}
                                 </button>
                             ))}
                         </div>
-                        <button onClick={() => setIsUpdateSheetOpen(false)} className="w-full mt-6 py-3 font-bold text-gray-500">Cancel</button>
+                        <button onClick={() => setIsUpdateSheetOpen(false)} className="w-full mt-6 py-3.5 rounded-xl bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 transition-colors">Cancel</button>
                     </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Convert to Client Bottom Sheet */}
+            <AnimatePresence>
+                {isConvertModalOpen && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsConvertModalOpen(false)}
+                            className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50"
+                        />
+                        <motion.div
+                            initial={{ y: "100%" }}
+                            animate={{ y: 0 }}
+                            exit={{ y: "100%" }}
+                            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl p-6 z-50 md:max-w-2xl md:mx-auto md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:rounded-3xl shadow-[0_-10px_40px_rgb(0,0,0,0.1)] max-h-[90vh] flex flex-col"
+                        >
+                            <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 md:hidden" />
+                            
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-2xl text-gray-900 tracking-tight">Convert to Client</h3>
+                                <button onClick={() => setIsConvertModalOpen(false)} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-500">
+                                    <FiX className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <div className="flex flex-col h-full overflow-hidden">
+                                <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2 -mr-2 pb-4">
+                                    {/* Client Name - Pre-filled, Read-only */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Client Name</label>
+                                        <div className="relative">
+                                            <FiUser className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                value={lead.name}
+                                                readOnly
+                                                className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none text-gray-900 cursor-not-allowed font-medium"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Phone Number - Pre-filled, Read-only */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Phone Number</label>
+                                        <div className="relative">
+                                            <FiPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                value={lead.phone}
+                                                readOnly
+                                                className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none text-gray-900 cursor-not-allowed font-medium"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Project Name */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Project Name <span className="text-red-500">*</span></label>
+                                        <div className="relative">
+                                            <FiFolder className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                value={conversionData.projectName}
+                                                onChange={(e) => setConversionData({ ...conversionData, projectName: e.target.value })}
+                                                placeholder="Project name"
+                                                className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Finished Days */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Finished Days</label>
+                                        <div className="relative">
+                                            <FiCalendar className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={conversionData.finishedDays}
+                                                onChange={(e) => setConversionData({ ...conversionData, finishedDays: e.target.value })}
+                                                placeholder="Finished days"
+                                                className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Project Type */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Project Type <span className="text-red-500">*</span></label>
+                                        <div className="flex flex-wrap gap-4">
+                                            <label className="flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={conversionData.projectType.web}
+                                                    onChange={(e) => setConversionData({
+                                                        ...conversionData,
+                                                        projectType: { ...conversionData.projectType, web: e.target.checked }
+                                                    })}
+                                                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                                />
+                                                <span className="ml-2 text-sm text-gray-700 font-medium">Web</span>
+                                            </label>
+                                            <label className="flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={conversionData.projectType.app}
+                                                    onChange={(e) => setConversionData({
+                                                        ...conversionData,
+                                                        projectType: { ...conversionData.projectType, app: e.target.checked }
+                                                    })}
+                                                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                                />
+                                                <span className="ml-2 text-sm text-gray-700 font-medium">App</span>
+                                            </label>
+                                            <label className="flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={conversionData.projectType.taxi}
+                                                    onChange={(e) => setConversionData({
+                                                        ...conversionData,
+                                                        projectType: { ...conversionData.projectType, taxi: e.target.checked }
+                                                    })}
+                                                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                                />
+                                                <span className="ml-2 text-sm text-gray-700 font-medium">Taxi</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {/* Description */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Description</label>
+                                        <div className="relative">
+                                            <FiFileText className="absolute left-4 top-3 text-gray-400" />
+                                            <textarea
+                                                value={conversionData.description}
+                                                onChange={(e) => setConversionData({ ...conversionData, description: e.target.value })}
+                                                placeholder="Description"
+                                                rows={3}
+                                                className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400 resize-none"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Total Cost */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Total Cost <span className="text-red-500">*</span></label>
+                                        <div className="relative">
+                                            <FaRupeeSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={conversionData.totalCost}
+                                                onChange={(e) => setConversionData({ ...conversionData, totalCost: e.target.value })}
+                                                placeholder="Total cost"
+                                                className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Advance Received */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Advance Received</label>
+                                        <div className="relative">
+                                            <FiCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={conversionData.advanceReceived}
+                                                onChange={(e) => setConversionData({ ...conversionData, advanceReceived: e.target.value })}
+                                                placeholder="Advance received"
+                                                className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium placeholder-gray-400"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Include GST */}
+                                    <div className="space-y-1.5">
+                                        <label className="flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={conversionData.includeGST}
+                                                onChange={(e) => setConversionData({ ...conversionData, includeGST: e.target.checked })}
+                                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                            />
+                                            <span className="ml-2 text-sm text-gray-700 font-medium">Include GST</span>
+                                        </label>
+                                    </div>
+
+                                    {/* Upload Screenshot */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Upload Screenshot</label>
+                                        <div
+                                            onClick={() => document.getElementById('screenshot-upload-details').click()}
+                                            className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-indigo-500 transition-colors"
+                                        >
+                                            <input
+                                                id="screenshot-upload-details"
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={(e) => {
+                                                    const file = e.target.files[0];
+                                                    if (file) {
+                                                        setConversionData({ ...conversionData, screenshot: file });
+                                                    }
+                                                }}
+                                                className="hidden"
+                                            />
+                                            {conversionData.screenshot ? (
+                                                <div className="text-sm text-gray-700 font-medium">
+                                                    {conversionData.screenshot.name}
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <FiFileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                                    <p className="text-sm text-gray-500 font-medium">Click to upload screenshot</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 border-t border-gray-100 mt-2 bg-white">
+                                    <button
+                                        onClick={() => {
+                                            // Validate required fields
+                                            if (!conversionData.projectName.trim()) {
+                                                alert('Please enter project name');
+                                                return;
+                                            }
+                                            if (!conversionData.totalCost.trim() || parseFloat(conversionData.totalCost) < 0) {
+                                                alert('Please enter a valid total cost');
+                                                return;
+                                            }
+                                            if (!conversionData.projectType.web && !conversionData.projectType.app && !conversionData.projectType.taxi) {
+                                                alert('Please select at least one project type');
+                                                return;
+                                            }
+
+                                            // Reset form and close modal
+                                            setConversionData({
+                                                projectName: '',
+                                                projectType: { web: false, app: false, taxi: false },
+                                                totalCost: '',
+                                                finishedDays: '',
+                                                advanceReceived: '',
+                                                includeGST: false,
+                                                description: '',
+                                                screenshot: null
+                                            });
+                                            setIsConvertModalOpen(false);
+                                            
+                                            // Navigate to converted clients page
+                                            navigate('/cp-converted');
+                                        }}
+                                        className="w-full py-4 rounded-xl bg-gray-900 text-white font-bold text-lg shadow-xl shadow-gray-200 hover:bg-gray-800 transition-all active:scale-95"
+                                    >
+                                        Convert to Client
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
                 )}
             </AnimatePresence>
         </div>

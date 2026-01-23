@@ -73,7 +73,7 @@ const VideoCard = ({ video, onNavigate, onShare }) => {
             layout
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 group cursor-pointer hover:shadow-md transition-all"
+            className="bg-white rounded-[24px] overflow-hidden shadow-sm border border-gray-100 group cursor-pointer hover:shadow-md transition-all"
             onClick={() => onNavigate(video.id)}
         >
             {/* Thumbnail Section */}
@@ -155,7 +155,7 @@ const CP_tutorials = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50/50 pb-20 font-sans">
+        <div className="min-h-screen bg-[#F9F9F9] pb-20 font-sans text-[#1E1E1E]">
             <CP_navbar />
 
             {/* Sticky Header */}

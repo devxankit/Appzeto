@@ -158,7 +158,7 @@ const CP_notice_board = () => {
         return (
             <div
                 onClick={() => handleNoticeView(notice.id)}
-                className={`bg-gradient-to-br ${getTypeColor(notice.type)} rounded-xl p-4 border shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer`}
+                className={`bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer`}
             >
                 <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center space-x-2">
@@ -263,7 +263,7 @@ const CP_notice_board = () => {
         return (
             <div
                 onClick={() => handleNoticeView(notice.id)}
-                className={`bg-gradient-to-br ${getTypeColor(notice.type)} rounded-xl p-4 border shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer`}
+                className={`bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer`}
             >
                 <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center space-x-2">
@@ -331,10 +331,10 @@ const CP_notice_board = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-[#F9F9F9] font-sans text-[#1E1E1E]">
             <CP_navbar />
 
-            <main className="max-w-7xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
+            <main className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-8 space-y-8">
 
                 {/* Mobile Layout */}
                 <div className="lg:hidden">

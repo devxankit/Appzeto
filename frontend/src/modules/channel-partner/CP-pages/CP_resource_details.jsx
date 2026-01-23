@@ -5,6 +5,7 @@ import {
     FiMonitor, FiDatabase, FiCloud, FiCheckCircle
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
+import CP_navbar from '../CP-components/CP_navbar';
 
 // --- Mock Data (Should match ID from previous page) ---
 const PROJECT_DATABASE = {
@@ -106,7 +107,9 @@ const CP_resource_details = () => {
     }
 
     return (
-        <div className="min-h-screen bg-white pb-24">
+        <div className="min-h-screen bg-[#F9F9F9] pb-24 font-sans text-[#1E1E1E]">
+            <CP_navbar />
+            
             {/* Header Image */}
             <div className="h-64 relative bg-gray-900">
                 <img
@@ -129,8 +132,7 @@ const CP_resource_details = () => {
                 </div>
             </div>
 
-            <div className="max-w-3xl mx-auto px-6 py-8">
-
+            <main className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-8 space-y-8">
                 {/* 1. Description */}
                 <div className="mb-8">
                     <h2 className="font-bold text-gray-900 text-lg mb-3">About the Project</h2>
@@ -144,7 +146,7 @@ const CP_resource_details = () => {
                     <h2 className="font-bold text-gray-900 text-lg mb-4">Key Features</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {project.features.map((feature, idx) => (
-                            <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                            <div key={idx} className="flex items-center gap-3 p-4 bg-white rounded-[24px] border border-gray-100 shadow-sm">
                                 <span className="p-1.5 bg-green-100 text-green-600 rounded-full">
                                     <FiCheckCircle className="w-3.5 h-3.5" />
                                 </span>
@@ -159,7 +161,7 @@ const CP_resource_details = () => {
                     <h2 className="font-bold text-gray-900 text-lg mb-4">Available On</h2>
                     <div className="flex gap-4">
                         {project.platforms.map(platform => (
-                            <div key={platform} className="flex flex-col items-center gap-2 p-4 bg-gray-50 rounded-xl border border-gray-100 min-w-[80px]">
+                            <div key={platform} className="flex flex-col items-center gap-2 p-4 bg-white rounded-[24px] border border-gray-100 shadow-sm min-w-[80px]">
                                 {platform.includes('Web') && <FiMonitor className="w-6 h-6 text-indigo-600" />}
                                 {platform === 'Android' && <FiSmartphone className="w-6 h-6 text-green-600" />}
                                 {platform === 'iOS' && <FiSmartphone className="w-6 h-6 text-gray-800" />}
@@ -192,7 +194,7 @@ const CP_resource_details = () => {
                         ))}
                     </div>
                 </div>
-            </div>
+            </main>
 
             {/* Sticky Bottom Action Bar */}
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] flex gap-3 z-40 md:static md:shadow-none md:border-none md:p-0 md:mt-8 md:max-w-3xl md:mx-auto">

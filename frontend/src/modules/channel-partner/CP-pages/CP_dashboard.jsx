@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useSpring, useTransform } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
     Users,
@@ -23,382 +23,388 @@ import {
 } from 'lucide-react'
 import CP_navbar from '../CP-components/CP_navbar'
 
+// --- Premium Components ---
+
+const CountUp = ({ value, duration = 2, prefix = '', suffix = '', className = '' }) => {
+    const numericValue = typeof value === 'string' ? parseFloat(value.replace(/[^0-9.-]+/g, '')) : value
+    const spring = useSpring(0, { duration: duration * 1000, bounce: 0 })
+    const displayValue = useTransform(spring, (current) =>
+        prefix + Math.floor(current).toLocaleString() + suffix
+    )
+
+    useEffect(() => {
+        spring.set(numericValue)
+    }, [spring, numericValue])
+
+    return <motion.span className={className}>{displayValue}</motion.span>
+}
+
+const DashboardSkeleton = () => (
+    <div className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-8 space-y-6 animate-pulse">
+        <div className="flex justify-between items-center mb-6">
+            <div className="space-y-2">
+                <div className="h-6 w-32 bg-gray-200 rounded-lg"></div>
+                <div className="h-4 w-24 bg-gray-100 rounded-lg"></div>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-gray-200"></div>
+        </div>
+        <div className="h-48 bg-gray-200 rounded-[24px]"></div>
+        <div className="grid grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-gray-200 rounded-[24px]"></div>)}
+        </div>
+        <div className="flex gap-3 overflow-hidden"><div className="w-full h-24 bg-gray-200 rounded-xl"></div></div>
+    </div>
+)
+
 const CP_dashboard = () => {
     const navigate = useNavigate()
     const [loading, setLoading] = useState(true)
 
-    // Simulate loading
+    // Simulate polished loading
     useEffect(() => {
-        const timer = setTimeout(() => setLoading(false), 1000)
+        const timer = setTimeout(() => setLoading(false), 1500)
         return () => clearTimeout(timer)
     }, [])
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="flex flex-col items-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent mb-4"></div>
-                    <p className="text-gray-500 font-medium animate-pulse">Loading dashboard...</p>
-                </div>
+            <div className="min-h-screen bg-[#F9F9F9]">
+                <CP_navbar />
+                <DashboardSkeleton />
             </div>
         )
     }
 
     return (
-        <div className="min-h-screen bg-gray-50/50 pb-24 font-sans">
+        <div className="min-h-screen bg-[#F9F9F9] pb-24 font-sans text-[#1E1E1E]">
             <CP_navbar />
 
-            <main className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-8 space-y-6">
+            <main className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-8 space-y-8">
 
-                {/* 1. Wallet Highlight Card (Hero Section) */}
+                {/* 1. Header */}
                 <motion.div
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
-                    className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-900 via-indigo-800 to-indigo-900 shadow-xl shadow-indigo-900/20 p-6 text-white"
+                    className="flex justify-between items-center"
                 >
-                    {/* Background Pattern */}
-                    <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-                    <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-indigo-500/20 rounded-full blur-3xl"></div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Hello, Partner</h1>
+                        <p className="text-sm text-gray-500 font-medium">Let's grow together</p>
+                    </div>
+                </motion.div>
+
+                {/* 2. Wallet Highlight Card (Premium Glassmorphism) */}
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, type: "spring" }}
+                    className="relative overflow-hidden rounded-[28px] bg-[#1E1E1E] p-6 text-white shadow-xl shadow-indigo-900/10 group"
+                >
+                    {/* Animated Background */}
+                    <div className="absolute top-[-50%] right-[-20%] w-[300px] h-[300px] bg-[#F6C453] rounded-full blur-[80px] opacity-20 group-hover:opacity-30 transition-opacity duration-700"></div>
+                    <div className="absolute bottom-[-30%] left-[-10%] w-[200px] h-[200px] bg-indigo-600 rounded-full blur-[60px] opacity-20 group-hover:opacity-30 transition-opacity duration-700"></div>
+
+                    {/* Noise Texture for Texture */}
+                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay"></div>
 
                     <div className="relative z-10">
-                        <div className="flex justify-between items-start mb-6">
+                        <div className="flex justify-between items-start mb-8">
                             <div>
-                                <p className="text-indigo-200 text-sm font-medium mb-1">Available Balance</p>
-                                <h2 className="text-4xl font-bold tracking-tight">₹ 42,500</h2>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="p-1.5 bg-white/10 rounded-lg backdrop-blur-sm"><Wallet className="w-3.5 h-3.5 text-[#F6C453]" /></span>
+                                    <p className="text-gray-300 text-xs font-bold uppercase tracking-widest">Total Balance</p>
+                                </div>
+                                <h2 className="text-4xl font-bold tracking-tight text-white">
+                                    <CountUp value={42500} prefix="₹ " />
+                                </h2>
                             </div>
-                            <div
-                                onClick={() => navigate('/cp-wallet')}
-                                className="p-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 relative group cursor-pointer hover:bg-white/20 transition-all"
-                            >
-                                <Wallet className="w-6 h-6 text-indigo-100 group-hover:scale-110 transition-transform" />
-                                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                            {/* Active Indicator */}
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 backdrop-blur-md rounded-full border border-white/10">
+                                <span className="relative flex h-2 w-2">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                                 </span>
+                                <span className="text-[10px] font-bold text-emerald-400">ACTIVE</span>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-6 mb-6 text-sm">
-                            <div>
-                                <p className="text-indigo-300 text-xs">Pending Earnings</p>
-                                <p className="font-semibold text-white">₹ 12,800</p>
-                            </div>
-                            <div className="h-8 w-px bg-white/10"></div>
-                            <div>
-                                <p className="text-indigo-300 text-xs">Last Payout</p>
-                                <p className="font-semibold text-white">22 Jan 2024</p>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3">
-                            <button
+                        <div className="flex gap-4">
+                            <motion.button
+                                whileTap={{ scale: 0.97 }}
                                 onClick={() => navigate('/cp-wallet')}
-                                className="flex-1 py-2.5 px-4 bg-white text-indigo-900 rounded-xl font-semibold text-sm hover:bg-indigo-50 active:scale-[0.98] transition-all focus:ring-2 focus:ring-white/20"
+                                className="flex-1 py-3.5 px-4 bg-[#F6C453] text-gray-900 rounded-2xl font-bold text-sm shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 transition-all flex items-center justify-center gap-2"
                             >
-                                View Wallet
-                            </button>
-                            <button className="flex-1 py-2.5 px-4 bg-indigo-800/50 backdrop-blur-sm border border-white/10 text-white rounded-xl font-semibold text-sm hover:bg-indigo-700/50 active:scale-[0.98] transition-all">
+                                <ArrowRight className="w-4 h-4" /> Withdraw
+                            </motion.button>
+                            <motion.button
+                                whileTap={{ scale: 0.97 }}
+                                onClick={() => navigate('/cp-wallet')}
+                                className="flex-1 py-3.5 px-4 bg-white/5 text-white rounded-2xl font-bold text-sm backdrop-blur-md border border-white/10 hover:bg-white/10 transition-all"
+                            >
                                 History
-                            </button>
+                            </motion.button>
                         </div>
                     </div>
                 </motion.div>
 
-                {/* 3. Lead Overview (Quick Stats Grid) */}
-                <div className="grid grid-cols-2 gap-3 md:gap-6">
-                    {[
-                        { label: 'Active Leads', count: 24, color: 'blue', icon: Activity, bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-100' },
-                        { label: 'Hot Leads', count: 8, color: 'orange', icon: TrendingUp, bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-100' },
-                        { label: 'Not Interested', count: 12, color: 'red', icon: Users, bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-100' },
-                        { label: 'Converted', count: 5, color: 'emerald', icon: CheckCircle, bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100' },
-                    ].map((stat, idx) => (
-                        <motion.div
-                            key={idx}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 + (idx * 0.05) }}
-                            whileTap={{ scale: 0.98 }}
-                            className={`p-4 rounded-2xl border ${stat.border} ${stat.bg} relative overflow-hidden cursor-pointer group hover:shadow-md transition-all`}
-                        >
-                            <div className={`absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity`}>
-                                <stat.icon className={`w-12 h-12 ${stat.text}`} />
-                            </div>
-                            <h3 className={`text-3xl font-bold ${stat.text} mb-1`}>{stat.count}</h3>
-                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{stat.label}</p>
-                        </motion.div>
-                    ))}
-                </div>
-
-                {/* Quick Actions Bar (Below Cards) */}
-                <div className="flex gap-3 overflow-x-auto hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
-                    <button
-                        onClick={() => navigate('/cp-converted')}
-                        className="flex-none w-28 p-3 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-2 hover:shadow-md transition-all group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Activity className="w-5 h-5" />
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-700 text-center leading-tight">Track Progress</span>
-                    </button>
-
-                    <button
-                        onClick={() => navigate('/cp-resources')}
-                        className="flex-none w-28 p-3 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-2 hover:shadow-md transition-all group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <FileText className="w-5 h-5" />
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-700 text-center leading-tight">Resources</span>
-                    </button>
-
-                    <button
-                        onClick={() => navigate('/cp-quotations')}
-                        className="flex-none w-28 p-3 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-2 hover:shadow-md transition-all group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <FileText className="w-5 h-5" />
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-700 text-center leading-tight">Quotes</span>
-                    </button>
-
-                    <button
-                        onClick={() => navigate('/cp-tutorials')}
-                        className="flex-none w-28 p-3 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-2 hover:shadow-md transition-all group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <PlayCircle className="w-5 h-5" />
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-700 text-center leading-tight">Demos</span>
-                    </button>
-
-                    <button
-                        onClick={() => navigate('/cp-profile')}
-                        className="flex-none w-28 p-3 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-2 hover:shadow-md transition-all group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-gray-50 text-gray-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Users className="w-5 h-5" />
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-700 text-center leading-tight">My Profile</span>
-                    </button>
-                </div>
-
-                {/* 4. Attention Required Section */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                >
-                    <div className="flex items-center gap-2 mb-4 px-1">
-                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                        <h3 className="text-lg font-bold text-gray-900">Attention Required</h3>
+                {/* 3. Quick Stats Grid (Modern Cards) */}
+                <div>
+                    <div className="flex justify-between items-center mb-5 px-1">
+                        <h3 className="text-lg font-bold text-gray-900">Overview</h3>
                     </div>
-
-                    <div className="space-y-3">
-                        <div className="bg-white p-4 rounded-2xl border border-red-100 shadow-sm flex items-center justify-between group cursor-pointer hover:border-red-200 hover:shadow-md transition-all">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 bg-red-50 text-red-600 rounded-xl group-hover:bg-red-100 transition-colors">
-                                    <Clock className="w-5 h-5" />
+                    <div className="grid grid-cols-2 gap-4">
+                        {[
+                            {
+                                label: 'Active Leads',
+                                count: 24,
+                                icon: Activity,
+                                color: 'text-blue-600',
+                                bg: 'bg-blue-50',
+                                path: '/cp-leads',
+                                state: { activeTab: 'all', searchQuery: '' }
+                            },
+                            {
+                                label: 'Hot Leads',
+                                count: 8,
+                                icon: TrendingUp,
+                                color: 'text-[#F6C453]',
+                                bg: 'bg-orange-50',
+                                path: '/cp-leads',
+                                state: { activeTab: 'all', searchQuery: 'Hot' }
+                            },
+                            {
+                                label: 'Shared Leads',
+                                count: 12,
+                                icon: Share2,
+                                color: 'text-purple-600',
+                                bg: 'bg-purple-50',
+                                path: '/cp-shared-leads'
+                            },
+                            {
+                                label: 'Converted',
+                                count: 5,
+                                icon: CheckCircle,
+                                color: 'text-emerald-600',
+                                bg: 'bg-emerald-50',
+                                path: '/cp-converted'
+                            },
+                        ].map((stat, idx) => (
+                            <motion.div
+                                key={idx}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 * idx }}
+                                whileHover={{ y: -4, shadow: "0 10px 30px -10px rgba(0,0,0,0.1)" }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => navigate(stat.path, { state: stat.state })}
+                                className={`${stat.bg} p-5 rounded-[24px] border border-transparent cursor-pointer relative overflow-hidden h-32 flex flex-col justify-between group`}
+                            >
+                                <div className="absolute right-[-10px] top-[-10px] opacity-5 transform rotate-12 scale-150 transition-transform group-hover:scale-125">
+                                    <stat.icon className={`w-24 h-24 ${stat.color}`} />
                                 </div>
-                                <div>
-                                    <p className="font-bold text-gray-900 text-sm">3 Pending Follow-ups</p>
-                                    <p className="text-xs text-gray-500">Scheduled for today</p>
-                                </div>
-                            </div>
-                            <button className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 rounded-lg group-hover:bg-red-100 transition-colors">
-                                View
-                            </button>
-                        </div>
-
-                        <div className="bg-white p-4 rounded-2xl border border-amber-100 shadow-sm flex items-center justify-between group cursor-pointer hover:border-amber-200 hover:shadow-md transition-all">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl group-hover:bg-amber-100 transition-colors">
-                                    <DollarSign className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <p className="font-bold text-gray-900 text-sm">Client Payment Pending</p>
-                                    <p className="text-xs text-gray-500">TechCorp Ltd - ₹25,000</p>
-                                </div>
-                            </div>
-                            <button className="px-3 py-1.5 text-xs font-bold text-amber-600 bg-amber-50 rounded-lg group-hover:bg-amber-100 transition-colors">
-                                Remind
-                            </button>
-                        </div>
-                    </div>
-                </motion.div>
-
-                {/* 5. Reward Progress (Gamification) */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden"
-                >
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mt-10 -mr-10 blur-2xl"></div>
-
-                    <div className="flex justify-between items-end mb-4 relative z-10">
-                        <div>
-                            <p className="text-indigo-200 text-xs font-bold uppercase tracking-wider mb-1">Next Achievement</p>
-                            <h3 className="text-xl font-bold">Gold Partner Status</h3>
-                        </div>
-                        <div className="text-right">
-                            <span className="text-2xl font-bold text-emerald-400">3/5</span>
-                            <p className="text-xs text-gray-400">Conversions</p>
-                        </div>
-                    </div>
-
-                    <div className="relative h-3 bg-gray-700 rounded-full overflow-hidden mb-4">
-                        <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: '60%' }}
-                            transition={{ duration: 1, delay: 0.5 }}
-                            className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-500 to-emerald-300 rounded-full"
-                        ></motion.div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-gray-400">
-                        <p>2 more conversions to unlock</p>
-                        <button className="text-white font-semibold flex items-center gap-1 hover:text-emerald-300 transition-colors">
-                            View Rewards <ArrowRight className="w-3 h-3" />
-                        </button>
-                    </div>
-                </motion.div>
-
-                {/* 6. Converted Clients Snapshot */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                >
-                    <div className="flex items-center justify-between mb-4 px-1">
-                        <h3 className="text-lg font-bold text-gray-900">Recent Conversions</h3>
-                        <button className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">View All</button>
-                    </div>
-
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-100 overflow-hidden">
-                        {[1, 2, 3].map((_, i) => (
-                            <div key={i} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors cursor-pointer">
-                                <div>
-                                    <h4 className="font-bold text-gray-900 text-sm">Global Tech Solutions</h4>
-                                    <p className="text-xs text-gray-500 mt-0.5">Mobile App Development</p>
-                                </div>
-                                <div className="text-right">
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 mb-1">
-                                        PAID
+                                <div className="flex justify-between items-start relative z-10">
+                                    <div className={`w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center ${stat.color}`}>
+                                        <stat.icon className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-3xl font-bold text-gray-900 tracking-tight">
+                                        <CountUp value={stat.count} />
                                     </span>
-                                    <p className="text-xs font-medium text-gray-600">45% Complete</p>
                                 </div>
-                            </div>
+                                <div className="relative z-10">
+                                    <p className={`text-sm font-bold ${stat.color.replace('text-', 'text-').replace('600', '800')}`}>{stat.label}</p>
+                                </div>
+                            </motion.div>
                         ))}
                     </div>
-                </motion.div>
+                </div>
 
-                <div className="grid md:grid-cols-2 gap-6">
-                    {/* 7. Sales Team Lead Card */}
+                {/* 4. Quick Actions (Horizontal Scroll) */}
+                <div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-5 px-1">Quick Actions</h3>
+                    <div className="flex gap-3 overflow-x-auto hide-scrollbar -mx-4 px-4 pb-4">
+                        {[
+                            { label: 'Track', sub: 'Progress', icon: Activity, path: '/cp-converted', color: 'text-blue-600', bg: 'bg-blue-50' },
+                            { label: 'Resources', sub: 'Library', icon: FileText, path: '/cp-resources', color: 'text-orange-600', bg: 'bg-orange-50' },
+                            { label: 'Quotes', sub: 'Create', icon: FileText, path: '/cp-quotations', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                            { label: 'Demos', sub: 'Videos', icon: PlayCircle, path: '/cp-tutorials', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                        ].map((action, idx) => (
+                            <motion.button
+                                key={idx}
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.2 + (0.05 * idx) }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => navigate(action.path)}
+                                className="flex-none w-20 h-24 flex flex-col items-center justify-center gap-2"
+                            >
+                                <div className={`w-12 h-12 rounded-full ${action.bg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                                    <action.icon className={`w-6 h-6 ${action.color}`} />
+                                </div>
+                                <div className="text-center">
+                                    <span className="block text-xs font-bold text-gray-900">{action.label}</span>
+                                    <span className="block text-[10px] text-gray-400 font-medium mt-0.5">{action.sub}</span>
+                                </div>
+                            </motion.button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* 5. Alerts & Gamification */}
+                <div className="grid gap-6">
+                    {/* Attention */}
+                    <div className="bg-white rounded-[24px] p-1 border border-gray-100 shadow-sm">
+                        <div className="p-4 flex items-center justify-between border-b border-gray-50 pb-4 mb-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                <h3 className="font-bold text-gray-900">Attention Required</h3>
+                            </div>
+                            <span className="px-2 py-1 rounded-lg bg-gray-100 text-[10px] font-bold text-gray-500">2 ITEMS</span>
+                        </div>
+
+                        <div className="px-4 pb-4 space-y-3">
+                            <div className="flex items-center justify-between p-3 rounded-xl bg-red-50/50 border border-red-50 hover:bg-red-50 transition-colors cursor-pointer group">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-white rounded-lg text-red-500 shadow-sm">
+                                        <Clock className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-gray-900 text-sm">3 Pending Follow-ups</p>
+                                        <p className="text-xs text-red-500 font-medium">Due Today</p>
+                                    </div>
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-red-300 group-hover:text-red-500 transition-colors" />
+                            </div>
+
+                            <motion.div
+                                whileTap={{ scale: 0.98 }}
+                                className="flex items-center justify-between p-3 rounded-xl bg-amber-50/50 border border-amber-50 hover:bg-amber-50 transition-colors cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-white rounded-lg text-amber-500 shadow-sm">
+                                        <DollarSign className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-gray-900 text-sm">Payment Pending</p>
+                                        <p className="text-xs text-amber-600 font-medium">TechCorp - ₹25k</p>
+                                    </div>
+                                </div>
+                                <button className="px-3 py-1.5 text-[10px] font-bold text-white bg-amber-500 rounded-lg shadow-sm hover:bg-amber-600 transition-colors">
+                                    Remind
+                                </button>
+                            </motion.div>
+                        </div>
+                    </div>
+
+                    {/* Gamification Card */}
                     <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.6 }}
-                        onClick={() => navigate('/cp-my-team')}
-                        className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 cursor-pointer hover:border-indigo-200 hover:shadow-md transition-all group"
+                        whileHover={{ y: -2 }}
+                        className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-[28px] p-6 text-white shadow-xl relative overflow-hidden"
                     >
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Your Sales Manager</p>
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg">
-                                RS
+                        <div className="absolute top-0 right-0 w-40 h-40 bg-[#F6C453] rounded-full -mt-10 -mr-10 blur-[60px] opacity-20 animate-pulse"></div>
+
+                        <div className="flex justify-between items-end mb-6 relative z-10">
+                            <div>
+                                <span className="inline-block px-2 py-1 bg-white/10 backdrop-blur-sm rounded-lg text-[10px] font-bold uppercase tracking-wider mb-2 text-[#F6C453] border border-white/5">
+                                    Current Rank
+                                </span>
+                                <h3 className="text-xl font-bold">Silver Partner</h3>
                             </div>
-                            <div className="flex-1">
-                                <h4 className="font-bold text-gray-900">Rahul Sharma</h4>
-                                <p className="text-xs text-gray-500">Senior Sales Lead</p>
-                            </div>
-                            <div className="flex gap-2">
-                                <button className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors">
-                                    <Phone className="w-4 h-4" />
-                                </button>
-                                <button className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
-                                    <Mail className="w-4 h-4" />
-                                </button>
+                            <div className="text-right">
+                                <span className="text-3xl font-bold text-[#F6C453]"><CountUp value={3} />/5</span>
+                                <p className="text-xs text-gray-400 font-medium mt-1">Conversions</p>
                             </div>
                         </div>
-                    </motion.div>
 
-                    {/* 8. Latest Admin Updates */}
+                        <div className="relative h-2.5 bg-gray-700/50 rounded-full overflow-hidden mb-5 backdrop-blur-sm border border-white/5">
+                            <motion.div
+                                initial={{ width: 0 }}
+                                whileInView={{ width: '60%' }}
+                                transition={{ duration: 1.5, ease: "easeOut" }}
+                                className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#F6C453] to-orange-500 rounded-full shadow-[0_0_10px_rgba(246,196,83,0.5)]"
+                            ></motion.div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs font-medium text-gray-300">
+                            <p>Unlock <span className="text-white font-bold">Gold Badge</span> in 2 sales</p>
+                            <motion.button
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => navigate('/cp-rewards')}
+                                className="flex items-center gap-1 text-[#F6C453] hover:text-white transition-colors"
+                            >
+                                View Rewards <ArrowRight className="w-3 h-3" />
+                            </motion.button>
+                        </div>
+                    </motion.div>
+                </div>
+
+                {/* 6. Activity & Team Lead */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Recent Conversions */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.7 }}
-                        className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200"
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.1 }}
+                        className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm order-1 lg:order-1 h-full"
                     >
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold text-gray-900">Latest Updates</h3>
-                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-bold text-gray-900">Recent Conversions</h3>
+                            <button onClick={() => navigate('/cp-converted')} className="text-sm font-bold text-indigo-600 hover:text-indigo-700">View All</button>
                         </div>
                         <div className="space-y-4">
-                            <div className="flex gap-3 items-start">
-                                <div className="mt-1 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></div>
+                            {[1, 2, 3].map((item, i) => (
+                                <div key={i} className="flex items-center justify-between pb-4 border-b border-gray-50 last:border-0 last:pb-0">
+                                    <div>
+                                        <h4 className="font-bold text-gray-900 text-sm">Global Tech Solutions</h4>
+                                        <p className="text-xs text-gray-400 mt-1">Mobile App Development</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="mb-1">
+                                            <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[10px] font-bold rounded">PAID</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 font-medium">45% Complete</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </motion.div>
+
+                    {/* Sales Manager Card */}
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        whileInView={{ opacity: 1, scale: 1 }}
+                        viewport={{ once: true }}
+                        whileHover={{ y: -5 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="bg-white rounded-[24px] p-8 border border-gray-100 shadow-sm flex flex-col justify-center order-2 lg:order-2 h-full"
+                    >
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-8">YOUR SALES MANAGER</p>
+                        
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xl">
+                                    RS
+                                </div>
                                 <div>
-                                    <p className="text-sm font-medium text-gray-900 leading-tight">New commission structure effective from Feb 1st</p>
-                                    <p className="text-xs text-gray-400 mt-1">Today, 10:30 AM</p>
+                                    <h3 className="font-bold text-gray-900 text-lg">Rahul Sharma</h3>
+                                    <p className="text-sm text-gray-500 font-medium">Senior Sales Lead</p>
                                 </div>
                             </div>
-                            <div className="flex gap-3 items-start">
-                                <div className="mt-1 w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0"></div>
-                                <div>
-                                    <p className="text-sm font-medium text-gray-600 leading-tight">Updated project proposal templates available</p>
-                                    <p className="text-xs text-gray-400 mt-1">Yesterday</p>
-                                </div>
+                            
+                            <div className="flex gap-3">
+                                <button className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600 hover:bg-green-100 transition-colors">
+                                    <Phone className="w-5 h-5" />
+                                </button>
+                                <button className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 hover:bg-blue-100 transition-colors">
+                                    <Mail className="w-5 h-5" />
+                                </button>
                             </div>
                         </div>
                     </motion.div>
                 </div>
 
-                <div className="pt-8 pb-4 text-center">
-                    <p className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1">Total Lifetime Earnings</p>
-                    <h2 className="text-2xl font-bold text-gray-900">₹ 1,45,200</h2>
-                    <p className="text-gray-400 text-xs mt-2">Partner since Dec 2023</p>
-                </div>
 
             </main>
-
-            {/* 9. Quick Actions (Fixed Bottom Bar on Mobile, Floating on Desktop) */}
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 lg:hidden shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-40">
-                <div className="grid grid-cols-4 gap-2">
-                    <button
-                        onClick={() => navigate('/cp-leads')}
-                        className="flex flex-col items-center gap-1 p-2 rounded-xl text-gray-500 hover:bg-gray-50 active:bg-gray-100"
-                    >
-                        <Plus className="w-6 h-6 text-indigo-600" />
-                        <span className="text-[10px] font-medium text-indigo-600">Add Lead</span>
-                    </button>
-                    <button className="flex flex-col items-center gap-1 p-2 rounded-xl text-gray-500 hover:bg-gray-50 active:bg-gray-100">
-                        <Share2 className="w-6 h-6" />
-                        <span className="text-[10px] font-medium">Share</span>
-                    </button>
-                    <button
-                        onClick={() => navigate('/cp-quotations')}
-                        className="flex flex-col items-center gap-1 p-2 rounded-xl text-gray-500 hover:bg-gray-50 active:bg-gray-100"
-                    >
-                        <FileText className="w-6 h-6" />
-                        <span className="text-[10px] font-medium">Quotes</span>
-                    </button>
-                    <button className="flex flex-col items-center gap-1 p-2 rounded-xl text-gray-500 hover:bg-gray-50 active:bg-gray-100">
-                        <PlayCircle className="w-6 h-6" />
-                        <span className="text-[10px] font-medium">Demo</span>
-                    </button>
-                </div>
-            </div>
-
-            {/* Desktop Floating Action Button */}
-            <div className="hidden lg:flex fixed bottom-8 right-8 gap-3 z-40">
-                <button
-                    onClick={() => navigate('/cp-leads')}
-                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-full shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 hover:scale-105 active:scale-95 transition-all font-semibold"
-                >
-                    <Plus className="w-5 h-5" />
-                    <span>Add New Lead</span>
-                </button>
-            </div>
-
         </div>
     )
 }

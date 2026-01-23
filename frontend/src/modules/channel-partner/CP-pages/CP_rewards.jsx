@@ -28,10 +28,10 @@ const REWARDS_DATA = {
 
 const CP_rewards = () => {
   return (
-    <div className="min-h-screen bg-[#F3F4F6] pb-24 md:pb-0">
+    <div className="min-h-screen bg-[#F9F9F9] pb-24 md:pb-0 font-sans text-[#1E1E1E]">
       <CP_navbar />
 
-      <div className="max-w-4xl mx-auto pt-20 px-4 md:px-8">
+      <main className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-8 space-y-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Rewards & Achievements</h1>
@@ -39,7 +39,7 @@ const CP_rewards = () => {
         </div>
 
         {/* Level Progress Card */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-8 relative overflow-hidden">
+        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 mb-8 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-10 opacity-5">
             <FiAward className="w-64 h-64 text-yellow-500" />
           </div>
@@ -120,8 +120,8 @@ const CP_rewards = () => {
         </div>
 
         {/* Recent History */}
-        <h3 className="font-bold text-lg text-gray-800 mb-4">Reward History</h3>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <h3 className="font-bold text-lg text-gray-900 mb-4">Reward History</h3>
+        <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden">
           {REWARDS_DATA.history.map((item, index) => (
             <div key={item.id} className={`flex items-center justify-between p-4 ${index !== REWARDS_DATA.history.length - 1 ? 'border-b border-gray-50' : ''}`}>
               <div className="flex items-center gap-3">
@@ -138,7 +138,7 @@ const CP_rewards = () => {
           ))}
         </div>
 
-      </div>
+      </main>
     </div>
   );
 };

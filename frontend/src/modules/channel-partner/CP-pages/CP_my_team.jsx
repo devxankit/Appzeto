@@ -46,7 +46,7 @@ const CP_my_team = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="min-h-screen bg-gray-50/50 pb-20 font-sans">
+        <div className="min-h-screen bg-[#F9F9F9] pb-20 font-sans text-[#1E1E1E]">
             <CP_navbar />
 
             {/* Sticky Header */}
@@ -86,7 +86,7 @@ const CP_my_team = () => {
                         </span>
                     </div>
 
-                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-indigo-100 relative overflow-hidden">
+                    <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 relative overflow-hidden">
                         {/* Decoration */}
                         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
 
@@ -140,7 +140,7 @@ const CP_my_team = () => {
 
                         <div className="grid gap-3">
                             {TEAM_MEMBERS.map(member => (
-                                <div key={member.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+                                <div key={member.id} className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center justify-between">
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center text-gray-500 font-bold text-sm">
                                             {member.initials}
@@ -163,7 +163,7 @@ const CP_my_team = () => {
                 )}
 
                 {/* 3. Guidelines */}
-                <section className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-5 border border-gray-200">
+                <section className="bg-white rounded-[24px] p-6 border border-gray-100 shadow-sm">
                     <h3 className="font-bold text-gray-900 text-sm mb-3 flex items-center gap-2">
                         <Clock className="w-4 h-4 text-gray-500" /> Communication Guidelines
                     </h3>

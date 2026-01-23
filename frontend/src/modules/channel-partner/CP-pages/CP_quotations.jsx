@@ -86,7 +86,7 @@ const QuotationCard = ({ quote, onNavigate, onShare }) => {
             layout
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 relative overflow-hidden group hover:shadow-md transition-all"
+            className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 relative overflow-hidden group hover:shadow-md transition-all"
         >
             {/* Badge */}
             {quote.tag && (
@@ -158,7 +158,7 @@ const CP_quotations = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50/50 pb-20 font-sans">
+        <div className="min-h-screen bg-[#F9F9F9] pb-20 font-sans text-[#1E1E1E]">
             <CP_navbar />
 
             {/* Sticky Header */}
