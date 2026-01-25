@@ -119,7 +119,7 @@ const channelPartnerSchema = new mongoose.Schema({
 });
 
 // Index for better performance
-channelPartnerSchema.index({ phoneNumber: 1 });
+// Note: phoneNumber index is created automatically by unique: true, so we don't need explicit index
 channelPartnerSchema.index({ email: 1 });
 channelPartnerSchema.index({ isActive: 1 });
 

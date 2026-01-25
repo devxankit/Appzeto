@@ -426,7 +426,7 @@ const Admin_dashboard = () => {
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
         <Admin_sidebar />
-        <div className="ml-64 pt-20 p-8">
+        <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">
             <Loading size="large" className="h-96" />
           </div>
@@ -440,7 +440,7 @@ const Admin_dashboard = () => {
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
         <Admin_sidebar />
-        <div className="ml-64 pt-20 p-8">
+        <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">
             <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
               <AlertTriangle className="h-12 w-12 text-red-600 mx-auto mb-4" />
@@ -525,7 +525,7 @@ const Admin_dashboard = () => {
       <Admin_sidebar />
       
       {/* Main Content */}
-      <div className="ml-64 pt-20 p-6">
+      <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-6">
         <div className="max-w-7xl mx-auto space-y-6">
 
           {/* Header Section */}
@@ -536,7 +536,7 @@ const Admin_dashboard = () => {
             className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6"
           >
             <div className="space-y-2">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-800 bg-clip-text text-transparent">
+              <h1 className="text-2xl lg:text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-800 bg-clip-text text-transparent">
                 Dashboard Overview
               </h1>
               <p className="text-gray-600 text-lg">
@@ -624,7 +624,7 @@ const Admin_dashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 lg:gap-4"
           >
             {/* Today Earnings */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-emerald-200/50">
@@ -771,7 +771,7 @@ const Admin_dashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3"
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
           >
             {/* Monthly Revenue */}
             <div className="bg-white/80 backdrop-blur-sm rounded-xl p-3 shadow-md border border-emerald-200/50 hover:shadow-lg transition-all duration-300">
@@ -882,7 +882,7 @@ const Admin_dashboard = () => {
             className="grid grid-cols-1 lg:grid-cols-2 gap-6"
           >
             {/* Revenue Trend Chart */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-200/50">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 lg:p-6 shadow-lg border border-gray-200/50">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Revenue Trend</h3>
@@ -936,7 +936,7 @@ const Admin_dashboard = () => {
             </div>
 
             {/* Project Status Distribution */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-200/50">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 lg:p-6 shadow-lg border border-gray-200/50">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Project Status</h3>
@@ -1001,7 +1001,7 @@ const Admin_dashboard = () => {
             className="grid grid-cols-1 lg:grid-cols-2 gap-8"
           >
             {/* Quick Actions */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-gray-200/50 h-full flex flex-col">
+            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-4 lg:p-6 shadow-xl border border-gray-200/50 h-full flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Quick Actions</h3>
@@ -1079,7 +1079,7 @@ const Admin_dashboard = () => {
                 </div>
 
             {/* Recent Activity & Notifications */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-gray-200/50 h-full flex flex-col">
+            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-4 lg:p-6 shadow-xl border border-gray-200/50 h-full flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Recent Activity</h3>

@@ -627,7 +627,7 @@ const Admin_leaderboard = () => {
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
         <Admin_sidebar />
-        <div className="ml-64 pt-20 p-8">
+        <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">
             <Loading size="large" className="h-96" />
           </div>
@@ -645,7 +645,7 @@ const Admin_leaderboard = () => {
       <Admin_sidebar />
       
       {/* Main Content */}
-      <div className="ml-64 pt-20 p-8">
+      <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
         <div className="max-w-7xl mx-auto">
           
           {/* Header */}

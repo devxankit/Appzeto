@@ -2068,7 +2068,7 @@ const Admin_sales_management = () => {
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
         <Admin_sidebar />
-        <div className="ml-64 pt-20 p-8">
+        <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">
             <Loading size="large" className="h-96" />
           </div>
@@ -2086,20 +2086,20 @@ const Admin_sales_management = () => {
       <Admin_sidebar />
       
       {/* Main Content */}
-      <div className="ml-64 pt-20 p-6">
-        <div className="max-w-7xl mx-auto">
+      <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-6">
+        <div className="max-w-7xl mx-auto space-y-4 lg:space-y-6">
           {/* Header */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between">
+          <div className="mb-4 lg:mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-1">
+                <h1 className="text-xl lg:text-2xl font-bold text-gray-900 mb-1">
                   Sales Management
                 </h1>
-                <p className="text-gray-600">
+                <p className="text-sm lg:text-base text-gray-600">
                   Monitor sales performance, leads, and sales team activities.
                 </p>
               </div>
-              <div className="flex items-center space-x-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                 <button
                   onClick={() => setShowAddLeadModal(true)}
                   className="flex items-center space-x-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
@@ -2130,7 +2130,7 @@ const Admin_sales_management = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"
+            className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4 mb-4"
           >
             {loadingStatistics ? (
               <div className="col-span-full flex items-center justify-center py-8">
@@ -2230,7 +2230,7 @@ const Admin_sales_management = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
+            className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4 mb-4 lg:mb-6"
           >
             {loadingStatistics ? (
               <div className="col-span-full flex items-center justify-center py-8">

@@ -27,7 +27,7 @@ const rewardTagSchema = new mongoose.Schema({
   timestamps: true
 });
 
-rewardTagSchema.index({ name: 1 }, { unique: true });
+// Note: name index is created automatically by unique: true, so we don't need explicit index
 rewardTagSchema.index({ isActive: 1 });
 
 module.exports = mongoose.model('RewardTag', rewardTagSchema);

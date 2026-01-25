@@ -27,7 +27,7 @@ const cpWalletSchema = new mongoose.Schema({
 });
 
 // Indexes
-cpWalletSchema.index({ channelPartner: 1 });
+// Note: channelPartner index is created automatically by unique: true, so we don't need explicit index
 
 // Transaction schema (embedded or separate - using separate for better querying)
 const cpWalletTransactionSchema = new mongoose.Schema({

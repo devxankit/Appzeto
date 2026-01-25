@@ -417,7 +417,7 @@ const Admin_requests_management = () => {
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
         <Admin_sidebar />
-        <div className="ml-64 pt-20 p-8">
+        <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">
             <Loading size="large" className="h-96" />
           </div>
@@ -435,31 +435,31 @@ const Admin_requests_management = () => {
       <Admin_sidebar />
       
       {/* Main Content */}
-      <div className="ml-64 pt-20 p-8">
+      <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
         <div className="max-w-7xl mx-auto">
           
           {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
+          <div className="mb-6 lg:mb-8">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                <h1 className="text-xl lg:text-3xl font-bold text-gray-900 mb-2">
                   Requests Management
                 </h1>
-                <p className="text-gray-600">
+                <p className="text-sm lg:text-base text-gray-600">
                   Comprehensive oversight and management of all system requests
                 </p>
               </div>
-              <div className="flex items-center space-x-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                  className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm"
                 >
                   <FiPlus className="text-sm" />
                   <span>Create Request</span>
                 </button>
                 <button
                   onClick={loadData}
-                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                  className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm"
                 >
                   <FiRefreshCw className="text-sm" />
                   <span>Refresh</span>
@@ -469,17 +469,17 @@ const Admin_requests_management = () => {
           </div>
 
           {/* Statistics Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-5 gap-3 lg:gap-4 mb-6 lg:mb-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+              className="bg-white rounded-lg p-3 lg:p-4 shadow-sm border border-gray-200"
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Requests</p>
-                  <p className="text-2xl font-bold text-gray-900">{statistics.totalRequests}</p>
+                  <p className="text-lg lg:text-2xl font-bold text-gray-900">{statistics.totalRequests}</p>
                 </div>
                 <FiFileText className="text-gray-600 text-xl" />
               </div>
@@ -489,7 +489,7 @@ const Admin_requests_management = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+              className="bg-white rounded-lg p-3 lg:p-4 shadow-sm border border-gray-200"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -504,7 +504,7 @@ const Admin_requests_management = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+              className="bg-white rounded-lg p-3 lg:p-4 shadow-sm border border-gray-200"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -519,7 +519,7 @@ const Admin_requests_management = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+              className="bg-white rounded-lg p-3 lg:p-4 shadow-sm border border-gray-200"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -534,7 +534,7 @@ const Admin_requests_management = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+              className="bg-white rounded-lg p-3 lg:p-4 shadow-sm border border-gray-200"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -547,12 +547,12 @@ const Admin_requests_management = () => {
           </div>
 
           {/* Module Statistics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 mb-6 lg:mb-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+              className="bg-white rounded-lg p-3 lg:p-4 shadow-sm border border-gray-200"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -567,7 +567,7 @@ const Admin_requests_management = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.6 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+              className="bg-white rounded-lg p-3 lg:p-4 shadow-sm border border-gray-200"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -582,7 +582,7 @@ const Admin_requests_management = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.7 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+              className="bg-white rounded-lg p-3 lg:p-4 shadow-sm border border-gray-200"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -597,7 +597,7 @@ const Admin_requests_management = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.8 }}
-              className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+              className="bg-white rounded-lg p-3 lg:p-4 shadow-sm border border-gray-200"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -611,8 +611,8 @@ const Admin_requests_management = () => {
 
           {/* Direction Tabs */}
           <div className="mb-4">
-            <div className="border-b border-gray-200">
-              <nav className="-mb-px flex space-x-8">
+            <div className="border-b border-gray-200 overflow-x-auto">
+              <nav className="-mb-px flex flex-nowrap space-x-4 lg:space-x-8 min-w-max lg:min-w-0 px-2 lg:px-0">
                 {[
                   { id: 'incoming', label: 'Incoming Requests', icon: FiArrowDown },
                   { id: 'outgoing', label: 'Outgoing Requests', icon: FiArrowUp },
@@ -643,8 +643,8 @@ const Admin_requests_management = () => {
 
           {/* Navigation Tabs */}
           <div className="mb-6">
-            <div className="border-b border-gray-200">
-              <nav className="-mb-px flex space-x-8">
+            <div className="border-b border-gray-200 overflow-x-auto">
+              <nav className="-mb-px flex flex-nowrap space-x-4 lg:space-x-8 min-w-max lg:min-w-0 px-2 lg:px-0">
                 {[
                   { id: 'all', label: 'All Modules', icon: FiFileText },
                   { id: 'client', label: 'Client Requests', icon: FiUsers },
@@ -704,7 +704,7 @@ const Admin_requests_management = () => {
           </div>
 
           {/* Content Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4">
             {paginatedData.map((request, index) => {
               const TypeIcon = getTypeIcon(request.type)
               const ModuleIcon = getModuleIcon(request.module)
@@ -715,7 +715,7 @@ const Admin_requests_management = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
+                  className="bg-white rounded-lg p-3 lg:p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
                 >
                   <div className="space-y-3">
                     {/* Header */}
@@ -837,7 +837,7 @@ const Admin_requests_management = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] lg:max-w-2xl max-h-[95vh] overflow-hidden flex flex-col m-4"
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -859,7 +859,7 @@ const Admin_requests_management = () => {
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4 lg:p-6">
               <div className="space-y-4">
                 {/* Request Details */}
                 <div className="bg-gray-50 rounded-lg p-4">
@@ -958,7 +958,7 @@ const Admin_requests_management = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] lg:max-w-2xl max-h-[95vh] overflow-hidden flex flex-col m-4"
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -980,7 +980,7 @@ const Admin_requests_management = () => {
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4 lg:p-6">
               <div className="space-y-6">
                 {/* Response Type Selection */}
                 <div>
@@ -1101,7 +1101,7 @@ const Admin_requests_management = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-hidden flex flex-col"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] lg:max-w-3xl max-h-[95vh] overflow-hidden flex flex-col m-4"
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -1123,7 +1123,7 @@ const Admin_requests_management = () => {
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4 lg:p-6">
               <div className="space-y-6">
                 {/* Request Type */}
                 <div>

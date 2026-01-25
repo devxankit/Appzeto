@@ -2578,7 +2578,7 @@ const Admin_hr_management = () => {
         ) : (
           <Admin_sidebar />
         )}
-        <div className="ml-64 pt-20 p-8">
+        <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">
             <Loading size="large" className="h-96" />
           </div>
@@ -2597,8 +2597,8 @@ const Admin_hr_management = () => {
       )}
       
       {/* Main Content */}
-      <div className="ml-64 pt-20 p-6">
-        <div className="max-w-7xl mx-auto space-y-6">
+      <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-6">
+        <div className="max-w-7xl mx-auto space-y-4 lg:space-y-6">
           {/* Header Section */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}

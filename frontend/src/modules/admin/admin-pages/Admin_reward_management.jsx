@@ -396,7 +396,7 @@ const Admin_reward_management = () => {
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
         <Admin_sidebar />
-        <div className="ml-64 pt-20 p-8">
+        <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
           <div className="max-w-6xl mx-auto">
             <Loading size="large" className="h-96" />
           </div>
@@ -410,7 +410,7 @@ const Admin_reward_management = () => {
       <Admin_navbar />
       <Admin_sidebar />
 
-      <div className="ml-64 pt-20 p-8">
+      <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
         <div className="max-w-6xl mx-auto space-y-8">
           <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>

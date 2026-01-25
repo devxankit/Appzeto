@@ -14,17 +14,18 @@ const HRProtectedRoute = ({ children }) => {
     return <Navigate to="/admin-login" state={{ from: location }} replace />
   }
   
-  // Check if user is HR
+  // Check if user is HR or Admin (admin can also access HR management)
   const adminData = adminStorage.get()
-  if (!adminData || adminData.role !== 'hr') {
-    // If not HR, redirect to appropriate page
-    if (adminData?.role === 'admin') {
-      return <Navigate to="/admin-dashboard" replace />
-    }
+  if (!adminData) {
     return <Navigate to="/admin-login" replace />
   }
   
-  // If authenticated and is HR, render the protected component
+  // Allow both HR and Admin roles to access HR management
+  if (adminData.role !== 'hr' && adminData.role !== 'admin') {
+    return <Navigate to="/admin-login" replace />
+  }
+  
+  // If authenticated and is HR or Admin, render the protected component
   return children
 }
 

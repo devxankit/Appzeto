@@ -1794,7 +1794,7 @@ function getFinancialSummary(project) {
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
         <Admin_sidebar />
-        <div className="ml-64 pt-20 p-8">
+        <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">
             <Loading size="large" className="h-96" />
           </div>
@@ -1812,8 +1812,8 @@ function getFinancialSummary(project) {
       <Admin_sidebar />
       
       {/* Main Content */}
-      <div className="ml-64 pt-20 p-8">
-        <div className="max-w-7xl mx-auto">
+      <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
+        <div className="max-w-7xl mx-auto space-y-4 lg:space-y-6">
           {/* Error Display */}
           {error && (
             <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">

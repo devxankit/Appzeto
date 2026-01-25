@@ -919,7 +919,7 @@ const Admin_notice_board = () => {
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
         <Admin_sidebar />
-        <div className="ml-64 pt-20 p-8">
+        <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">
             <Loading size="large" className="h-96" />
           </div>
@@ -934,7 +934,7 @@ const Admin_notice_board = () => {
       <Admin_sidebar />
       
       {/* Main Content */}
-      <div className="ml-64 pt-20 p-6">
+      <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           
           {/* Header Section */}
@@ -944,23 +944,23 @@ const Admin_notice_board = () => {
             transition={{ duration: 0.6 }}
             className="mb-8"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">Notice Board Management</h1>
-                <p className="text-gray-600 mt-2">Create and manage notices for all employees</p>
+                <h1 className="text-xl lg:text-3xl font-bold text-gray-900">Notice Board Management</h1>
+                <p className="text-sm lg:text-base text-gray-600 mt-2">Create and manage notices for all employees</p>
               </div>
-              <div className="flex items-center space-x-4">
-                <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl">
-                  <span className="text-sm font-semibold">Total: {statistics.total}</span>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 sm:space-x-0">
+                <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-center sm:text-left">
+                  <span className="text-xs sm:text-sm font-semibold">Total: {statistics.total}</span>
                 </div>
-                <div className="bg-white text-gray-600 px-6 py-3 rounded-xl border border-gray-200">
-                  <span className="text-sm font-semibold">Showing: {filteredNotices.length}</span>
+                <div className="bg-white text-gray-600 px-4 sm:px-6 py-2 sm:py-3 rounded-xl border border-gray-200 text-center sm:text-left">
+                  <span className="text-xs sm:text-sm font-semibold">Showing: {filteredNotices.length}</span>
                 </div>
                 <Button
                   onClick={handleCreateNotice}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl flex items-center space-x-2"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl flex items-center justify-center space-x-2 text-sm"
                 >
-                  <FiPlus className="h-5 w-5" />
+                  <FiPlus className="h-4 w-4 sm:h-5 sm:w-5" />
                   <span>Create Notice</span>
                 </Button>
               </div>
@@ -974,23 +974,23 @@ const Admin_notice_board = () => {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="mb-6"
           >
-            <div className="flex items-center space-x-4 mb-6">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 mb-4 lg:mb-6">
               <div className="flex-1 relative">
-                <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-blue-600 text-xl" />
+                <FiSearch className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-blue-600 text-lg sm:text-xl" />
                 <input
                   type="text"
-                  placeholder="Search notices by title, content, or author..."
+                  placeholder="Search notices..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 text-lg"
+                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 text-sm sm:text-lg"
                 />
               </div>
             </div>
             
             {/* Tabs Navigation */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="border-b border-gray-200">
-                <nav className="flex flex-wrap gap-1 px-4">
+              <div className="border-b border-gray-200 overflow-x-auto">
+                <nav className="flex flex-nowrap gap-1 px-2 lg:px-4 min-w-max lg:min-w-0">
                   {tabs.map((tab) => {
                     const TabIcon = tab.icon
                     const isActive = selectedTab === tab.id
@@ -1020,14 +1020,14 @@ const Admin_notice_board = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+            className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6 mb-6 lg:mb-8"
           >
             <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-              <CardContent className="p-6">
+              <CardContent className="p-4 lg:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-blue-600 text-sm font-medium">Total Notices</p>
-                    <p className="text-2xl font-bold text-blue-900">{statistics.total}</p>
+                    <p className="text-lg lg:text-2xl font-bold text-blue-900">{statistics.total}</p>
                   </div>
                   <FiFileText className="h-8 w-8 text-blue-600" />
                 </div>
@@ -1035,11 +1035,11 @@ const Admin_notice_board = () => {
             </Card>
 
             <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-              <CardContent className="p-6">
+              <CardContent className="p-4 lg:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-green-600 text-sm font-medium">Published</p>
-                    <p className="text-2xl font-bold text-green-900">{statistics.published}</p>
+                    <p className="text-lg lg:text-2xl font-bold text-green-900">{statistics.published}</p>
                   </div>
                   <FiCheckCircle className="h-8 w-8 text-green-600" />
                 </div>
@@ -1047,11 +1047,11 @@ const Admin_notice_board = () => {
             </Card>
 
             <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-              <CardContent className="p-6">
+              <CardContent className="p-4 lg:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-orange-600 text-sm font-medium">Pinned</p>
-                    <p className="text-2xl font-bold text-orange-900">{statistics.pinned}</p>
+                    <p className="text-lg lg:text-2xl font-bold text-orange-900">{statistics.pinned}</p>
                   </div>
                   <FiTarget className="h-8 w-8 text-orange-600" />
                 </div>
@@ -1059,11 +1059,11 @@ const Admin_notice_board = () => {
             </Card>
 
             <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-              <CardContent className="p-6">
+              <CardContent className="p-4 lg:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-purple-600 text-sm font-medium">Drafts</p>
-                    <p className="text-2xl font-bold text-purple-900">{statistics.draft}</p>
+                    <p className="text-lg lg:text-2xl font-bold text-purple-900">{statistics.draft}</p>
                   </div>
                   <FiEdit3 className="h-8 w-8 text-purple-600" />
                 </div>
@@ -1072,7 +1072,7 @@ const Admin_notice_board = () => {
           </motion.div>
 
           {/* Notices Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
             {filteredNotices.map((notice, index) => (
               <NoticeCard 
                 key={notice.id} 
@@ -1093,7 +1093,7 @@ const Admin_notice_board = () => {
                 <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
                   <FiFileText className="text-gray-400 text-3xl" />
                 </div>
-                <h3 className="text-2xl font-semibold text-gray-900 mb-4">No notices found</h3>
+                <h3 className="text-lg lg:text-2xl font-semibold text-gray-900 mb-4">No notices found</h3>
                 <p className="text-gray-600 text-lg mb-6">
                   {searchTerm ? 'Try adjusting your search criteria or filters.' : 'No notices match your current filters.'}
                 </p>
@@ -1124,18 +1124,18 @@ const Admin_notice_board = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl p-4 lg:p-6 w-full max-w-[95vw] lg:max-w-2xl max-h-[90vh] overflow-y-auto m-4"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-900">Create New Notice</h3>
+              <div className="flex items-center justify-between mb-4 lg:mb-6">
+                <h3 className="text-xl lg:text-2xl font-bold text-gray-900">Create New Notice</h3>
                 <button onClick={closeModals} className="p-2 hover:bg-gray-100 rounded-full">
                   <FiX className="h-5 w-5" />
                 </button>
               </div>
 
-              <form onSubmit={(e) => { e.preventDefault(); handleSaveNotice(); }} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <form onSubmit={(e) => { e.preventDefault(); handleSaveNotice(); }} className="space-y-3 lg:space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 lg:gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Notice Type</label>
                     <Combobox
@@ -1210,7 +1210,7 @@ const Admin_notice_board = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Image Upload</label>
                     
                     {!formData.imageUrl ? (
-                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors">
+                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 lg:p-6 text-center hover:border-blue-400 transition-colors">
                         <input
                           type="file"
                           accept="image/*"
@@ -1254,7 +1254,7 @@ const Admin_notice_board = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Video Upload</label>
                     
                     {!formData.videoUrl ? (
-                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors">
+                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 lg:p-6 text-center hover:border-blue-400 transition-colors">
                         <input
                           type="file"
                           accept="video/*"
@@ -1341,11 +1341,11 @@ const Admin_notice_board = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl p-4 lg:p-6 w-full max-w-[95vw] lg:max-w-2xl max-h-[90vh] overflow-y-auto m-4"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-900">Edit Notice</h3>
+              <div className="flex items-center justify-between mb-4 lg:mb-6">
+                <h3 className="text-xl lg:text-2xl font-bold text-gray-900">Edit Notice</h3>
                 <button onClick={closeModals} className="p-2 hover:bg-gray-100 rounded-full">
                   <FiX className="h-5 w-5" />
                 </button>
@@ -1427,7 +1427,7 @@ const Admin_notice_board = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Image Upload</label>
                     
                     {!formData.imageUrl ? (
-                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors">
+                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 lg:p-6 text-center hover:border-blue-400 transition-colors">
                         <input
                           type="file"
                           accept="image/*"
@@ -1471,7 +1471,7 @@ const Admin_notice_board = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Video Upload</label>
                     
                     {!formData.videoUrl ? (
-                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors">
+                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 lg:p-6 text-center hover:border-blue-400 transition-colors">
                         <input
                           type="file"
                           accept="video/*"
@@ -1558,7 +1558,7 @@ const Admin_notice_board = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-md"
+              className="bg-white rounded-2xl p-4 lg:p-6 w-full max-w-[95vw] lg:max-w-md m-4"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">

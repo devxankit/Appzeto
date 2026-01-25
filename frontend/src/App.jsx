@@ -130,11 +130,13 @@ import Admin_hr_management from './modules/admin/admin-pages/Admin_hr_management
 import Admin_channel_partner_management from './modules/admin/admin-pages/Admin_channel_partner_management'
 import Admin_notice_board from './modules/admin/admin-pages/Admin_notice_board'
 import ResetPassword from './components/auth/ResetPassword'
+import { AdminSidebarProvider } from './modules/admin/admin-contexts/AdminSidebarContext'
 
 function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
+        <AdminSidebarProvider>
         <Router>
           <Routes>
           //Login pages start here //
@@ -652,6 +654,7 @@ function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Router>
+        </AdminSidebarProvider>
       </ToastProvider>
     </ErrorBoundary>
   )
