@@ -31,6 +31,9 @@ export { default as adminRecurringExpenseService } from './adminRecurringExpense
 // Notice Management Service
 export { default as adminNoticeService } from './adminNoticeService';
 
+// Quotation Management Service
+export { adminQuotationService } from './adminQuotationService';
+
 // Base API Service (for internal use)
 export { default as baseApiService } from './baseApiService';
 

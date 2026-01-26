@@ -13,16 +13,16 @@ const REWARDS_DATA = {
   totalConversions: 8,
   conversionsForNextLevel: 10,
   progress: 80, // 8 out of 10
-  currentRewardValue: '$500',
+  currentRewardValue: '₹500',
   milestones: [
-    { id: 1, title: 'First Sale', requirement: '1 Conversion', reward: '$150', status: 'unlocked' },
-    { id: 2, title: 'Rising Star', requirement: '5 Conversions', reward: '$350', status: 'unlocked' },
-    { id: 3, title: 'Pro Partner', requirement: '10 Conversions', reward: '$1,000', status: 'in-progress' },
-    { id: 4, title: 'Elite Club', requirement: '25 Conversions', reward: '$3,000', status: 'locked' },
+    { id: 1, title: 'First Sale', requirement: '1 Conversion', reward: '₹150', status: 'unlocked' },
+    { id: 2, title: 'Rising Star', requirement: '5 Conversions', reward: '₹350', status: 'unlocked' },
+    { id: 3, title: 'Pro Partner', requirement: '10 Conversions', reward: '₹1,000', status: 'in-progress' },
+    { id: 4, title: 'Elite Club', requirement: '25 Conversions', reward: '₹3,000', status: 'locked' },
   ],
   history: [
-    { id: 101, title: 'Rising Star Bonus', date: '2 days ago', amount: '+$350' },
-    { id: 102, title: 'First Sale Bonus', date: '15 Sep, 2023', amount: '+$150' },
+    { id: 101, title: 'Rising Star Bonus', date: '2 days ago', amount: '+₹350' },
+    { id: 102, title: 'First Sale Bonus', date: '15 Sep, 2023', amount: '+₹150' },
   ]
 };
 

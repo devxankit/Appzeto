@@ -16,6 +16,13 @@ const channelPartnerSchema = new mongoose.Schema({
     trim: true,
     match: [/^[0-9]{10}$/, 'Please enter a valid 10-digit phone number']
   },
+  partnerId: {
+    type: String,
+    trim: true,
+    unique: true,
+    sparse: true, // Allows multiple null values but enforces uniqueness for non-null values
+    maxlength: [50, 'Partner ID cannot exceed 50 characters']
+  },
   email: {
     type: String,
     trim: true,
@@ -113,6 +120,21 @@ const channelPartnerSchema = new mongoose.Schema({
   lastActivity: {
     type: Date,
     default: Date.now
+  },
+  // Sales Team Lead Assignment
+  salesTeamLeadId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Sales',
+    default: null
+  },
+  salesTeamLeadName: {
+    type: String,
+    trim: true,
+    default: null
+  },
+  teamLeadAssignedDate: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
@@ -122,6 +144,7 @@ const channelPartnerSchema = new mongoose.Schema({
 // Note: phoneNumber index is created automatically by unique: true, so we don't need explicit index
 channelPartnerSchema.index({ email: 1 });
 channelPartnerSchema.index({ isActive: 1 });
+channelPartnerSchema.index({ partnerId: 1 });
 
 // Virtual for account lock status
 channelPartnerSchema.virtual('isLocked').get(function() {

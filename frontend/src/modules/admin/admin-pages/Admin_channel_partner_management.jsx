@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
@@ -21,7 +21,6 @@ import {
   AlertCircle,
   RefreshCw,
   Handshake,
-  DollarSign,
   Award,
   FileText,
   UserCheck,
@@ -41,13 +40,156 @@ import {
   Smartphone,
   ShoppingCart,
   Database,
-  Shield
+  Shield,
+  ChevronDown,
+  Check
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 import Loading from '../../../components/ui/loading'
-import { adminChannelPartnerService } from '../admin-services'
+import { adminChannelPartnerService, adminQuotationService } from '../admin-services'
+import adminSalesService from '../admin-services/adminSalesService'
 import { useToast } from '../../../contexts/ToastContext'
+
+// Custom Searchable Dropdown Component
+const SearchableDropdown = ({ 
+  options = [], 
+  value, 
+  onChange, 
+  placeholder = "Select an option...",
+  getOptionLabel = (option) => option?.label || option?.name || String(option),
+  getOptionValue = (option) => option?.value || option?.id || option?._id || option,
+  className = "",
+  disabled = false,
+  maxHeight = "max-h-60"
+}) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const dropdownRef = useRef(null)
+
+  const filteredOptions = options.filter(option => {
+    const label = getOptionLabel(option)
+    return label && label.toLowerCase().includes(searchTerm.toLowerCase())
+  })
+
+  const selectedOption = options.find(option => {
+    const optionValue = getOptionValue(option)
+    return optionValue === value || String(optionValue) === String(value)
+  })
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false)
+        setSearchTerm('')
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen])
+
+  const handleSelect = (option) => {
+    const optionValue = getOptionValue(option)
+    onChange(optionValue)
+    setIsOpen(false)
+    setSearchTerm('')
+  }
+
+  return (
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+        className={`
+          w-full px-4 py-2.5 border border-gray-300 rounded-lg 
+          bg-white text-left text-sm
+          focus:ring-2 focus:ring-blue-500 focus:border-transparent
+          disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-50
+          flex items-center justify-between
+          transition-all duration-200
+          ${isOpen ? 'ring-2 ring-blue-500 border-blue-500' : 'hover:border-gray-400'}
+        `}
+      >
+        <span className={`truncate ${!selectedOption ? 'text-gray-500' : 'text-gray-900'}`}>
+          {selectedOption ? getOptionLabel(selectedOption) : placeholder}
+        </span>
+        <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ml-2 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className={`absolute top-full left-0 right-0 z-50 mt-2 ${maxHeight} overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl`}
+          >
+            {/* Search Input */}
+            <div className="border-b border-gray-100 p-3 bg-gray-50">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-10 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Scrollable Options List */}
+            <div className="overflow-y-auto max-h-[240px]">
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map((option, index) => {
+                  const optionValue = getOptionValue(option)
+                  const optionLabel = getOptionLabel(option)
+                  const isSelected = optionValue === value || String(optionValue) === String(value)
+                  
+                  return (
+                    <motion.button
+                      key={optionValue || index}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.02 }}
+                      type="button"
+                      onClick={() => handleSelect(option)}
+                      className={`
+                        w-full px-4 py-3 text-left text-sm
+                        transition-colors duration-150
+                        flex items-center justify-between
+                        ${isSelected 
+                          ? 'bg-blue-50 text-blue-700 font-medium' 
+                          : 'hover:bg-gray-50 text-gray-900'
+                        }
+                        border-b border-gray-100 last:border-b-0
+                      `}
+                    >
+                      <span className="truncate flex-1">{optionLabel}</span>
+                      {isSelected && (
+                        <Check className="h-4 w-4 text-blue-600 flex-shrink-0 ml-2" />
+                      )}
+                    </motion.button>
+                  )
+                })
+              ) : (
+                <div className="px-4 py-6 text-sm text-gray-500 text-center">
+                  {searchTerm ? 'No results found' : 'No options available'}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
 
 const Admin_channel_partner_management = () => {
   const [loading, setLoading] = useState(true)
@@ -126,23 +268,63 @@ const Admin_channel_partner_management = () => {
   const [leadStatusFilter, setLeadStatusFilter] = useState('all')
   const [showAssignLeadModal, setShowAssignLeadModal] = useState(false)
   const [showLeadDetailsModal, setShowLeadDetailsModal] = useState(false)
+  const [showLeadsListModal, setShowLeadsListModal] = useState(false)
   const [selectedLead, setSelectedLead] = useState(null)
+  const [selectedCPForLeads, setSelectedCPForLeads] = useState(null)
+  const [selectedStatusForLeads, setSelectedStatusForLeads] = useState(null)
+  const [leadsBreakdownData, setLeadsBreakdownData] = useState([])
+  const [leadsBreakdownLoading, setLeadsBreakdownLoading] = useState(false)
+  const [leadsBreakdownPage, setLeadsBreakdownPage] = useState(1)
+  const [leadsBreakdownPerPage, setLeadsBreakdownPerPage] = useState(10)
   
   // Wallet section states
   const [selectedCPWallet, setSelectedCPWallet] = useState('all')
   const [transactionTypeFilter, setTransactionTypeFilter] = useState('all')
   const [showTransactionModal, setShowTransactionModal] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState(null)
+  const [walletData, setWalletData] = useState([])
+  const [walletLoading, setWalletLoading] = useState(false)
   
   // Rewards section states
   const [showAssignRewardModal, setShowAssignRewardModal] = useState(false)
   const [showMilestoneModal, setShowMilestoneModal] = useState(false)
   const [showRewardDetailsModal, setShowRewardDetailsModal] = useState(false)
+  const [showEditRewardModal, setShowEditRewardModal] = useState(false)
+  const [showDeleteRewardModal, setShowDeleteRewardModal] = useState(false)
   const [selectedReward, setSelectedReward] = useState(null)
+  const [rewardsData, setRewardsData] = useState([])
+  const [rewardsLoading, setRewardsLoading] = useState(false)
+  const [rewardStatistics, setRewardStatistics] = useState({
+    totalRewards: 0,
+    activeRewards: 0,
+    totalDistributed: 0,
+    totalAmountDistributed: 0
+  })
+  const [rewardFormData, setRewardFormData] = useState({
+    name: '',
+    description: '',
+    level: '',
+    requirement: {
+      type: 'conversions',
+      value: '',
+      description: ''
+    },
+    rewardAmount: '',
+    order: 0,
+    isActive: true
+  })
   
-  // Team section states
-  const [showAssignTeamModal, setShowAssignTeamModal] = useState(false)
-  const [selectedCPForTeam, setSelectedCPForTeam] = useState(null)
+  // Converted section states
+  const [showConvertedClientModal, setShowConvertedClientModal] = useState(false)
+  const [selectedConvertedClient, setSelectedConvertedClient] = useState(null)
+  
+  // Team Lead Assignment section states
+  const [showAssignTeamLeadModal, setShowAssignTeamLeadModal] = useState(false)
+  const [selectedCPForTeamLead, setSelectedCPForTeamLead] = useState(null)
+  const [salesTeamLeads, setSalesTeamLeads] = useState([])
+  const [teamLeadAssignments, setTeamLeadAssignments] = useState([])
+  const [loadingTeamLeads, setLoadingTeamLeads] = useState(false)
+  const [selectedTeamLeadId, setSelectedTeamLeadId] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
@@ -152,6 +334,7 @@ const Admin_channel_partner_management = () => {
     name: '',
     email: '',
     phoneNumber: '',
+    partnerId: '',
     status: 'active',
     dateOfBirth: '',
     gender: '',
@@ -206,17 +389,34 @@ const Admin_channel_partner_management = () => {
     { id: 'c3', clientName: 'Nexus Logistics', cpName: 'Amit Patel', cpId: 'cp3', projectType: 'CRM Implementation', status: 'Planning', progress: 10, totalValue: 25000, paidAmount: 0, pendingAmount: 25000, paymentStatus: 'Payment Pending', commissionEarned: 2500, commissionStatus: 'Pending' }
   ])
   
-  const [mockQuotations] = useState([
-    { id: 'q1', title: 'Business Website', category: 'Website', price: '₹25,000', timesShared: 12, lastShared: '2024-01-18', sharedBy: ['Rajesh Kumar', 'Priya Sharma'] },
-    { id: 'q2', title: 'Hybrid Mobile App', category: 'Mobile', price: '₹85,000', timesShared: 8, lastShared: '2024-01-19', sharedBy: ['Amit Patel', 'Rajesh Kumar'] },
-    { id: 'q3', title: 'E-commerce Starter', category: 'E-commerce', price: '₹60,000', timesShared: 5, lastShared: '2024-01-15', sharedBy: ['Priya Sharma'] }
-  ])
+  // Quotations section states
+  const [quotations, setQuotations] = useState([])
+  const [quotationsTotal, setQuotationsTotal] = useState(0)
+  const [quotationsLoading, setQuotationsLoading] = useState(false)
+  const [quotationStatistics, setQuotationStatistics] = useState({
+    total: 0,
+    active: 0,
+    inactive: 0,
+    totalShared: 0,
+    categoryCounts: {}
+  })
+  const [quotationSearchTerm, setQuotationSearchTerm] = useState('')
+  const [quotationStatusFilter, setQuotationStatusFilter] = useState('all')
+  // Removed category filter since categories are now dynamic
+  const [showQuotationModal, setShowQuotationModal] = useState(false)
+  const [editingQuotation, setEditingQuotation] = useState(null)
+  const [quotationFormData, setQuotationFormData] = useState({
+    title: '',
+    category: '',
+    description: '',
+    price: '',
+    currency: 'INR',
+    status: 'active',
+    pdfDocument: null
+  })
   
-  const [mockTeamAssignments] = useState([
-    { id: 'ta1', cpName: 'Rajesh Kumar', cpId: 'cp1', salesLead: 'Rahul Sharma', teamMembers: ['Priya Verma', 'Amit Kumar'], assignedDate: '2024-01-01' },
-    { id: 'ta2', cpName: 'Priya Sharma', cpId: 'cp2', salesLead: 'Rahul Sharma', teamMembers: ['Priya Verma'], assignedDate: '2024-01-05' },
-    { id: 'ta3', cpName: 'Amit Patel', cpId: 'cp3', salesLead: null, teamMembers: [], assignedDate: null }
-  ])
+  // Team lead assignments - will be loaded from API or initialized from partners
+  // Format: { cpId, cpName, salesTeamLeadId, salesTeamLeadName, assignedDate }
   
   const [mockMilestones] = useState([
     { id: 'm1', title: 'First Sale', requirement: '1 Conversion', reward: 150, status: 'active' },
@@ -304,6 +504,128 @@ const Admin_channel_partner_management = () => {
     }
   }
 
+  const loadWalletData = async () => {
+    setWalletLoading(true)
+    try {
+      const response = await adminChannelPartnerService.getAllChannelPartnerWallets({
+        page: walletPage,
+        limit: walletPerPage,
+        search: searchTerm || undefined
+      })
+      setWalletData(response.data || [])
+    } catch (error) {
+      console.error('Error loading wallet data:', error)
+      addToast({ type: 'error', message: 'Failed to load wallet data' })
+    } finally {
+      setWalletLoading(false)
+    }
+  }
+
+  const loadRewardsData = async () => {
+    setRewardsLoading(true)
+    try {
+      const [rewardsResponse, statisticsResponse] = await Promise.all([
+        adminChannelPartnerService.getAllCPRewards({
+          page: rewardsPage,
+          limit: rewardsPerPage
+        }),
+        adminChannelPartnerService.getCPRewardStatistics()
+      ])
+      setRewardsData(rewardsResponse.data || [])
+      setRewardStatistics(statisticsResponse.data || {
+        totalRewards: 0,
+        activeRewards: 0,
+        totalDistributed: 0,
+        totalAmountDistributed: 0
+      })
+    } catch (error) {
+      console.error('Error loading rewards data:', error)
+      addToast({ type: 'error', message: 'Failed to load rewards data' })
+    } finally {
+      setRewardsLoading(false)
+    }
+  }
+
+  const handleSaveReward = async () => {
+    try {
+      if (!rewardFormData.name || !rewardFormData.level || !rewardFormData.requirement.value || !rewardFormData.rewardAmount) {
+        addToast({ type: 'error', message: 'Please fill all required fields' })
+        return
+      }
+
+      // Prepare data with proper number conversion
+      const rewardData = {
+        ...rewardFormData,
+        requirement: {
+          ...rewardFormData.requirement,
+          value: Number(rewardFormData.requirement.value)
+        },
+        rewardAmount: Number(rewardFormData.rewardAmount),
+        order: Number(rewardFormData.order) || 0
+      }
+
+      if (showEditRewardModal && selectedReward) {
+        await adminChannelPartnerService.updateCPReward(selectedReward._id || selectedReward.id, rewardData)
+        addToast({ type: 'success', message: 'Reward updated successfully' })
+      } else {
+        await adminChannelPartnerService.createCPReward(rewardData)
+        addToast({ type: 'success', message: 'Reward created successfully' })
+      }
+
+      setShowMilestoneModal(false)
+      setShowEditRewardModal(false)
+      setSelectedReward(null)
+      setRewardFormData({
+        name: '',
+        description: '',
+        level: '',
+        requirement: {
+          type: 'conversions',
+          value: '',
+          description: ''
+        },
+        rewardAmount: '',
+        order: 0,
+        isActive: true
+      })
+      await loadRewardsData()
+    } catch (error) {
+      console.error('Error saving reward:', error)
+      addToast({ type: 'error', message: error.response?.data?.message || 'Failed to save reward' })
+    }
+  }
+
+  const handleEditReward = (reward) => {
+    setSelectedReward(reward)
+    setRewardFormData({
+      name: reward.name || '',
+      description: reward.description || '',
+      level: reward.level || '',
+      requirement: {
+        type: reward.requirement?.type || 'conversions',
+        value: reward.requirement?.value || '',
+        description: reward.requirement?.description || ''
+      },
+      rewardAmount: reward.rewardAmount || '',
+      order: reward.order || 0,
+      isActive: reward.isActive !== undefined ? reward.isActive : true
+    })
+    setShowEditRewardModal(true)
+  }
+
+  const handleDeleteReward = async () => {
+    try {
+      await adminChannelPartnerService.deleteCPReward(selectedReward._id || selectedReward.id)
+      addToast({ type: 'success', message: 'Reward deleted successfully' })
+      setShowDeleteRewardModal(false)
+      setSelectedReward(null)
+      await loadRewardsData()
+    } catch (error) {
+      console.error('Error deleting reward:', error)
+      addToast({ type: 'error', message: error.response?.data?.message || 'Failed to delete reward' })
+    }
+  }
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-800 border-green-200'
@@ -357,6 +679,7 @@ const Admin_channel_partner_management = () => {
       name: '',
       email: '',
       phoneNumber: '',
+      partnerId: '',
       status: 'active',
       dateOfBirth: '',
       gender: '',
@@ -379,9 +702,11 @@ const Admin_channel_partner_management = () => {
       name: partner.name,
       email: partner.email || '',
       phoneNumber: partner.phoneNumber,
+      partnerId: partner.partnerId || '',
       status: partner.status,
       dateOfBirth: formatDateForInput(partner.dateOfBirth),
       joiningDate: formatDateForInput(partner.joiningDate),
+      gender: partner.gender || '',
       document: partner.document || null,
       companyName: partner.companyName || '',
       address: partner.address || {
@@ -431,6 +756,7 @@ const Admin_channel_partner_management = () => {
         name: '',
         email: '',
         phoneNumber: '',
+        partnerId: '',
         status: 'active',
         dateOfBirth: '',
         gender: '',
@@ -508,10 +834,59 @@ const Admin_channel_partner_management = () => {
   useEffect(() => {
     setWalletPage(1)
   }, [selectedCPWallet, transactionTypeFilter])
+
+  // Load wallet data when wallet tab is active
+  useEffect(() => {
+    if (activeTab === 'wallet') {
+      loadWalletData()
+    }
+  }, [activeTab, walletPage, walletPerPage, searchTerm])
   
   useEffect(() => {
     setRewardsPage(1)
   }, [])
+
+  // Load rewards data when rewards tab is active
+  useEffect(() => {
+    if (activeTab === 'rewards') {
+      loadRewardsData()
+    }
+  }, [activeTab, rewardsPage, rewardsPerPage])
+
+  // Load leads breakdown data when leads tab is active
+  const loadLeadsBreakdown = async () => {
+    setLeadsBreakdownLoading(true)
+    try {
+      const response = await adminChannelPartnerService.getChannelPartnerLeadsBreakdown({
+        page: leadsBreakdownPage,
+        limit: leadsBreakdownPerPage
+      })
+      setLeadsBreakdownData(response.data || [])
+    } catch (error) {
+      console.error('Error loading leads breakdown:', error)
+      addToast({ type: 'error', message: 'Failed to load leads breakdown' })
+    } finally {
+      setLeadsBreakdownLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'leads') {
+      loadLeadsBreakdown()
+    }
+  }, [activeTab, leadsBreakdownPage, leadsBreakdownPerPage])
+
+  const handleViewLeadsByStatus = (cpData, status) => {
+    setSelectedCPForLeads(cpData)
+    setSelectedStatusForLeads(status)
+    setShowLeadsListModal(true)
+  }
+
+  const handleViewSharedLeads = (cpData, type) => {
+    setSelectedCPForLeads(cpData)
+    setSelectedStatusForLeads(type) // 'sharedWithSales' or 'receivedFromSales'
+    setShowLeadsListModal(true)
+  }
   
   useEffect(() => {
     setConvertedPage(1)
@@ -525,15 +900,266 @@ const Admin_channel_partner_management = () => {
     setTeamPage(1)
   }, [])
 
+  // Load sales team leads (only team leads)
+  const loadSalesTeamLeads = async () => {
+    try {
+      setLoadingTeamLeads(true)
+      const response = await adminSalesService.getAllSalesTeam()
+      if (response.success && response.data) {
+        // Filter only team leads
+        const leads = response.data.filter(member => member.isTeamLead === true || member.role === 'team_lead' || member.role === 'Team Lead')
+        setSalesTeamLeads(leads)
+      }
+    } catch (error) {
+      console.error('Error loading sales team leads:', error)
+      addToast('Failed to load sales team leads', 'error')
+    } finally {
+      setLoadingTeamLeads(false)
+    }
+  }
+
+  // Load team lead assignments from channel partners
+  const loadTeamLeadAssignments = async () => {
+    try {
+      const response = await adminChannelPartnerService.getAllChannelPartners({})
+      console.log('Raw channel partners response:', response)
+      if (response.success && response.data) {
+        const assignments = response.data.map(cp => {
+          const cpId = cp.id || cp._id || (cp.data && (cp.data.id || cp.data._id))
+          const cpName = cp.name || (cp.data && cp.data.name)
+          const salesTeamLeadId = cp.salesTeamLeadId || cp.assignedSalesTeamLeadId || (cp.data && (cp.data.salesTeamLeadId || cp.data.assignedSalesTeamLeadId)) || null
+          const salesTeamLeadName = cp.salesTeamLeadName || cp.assignedSalesTeamLeadName || (cp.data && (cp.data.salesTeamLeadName || cp.data.assignedSalesTeamLeadName)) || null
+          const assignedDate = cp.teamLeadAssignedDate || (cp.data && cp.data.teamLeadAssignedDate) || null
+          
+          return {
+            cpId: cpId,
+            cpName: cpName,
+            salesTeamLeadId: salesTeamLeadId ? String(salesTeamLeadId) : null,
+            salesTeamLeadName: salesTeamLeadName,
+            assignedDate: assignedDate
+          }
+        })
+        console.log('Team lead assignments loaded:', assignments)
+        setTeamLeadAssignments(assignments)
+      } else {
+        console.error('Failed to load channel partners:', response)
+        setTeamLeadAssignments([])
+      }
+    } catch (error) {
+      console.error('Error loading team lead assignments:', error)
+      addToast('Failed to load team lead assignments', 'error')
+      setTeamLeadAssignments([])
+    }
+  }
+
+  // Assign team lead to channel partner
+  const handleAssignTeamLead = async () => {
+    if (!selectedCPForTeamLead || !selectedTeamLeadId) {
+      addToast('Please select a channel partner and sales team lead', 'error')
+      return
+    }
+
+    try {
+      const teamLead = salesTeamLeads.find(lead => (lead.id || lead._id) === selectedTeamLeadId)
+      if (!teamLead) {
+        addToast('Sales team lead not found', 'error')
+        return
+      }
+
+      // Update channel partner with team lead assignment
+      const updateData = {
+        salesTeamLeadId: selectedTeamLeadId,
+        salesTeamLeadName: teamLead.name,
+        teamLeadAssignedDate: new Date().toISOString()
+      }
+
+      console.log('Assigning team lead:', { cpId: selectedCPForTeamLead.cpId, updateData })
+      const response = await adminChannelPartnerService.updateChannelPartner(selectedCPForTeamLead.cpId, updateData)
+      console.log('Update response:', response)
+      
+      if (response.success) {
+        addToast('Team lead assigned successfully', 'success')
+        setShowAssignTeamLeadModal(false)
+        setSelectedCPForTeamLead(null)
+        setSelectedTeamLeadId('')
+        // Wait a bit for the backend to save, then reload
+        setTimeout(async () => {
+          await loadTeamLeadAssignments()
+          await loadData() // Refresh main data
+        }, 500)
+      } else {
+        console.error('Failed to assign team lead:', response)
+        addToast(response.message || 'Failed to assign team lead', 'error')
+      }
+    } catch (error) {
+      console.error('Error assigning team lead:', error)
+      addToast('Failed to assign team lead', 'error')
+    }
+  }
+
+  // Load team leads when team tab is active
+  useEffect(() => {
+    if (activeTab === 'team') {
+      loadSalesTeamLeads()
+      loadTeamLeadAssignments()
+    }
+  }, [activeTab])
+
+  // Load quotations when quotations tab is active
+  useEffect(() => {
+    if (activeTab === 'quotations') {
+      loadQuotations()
+      loadQuotationStatistics()
+    }
+  }, [activeTab, quotationsPage, quotationsPerPage, quotationSearchTerm, quotationStatusFilter])
+
+  // Load quotations
+  const loadQuotations = async () => {
+    setQuotationsLoading(true)
+    try {
+      const response = await adminQuotationService.getAllQuotations({
+        page: quotationsPage,
+        limit: quotationsPerPage,
+        search: quotationSearchTerm || undefined,
+        status: quotationStatusFilter !== 'all' ? quotationStatusFilter : undefined,
+        // Category filter removed - categories are now dynamic
+      })
+      
+      if (response.success) {
+        const formattedQuotations = response.data.map(quote => 
+          adminQuotationService.formatQuotationForDisplay(quote)
+        )
+        setQuotations(formattedQuotations)
+        setQuotationsTotal(response.total || 0)
+      }
+    } catch (error) {
+      console.error('Error loading quotations:', error)
+      addToast('Failed to load quotations', 'error')
+    } finally {
+      setQuotationsLoading(false)
+    }
+  }
+
+  // Load quotation statistics
+  const loadQuotationStatistics = async () => {
+    try {
+      const response = await adminQuotationService.getQuotationStatistics()
+      if (response.success) {
+        setQuotationStatistics(response.data)
+      }
+    } catch (error) {
+      console.error('Error loading quotation statistics:', error)
+    }
+  }
+
+  // Handle create quotation
+  const handleCreateQuotation = async () => {
+    try {
+      console.log('Creating quotation with data:', quotationFormData)
+      const response = await adminQuotationService.createQuotation(quotationFormData)
+      console.log('Create quotation response:', response)
+      if (response.success) {
+        addToast({ type: 'success', message: 'Quotation created successfully' })
+        setShowQuotationModal(false)
+        resetQuotationForm()
+        loadQuotations()
+        loadQuotationStatistics()
+      } else {
+        addToast({ type: 'error', message: response.message || 'Failed to create quotation' })
+      }
+    } catch (error) {
+      console.error('Error creating quotation:', error)
+      addToast({ type: 'error', message: error.message || 'Failed to create quotation' })
+    }
+  }
+
+  // Handle update quotation
+  const handleUpdateQuotation = async () => {
+    if (!editingQuotation) return
+    
+    try {
+      console.log('Updating quotation with data:', quotationFormData)
+      const response = await adminQuotationService.updateQuotation(editingQuotation.id, quotationFormData)
+      console.log('Update quotation response:', response)
+      if (response.success) {
+        addToast({ type: 'success', message: 'Quotation updated successfully' })
+        setShowQuotationModal(false)
+        setEditingQuotation(null)
+        resetQuotationForm()
+        loadQuotations()
+        loadQuotationStatistics()
+      } else {
+        addToast({ type: 'error', message: response.message || 'Failed to update quotation' })
+      }
+    } catch (error) {
+      console.error('Error updating quotation:', error)
+      addToast({ type: 'error', message: error.message || 'Failed to update quotation' })
+    }
+  }
+
+  // Handle delete quotation
+  const handleDeleteQuotation = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this quotation?')) return
+    
+    try {
+      const response = await adminQuotationService.deleteQuotation(id)
+      if (response.success) {
+        addToast({ type: 'success', message: 'Quotation deleted successfully' })
+        loadQuotations()
+        loadQuotationStatistics()
+      } else {
+        addToast({ type: 'error', message: response.message || 'Failed to delete quotation' })
+      }
+    } catch (error) {
+      console.error('Error deleting quotation:', error)
+      addToast({ type: 'error', message: error.message || 'Failed to delete quotation' })
+    }
+  }
+
+  // Reset quotation form
+  const resetQuotationForm = () => {
+    setQuotationFormData({
+      title: '',
+      category: '',
+      description: '',
+      price: '',
+      currency: 'INR',
+      status: 'active',
+      pdfDocument: null
+    })
+  }
+
+  // Open create modal
+  const openCreateQuotationModal = () => {
+    setEditingQuotation(null)
+    resetQuotationForm()
+    setShowQuotationModal(true)
+  }
+
+  // Open edit modal
+  const openEditQuotationModal = (quotation) => {
+    setEditingQuotation(quotation)
+    setQuotationFormData({
+      title: quotation.title,
+      category: quotation.category,
+      description: quotation.description || '',
+      price: quotation.price,
+      currency: quotation.currency || 'INR',
+      status: quotation.status,
+      pdfDocument: quotation.pdfDocument
+    })
+    setShowQuotationModal(true)
+  }
+
   // Main section tabs
   const mainTabs = [
     { key: 'partners', label: 'Partners', icon: Handshake },
     { key: 'leads', label: 'Leads', icon: Users },
-    { key: 'wallet', label: 'Wallet', icon: DollarSign },
+    { key: 'wallet', label: 'Wallet', icon: WalletIcon },
     { key: 'rewards', label: 'Rewards', icon: Award },
     { key: 'converted', label: 'Converted', icon: CheckCircle },
     { key: 'quotations', label: 'Quotations', icon: FileText },
-    { key: 'team', label: 'Team', icon: UserCheck }
+    { key: 'team', label: 'Assign Team Leads', icon: UserCheck }
   ]
   
   // Partner status tabs (for partners section only)
@@ -587,7 +1213,7 @@ const Admin_channel_partner_management = () => {
                 {activeTab === 'rewards' && 'Manage rewards, milestones, and achievements'}
                 {activeTab === 'converted' && 'Track converted clients and project progress'}
                 {activeTab === 'quotations' && 'View quotations shared by channel partners'}
-                {activeTab === 'team' && 'Manage sales team assignments to channel partners'}
+                {activeTab === 'team' && 'Assign sales team leads to channel partners'}
               </p>
             </div>
             {activeTab === 'partners' && (
@@ -690,7 +1316,7 @@ const Admin_channel_partner_management = () => {
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-3">
                   <div className="p-2 rounded-lg bg-purple-500/10">
-                    <DollarSign className="h-4 w-4 text-purple-600" />
+                    <WalletIcon className="h-4 w-4 text-purple-600" />
                   </div>
                 </div>
                 <div>
@@ -850,8 +1476,8 @@ const Admin_channel_partner_management = () => {
                       </div>
                     ) : (
                       <>
-                        <div className="overflow-x-auto">
-                          <table className="w-full min-w-[640px]">
+                        <div className="overflow-x-auto -mx-3 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          <table className="w-full min-w-[640px] border-collapse">
                             <thead>
                               <tr className="border-b border-gray-200">
                                 <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Name</th>
@@ -960,125 +1586,164 @@ const Admin_channel_partner_management = () => {
               <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
-                    Leads Management
+                    Channel Partner Leads Breakdown
                   </CardTitle>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-                    <select
-                      value={leadStatusFilter}
-                      onChange={(e) => setLeadStatusFilter(e.target.value)}
-                      className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm w-full sm:w-auto"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="Hot">Hot</option>
-                      <option value="Connected">Connected</option>
-                      <option value="Converted">Converted</option>
-                      <option value="Lost">Lost</option>
-                    </select>
                     <Button
-                      onClick={() => setShowAssignLeadModal(true)}
+                      onClick={loadLeadsBreakdown}
+                      variant="outline"
                       className="gap-2 w-full sm:w-auto text-sm"
                       size="sm"
+                      disabled={leadsBreakdownLoading}
                     >
-                      <Plus className="h-4 w-4" />
-                      <span className="hidden sm:inline">Assign Lead</span>
-                      <span className="sm:hidden">Assign</span>
+                      <RefreshCw className={`h-4 w-4 ${leadsBreakdownLoading ? 'animate-spin' : ''}`} />
+                      <span className="hidden sm:inline">Refresh</span>
                     </Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="p-3 lg:p-6">
-                <div className="overflow-x-auto -mx-3 lg:mx-0">
-                  <table className="w-full min-w-[800px]">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Lead Name</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 hidden sm:table-cell">Channel Partner</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Project Type</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Status</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 hidden md:table-cell">Value</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 hidden lg:table-cell">Created</th>
-                        <th className="text-right py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mockLeads
-                        .filter(lead => {
-                          if (leadStatusFilter !== 'all' && lead.status !== leadStatusFilter) return false
-                          return true
-                        })
-                        .slice((leadsPage - 1) * leadsPerPage, leadsPage * leadsPerPage)
-                        .map((lead) => (
-                          <tr key={lead.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <div>
-                                <p className="text-sm font-semibold text-gray-900">{lead.name}</p>
-                                <p className="text-xs text-gray-500">{lead.phone}</p>
-                              </div>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4 hidden sm:table-cell">
-                              <p className="text-xs lg:text-sm text-gray-600 truncate max-w-[120px] lg:max-w-none">{lead.cpName}</p>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <p className="text-xs lg:text-sm text-gray-600 truncate max-w-[150px] lg:max-w-none">{lead.projectType}</p>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                                lead.status === 'Hot' ? 'bg-red-100 text-red-800' :
-                                lead.status === 'Connected' ? 'bg-blue-100 text-blue-800' :
-                                lead.status === 'Converted' ? 'bg-green-100 text-green-800' :
-                                lead.status === 'Lost' ? 'bg-gray-100 text-gray-800' :
-                                'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {lead.status}
-                              </span>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4 hidden md:table-cell">
-                              <p className="text-xs lg:text-sm font-semibold text-gray-900">{lead.value}</p>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4 hidden lg:table-cell">
-                              <p className="text-xs lg:text-sm text-gray-600">{formatDate(lead.createdDate)}</p>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <div className="flex items-center justify-end space-x-1 lg:space-x-2">
-                                <button
-                                  onClick={() => { setSelectedLead(lead); setShowLeadDetailsModal(true); }}
-                                  className="text-gray-400 hover:text-blue-600 p-2 rounded hover:bg-blue-50 transition-all"
-                                  title="View"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => { setSelectedLead(lead); setShowAssignLeadModal(true); }}
-                                  className="text-gray-400 hover:text-green-600 p-2 rounded hover:bg-green-50 transition-all"
-                                  title="Assign"
-                                >
-                                  <Share2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </td>
+                {leadsBreakdownLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loading size="medium" />
+                  </div>
+                ) : leadsBreakdownData.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">No channel partner leads data found</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto -mx-3 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                      <table className="w-full min-w-[1000px] border-collapse">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[180px]">Channel Partner</th>
+                            <th className="text-center py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[70px] whitespace-normal">
+                              <div className="leading-tight">Hot</div>
+                            </th>
+                            <th className="text-center py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[80px] whitespace-normal">
+                              <div className="leading-tight">Connected</div>
+                            </th>
+                            <th className="text-center py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[80px] whitespace-normal">
+                              <div className="leading-tight">Converted</div>
+                            </th>
+                            <th className="text-center py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[70px] whitespace-normal">
+                              <div className="leading-tight">Lost</div>
+                            </th>
+                            <th className="text-center py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px] whitespace-normal">
+                              <div className="leading-tight">Shared<br />with Sales</div>
+                            </th>
+                            <th className="text-center py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[110px] whitespace-normal">
+                              <div className="leading-tight">Received<br />from Sales</div>
+                            </th>
+                            <th className="text-center py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px] whitespace-normal">
+                              <div className="leading-tight">Collected</div>
+                            </th>
+                            <th className="text-center py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px] whitespace-normal">
+                              <div className="leading-tight">Outstanding</div>
+                            </th>
+                            <th className="text-center py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px] whitespace-normal">
+                              <div className="leading-tight">Total<br />Revenue</div>
+                            </th>
                           </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-                {(() => {
-                  const filteredLeads = mockLeads.filter(lead => {
-                    if (leadStatusFilter !== 'all' && lead.status !== leadStatusFilter) return false
-                    return true
-                  })
-                  const totalLeadsPages = Math.ceil(filteredLeads.length / leadsPerPage)
-                  return (
+                        </thead>
+                        <tbody>
+                          {leadsBreakdownData
+                            .slice((leadsBreakdownPage - 1) * leadsBreakdownPerPage, leadsBreakdownPage * leadsBreakdownPerPage)
+                            .map((cpData) => (
+                              <tr key={cpData.channelPartner.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
+                                      {cpData.channelPartner.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-semibold text-gray-900">{cpData.channelPartner.name}</p>
+                                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                                        <span className="text-xs text-gray-500">{cpData.channelPartner.phoneNumber}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4 text-center">
+                                  <button
+                                    onClick={() => handleViewLeadsByStatus(cpData, 'hot')}
+                                    className="text-red-600 hover:text-red-800 font-bold hover:underline transition-colors"
+                                  >
+                                    {cpData.leadCounts.hot || 0}
+                                  </button>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4 text-center">
+                                  <button
+                                    onClick={() => handleViewLeadsByStatus(cpData, 'connected')}
+                                    className="text-blue-600 hover:text-blue-800 font-bold hover:underline transition-colors"
+                                  >
+                                    {cpData.leadCounts.connected || 0}
+                                  </button>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4 text-center">
+                                  <button
+                                    onClick={() => handleViewLeadsByStatus(cpData, 'converted')}
+                                    className="text-green-600 hover:text-green-800 font-bold hover:underline transition-colors"
+                                  >
+                                    {cpData.leadCounts.converted || 0}
+                                  </button>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4 text-center">
+                                  <button
+                                    onClick={() => handleViewLeadsByStatus(cpData, 'lost')}
+                                    className="text-gray-600 hover:text-gray-800 font-bold hover:underline transition-colors"
+                                  >
+                                    {cpData.leadCounts.lost || 0}
+                                  </button>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4 text-center">
+                                  <button
+                                    onClick={() => handleViewSharedLeads(cpData, 'sharedWithSales')}
+                                    className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800 hover:bg-purple-200 transition-colors cursor-pointer"
+                                  >
+                                    {cpData.leadSharing.sharedWithSales || 0}
+                                  </button>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4 text-center">
+                                  <button
+                                    onClick={() => handleViewSharedLeads(cpData, 'receivedFromSales')}
+                                    className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800 hover:bg-indigo-200 transition-colors cursor-pointer"
+                                  >
+                                    {cpData.leadSharing.receivedFromSales || 0}
+                                  </button>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4 text-center">
+                                  <p className="text-sm font-semibold text-green-600">
+                                    ₹{(cpData.revenue.collectedAmount || 0).toLocaleString('en-IN')}
+                                  </p>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4 text-center">
+                                  <p className="text-sm font-semibold text-orange-600">
+                                    ₹{(cpData.revenue.pendingAmount || 0).toLocaleString('en-IN')}
+                                  </p>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4 text-center">
+                                  <p className="text-sm font-semibold text-teal-600">
+                                    ₹{(cpData.revenue.totalRevenue || 0).toLocaleString('en-IN')}
+                                  </p>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
                     <PaginationComponent
-                      currentPage={leadsPage}
-                      totalPages={totalLeadsPages}
-                      itemsPerPage={leadsPerPage}
-                      totalItems={filteredLeads.length}
-                      onPageChange={setLeadsPage}
-                      onItemsPerPageChange={setLeadsPerPage}
+                      currentPage={leadsBreakdownPage}
+                      totalPages={Math.ceil(leadsBreakdownData.length / leadsBreakdownPerPage)}
+                      itemsPerPage={leadsBreakdownPerPage}
+                      totalItems={leadsBreakdownData.length}
+                      onPageChange={setLeadsBreakdownPage}
+                      onItemsPerPageChange={setLeadsBreakdownPerPage}
                       alwaysShow={true}
                     />
-                  )
-                })()}
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1089,7 +1754,7 @@ const Admin_channel_partner_management = () => {
               <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
-                    Wallet & Transactions
+                    Channel Partner Wallets
                   </CardTitle>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
                     <select
@@ -1098,134 +1763,139 @@ const Admin_channel_partner_management = () => {
                       className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm w-full sm:w-auto"
                     >
                       <option value="all">All Partners</option>
-                      <option value="cp1">Rajesh Kumar</option>
-                      <option value="cp2">Priya Sharma</option>
-                      <option value="cp3">Amit Patel</option>
-                    </select>
-                    <select
-                      value={transactionTypeFilter}
-                      onChange={(e) => setTransactionTypeFilter(e.target.value)}
-                      className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm w-full sm:w-auto"
-                    >
-                      <option value="all">All Types</option>
-                      <option value="Salary">Salary</option>
-                      <option value="Reward">Reward</option>
-                      <option value="Commission">Commission</option>
+                      {walletData.map((wallet) => (
+                        <option key={wallet.channelPartner.id} value={wallet.channelPartner.id}>
+                          {wallet.channelPartner.name}
+                        </option>
+                      ))}
                     </select>
                     <Button
                       variant="outline"
+                      onClick={loadWalletData}
                       className="gap-2 w-full sm:w-auto text-sm"
                       size="sm"
+                      disabled={walletLoading}
                     >
-                      <Download className="h-4 w-4" />
-                      <span className="hidden sm:inline">Export</span>
+                      <RefreshCw className={`h-4 w-4 ${walletLoading ? 'animate-spin' : ''}`} />
+                      <span className="hidden sm:inline">Refresh</span>
                     </Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="p-3 lg:p-6">
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4 mb-4 lg:mb-6">
-                  <div className="bg-blue-50 p-3 lg:p-4 rounded-lg border border-blue-200">
-                    <p className="text-xs font-medium text-blue-700 mb-1">Total Balance</p>
-                    <p className="text-base lg:text-lg font-bold text-blue-800">₹{mockTransactions.reduce((sum, t) => sum + (t.status === 'Completed' ? t.amount : 0), 0).toLocaleString('en-IN')}</p>
+                {walletLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loading size="medium" />
                   </div>
-                  <div className="bg-orange-50 p-3 lg:p-4 rounded-lg border border-orange-200">
-                    <p className="text-xs font-medium text-orange-700 mb-1">Pending</p>
-                    <p className="text-base lg:text-lg font-bold text-orange-800">₹{mockTransactions.reduce((sum, t) => sum + (t.status === 'Pending' ? t.amount : 0), 0).toLocaleString('en-IN')}</p>
+                ) : walletData.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">No wallet data found</p>
                   </div>
-                  <div className="bg-green-50 p-3 lg:p-4 rounded-lg border border-green-200">
-                    <p className="text-xs font-medium text-green-700 mb-1">Lifetime Earnings</p>
-                    <p className="text-base lg:text-lg font-bold text-green-800">₹{mockTransactions.reduce((sum, t) => sum + t.amount, 0).toLocaleString('en-IN')}</p>
-                  </div>
-                  <div className="bg-purple-50 p-3 lg:p-4 rounded-lg border border-purple-200">
-                    <p className="text-xs font-medium text-purple-700 mb-1">Transactions</p>
-                    <p className="text-base lg:text-lg font-bold text-purple-800">{mockTransactions.length}</p>
-                  </div>
-                </div>
-                <div className="overflow-x-auto -mx-3 lg:mx-0">
-                  <table className="w-full min-w-[800px]">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Date</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 hidden sm:table-cell">Channel Partner</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Type</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Amount</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Status</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 hidden md:table-cell">Description</th>
-                        <th className="text-right py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mockTransactions
-                        .filter(t => {
-                          if (selectedCPWallet !== 'all' && t.cpId !== selectedCPWallet) return false
-                          if (transactionTypeFilter !== 'all' && t.type !== transactionTypeFilter) return false
-                          return true
-                        })
-                        .slice((walletPage - 1) * walletPerPage, walletPage * walletPerPage)
-                        .map((transaction) => (
-                          <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <p className="text-sm text-gray-600">{formatDate(transaction.date)}</p>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4 hidden sm:table-cell">
-                              <p className="text-xs lg:text-sm text-gray-600 truncate max-w-[120px] lg:max-w-none">{transaction.cpName}</p>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                                transaction.type === 'Salary' ? 'bg-blue-100 text-blue-800' :
-                                transaction.type === 'Reward' ? 'bg-purple-100 text-purple-800' :
-                                'bg-green-100 text-green-800'
-                              }`}>
-                                {transaction.type}
-                              </span>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <p className="text-xs lg:text-sm font-semibold text-gray-900">₹{transaction.amount.toLocaleString('en-IN')}</p>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                                transaction.status === 'Completed' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
-                              }`}>
-                                {transaction.status}
-                              </span>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4 hidden md:table-cell">
-                              <p className="text-xs lg:text-sm text-gray-600 truncate max-w-[150px] lg:max-w-none">{transaction.description}</p>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <button
-                                onClick={() => { setSelectedTransaction(transaction); setShowTransactionModal(true); }}
-                                className="text-gray-400 hover:text-blue-600 p-1.5 lg:p-2 rounded hover:bg-blue-50 transition-all"
-                                title="View"
-                              >
-                                <Eye className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
-                              </button>
-                            </td>
+                ) : (
+                  <>
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4 mb-4 lg:mb-6">
+                      <div className="bg-blue-50 p-3 lg:p-4 rounded-lg border border-blue-200">
+                        <p className="text-xs font-medium text-blue-700 mb-1">Total Balance</p>
+                        <p className="text-base lg:text-lg font-bold text-blue-800">
+                          ₹{walletData.reduce((sum, w) => sum + (w.balance || 0), 0).toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                      <div className="bg-green-50 p-3 lg:p-4 rounded-lg border border-green-200">
+                        <p className="text-xs font-medium text-green-700 mb-1">All Time Earnings</p>
+                        <p className="text-base lg:text-lg font-bold text-green-800">
+                          ₹{walletData.reduce((sum, w) => sum + (w.totalEarned || 0), 0).toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                      <div className="bg-purple-50 p-3 lg:p-4 rounded-lg border border-purple-200">
+                        <p className="text-xs font-medium text-purple-700 mb-1">Current Month</p>
+                        <p className="text-base lg:text-lg font-bold text-purple-800">
+                          ₹{walletData.reduce((sum, w) => sum + (w.currentMonthEarnings || 0), 0).toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                      <div className="bg-yellow-50 p-3 lg:p-4 rounded-lg border border-yellow-200">
+                        <p className="text-xs font-medium text-yellow-700 mb-1">Total Rewards</p>
+                        <p className="text-base lg:text-lg font-bold text-yellow-800">
+                          ₹{walletData.reduce((sum, w) => sum + (w.rewardAmount || 0), 0).toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Wallet Data Table */}
+                    <div className="overflow-x-auto -mx-3 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                      <table className="w-full min-w-[800px] border-collapse">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Channel Partner</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Current Month</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">All Time Earnings</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Reward Amount</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Paid</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Unpaid</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Balance</th>
                           </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-                {(() => {
-                  const filteredTransactions = mockTransactions.filter(t => {
-                    if (selectedCPWallet !== 'all' && t.cpId !== selectedCPWallet) return false
-                    if (transactionTypeFilter !== 'all' && t.type !== transactionTypeFilter) return false
-                    return true
-                  })
-                  const totalWalletPages = Math.ceil(filteredTransactions.length / walletPerPage)
-                  return (
+                        </thead>
+                        <tbody>
+                          {walletData
+                            .filter(w => selectedCPWallet === 'all' || w.channelPartner.id === selectedCPWallet)
+                            .slice((walletPage - 1) * walletPerPage, walletPage * walletPerPage)
+                            .map((wallet) => (
+                              <tr key={wallet.channelPartner.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                  <div>
+                                    <p className="text-sm font-semibold text-gray-900">{wallet.channelPartner.name}</p>
+                                    {wallet.channelPartner.partnerId && (
+                                      <p className="text-xs text-gray-500">{wallet.channelPartner.partnerId}</p>
+                                    )}
+                                    <p className="text-xs text-gray-500">{wallet.channelPartner.phoneNumber}</p>
+                                  </div>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    ₹{(wallet.currentMonthEarnings || 0).toLocaleString('en-IN')}
+                                  </p>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    ₹{(wallet.totalEarned || 0).toLocaleString('en-IN')}
+                                  </p>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                  <p className="text-sm font-semibold text-purple-600">
+                                    ₹{(wallet.rewardAmount || 0).toLocaleString('en-IN')}
+                                  </p>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                  <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                    ₹{(wallet.paidAmount || 0).toLocaleString('en-IN')}
+                                  </span>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                  <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                                    ₹{(wallet.unpaidAmount || 0).toLocaleString('en-IN')}
+                                  </span>
+                                </td>
+                                <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                  <p className="text-sm font-bold text-blue-600">
+                                    ₹{(wallet.balance || 0).toLocaleString('en-IN')}
+                                  </p>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
                     <PaginationComponent
                       currentPage={walletPage}
-                      totalPages={totalWalletPages}
+                      totalPages={Math.ceil(walletData.filter(w => selectedCPWallet === 'all' || w.channelPartner.id === selectedCPWallet).length / walletPerPage)}
                       itemsPerPage={walletPerPage}
-                      totalItems={filteredTransactions.length}
+                      totalItems={walletData.filter(w => selectedCPWallet === 'all' || w.channelPartner.id === selectedCPWallet).length}
                       onPageChange={setWalletPage}
                       onItemsPerPageChange={setWalletPerPage}
                       alwaysShow={true}
                     />
-                  )
-                })()}
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1236,118 +1906,190 @@ const Admin_channel_partner_management = () => {
               <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
-                    Rewards & Achievements
+                    Level-wise Rewards Management
                   </CardTitle>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
                     <Button
-                      onClick={() => setShowAssignRewardModal(true)}
+                      onClick={() => {
+                        setShowEditRewardModal(false)
+                        setSelectedReward(null)
+                        setRewardFormData({
+                          name: '',
+                          description: '',
+                          level: '',
+                          requirement: {
+                            type: 'conversions',
+                            value: '',
+                            description: ''
+                          },
+                          rewardAmount: '',
+                          order: 0,
+                          isActive: true
+                        })
+                        setShowMilestoneModal(true)
+                      }}
                       className="gap-2 w-full sm:w-auto text-sm"
                       size="sm"
                     >
                       <Plus className="h-4 w-4" />
-                      <span className="hidden sm:inline">Assign Reward</span>
-                      <span className="sm:hidden">Assign</span>
+                      <span className="hidden sm:inline">Create Reward</span>
+                      <span className="sm:hidden">Create</span>
                     </Button>
                     <Button
-                      onClick={() => setShowMilestoneModal(true)}
+                      onClick={loadRewardsData}
                       variant="outline"
                       className="gap-2 w-full sm:w-auto text-sm"
                       size="sm"
+                      disabled={rewardsLoading}
                     >
-                      <Award className="h-4 w-4" />
-                      <span className="hidden sm:inline">Configure Milestones</span>
-                      <span className="sm:hidden">Milestones</span>
+                      <RefreshCw className={`h-4 w-4 ${rewardsLoading ? 'animate-spin' : ''}`} />
+                      <span className="hidden sm:inline">Refresh</span>
                     </Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="p-3 lg:p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 lg:gap-4 mb-4 lg:mb-6">
-                  <div className="bg-yellow-50 p-3 lg:p-4 rounded-lg border border-yellow-200">
-                    <p className="text-xs font-medium text-yellow-700 mb-1">Total Rewards</p>
-                    <p className="text-base lg:text-lg font-bold text-yellow-800">₹{mockRewards.reduce((sum, r) => sum + r.amount, 0).toLocaleString('en-IN')}</p>
+                {rewardsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loading size="medium" />
                   </div>
-                  <div className="bg-purple-50 p-3 lg:p-4 rounded-lg border border-purple-200">
-                    <p className="text-xs font-medium text-purple-700 mb-1">Active Milestones</p>
-                    <p className="text-base lg:text-lg font-bold text-purple-800">{mockMilestones.length}</p>
-                  </div>
-                  <div className="bg-green-50 p-3 lg:p-4 rounded-lg border border-green-200">
-                    <p className="text-xs font-medium text-green-700 mb-1">Rewards Distributed</p>
-                    <p className="text-base lg:text-lg font-bold text-green-800">{mockRewards.length}</p>
-                  </div>
-                </div>
-                <div className="overflow-x-auto -mx-3 lg:mx-0">
-                  <table className="w-full min-w-[700px]">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Channel Partner</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Reward Type</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Amount</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 hidden md:table-cell">Date</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Status</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 hidden lg:table-cell">Milestone</th>
-                        <th className="text-right py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mockRewards
-                        .slice((rewardsPage - 1) * rewardsPerPage, rewardsPage * rewardsPerPage)
-                        .map((reward) => (
-                          <tr key={reward.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                            <p className="text-sm font-semibold text-gray-900">{reward.cpName}</p>
-                          </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                                reward.type === 'Milestone' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-                              }`}>
-                                {reward.type}
-                              </span>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <p className="text-xs lg:text-sm font-semibold text-gray-900">₹{reward.amount.toLocaleString('en-IN')}</p>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4 hidden md:table-cell">
-                              <p className="text-xs lg:text-sm text-gray-600">{formatDate(reward.date)}</p>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                                reward.status === 'Credited' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
-                              }`}>
-                                {reward.status}
-                              </span>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4 hidden lg:table-cell">
-                              <p className="text-xs lg:text-sm text-gray-600 truncate max-w-[120px]">{reward.milestone || 'N/A'}</p>
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <button
-                                onClick={() => { setSelectedReward(reward); setShowRewardDetailsModal(true); }}
-                                className="text-gray-400 hover:text-blue-600 p-1.5 lg:p-2 rounded hover:bg-blue-50 transition-all"
-                                title="View"
-                              >
-                                <Eye className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
-                              </button>
-                            </td>
-                        </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-                {(() => {
-                  const totalRewardsPages = Math.ceil(mockRewards.length / rewardsPerPage)
-                  return (
+                ) : (
+                  <>
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4 mb-4 lg:mb-6">
+                      <div className="bg-yellow-50 p-3 lg:p-4 rounded-lg border border-yellow-200">
+                        <p className="text-xs font-medium text-yellow-700 mb-1">Total Rewards</p>
+                        <p className="text-base lg:text-lg font-bold text-yellow-800">{rewardStatistics.totalRewards || 0}</p>
+                      </div>
+                      <div className="bg-purple-50 p-3 lg:p-4 rounded-lg border border-purple-200">
+                        <p className="text-xs font-medium text-purple-700 mb-1">Active Rewards</p>
+                        <p className="text-base lg:text-lg font-bold text-purple-800">{rewardStatistics.activeRewards || 0}</p>
+                      </div>
+                      <div className="bg-green-50 p-3 lg:p-4 rounded-lg border border-green-200">
+                        <p className="text-xs font-medium text-green-700 mb-1">Rewards Distributed</p>
+                        <p className="text-base lg:text-lg font-bold text-green-800">{rewardStatistics.totalDistributed || 0}</p>
+                      </div>
+                      <div className="bg-blue-50 p-3 lg:p-4 rounded-lg border border-blue-200">
+                        <p className="text-xs font-medium text-blue-700 mb-1">Total Amount</p>
+                        <p className="text-base lg:text-lg font-bold text-blue-800">
+                          ₹{(rewardStatistics.totalAmountDistributed || 0).toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Rewards List */}
+                    <div className="overflow-x-auto -mx-3 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                      <table className="w-full min-w-[800px] border-collapse">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Level</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Reward Name</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Requirement</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Reward Amount</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">CPs Won</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Status</th>
+                            <th className="text-right py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rewardsData.length === 0 ? (
+                            <tr>
+                              <td colSpan="7" className="py-12 text-center">
+                                <p className="text-gray-500">No rewards created yet. Click "Create Reward" to add a new level-wise reward.</p>
+                              </td>
+                            </tr>
+                          ) : (
+                            rewardsData
+                              .slice((rewardsPage - 1) * rewardsPerPage, rewardsPage * rewardsPerPage)
+                              .map((reward) => (
+                                <tr key={reward._id || reward.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                  <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                    <span className="inline-flex px-2 py-1 text-xs font-bold rounded-full bg-indigo-100 text-indigo-800">
+                                      {reward.level}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                    <p className="text-sm font-semibold text-gray-900">{reward.name}</p>
+                                    {reward.description && (
+                                      <p className="text-xs text-gray-500 mt-0.5 truncate max-w-[200px]">{reward.description}</p>
+                                    )}
+                                  </td>
+                                  <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                    <p className="text-xs lg:text-sm text-gray-600">
+                                      {reward.requirement?.value} {reward.requirement?.value === 1 ? 'Conversion' : 'Conversions'}
+                                    </p>
+                                    {reward.requirement?.description && (
+                                      <p className="text-xs text-gray-500 mt-0.5">{reward.requirement.description}</p>
+                                    )}
+                                  </td>
+                                  <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                    <p className="text-sm font-bold text-purple-600">
+                                      ₹{(reward.rewardAmount || 0).toLocaleString('en-IN')}
+                                    </p>
+                                  </td>
+                                  <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                    <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                      {reward.winnersCount || 0} CPs
+                                    </span>
+                                  </td>
+                                  <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                                      reward.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {reward.isActive ? 'Active' : 'Inactive'}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <button
+                                        onClick={() => {
+                                          handleEditReward(reward)
+                                          setShowMilestoneModal(true)
+                                        }}
+                                        className="text-gray-400 hover:text-blue-600 p-1.5 lg:p-2 rounded hover:bg-blue-50 transition-all"
+                                        title="Edit"
+                                      >
+                                        <Edit3 className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setSelectedReward(reward)
+                                          setShowRewardDetailsModal(true)
+                                        }}
+                                        className="text-gray-400 hover:text-blue-600 p-1.5 lg:p-2 rounded hover:bg-blue-50 transition-all"
+                                        title="View Details"
+                                      >
+                                        <Eye className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setSelectedReward(reward)
+                                          setShowDeleteRewardModal(true)
+                                        }}
+                                        className="text-gray-400 hover:text-red-600 p-1.5 lg:p-2 rounded hover:bg-red-50 transition-all"
+                                        title="Delete"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                     <PaginationComponent
                       currentPage={rewardsPage}
-                      totalPages={totalRewardsPages}
+                      totalPages={Math.ceil(rewardsData.length / rewardsPerPage)}
                       itemsPerPage={rewardsPerPage}
-                      totalItems={mockRewards.length}
+                      totalItems={rewardsData.length}
                       onPageChange={setRewardsPage}
                       onItemsPerPageChange={setRewardsPerPage}
                       alwaysShow={true}
                     />
-                  )
-                })()}
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1391,68 +2133,88 @@ const Admin_channel_partner_management = () => {
                     <p className="text-base lg:text-lg font-bold text-green-800">₹{mockConverted.reduce((sum, c) => sum + (c.commissionStatus === 'Credited' ? c.commissionEarned : 0), 0).toLocaleString('en-IN')}</p>
                   </div>
                 </div>
-                <div className="space-y-3 lg:space-y-4">
-                  {mockConverted
-                    .slice((convertedPage - 1) * convertedPerPage, convertedPage * convertedPerPage)
-                    .map((client) => (
-                    <div key={client.id} className="bg-white border border-gray-200 rounded-lg p-4 lg:p-6 hover:shadow-md transition-all">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-base lg:text-lg font-bold text-gray-900 truncate">{client.clientName}</h3>
-                          <p className="text-xs lg:text-sm text-gray-500 truncate">{client.projectType}</p>
-                          <p className="text-xs lg:text-sm text-gray-600 mt-1">CP: {client.cpName}</p>
-                        </div>
-                        <span className={`px-2 lg:px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
-                          client.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
-                          client.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {client.status}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4 mb-4">
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Total Value</p>
-                          <p className="text-sm font-bold text-gray-900">₹{client.totalValue.toLocaleString('en-IN')}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Paid Amount</p>
-                          <p className="text-sm font-bold text-green-600">₹{client.paidAmount.toLocaleString('en-IN')}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Pending</p>
-                          <p className="text-sm font-bold text-red-600">₹{client.pendingAmount.toLocaleString('en-IN')}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Commission</p>
-                          <p className="text-sm font-bold text-purple-600">₹{client.commissionEarned.toLocaleString('en-IN')}</p>
-                        </div>
-                      </div>
-                      <div className="mb-4">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-gray-500">Progress</span>
-                          <span className="text-blue-600 font-semibold">{client.progress}%</span>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-600 rounded-full" style={{ width: `${client.progress}%` }}></div>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                          client.paymentStatus === 'Fully Paid' ? 'bg-green-100 text-green-800' :
-                          client.paymentStatus === 'Partial Paid' ? 'bg-orange-100 text-orange-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {client.paymentStatus}
-                        </span>
-                        <button
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
-                        >
-                          View Details <ArrowRight className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto -mx-3 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  <table className="w-full min-w-[900px] border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[180px]">Client Name</th>
+                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[150px]">Project Type</th>
+                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[120px]">Channel Partner</th>
+                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px]">Status</th>
+                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px]">Total Value</th>
+                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px]">Paid Amount</th>
+                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px]">Pending</th>
+                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px]">Commission</th>
+                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px]">Progress</th>
+                        <th className="text-right py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px]">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mockConverted
+                        .slice((convertedPage - 1) * convertedPerPage, convertedPage * convertedPerPage)
+                        .map((client) => (
+                          <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                            <td className="py-3 lg:py-4 px-2 lg:px-4">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-green-600 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                  {client.clientName?.charAt(0).toUpperCase() || 'C'}
+                                </div>
+                                <span className="text-sm font-semibold text-gray-900 truncate">{client.clientName}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 lg:py-4 px-2 lg:px-4">
+                              <span className="text-xs lg:text-sm text-gray-600 truncate block">{client.projectType}</span>
+                            </td>
+                            <td className="py-3 lg:py-4 px-2 lg:px-4">
+                              <span className="text-xs lg:text-sm text-gray-600">{client.cpName}</span>
+                            </td>
+                            <td className="py-3 lg:py-4 px-2 lg:px-4">
+                              <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${
+                                client.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                                client.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {client.status}
+                              </span>
+                            </td>
+                            <td className="py-3 lg:py-4 px-2 lg:px-4">
+                              <span className="text-sm font-bold text-gray-900">₹{client.totalValue.toLocaleString('en-IN')}</span>
+                            </td>
+                            <td className="py-3 lg:py-4 px-2 lg:px-4">
+                              <span className="text-sm font-bold text-green-600">₹{client.paidAmount.toLocaleString('en-IN')}</span>
+                            </td>
+                            <td className="py-3 lg:py-4 px-2 lg:px-4">
+                              <span className="text-sm font-bold text-red-600">₹{client.pendingAmount.toLocaleString('en-IN')}</span>
+                            </td>
+                            <td className="py-3 lg:py-4 px-2 lg:px-4">
+                              <span className="text-sm font-bold text-purple-600">₹{client.commissionEarned.toLocaleString('en-IN')}</span>
+                            </td>
+                            <td className="py-3 lg:py-4 px-2 lg:px-4">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden min-w-[60px]">
+                                  <div className="h-full bg-blue-600 rounded-full" style={{ width: `${client.progress}%` }}></div>
+                                </div>
+                                <span className="text-xs font-semibold text-blue-600 whitespace-nowrap">{client.progress}%</span>
+                              </div>
+                            </td>
+                            <td className="py-3 lg:py-4 px-2 lg:px-4">
+                              <div className="flex items-center justify-end">
+                                <button
+                                  onClick={() => {
+                                    setSelectedConvertedClient(client)
+                                    setShowConvertedClientModal(true)
+                                  }}
+                                  className="text-gray-400 hover:text-blue-600 p-1.5 lg:p-2 rounded hover:bg-blue-50 transition-all"
+                                  title="View Details"
+                                >
+                                  <Eye className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
                 </div>
                 {(() => {
                   const totalConvertedPages = Math.ceil(mockConverted.length / convertedPerPage)
@@ -1480,198 +2242,309 @@ const Admin_channel_partner_management = () => {
                   <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
                     Quotations
                   </CardTitle>
-                  <div className="flex items-center w-full sm:w-auto">
-                    <div className="relative w-full sm:w-64">
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:w-64">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                       <input
                         type="text"
                         placeholder="Search quotations..."
+                        value={quotationSearchTerm}
+                        onChange={(e) => {
+                          setQuotationSearchTerm(e.target.value)
+                          setQuotationsPage(1)
+                        }}
                         className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full text-sm"
                       />
                     </div>
+                    <Button onClick={openCreateQuotationModal} className="flex items-center gap-2">
+                      <Plus className="h-4 w-4" />
+                      <span className="hidden sm:inline">Create Quotation</span>
+                    </Button>
                   </div>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <select
+                    value={quotationStatusFilter}
+                    onChange={(e) => {
+                      setQuotationStatusFilter(e.target.value)
+                      setQuotationsPage(1)
+                    }}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="archived">Archived</option>
+                  </select>
                 </div>
               </CardHeader>
               <CardContent className="p-3 lg:p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 lg:gap-4 mb-4 lg:mb-6">
-                  <div className="bg-indigo-50 p-3 lg:p-4 rounded-lg border border-indigo-200">
-                    <p className="text-xs font-medium text-indigo-700 mb-1">Total Shared</p>
-                    <p className="text-base lg:text-lg font-bold text-indigo-800">{mockQuotations.reduce((sum, q) => sum + q.timesShared, 0)}</p>
+                {quotationsLoading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <Loading size="large" />
                   </div>
-                  <div className="bg-purple-50 p-3 lg:p-4 rounded-lg border border-purple-200">
-                    <p className="text-xs font-medium text-purple-700 mb-1">Quotations</p>
-                    <p className="text-base lg:text-lg font-bold text-purple-800">{mockQuotations.length}</p>
-                  </div>
-                  <div className="bg-pink-50 p-3 lg:p-4 rounded-lg border border-pink-200">
-                    <p className="text-xs font-medium text-pink-700 mb-1">Categories</p>
-                    <p className="text-base lg:text-lg font-bold text-pink-800">{new Set(mockQuotations.map(q => q.category)).size}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {mockQuotations
-                    .slice((quotationsPage - 1) * quotationsPerPage, quotationsPage * quotationsPerPage)
-                    .map((quote) => (
-                    <div key={quote.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-all">
-                      <div className="flex items-start justify-between mb-4">
-                        <div>
-                          <span className="text-xs font-bold text-gray-400 uppercase mb-1 block">{quote.category}</span>
-                          <h3 className="text-lg font-bold text-gray-900">{quote.title}</h3>
-                        </div>
-                        <span className="px-2 py-1 text-xs font-bold bg-indigo-100 text-indigo-700 rounded">
-                          {quote.price}
-                        </span>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 lg:gap-4 mb-4 lg:mb-6">
+                      <div className="bg-indigo-50 p-3 lg:p-4 rounded-lg border border-indigo-200">
+                        <p className="text-xs font-medium text-indigo-700 mb-1">Total Shared</p>
+                        <p className="text-base lg:text-lg font-bold text-indigo-800">{quotationStatistics.totalShared || 0}</p>
                       </div>
-                      <div className="space-y-2 mb-4">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-500">Times Shared</span>
-                          <span className="font-semibold text-gray-900">{quote.timesShared}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-500">Last Shared</span>
-                          <span className="text-gray-600">{formatDate(quote.lastShared)}</span>
-                        </div>
+                      <div className="bg-purple-50 p-3 lg:p-4 rounded-lg border border-purple-200">
+                        <p className="text-xs font-medium text-purple-700 mb-1">Quotations</p>
+                        <p className="text-base lg:text-lg font-bold text-purple-800">{quotationStatistics.total || 0}</p>
                       </div>
-                      <div className="pt-4 border-t border-gray-100">
-                        <p className="text-xs text-gray-500 mb-2">Shared by:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {quote.sharedBy.map((cp, idx) => (
-                            <span key={idx} className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded">
-                              {cp}
-                            </span>
-                          ))}
-                        </div>
+                      <div className="bg-pink-50 p-3 lg:p-4 rounded-lg border border-pink-200">
+                        <p className="text-xs font-medium text-pink-700 mb-1">Categories</p>
+                        <p className="text-base lg:text-lg font-bold text-pink-800">{Object.keys(quotationStatistics.categoryCounts || {}).length}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-                {(() => {
-                  const totalQuotationsPages = Math.ceil(mockQuotations.length / quotationsPerPage)
-                  return (
-                    <PaginationComponent
-                      currentPage={quotationsPage}
-                      totalPages={totalQuotationsPages}
-                      itemsPerPage={quotationsPerPage}
-                      totalItems={mockQuotations.length}
-                      onPageChange={setQuotationsPage}
-                      onItemsPerPageChange={setQuotationsPerPage}
-                      alwaysShow={true}
-                    />
-                  )
-                })()}
+                    {quotations.length === 0 ? (
+                      <div className="text-center py-12">
+                        <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500">No quotations found</p>
+                        <Button onClick={openCreateQuotationModal} className="mt-4">
+                          Create First Quotation
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {quotations.map((quote) => (
+                            <div key={quote.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-all">
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex-1">
+                                  <span className="text-xs font-bold text-gray-400 uppercase mb-1 block">{quote.category}</span>
+                                  <h3 className="text-lg font-bold text-gray-900">{quote.title}</h3>
+                                </div>
+                                <div className="flex items-center gap-2 ml-2">
+                                  <button
+                                    onClick={() => openEditQuotationModal(quote)}
+                                    className="p-1.5 hover:bg-gray-100 rounded"
+                                    title="Edit"
+                                  >
+                                    <Edit3 className="h-4 w-4 text-gray-600" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteQuotation(quote.id)}
+                                    className="p-1.5 hover:bg-red-50 rounded"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="space-y-2 mb-4">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-500">Price</span>
+                                  <span className="font-semibold text-gray-900">{quote.formattedPrice || adminQuotationService.formatPrice(quote.price, quote.currency)}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-500">Times Shared</span>
+                                  <span className="font-semibold text-gray-900">{quote.timesShared || 0}</span>
+                                </div>
+                                {quote.lastShared && (
+                                  <div className="flex items-center justify-between text-sm">
+                                    <span className="text-gray-500">Last Shared</span>
+                                    <span className="text-gray-600">{formatDate(quote.lastShared)}</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-500">Status</span>
+                                  <span className={`px-2 py-1 text-xs font-medium rounded ${
+                                    quote.status === 'active' ? 'bg-green-100 text-green-800' :
+                                    quote.status === 'inactive' ? 'bg-gray-100 text-gray-800' :
+                                    'bg-orange-100 text-orange-800'
+                                  }`}>
+                                    {quote.status}
+                                  </span>
+                                </div>
+                              </div>
+                              {quote.pdfDocument && quote.pdfDocument.secure_url && (
+                                <div className="pt-4 border-t border-gray-100">
+                                  <a
+                                    href={quote.pdfDocument.secure_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                    <span>View PDF</span>
+                                  </a>
+                                </div>
+                              )}
+                              {quote.sharedBy && quote.sharedBy.length > 0 && (
+                                <div className="pt-4 border-t border-gray-100 mt-4">
+                                  <p className="text-xs text-gray-500 mb-2">Shared by:</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {quote.sharedBy.slice(0, 3).map((share, idx) => (
+                                      <span key={idx} className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded">
+                                        {share.channelPartner?.name || 'Unknown'}
+                                      </span>
+                                    ))}
+                                    {quote.sharedBy.length > 3 && (
+                                      <span className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded">
+                                        +{quote.sharedBy.length - 3} more
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {(() => {
+                          const totalQuotationsPages = Math.ceil((quotationsTotal || 0) / quotationsPerPage)
+                          return (
+                            <PaginationComponent
+                              currentPage={quotationsPage}
+                              totalPages={totalQuotationsPages}
+                              itemsPerPage={quotationsPerPage}
+                              totalItems={quotationsTotal || 0}
+                              onPageChange={setQuotationsPage}
+                              onItemsPerPageChange={setQuotationsPerPage}
+                              alwaysShow={true}
+                            />
+                          )
+                        })()}
+                      </>
+                    )}
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
 
-          {/* Team Assignments Section */}
+          {/* Assign Team Lead Section */}
           {activeTab === 'team' && (
             <Card className="shadow-sm border border-gray-200">
               <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
-                    Team Assignments
+                    Assign Team Lead
                   </CardTitle>
                   <Button
-                    onClick={() => setShowAssignTeamModal(true)}
+                    onClick={() => {
+                      setSelectedCPForTeamLead(null)
+                      setSelectedTeamLeadId('')
+                      setShowAssignTeamLeadModal(true)
+                    }}
                     className="gap-2 w-full sm:w-auto text-sm"
                     size="sm"
                   >
                     <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Assign Team</span>
+                    <span className="hidden sm:inline">Assign Team Lead</span>
                     <span className="sm:hidden">Assign</span>
                   </Button>
                 </div>
               </CardHeader>
               <CardContent className="p-3 lg:p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 lg:gap-4 mb-4 lg:mb-6">
-                  <div className="bg-blue-50 p-3 lg:p-4 rounded-lg border border-blue-200">
-                    <p className="text-xs font-medium text-blue-700 mb-1">Sales Team Members</p>
-                    <p className="text-base lg:text-lg font-bold text-blue-800">12</p>
+                {loadingTeamLeads ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loading size="medium" />
                   </div>
-                  <div className="bg-green-50 p-3 lg:p-4 rounded-lg border border-green-200">
-                    <p className="text-xs font-medium text-green-700 mb-1">CPs with Teams</p>
-                    <p className="text-base lg:text-lg font-bold text-green-800">{mockTeamAssignments.filter(ta => ta.salesLead).length}</p>
-                  </div>
-                  <div className="bg-orange-50 p-3 lg:p-4 rounded-lg border border-orange-200">
-                    <p className="text-xs font-medium text-orange-700 mb-1">Unassigned CPs</p>
-                    <p className="text-base lg:text-lg font-bold text-orange-800">{mockTeamAssignments.filter(ta => !ta.salesLead).length}</p>
-                  </div>
-                </div>
-                <div className="overflow-x-auto -mx-3 lg:mx-0">
-                  <table className="w-full min-w-[700px]">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Channel Partner</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Sales Lead</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 hidden md:table-cell">Team Members</th>
-                        <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 hidden lg:table-cell">Assigned Date</th>
-                        <th className="text-right py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mockTeamAssignments
-                        .slice((teamPage - 1) * teamPerPage, teamPage * teamPerPage)
-                        .map((assignment) => (
-                          <tr key={assignment.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                            <p className="text-sm font-semibold text-gray-900">{assignment.cpName}</p>
-                          </td>
-                          <td className="py-4 px-4">
-                            {assignment.salesLead ? (
-                              <p className="text-sm text-gray-600">{assignment.salesLead}</p>
-                            ) : (
-                              <span className="text-xs text-gray-400">Not assigned</span>
-                            )}
-                          </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4 hidden md:table-cell">
-                              {assignment.teamMembers.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {assignment.teamMembers.map((member, idx) => (
-                                    <span key={idx} className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
-                                      {member}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-xs text-gray-400">No members</span>
-                              )}
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4 hidden lg:table-cell">
-                              {assignment.assignedDate ? (
-                                <p className="text-xs lg:text-sm text-gray-600">{formatDate(assignment.assignedDate)}</p>
-                              ) : (
-                                <span className="text-xs text-gray-400">—</span>
-                              )}
-                            </td>
-                            <td className="py-3 lg:py-4 px-2 lg:px-4">
-                              <div className="flex items-center justify-end space-x-1 lg:space-x-2">
-                                <button
-                                  onClick={() => { setSelectedCPForTeam(assignment); setShowAssignTeamModal(true); }}
-                                  className="text-gray-400 hover:text-blue-600 p-1.5 lg:p-2 rounded hover:bg-blue-50 transition-all"
-                                  title="Edit"
-                                >
-                                  <Edit3 className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
-                                </button>
-                              </div>
-                            </td>
-                        </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-                {(() => {
-                  const totalTeamPages = Math.ceil(mockTeamAssignments.length / teamPerPage)
-                  return (
-                    <PaginationComponent
-                      currentPage={teamPage}
-                      totalPages={totalTeamPages}
-                      itemsPerPage={teamPerPage}
-                      totalItems={mockTeamAssignments.length}
-                      onPageChange={setTeamPage}
-                      onItemsPerPageChange={setTeamPerPage}
-                      alwaysShow={true}
-                    />
-                  )
-                })()}
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 lg:gap-4 mb-4 lg:mb-6">
+                      <div className="bg-blue-50 p-3 lg:p-4 rounded-lg border border-blue-200">
+                        <p className="text-xs font-medium text-blue-700 mb-1">Total Sales Team Leads</p>
+                        <p className="text-base lg:text-lg font-bold text-blue-800">{salesTeamLeads.length}</p>
+                      </div>
+                      <div className="bg-green-50 p-3 lg:p-4 rounded-lg border border-green-200">
+                        <p className="text-xs font-medium text-green-700 mb-1">CPs with Team Lead</p>
+                        <p className="text-base lg:text-lg font-bold text-green-800">{teamLeadAssignments.filter(ta => ta.salesTeamLeadId).length}</p>
+                      </div>
+                      <div className="bg-orange-50 p-3 lg:p-4 rounded-lg border border-orange-200">
+                        <p className="text-xs font-medium text-orange-700 mb-1">Unassigned CPs</p>
+                        <p className="text-base lg:text-lg font-bold text-orange-800">{teamLeadAssignments.filter(ta => !ta.salesTeamLeadId).length}</p>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto -mx-3 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                      <table className="w-full min-w-[700px] border-collapse">
+                        <thead>
+                          <tr className="border-b border-gray-200 bg-gray-50">
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[200px]">Channel Partner</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[180px]">Sales Team Lead</th>
+                            <th className="text-left py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[120px]">Assigned Date</th>
+                            <th className="text-right py-2 lg:py-3 px-2 lg:px-4 text-xs lg:text-sm font-semibold text-gray-700 min-w-[100px]">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {teamLeadAssignments.length === 0 ? (
+                            <tr>
+                              <td colSpan="4" className="py-12 text-center">
+                                <p className="text-gray-500">No channel partners found</p>
+                              </td>
+                            </tr>
+                          ) : (
+                            teamLeadAssignments
+                              .slice((teamPage - 1) * teamPerPage, teamPage * teamPerPage)
+                              .map((assignment) => (
+                                <tr key={assignment.cpId} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                  <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                        {assignment.cpName?.charAt(0).toUpperCase() || 'C'}
+                                      </div>
+                                      <p className="text-sm font-semibold text-gray-900">{assignment.cpName}</p>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                    {assignment.salesTeamLeadName ? (
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 bg-gradient-to-br from-green-500 to-teal-600 text-white rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0">
+                                          {assignment.salesTeamLeadName?.charAt(0).toUpperCase() || 'L'}
+                                        </div>
+                                        <p className="text-sm text-gray-600">{assignment.salesTeamLeadName}</p>
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-gray-400">Not assigned</span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                    {assignment.assignedDate ? (
+                                      <p className="text-xs lg:text-sm text-gray-600">{formatDate(assignment.assignedDate)}</p>
+                                    ) : (
+                                      <span className="text-xs text-gray-400">—</span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 lg:py-4 px-2 lg:px-4">
+                                    <div className="flex items-center justify-end space-x-1 lg:space-x-2">
+                                      <button
+                                        onClick={() => {
+                                          setSelectedCPForTeamLead(assignment)
+                                          setSelectedTeamLeadId(assignment.salesTeamLeadId || '')
+                                          setShowAssignTeamLeadModal(true)
+                                        }}
+                                        className="text-gray-400 hover:text-blue-600 p-1.5 lg:p-2 rounded hover:bg-blue-50 transition-all"
+                                        title="Assign/Edit Team Lead"
+                                      >
+                                        <Edit3 className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    {(() => {
+                      const totalTeamPages = Math.ceil(teamLeadAssignments.length / teamPerPage)
+                      return (
+                        <PaginationComponent
+                          currentPage={teamPage}
+                          totalPages={totalTeamPages}
+                          itemsPerPage={teamPerPage}
+                          totalItems={teamLeadAssignments.length}
+                          onPageChange={setTeamPage}
+                          onItemsPerPageChange={setTeamPerPage}
+                          alwaysShow={true}
+                        />
+                      )
+                    })()}
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1747,6 +2620,20 @@ const Admin_channel_partner_management = () => {
                     maxLength={10}
                   />
                   <p className="text-xs text-gray-500">10-digit Indian mobile number (OTP login will be enabled)</p>
+                </div>
+
+                {/* Partner ID Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Partner ID</label>
+                  <input
+                    type="text"
+                    value={formData.partnerId}
+                    onChange={(e) => setFormData({...formData, partnerId: e.target.value})}
+                    className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    placeholder="CP-2024-STARK"
+                    maxLength={50}
+                  />
+                  <p className="text-xs text-gray-500">Unique identifier for the channel partner (optional)</p>
                 </div>
 
                 {/* Email Field (Optional) */}
@@ -2361,14 +3248,31 @@ const Admin_channel_partner_management = () => {
           </motion.div>
         )}
 
-        {/* Milestone Configuration Modal */}
+        {/* Create/Edit Reward Modal */}
         {showMilestoneModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            onClick={() => setShowMilestoneModal(false)}
+            onClick={() => {
+              setShowMilestoneModal(false)
+              setShowEditRewardModal(false)
+              setSelectedReward(null)
+              setRewardFormData({
+                name: '',
+                description: '',
+                level: '',
+                requirement: {
+                  type: 'conversions',
+                  value: '',
+                  description: ''
+                },
+                rewardAmount: '',
+                order: 0,
+                isActive: true
+              })
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -2379,51 +3283,194 @@ const Admin_channel_partner_management = () => {
             >
               <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-white">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-2xl font-bold">Configure Milestones</h3>
-                  <button onClick={() => setShowMilestoneModal(false)} className="p-2 hover:bg-white/20 rounded-full">
+                  <h3 className="text-2xl font-bold">{showEditRewardModal ? 'Edit Reward' : 'Create Level-wise Reward'}</h3>
+                  <button 
+                    onClick={() => {
+                      setShowMilestoneModal(false)
+                      setShowEditRewardModal(false)
+                      setSelectedReward(null)
+                      setRewardFormData({
+                        name: '',
+                        description: '',
+                        level: '',
+                        requirement: {
+                          type: 'conversions',
+                          value: '',
+                          description: ''
+                        },
+                        rewardAmount: '',
+                        order: 0,
+                        isActive: true
+                      })
+                    }} 
+                    className="p-2 hover:bg-white/20 rounded-full"
+                  >
                     <X className="h-5 w-5" />
                   </button>
                 </div>
               </div>
-              <div className="p-6 space-y-4 max-h-[calc(90vh-120px)] overflow-y-auto">
-                <div className="space-y-3">
-                  {mockMilestones.map((milestone) => (
-                    <div key={milestone.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{milestone.title}</h4>
-                          <p className="text-sm text-gray-500">{milestone.requirement}</p>
-                          <p className="text-sm font-semibold text-purple-600 mt-1">Reward: ₹{milestone.reward.toLocaleString('en-IN')}</p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">
-                            <Edit3 className="h-4 w-4" />
-                          </button>
-                          <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+              <form onSubmit={(e) => { e.preventDefault(); handleSaveReward(); }} className="p-6 space-y-4 max-h-[calc(90vh-120px)] overflow-y-auto">
+                {/* Reward Name */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center">
+                    Reward Name <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={rewardFormData.name}
+                    onChange={(e) => setRewardFormData({...rewardFormData, name: e.target.value})}
+                    className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    placeholder="e.g., First Sale, Rising Star, Pro Partner"
+                    required
+                  />
                 </div>
-                <Button className="w-full gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add New Milestone
-                </Button>
-              </div>
+
+                {/* Level */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center">
+                    Level <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={rewardFormData.level}
+                    onChange={(e) => setRewardFormData({...rewardFormData, level: e.target.value})}
+                    className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    placeholder="e.g., Bronze Partner, Silver Partner, Gold Partner"
+                    required
+                  />
+                </div>
+
+                {/* Description */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Description</label>
+                  <textarea
+                    value={rewardFormData.description}
+                    onChange={(e) => setRewardFormData({...rewardFormData, description: e.target.value})}
+                    className="w-full px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    rows="3"
+                    placeholder="Optional description for this reward"
+                  />
+                </div>
+
+                {/* Requirement Value */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center">
+                    Number of Conversions Required <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={rewardFormData.requirement.value}
+                    onChange={(e) => setRewardFormData({
+                      ...rewardFormData, 
+                      requirement: {...rewardFormData.requirement, value: e.target.value, type: 'conversions'}
+                    })}
+                    className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    placeholder="e.g., 1, 5, 10"
+                    min="0"
+                    required
+                  />
+                </div>
+
+                {/* Requirement Description */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Requirement Description</label>
+                  <input
+                    type="text"
+                    value={rewardFormData.requirement.description}
+                    onChange={(e) => setRewardFormData({
+                      ...rewardFormData, 
+                      requirement: {...rewardFormData.requirement, description: e.target.value}
+                    })}
+                    className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    placeholder="e.g., 1 Conversion, 5 Conversions (optional)"
+                  />
+                </div>
+
+                {/* Reward Amount */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center">
+                    Reward Amount (₹) <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={rewardFormData.rewardAmount}
+                    onChange={(e) => setRewardFormData({...rewardFormData, rewardAmount: e.target.value})}
+                    className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    placeholder="e.g., 150, 350, 1000"
+                    min="0"
+                    required
+                  />
+                </div>
+
+                {/* Order */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Display Order</label>
+                  <input
+                    type="number"
+                    value={rewardFormData.order}
+                    onChange={(e) => setRewardFormData({...rewardFormData, order: parseInt(e.target.value) || 0})}
+                    className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    placeholder="Lower numbers appear first"
+                    min="0"
+                  />
+                </div>
+
+                {/* Active Status */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700">Status</label>
+                  <select
+                    value={rewardFormData.isActive ? 'active' : 'inactive'}
+                    onChange={(e) => setRewardFormData({...rewardFormData, isActive: e.target.value === 'active'})}
+                    className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    onClick={() => {
+                      setShowMilestoneModal(false)
+                      setShowEditRewardModal(false)
+                      setSelectedReward(null)
+                      setRewardFormData({
+                        name: '',
+                        description: '',
+                        level: '',
+                        requirement: {
+                          type: 'conversions',
+                          value: '',
+                          description: ''
+                        },
+                        rewardAmount: '',
+                        order: 0,
+                        isActive: true
+                      })
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit">
+                    {showEditRewardModal ? 'Update Reward' : 'Create Reward'}
+                  </Button>
+                </div>
+              </form>
             </motion.div>
           </motion.div>
         )}
 
-        {/* Assign Team Modal */}
-        {showAssignTeamModal && (
+        {/* Delete Reward Confirmation Modal */}
+        {showDeleteRewardModal && selectedReward && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            onClick={() => { setShowAssignTeamModal(false); setSelectedCPForTeam(null); }}
+            onClick={() => { setShowDeleteRewardModal(false); setSelectedReward(null); }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -2433,43 +3480,984 @@ const Admin_channel_partner_management = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-gray-900">Assign Team</h3>
-                <button onClick={() => { setShowAssignTeamModal(false); setSelectedCPForTeam(null); }} className="p-2 hover:bg-gray-100 rounded-full">
+                <h3 className="text-xl font-bold text-gray-900">Delete Reward</h3>
+                <button onClick={() => { setShowDeleteRewardModal(false); setSelectedReward(null); }} className="p-2 hover:bg-gray-100 rounded-full">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="mb-6">
+                <p className="text-sm text-gray-600 mb-2">
+                  Are you sure you want to delete the reward <span className="font-semibold text-gray-900">"{selectedReward.name}"</span>?
+                </p>
+                <p className="text-xs text-red-600">This action cannot be undone.</p>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <Button variant="outline" onClick={() => { setShowDeleteRewardModal(false); setSelectedReward(null); }}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleDeleteReward}>
+                  Delete
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Reward Details Modal */}
+        {showRewardDetailsModal && selectedReward && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => { setShowRewardDetailsModal(false); setSelectedReward(null); }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">Reward Details</h3>
+                <button onClick={() => { setShowRewardDetailsModal(false); setSelectedReward(null); }} className="p-2 hover:bg-gray-100 rounded-full">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Level</p>
+                  <span className="inline-flex px-2 py-1 text-xs font-bold rounded-full bg-indigo-100 text-indigo-800">
+                    {selectedReward.level}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Reward Name</p>
+                  <p className="text-sm text-gray-900">{selectedReward.name}</p>
+                </div>
+                {selectedReward.description && (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-1">Description</p>
+                    <p className="text-sm text-gray-900">{selectedReward.description}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Requirement</p>
+                  <p className="text-sm text-gray-900">
+                    {selectedReward.requirement?.value} {selectedReward.requirement?.value === 1 ? 'Conversion' : 'Conversions'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Reward Amount</p>
+                  <p className="text-sm font-bold text-purple-600">₹{(selectedReward.rewardAmount || 0).toLocaleString('en-IN')}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Channel Partners Won</p>
+                  <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                    {selectedReward.winnersCount || 0} CPs
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Status</p>
+                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                    selectedReward.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {selectedReward.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Leads List Modal */}
+        {showLeadsListModal && selectedCPForLeads && selectedStatusForLeads && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowLeadsListModal(false)
+              setSelectedCPForLeads(null)
+              setSelectedStatusForLeads(null)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-2xl font-bold">
+                      {selectedStatusForLeads === 'hot' ? 'Hot' : 
+                       selectedStatusForLeads === 'connected' ? 'Connected' :
+                       selectedStatusForLeads === 'converted' ? 'Converted' :
+                       selectedStatusForLeads === 'lost' ? 'Lost' :
+                       selectedStatusForLeads === 'sharedWithSales' ? 'Leads Shared with Sales' :
+                       selectedStatusForLeads === 'receivedFromSales' ? 'Leads Received from Sales' :
+                       'Leads'}
+                    </h3>
+                    <p className="text-sm text-blue-100 mt-1">
+                      {selectedCPForLeads.channelPartner.name}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowLeadsListModal(false)
+                      setSelectedCPForLeads(null)
+                      setSelectedStatusForLeads(null)
+                    }}
+                    className="p-2 hover:bg-white/20 rounded-full"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 lg:p-6">
+                {/* Check if showing shared leads */}
+                {selectedStatusForLeads === 'sharedWithSales' ? (
+                  selectedCPForLeads.leadSharing?.sharedWithSalesList?.length > 0 ? (
+                    <div className="overflow-x-auto -mx-3 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                      <table className="w-full min-w-[700px] border-collapse">
+                        <thead>
+                          <tr className="border-b border-gray-200 bg-gray-50">
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[140px]">Name</th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[120px]">Contact</th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[100px]">Project Type</th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[90px]">Value</th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[80px]">Status</th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[130px]">Shared With</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedCPForLeads.leadSharing.sharedWithSalesList.map((lead, index) => (
+                            <tr key={lead.id || index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                    {lead.name?.charAt(0).toUpperCase() || 'N'}
+                                  </div>
+                                  <span className="text-sm font-semibold text-gray-900 truncate">{lead.name || 'N/A'}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="text-xs text-gray-600">
+                                  <div>{lead.phone || 'N/A'}</div>
+                                  {lead.email && <div className="text-gray-500 mt-1 truncate">{lead.email}</div>}
+                                </div>
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                  {lead.projectType || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className="text-xs font-semibold text-gray-900">
+                                  {lead.value > 0 ? `₹${lead.value.toLocaleString('en-IN')}` : 'N/A'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                {lead.status && (
+                                  <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
+                                    lead.status === 'converted' ? 'bg-green-100 text-green-800' :
+                                    lead.status === 'lost' || lead.status === 'not_converted' ? 'bg-gray-100 text-gray-800' :
+                                    'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {lead.status}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4">
+                                {lead.sharedWith && lead.sharedWith.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {lead.sharedWith.map((share, idx) => (
+                                      <div key={idx} className="text-xs text-purple-700">
+                                        <div className="font-medium">{share.salesName || 'N/A'}</div>
+                                        {share.sharedAt && (
+                                          <div className="text-purple-600 text-[10px]">{formatDate(share.sharedAt)}</div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-400">N/A</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <p className="text-gray-500">No leads shared with sales found for this channel partner</p>
+                    </div>
+                  )
+                ) : selectedStatusForLeads === 'receivedFromSales' ? (
+                  selectedCPForLeads.leadSharing?.receivedFromSalesList?.length > 0 ? (
+                    <div className="overflow-x-auto -mx-3 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                      <table className="w-full min-w-[700px] border-collapse">
+                        <thead>
+                          <tr className="border-b border-gray-200 bg-gray-50">
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[140px]">Name</th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[120px]">Contact</th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[100px]">Project Type</th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[90px]">Value</th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[80px]">Status</th>
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[130px]">Received From</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedCPForLeads.leadSharing.receivedFromSalesList.map((lead, index) => (
+                            <tr key={lead.id || index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                    {lead.name?.charAt(0).toUpperCase() || 'N'}
+                                  </div>
+                                  <span className="text-sm font-semibold text-gray-900 truncate">{lead.name || 'N/A'}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="text-xs text-gray-600">
+                                  <div>{lead.phone || 'N/A'}</div>
+                                  {lead.email && <div className="text-gray-500 mt-1 truncate">{lead.email}</div>}
+                                </div>
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                  {lead.projectType || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className="text-xs font-semibold text-gray-900">
+                                  {lead.value > 0 ? `₹${lead.value.toLocaleString('en-IN')}` : 'N/A'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                {lead.status && (
+                                  <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
+                                    lead.status === 'converted' ? 'bg-green-100 text-green-800' :
+                                    lead.status === 'lost' || lead.status === 'not_converted' ? 'bg-gray-100 text-gray-800' :
+                                    'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {lead.status}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4">
+                                {lead.receivedFrom && lead.receivedFrom.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {lead.receivedFrom.map((received, idx) => (
+                                      <div key={idx} className="text-xs text-indigo-700">
+                                        <div className="font-medium">{received.sharedByName || 'N/A'}</div>
+                                        {received.sharedAt && (
+                                          <div className="text-indigo-600 text-[10px]">{formatDate(received.sharedAt)}</div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-400">N/A</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <p className="text-gray-500">No leads received from sales found for this channel partner</p>
+                    </div>
+                  )
+                ) : selectedCPForLeads.leadsByStatus?.[selectedStatusForLeads]?.length > 0 ? (
+                  <div className="overflow-x-auto -mx-3 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    <table className="w-full min-w-[800px] border-collapse">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-gray-50">
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[140px]">Name</th>
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[120px]">Contact</th>
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[100px]">Project Type</th>
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[90px]">Value</th>
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[80px]">Status</th>
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[80px]">Priority</th>
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 min-w-[100px]">Created</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedCPForLeads.leadsByStatus[selectedStatusForLeads].map((lead, index) => (
+                          <tr key={lead.id || index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                  {lead.name?.charAt(0).toUpperCase() || 'N'}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold text-gray-900 truncate">{lead.name || 'N/A'}</div>
+                                  {lead.client && (
+                                    <div className="text-[10px] text-green-600 mt-0.5">Client: {lead.client.name}</div>
+                                  )}
+                                  {lead.lostReason && (
+                                    <div className="text-[10px] text-gray-500 mt-0.5 truncate">{lead.lostReason}</div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="text-xs text-gray-600">
+                                <div>{lead.phone || 'N/A'}</div>
+                                {lead.email && <div className="text-gray-500 mt-1 truncate">{lead.email}</div>}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                {lead.projectType || 'N/A'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-xs font-semibold text-gray-900">
+                                {lead.value > 0 ? `₹${lead.value.toLocaleString('en-IN')}` : 'N/A'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              {lead.status && (
+                                <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
+                                  lead.status === 'converted' ? 'bg-green-100 text-green-800' :
+                                  lead.status === 'lost' || lead.status === 'not_converted' ? 'bg-gray-100 text-gray-800' :
+                                  'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {lead.status}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              {lead.priority && (
+                                <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
+                                  lead.priority === 'urgent' || lead.priority === 'high' ? 'bg-red-100 text-red-800' :
+                                  'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {lead.priority}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="text-xs text-gray-600">
+                                {lead.createdAt && <div>{formatDate(lead.createdAt)}</div>}
+                                {lead.convertedAt && (
+                                  <div className="text-green-600 mt-0.5">Converted: {formatDate(lead.convertedAt)}</div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">No {selectedStatusForLeads} leads found for this channel partner</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Converted Client View Modal */}
+        {showConvertedClientModal && selectedConvertedClient && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => { setShowConvertedClientModal(false); setSelectedConvertedClient(null); }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-r from-teal-600 to-green-600 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-2xl font-bold">{selectedConvertedClient.clientName}</h3>
+                    <p className="text-sm text-teal-100 mt-1">{selectedConvertedClient.projectType}</p>
+                  </div>
+                  <button 
+                    onClick={() => { setShowConvertedClientModal(false); setSelectedConvertedClient(null); }} 
+                    className="p-2 hover:bg-white/20 rounded-full"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6 space-y-6">
+                {/* Client Information */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Client Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-1">Client Name</p>
+                      <p className="text-sm font-semibold text-gray-900">{selectedConvertedClient.clientName}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-1">Project Type</p>
+                      <p className="text-sm font-semibold text-gray-900">{selectedConvertedClient.projectType}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-1">Channel Partner</p>
+                      <p className="text-sm font-semibold text-gray-900">{selectedConvertedClient.cpName}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-1">CP ID</p>
+                      <p className="text-sm font-semibold text-gray-900">{selectedConvertedClient.cpId}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Project Status */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Project Status</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-gray-500">Status</span>
+                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                          selectedConvertedClient.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                          selectedConvertedClient.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {selectedConvertedClient.status}
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-gray-500">Progress</span>
+                        <span className="text-blue-600 font-semibold">{selectedConvertedClient.progress}%</span>
+                      </div>
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-600 rounded-full" style={{ width: `${selectedConvertedClient.progress}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Information */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Financial Information</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-xs font-medium text-gray-500 mb-1">Total Value</p>
+                      <p className="text-sm font-bold text-gray-900">₹{selectedConvertedClient.totalValue.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-green-50 p-3 rounded-lg">
+                      <p className="text-xs font-medium text-green-700 mb-1">Paid Amount</p>
+                      <p className="text-sm font-bold text-green-800">₹{selectedConvertedClient.paidAmount.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-lg">
+                      <p className="text-xs font-medium text-red-700 mb-1">Pending</p>
+                      <p className="text-sm font-bold text-red-800">₹{selectedConvertedClient.pendingAmount.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg">
+                      <p className="text-xs font-medium text-purple-700 mb-1">Commission</p>
+                      <p className="text-sm font-bold text-purple-800">₹{selectedConvertedClient.commissionEarned.toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Status */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Payment Status</h4>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                      selectedConvertedClient.paymentStatus === 'Fully Paid' ? 'bg-green-100 text-green-800' :
+                      selectedConvertedClient.paymentStatus === 'Partial Paid' ? 'bg-orange-100 text-orange-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {selectedConvertedClient.paymentStatus}
+                    </span>
+                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                      selectedConvertedClient.commissionStatus === 'Credited' ? 'bg-green-100 text-green-800' :
+                      'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      Commission: {selectedConvertedClient.commissionStatus}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Assign Team Lead Modal */}
+        {showAssignTeamLeadModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => { 
+              setShowAssignTeamLeadModal(false)
+              setSelectedCPForTeamLead(null)
+              setSelectedTeamLeadId('')
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">
+                  {selectedCPForTeamLead ? 'Edit Team Lead Assignment' : 'Assign Team Lead'}
+                </h3>
+                <button 
+                  onClick={() => { 
+                    setShowAssignTeamLeadModal(false)
+                    setSelectedCPForTeamLead(null)
+                    setSelectedTeamLeadId('')
+                  }} 
+                  className="p-2 hover:bg-gray-100 rounded-full"
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 mb-2 block">Channel Partner</label>
-                  <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <option>Rajesh Kumar</option>
-                    <option>Priya Sharma</option>
-                    <option>Amit Patel</option>
-                  </select>
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                    Channel Partner {selectedCPForTeamLead && <span className="text-gray-500">(Selected)</span>}
+                  </label>
+                  {selectedCPForTeamLead ? (
+                    <div className="px-4 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                          {selectedCPForTeamLead.cpName?.charAt(0).toUpperCase() || 'C'}
+                        </div>
+                        <p className="text-sm font-semibold text-gray-900">{selectedCPForTeamLead.cpName}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <SearchableDropdown
+                      options={teamLeadAssignments}
+                      value={selectedCPForTeamLead?.cpId || ''}
+                      onChange={(cpId) => {
+                        const cp = teamLeadAssignments.find(a => a.cpId === cpId)
+                        if (cp) {
+                          setSelectedCPForTeamLead(cp)
+                          setSelectedTeamLeadId(cp.salesTeamLeadId || '')
+                        }
+                      }}
+                      placeholder="Select Channel Partner"
+                      getOptionLabel={(cp) => cp?.cpName || ''}
+                      getOptionValue={(cp) => cp?.cpId || ''}
+                    />
+                  )}
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 mb-2 block">Sales Lead</label>
-                  <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <option>Rahul Sharma</option>
-                    <option>Other Sales Lead</option>
-                  </select>
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block">Sales Team Lead</label>
+                  {loadingTeamLeads ? (
+                    <div className="px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-center">
+                      <Loading size="small" />
+                    </div>
+                  ) : (
+                    <SearchableDropdown
+                      options={salesTeamLeads}
+                      value={selectedTeamLeadId}
+                      onChange={setSelectedTeamLeadId}
+                      placeholder="Select Sales Team Lead"
+                      getOptionLabel={(lead) => `${lead.name}${lead.email ? ` (${lead.email})` : ''}`}
+                      getOptionValue={(lead) => lead.id || lead._id || ''}
+                      disabled={loadingTeamLeads}
+                    />
+                  )}
+                  {salesTeamLeads.length === 0 && !loadingTeamLeads && (
+                    <p className="text-xs text-gray-500 mt-1">No sales team leads available</p>
+                  )}
+                </div>
+                {selectedTeamLeadId && (
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-xs font-semibold text-blue-800 mb-1">Note:</p>
+                    <p className="text-xs text-blue-700">
+                      A single sales team lead can be assigned to multiple channel partners. This assignment will be saved immediately.
+                    </p>
+                  </div>
+                )}
+                <div className="flex justify-end space-x-3 pt-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => { 
+                      setShowAssignTeamLeadModal(false)
+                      setSelectedCPForTeamLead(null)
+                      setSelectedTeamLeadId('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleAssignTeamLead}
+                    disabled={!selectedCPForTeamLead || !selectedTeamLeadId || loadingTeamLeads}
+                  >
+                    {selectedCPForTeamLead?.salesTeamLeadId ? 'Update Assignment' : 'Assign Team Lead'}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Assign Team Lead Modal */}
+        {showAssignTeamLeadModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => { 
+              setShowAssignTeamLeadModal(false)
+              setSelectedCPForTeamLead(null)
+              setSelectedTeamLeadId('')
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">
+                  {selectedCPForTeamLead ? 'Edit Team Lead Assignment' : 'Assign Team Lead'}
+                </h3>
+                <button 
+                  onClick={() => { 
+                    setShowAssignTeamLeadModal(false)
+                    setSelectedCPForTeamLead(null)
+                    setSelectedTeamLeadId('')
+                  }} 
+                  className="p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                    Channel Partner {selectedCPForTeamLead && <span className="text-gray-500">(Selected)</span>}
+                  </label>
+                  {selectedCPForTeamLead ? (
+                    <div className="px-4 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                          {selectedCPForTeamLead.cpName?.charAt(0).toUpperCase() || 'C'}
+                        </div>
+                        <p className="text-sm font-semibold text-gray-900">{selectedCPForTeamLead.cpName}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <SearchableDropdown
+                      options={teamLeadAssignments}
+                      value={selectedCPForTeamLead?.cpId || ''}
+                      onChange={(cpId) => {
+                        const cp = teamLeadAssignments.find(a => a.cpId === cpId)
+                        if (cp) {
+                          setSelectedCPForTeamLead(cp)
+                          setSelectedTeamLeadId(cp.salesTeamLeadId || '')
+                        }
+                      }}
+                      placeholder="Select Channel Partner"
+                      getOptionLabel={(cp) => cp?.cpName || ''}
+                      getOptionValue={(cp) => cp?.cpId || ''}
+                    />
+                  )}
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 mb-2 block">Team Members</label>
-                  <div className="space-y-2">
-                    <label className="flex items-center space-x-2">
-                      <input type="checkbox" className="rounded" />
-                      <span className="text-sm text-gray-700">Priya Verma</span>
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block">Sales Team Lead</label>
+                  {loadingTeamLeads ? (
+                    <div className="px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-center">
+                      <Loading size="small" />
+                    </div>
+                  ) : (
+                    <SearchableDropdown
+                      options={salesTeamLeads}
+                      value={selectedTeamLeadId}
+                      onChange={setSelectedTeamLeadId}
+                      placeholder="Select Sales Team Lead"
+                      getOptionLabel={(lead) => `${lead.name}${lead.email ? ` (${lead.email})` : ''}`}
+                      getOptionValue={(lead) => lead.id || lead._id || ''}
+                      disabled={loadingTeamLeads}
+                    />
+                  )}
+                  {salesTeamLeads.length === 0 && !loadingTeamLeads && (
+                    <p className="text-xs text-gray-500 mt-1">No sales team leads available</p>
+                  )}
+                </div>
+                {selectedTeamLeadId && (
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-xs font-semibold text-blue-800 mb-1">Note:</p>
+                    <p className="text-xs text-blue-700">
+                      A single sales team lead can be assigned to multiple channel partners. This assignment will be saved immediately.
+                    </p>
+                  </div>
+                )}
+                <div className="flex justify-end space-x-3 pt-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => { 
+                      setShowAssignTeamLeadModal(false)
+                      setSelectedCPForTeamLead(null)
+                      setSelectedTeamLeadId('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleAssignTeamLead}
+                    disabled={!selectedCPForTeamLead || !selectedTeamLeadId || loadingTeamLeads}
+                  >
+                    {selectedCPForTeamLead?.salesTeamLeadId ? 'Update Assignment' : 'Assign Team Lead'}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Quotation Create/Edit Modal */}
+        {showQuotationModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowQuotationModal(false)
+              setEditingQuotation(null)
+              resetQuotationForm()
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">
+                  {editingQuotation ? 'Edit Quotation' : 'Create Quotation'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowQuotationModal(false)
+                    setEditingQuotation(null)
+                    resetQuotationForm()
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                    Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={quotationFormData.title}
+                    onChange={(e) => setQuotationFormData({ ...quotationFormData, title: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter quotation title"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                      Category <span className="text-red-500">*</span>
                     </label>
-                    <label className="flex items-center space-x-2">
-                      <input type="checkbox" className="rounded" />
-                      <span className="text-sm text-gray-700">Amit Kumar</span>
+                    <input
+                      type="text"
+                      value={quotationFormData.category}
+                      onChange={(e) => setQuotationFormData({ ...quotationFormData, category: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="e.g., Website, Mobile App, E-commerce, Taxi, CRM, ERP..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                      Status
                     </label>
+                    <select
+                      value={quotationFormData.status}
+                      onChange={(e) => setQuotationFormData({ ...quotationFormData, status: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="archived">Archived</option>
+                    </select>
                   </div>
                 </div>
-                <div className="flex justify-end space-x-3">
-                  <Button variant="outline" onClick={() => { setShowAssignTeamModal(false); setSelectedCPForTeam(null); }}>Cancel</Button>
-                  <Button>Assign Team</Button>
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                    Price (INR) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={quotationFormData.price}
+                    onChange={(e) => setQuotationFormData({ ...quotationFormData, price: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                    Description
+                  </label>
+                  <textarea
+                    value={quotationFormData.description}
+                    onChange={(e) => setQuotationFormData({ ...quotationFormData, description: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter quotation description"
+                    rows="3"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                    PDF Document
+                  </label>
+                  
+                  {/* Show existing PDF or newly selected file */}
+                  {quotationFormData.pdfDocument ? (
+                    <div className="mb-3 p-4 bg-green-50 rounded-lg border-2 border-green-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="flex-shrink-0">
+                            {quotationFormData.pdfDocument instanceof File ? (
+                              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <FileText className="h-6 w-6 text-blue-600" />
+                              </div>
+                            ) : (
+                              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                <CheckCircle className="h-6 w-6 text-green-600" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            {quotationFormData.pdfDocument instanceof File ? (
+                              <>
+                                <p className="text-sm font-semibold text-gray-900 truncate">
+                                  {quotationFormData.pdfDocument.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {(quotationFormData.pdfDocument.size / 1024 / 1024).toFixed(2)} MB • Ready to upload
+                                </p>
+                              </>
+                            ) : quotationFormData.pdfDocument.secure_url ? (
+                              <>
+                                <p className="text-sm font-semibold text-gray-900 truncate">
+                                  {quotationFormData.pdfDocument.originalName || 'PDF Document'}
+                                </p>
+                                <a
+                                  href={quotationFormData.pdfDocument.secure_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  View current PDF
+                                </a>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuotationFormData({ ...quotationFormData, pdfDocument: null })
+                            // Reset file input
+                            const fileInput = document.querySelector('input[type="file"][accept=".pdf"]')
+                            if (fileInput) fileInput.value = ''
+                          }}
+                          className="ml-3 p-1.5 hover:bg-red-100 rounded-full transition-colors"
+                          title="Remove PDF"
+                        >
+                          <X className="h-4 w-4 text-red-600" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-3 p-6 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 hover:border-blue-400 hover:bg-blue-50 transition-colors">
+                      <div className="text-center">
+                        <FileText className="h-10 w-10 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm text-gray-600 mb-1">No PDF uploaded</p>
+                        <p className="text-xs text-gray-500">Click below to select a PDF file</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* File Input */}
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      id="quotation-pdf-upload"
+                      onChange={(e) => {
+                        const file = e.target.files[0]
+                        if (file) {
+                          if (file.size > 10 * 1024 * 1024) {
+                            addToast({ type: 'error', message: 'File size must be less than 10MB' })
+                            e.target.value = '' // Reset input
+                            return
+                          }
+                          if (file.type !== 'application/pdf') {
+                            addToast({ type: 'error', message: 'Only PDF files are allowed' })
+                            e.target.value = '' // Reset input
+                            return
+                          }
+                          setQuotationFormData({ ...quotationFormData, pdfDocument: file })
+                          addToast({ type: 'success', message: 'PDF file selected successfully' })
+                        }
+                      }}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                    <FileText className="h-3 w-3" />
+                    Supported format: PDF only (Maximum 10MB)
+                  </p>
+                </div>
+                <div className="flex justify-end space-x-3 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowQuotationModal(false)
+                      setEditingQuotation(null)
+                      resetQuotationForm()
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={editingQuotation ? handleUpdateQuotation : handleCreateQuotation}
+                    disabled={!quotationFormData.title || !quotationFormData.price || !quotationFormData.category}
+                  >
+                    {editingQuotation ? 'Update Quotation' : 'Create Quotation'}
+                  </Button>
                 </div>
               </div>
             </motion.div>

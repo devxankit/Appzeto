@@ -89,7 +89,14 @@ const protect = async (req, res, next) => {
 
       // Try to find Channel Partner if not admin, PM, Sales, Employee, or Client
       let channelPartner = await ChannelPartner.findById(decoded.id);
-      if (channelPartner && channelPartner.isActive) {
+      if (channelPartner) {
+        if (!channelPartner.isActive) {
+          return res.status(403).json({
+            success: false,
+            message: 'Your account has been deactivated. Please contact support for assistance.',
+            code: 'ACCOUNT_INACTIVE'
+          });
+        }
         req.channelPartner = channelPartner;
         req.user = channelPartner;
         req.userType = 'channel-partner';

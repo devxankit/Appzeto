@@ -1,4 +1,5 @@
 const ChannelPartner = require('../models/ChannelPartner');
+const { CPWallet, CPWalletTransaction } = require('../models/CPWallet');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { deleteFile } = require('../services/cloudinaryService');
@@ -23,6 +24,7 @@ const getAllChannelPartners = asyncHandler(async (req, res, next) => {
       { name: { $regex: search, $options: 'i' } },
       { email: { $regex: search, $options: 'i' } },
       { phoneNumber: { $regex: search, $options: 'i' } },
+      { partnerId: { $regex: search, $options: 'i' } },
       { companyName: { $regex: search, $options: 'i' } }
     ];
   }
@@ -141,6 +143,14 @@ const createChannelPartner = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Channel partner with this phone number already exists', 400));
   }
 
+  // Check if partnerId is provided and if it already exists
+  if (partnerId) {
+    const existingPartnerId = await ChannelPartner.findOne({ partnerId: partnerId.trim() });
+    if (existingPartnerId) {
+      return next(new ErrorResponse('Channel partner with this Partner ID already exists', 400));
+    }
+  }
+
   // Helper function to parse date string correctly (preserves calendar date)
   const parseDate = (dateString) => {
     if (!dateString) return null;
@@ -159,6 +169,7 @@ const createChannelPartner = asyncHandler(async (req, res, next) => {
     name,
     email: email || undefined,
     phoneNumber: cleanPhoneNumber,
+    partnerId: partnerId ? partnerId.trim() : undefined,
     dateOfBirth: parseDate(dateOfBirth),
     gender: gender || undefined,
     joiningDate: parseDate(joiningDate),
@@ -189,12 +200,16 @@ const updateChannelPartner = asyncHandler(async (req, res, next) => {
     name, 
     email, 
     phoneNumber, 
+    partnerId,
     dateOfBirth, 
     gender,
     joiningDate, 
     status, 
     companyName,
-    address
+    address,
+    salesTeamLeadId,
+    salesTeamLeadName,
+    teamLeadAssignedDate
   } = req.body;
 
   let channelPartner = await ChannelPartner.findById(req.params.id);
@@ -236,12 +251,46 @@ const updateChannelPartner = asyncHandler(async (req, res, next) => {
     
     channelPartner.phoneNumber = cleanPhoneNumber;
   }
+  if (partnerId !== undefined) {
+    const trimmedPartnerId = partnerId ? partnerId.trim() : null;
+    // Check if partnerId is already taken by another channel partner
+    if (trimmedPartnerId && trimmedPartnerId !== channelPartner.partnerId) {
+      const existingPartnerId = await ChannelPartner.findOne({ partnerId: trimmedPartnerId });
+      if (existingPartnerId) {
+        return next(new ErrorResponse('Channel partner with this Partner ID already exists', 400));
+      }
+    }
+    channelPartner.partnerId = trimmedPartnerId || undefined;
+  }
   if (dateOfBirth) channelPartner.dateOfBirth = parseDate(dateOfBirth);
   if (gender !== undefined) channelPartner.gender = gender;
   if (joiningDate) channelPartner.joiningDate = parseDate(joiningDate);
   if (status !== undefined) channelPartner.isActive = status === 'active';
   if (companyName !== undefined) channelPartner.companyName = companyName;
   if (address !== undefined) channelPartner.address = address;
+  
+  // Handle sales team lead assignment
+  if (salesTeamLeadId !== undefined) {
+    if (salesTeamLeadId === null || salesTeamLeadId === '') {
+      // Remove team lead assignment
+      channelPartner.salesTeamLeadId = null;
+      channelPartner.salesTeamLeadName = null;
+      channelPartner.teamLeadAssignedDate = null;
+    } else {
+      // Validate that the sales team lead exists and is actually a team lead
+      const Sales = require('../models/Sales');
+      const salesTeamLead = await Sales.findById(salesTeamLeadId);
+      if (!salesTeamLead) {
+        return next(new ErrorResponse('Sales team lead not found', 404));
+      }
+      if (!salesTeamLead.isTeamLead && salesTeamLead.role !== 'team_lead' && salesTeamLead.role !== 'Team Lead') {
+        return next(new ErrorResponse('Selected sales member is not a team lead', 400));
+      }
+      channelPartner.salesTeamLeadId = salesTeamLeadId;
+      channelPartner.salesTeamLeadName = salesTeamLeadName || salesTeamLead.name;
+      channelPartner.teamLeadAssignedDate = teamLeadAssignedDate ? parseDate(teamLeadAssignedDate) : new Date();
+    }
+  }
 
   // Handle document update if present (already uploaded to Cloudinary)
   if (req.body.document) {
@@ -285,11 +334,168 @@ const deleteChannelPartner = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get all channel partner wallets with earnings data
+// @route   GET /api/admin/channel-partners/wallets
+// @access  Private (Admin only)
+const getAllChannelPartnerWallets = asyncHandler(async (req, res, next) => {
+  const { page = 1, limit = 20, search } = req.query;
+  
+  const pageNum = parseInt(page);
+  const limitNum = parseInt(limit);
+  const skip = (pageNum - 1) * limitNum;
+
+  // Get current month start and end dates
+  const now = new Date();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // Build search filter
+  let partnerFilter = {};
+  if (search) {
+    partnerFilter.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { email: { $regex: search, $options: 'i' } },
+      { phoneNumber: { $regex: search, $options: 'i' } },
+      { partnerId: { $regex: search, $options: 'i' } }
+    ];
+  }
+
+  // Get all channel partners
+  const channelPartners = await ChannelPartner.find(partnerFilter)
+    .select('name email phoneNumber partnerId')
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limitNum);
+
+  const total = await ChannelPartner.countDocuments(partnerFilter);
+
+  // Get wallet data for each partner
+  const walletsData = await Promise.all(
+    channelPartners.map(async (partner) => {
+      const wallet = await CPWallet.findOne({ channelPartner: partner._id });
+      
+      if (!wallet) {
+        return {
+          channelPartner: {
+            id: partner._id,
+            name: partner.name,
+            email: partner.email,
+            phoneNumber: partner.phoneNumber,
+            partnerId: partner.partnerId
+          },
+          balance: 0,
+          totalEarned: 0,
+          currentMonthEarnings: 0,
+          rewardAmount: 0,
+          paidAmount: 0,
+          unpaidAmount: 0
+        };
+      }
+
+      // Get current month earnings (credits only)
+      const currentMonthEarnings = await CPWalletTransaction.aggregate([
+        {
+          $match: {
+            wallet: wallet._id,
+            type: 'credit',
+            createdAt: {
+              $gte: currentMonthStart,
+              $lte: currentMonthEnd
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' }
+          }
+        }
+      ]);
+
+      // Get reward amount (all time)
+      const rewardAmount = await CPWalletTransaction.aggregate([
+        {
+          $match: {
+            wallet: wallet._id,
+            type: 'credit',
+            transactionType: 'reward'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' }
+          }
+        }
+      ]);
+
+      // Get paid and unpaid amounts
+      const paidAmount = await CPWalletTransaction.aggregate([
+        {
+          $match: {
+            wallet: wallet._id,
+            type: 'credit',
+            status: 'completed'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' }
+          }
+        }
+      ]);
+
+      const unpaidAmount = await CPWalletTransaction.aggregate([
+        {
+          $match: {
+            wallet: wallet._id,
+            type: 'credit',
+            status: 'pending'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' }
+          }
+        }
+      ]);
+
+      return {
+        channelPartner: {
+          id: partner._id,
+          name: partner.name,
+          email: partner.email,
+          phoneNumber: partner.phoneNumber,
+          partnerId: partner.partnerId
+        },
+        balance: wallet.balance || 0,
+        totalEarned: wallet.totalEarned || 0,
+        currentMonthEarnings: currentMonthEarnings[0]?.total || 0,
+        rewardAmount: rewardAmount[0]?.total || 0,
+        paidAmount: paidAmount[0]?.total || 0,
+        unpaidAmount: unpaidAmount[0]?.total || 0
+      };
+    })
+  );
+
+  res.status(200).json({
+    success: true,
+    count: walletsData.length,
+    total,
+    page: pageNum,
+    pages: Math.ceil(total / limitNum),
+    data: walletsData
+  });
+});
+
 module.exports = {
   getAllChannelPartners,
   getChannelPartnerStatistics,
   getChannelPartner,
   createChannelPartner,
   updateChannelPartner,
-  deleteChannelPartner
+  deleteChannelPartner,
+  getAllChannelPartnerWallets
 };

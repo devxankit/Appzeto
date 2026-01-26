@@ -6,8 +6,21 @@ const {
   getChannelPartner,
   createChannelPartner,
   updateChannelPartner,
-  deleteChannelPartner
+  deleteChannelPartner,
+  getAllChannelPartnerWallets
 } = require('../controllers/channelPartnerController');
+const {
+  getAllCPRewards,
+  getCPReward,
+  createCPReward,
+  updateCPReward,
+  deleteCPReward,
+  getCPRewardStatistics
+} = require('../controllers/cpRewardAdminController');
+const {
+  getChannelPartnerLeadsBreakdown,
+  getChannelPartnerLeads
+} = require('../controllers/channelPartnerLeadsController');
 const { protect, authorize } = require('../middlewares/auth');
 
 // Apply authentication and authorization to all routes
@@ -18,6 +31,51 @@ const { protect, authorize } = require('../middlewares/auth');
 // @desc    Get channel partner statistics
 // @access  Private (Admin only)
 router.get('/statistics', getChannelPartnerStatistics);
+
+// @route   GET /api/admin/channel-partners/wallets
+// @desc    Get all channel partner wallets with earnings data
+// @access  Private (Admin only)
+router.get('/wallets', getAllChannelPartnerWallets);
+
+// @route   GET /api/admin/channel-partners/leads/breakdown
+// @desc    Get channel partner leads breakdown with metrics
+// @access  Private (Admin only)
+router.get('/leads/breakdown', getChannelPartnerLeadsBreakdown);
+
+// @route   GET /api/admin/channel-partners/:cpId/leads
+// @desc    Get leads for a specific channel partner and status
+// @access  Private (Admin only)
+router.get('/:cpId/leads', getChannelPartnerLeads);
+
+// @route   GET /api/admin/channel-partners/rewards/statistics
+// @desc    Get channel partner reward statistics
+// @access  Private (Admin only)
+router.get('/rewards/statistics', getCPRewardStatistics);
+
+// @route   GET /api/admin/channel-partners/rewards
+// @desc    Get all channel partner rewards
+// @access  Private (Admin only)
+router.get('/rewards', getAllCPRewards);
+
+// @route   POST /api/admin/channel-partners/rewards
+// @desc    Create channel partner reward
+// @access  Private (Admin only)
+router.post('/rewards', createCPReward);
+
+// @route   GET /api/admin/channel-partners/rewards/:id
+// @desc    Get single channel partner reward
+// @access  Private (Admin only)
+router.get('/rewards/:id', getCPReward);
+
+// @route   PUT /api/admin/channel-partners/rewards/:id
+// @desc    Update channel partner reward
+// @access  Private (Admin only)
+router.put('/rewards/:id', updateCPReward);
+
+// @route   DELETE /api/admin/channel-partners/rewards/:id
+// @desc    Delete channel partner reward
+// @access  Private (Admin only)
+router.delete('/rewards/:id', deleteCPReward);
 
 // @route   GET /api/admin/channel-partners
 // @desc    Get all channel partners with filtering and pagination

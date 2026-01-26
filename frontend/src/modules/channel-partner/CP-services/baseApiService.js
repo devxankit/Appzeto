@@ -60,9 +60,11 @@ const buildApiError = (response, payload) => {
     'Something went wrong';
 
   const error = new Error(message);
-  error.status = response.status;
+  error.status = response ? response.status : 500;
   error.payload = payload;
-  error.isUnauthorized = response.status === 401;
+  error.isUnauthorized = response && response.status === 401;
+  error.isForbidden = response && response.status === 403;
+  error.code = payload && payload.code;
   return error;
 };
 
@@ -101,7 +103,15 @@ export const apiRequest = async (url, options = {}) => {
     const data = await parseResponseBody(response);
 
     if (!response.ok) {
-      if (response.status === 401) {
+      if (response.status === 401 || response.status === 403) {
+        // Check if it's an inactive account error
+        if (data && data.code === 'ACCOUNT_INACTIVE') {
+          handleUnauthorized();
+          // Throw error with specific code for handling
+          const inactiveError = buildApiError(response, data);
+          inactiveError.isInactive = true;
+          throw inactiveError;
+        }
         handleUnauthorized();
       }
 
@@ -110,7 +120,17 @@ export const apiRequest = async (url, options = {}) => {
 
     return data;
   } catch (error) {
-    // Don't log here - let the calling component handle error logging
+    // Re-throw the error to preserve the original error structure
+    if (error.isInactive || error.code === 'ACCOUNT_INACTIVE') {
+      throw error;
+    }
+    // For network errors or other issues, wrap them properly
+    if (!error.status && !error.isUnauthorized && !error.isForbidden) {
+      const wrappedError = new Error(error.message || 'Network error occurred');
+      wrappedError.status = 500;
+      wrappedError.originalError = error;
+      throw wrappedError;
+    }
     throw error;
   }
 };

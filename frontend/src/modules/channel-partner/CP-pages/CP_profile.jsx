@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import CP_navbar from '../CP-components/CP_navbar';
 import { useToast } from '../../../contexts/ToastContext';
-import { logoutCP } from '../CP-services/cpAuthService';
+import { logoutCP, getProfile } from '../CP-services/cpAuthService';
 
 const CP_profile = () => {
     const navigate = useNavigate();
@@ -18,27 +18,121 @@ const CP_profile = () => {
     const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
     const longPressTimer = useRef(null);
     const isLongPressing = useRef(false);
+    const [userData, setUserData] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-    // Mock User Data
-    const USER = {
-        name: 'Iron Man',
-        id: 'CP-2024-STARK',
-        role: 'Titanium Partner',
-        initials: 'IM',
-        company: 'Stark Industries',
-        location: 'Indore',
-        licenseNo: 'LIC-2024-001',
-        issuedDate: '15 Jan 2026',
-        validThru: '12/28',
+    // Format date helper
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        const day = date.getDate();
+        const month = date.toLocaleString('default', { month: 'short' });
+        const year = date.getFullYear();
+        return `${day} ${month} ${year}`;
+    };
+
+    // Get initials from name
+    const getInitials = (name) => {
+        if (!name) return 'CP';
+        return name
+            .split(' ')
+            .filter(Boolean)
+            .map((segment) => segment[0]?.toUpperCase())
+            .join('')
+            .slice(0, 2) || 'CP';
+    };
+
+    // Fetch user profile data
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                setLoading(true);
+                const response = await getProfile();
+                const profile = response?.data || {};
+                
+                setUserData({
+                    name: profile.name || 'Channel Partner',
+                    id: profile.partnerId || `CP-${profile._id?.slice(-6)?.toUpperCase()}` || 'CP-XXXXXX',
+                    role: 'Channel Partner',
+                    initials: getInitials(profile.name),
+                    company: profile.companyName || '',
+                    location: profile.address?.city || profile.address?.state || '',
+                    issuedDate: formatDate(profile.joiningDate || profile.createdAt),
+                    contact: {
+                        phone: profile.phoneNumber ? `+91 ${profile.phoneNumber}` : '',
+                        email: profile.email || '',
+                        website: profile.companyName?.toLowerCase().replace(/\s+/g, '') + '.com' || 'appzeto.com'
+                    }
+                });
+            } catch (error) {
+                // Check if account is inactive
+                if (error.isInactive || error.code === 'ACCOUNT_INACTIVE' || (error.payload && error.payload.code === 'ACCOUNT_INACTIVE')) {
+                    toast.error(error.message || 'Your account has been deactivated. Please contact support.');
+                    // Log out and redirect to login
+                    try {
+                        await logoutCP();
+                    } catch (logoutError) {
+                        console.error('Logout error:', logoutError);
+                    }
+                    setTimeout(() => {
+                        navigate('/cp-login');
+                    }, 2000);
+                    return;
+                }
+                
+                console.error('Failed to fetch profile:', error);
+                // Only show error toast if it's not an inactive account
+                if (error.status !== 403) {
+                    toast.error('Failed to load profile data');
+                }
+                // Set default data on error
+                setUserData({
+                    name: 'Channel Partner',
+                    id: 'CP-XXXXXX',
+                    role: 'Channel Partner',
+                    initials: 'CP',
+                    company: '',
+                    location: '',
+                    issuedDate: formatDate(new Date()),
+                    contact: {
+                        phone: '',
+                        email: '',
+                        website: 'appzeto.com'
+                    }
+                });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProfile();
+    }, [toast, navigate]);
+
+    // Use userData or fallback to empty object
+    const USER = userData ? {
+        ...userData,
         stats: {
-            leads: 124,
-            converted: 89,
-            earnings: '₹ 5.45L'
-        },
+            leads: 0,
+            converted: 0,
+            earnings: '₹ 0'
+        }
+    } : {
+        name: 'Channel Partner',
+        id: 'CP-XXXXXX',
+        role: 'Channel Partner',
+        initials: 'CP',
+        company: '',
+        location: '',
+        issuedDate: formatDate(new Date()),
         contact: {
-            phone: '+91 98765 00000',
-            email: 'tony@stark.com',
-            website: 'stark.com'
+            phone: '',
+            email: '',
+            website: 'appzeto.com'
+        },
+        stats: {
+            leads: 0,
+            converted: 0,
+            earnings: '₹ 0'
         }
     };
 
@@ -98,6 +192,22 @@ const CP_profile = () => {
         hidden: { opacity: 0, y: 20 },
         visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
     };
+
+    // Show loading state
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#F9F9F9] flex flex-col font-sans text-[#1E1E1E] selection:bg-teal-500 selection:text-white">
+                <CP_navbar />
+                <main className="flex-1 relative overflow-x-hidden pb-28">
+                    <div className="relative z-10 pt-24 px-6 md:pt-28 max-w-lg mx-auto">
+                        <div className="flex items-center justify-center h-64">
+                            <div className="text-gray-500">Loading profile...</div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#F9F9F9] flex flex-col font-sans text-[#1E1E1E] selection:bg-teal-500 selection:text-white">
@@ -192,13 +302,6 @@ const CP_profile = () => {
                                                             <div>
                                                                 <p className="text-[10px] text-gray-500 font-medium">Partner ID</p>
                                                                 <p className="text-sm font-bold text-gray-900">{USER.id}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-start gap-2">
-                                                            <Shield className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
-                                                            <div>
-                                                                <p className="text-[10px] text-gray-500 font-medium">License No.</p>
-                                                                <p className="text-sm font-bold text-gray-900">{USER.licenseNo}</p>
                                                             </div>
                                                         </div>
                                                         <div className="flex items-start gap-2">

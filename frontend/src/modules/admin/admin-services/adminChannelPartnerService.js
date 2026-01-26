@@ -161,6 +161,7 @@ class AdminChannelPartnerService {
       email: partner.email,
       phone: partner.phoneNumber,
       phoneNumber: partner.phoneNumber,
+      partnerId: partner.partnerId,
       role: partner.role,
       status: partner.isActive ? 'active' : 'inactive',
       joiningDate: partner.joiningDate || partner.createdAt,
@@ -172,7 +173,10 @@ class AdminChannelPartnerService {
       document: partner.document,
       companyName: partner.companyName,
       address: partner.address,
-      totalRevenue: partner.totalRevenue || 0
+      totalRevenue: partner.totalRevenue || 0,
+      salesTeamLeadId: partner.salesTeamLeadId || null,
+      salesTeamLeadName: partner.salesTeamLeadName || null,
+      teamLeadAssignedDate: partner.teamLeadAssignedDate || null
     };
   }
 
@@ -222,6 +226,157 @@ class AdminChannelPartnerService {
       { value: 'active', label: 'Active', icon: 'CheckCircle' },
       { value: 'inactive', label: 'Inactive', icon: 'AlertCircle' }
     ];
+  }
+
+  // Get all channel partner wallets with earnings data
+  async getAllChannelPartnerWallets(params = {}) {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+
+      const url = `/admin/channel-partners/wallets${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      
+      const response = await apiRequest(url, { method: 'GET' });
+      return response;
+    } catch (error) {
+      console.error('Error fetching channel partner wallets:', error);
+      throw error;
+    }
+  }
+
+  // Get all channel partner rewards
+  async getAllCPRewards(params = {}) {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+
+      const url = `/admin/channel-partners/rewards${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      
+      const response = await apiRequest(url, { method: 'GET' });
+      return response;
+    } catch (error) {
+      console.error('Error fetching channel partner rewards:', error);
+      throw error;
+    }
+  }
+
+  // Get single channel partner reward
+  async getCPReward(id) {
+    try {
+      const response = await apiRequest(`/admin/channel-partners/rewards/${id}`, { method: 'GET' });
+      return response;
+    } catch (error) {
+      console.error('Error fetching channel partner reward:', error);
+      throw error;
+    }
+  }
+
+  // Create channel partner reward
+  async createCPReward(rewardData) {
+    try {
+      const response = await apiRequest(`/admin/channel-partners/rewards`, {
+        method: 'POST',
+        body: JSON.stringify(rewardData),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response;
+    } catch (error) {
+      console.error('Error creating channel partner reward:', error);
+      throw error;
+    }
+  }
+
+  // Update channel partner reward
+  async updateCPReward(id, rewardData) {
+    try {
+      const response = await apiRequest(`/admin/channel-partners/rewards/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(rewardData),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response;
+    } catch (error) {
+      console.error('Error updating channel partner reward:', error);
+      throw error;
+    }
+  }
+
+  // Delete channel partner reward
+  async deleteCPReward(id) {
+    try {
+      const response = await apiRequest(`/admin/channel-partners/rewards/${id}`, { method: 'DELETE' });
+      return response;
+    } catch (error) {
+      console.error('Error deleting channel partner reward:', error);
+      throw error;
+    }
+  }
+
+  // Get channel partner reward statistics
+  async getCPRewardStatistics() {
+    try {
+      const response = await apiRequest(`/admin/channel-partners/rewards/statistics`, { method: 'GET' });
+      return response;
+    } catch (error) {
+      console.error('Error fetching channel partner reward statistics:', error);
+      throw error;
+    }
+  }
+
+  // Get channel partner leads breakdown
+  async getChannelPartnerLeadsBreakdown(params = {}) {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+
+      const url = `/admin/channel-partners/leads/breakdown${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      
+      const response = await apiRequest(url, { method: 'GET' });
+      return response;
+    } catch (error) {
+      console.error('Error fetching channel partner leads breakdown:', error);
+      throw error;
+    }
+  }
+
+  // Get leads for a specific channel partner
+  async getChannelPartnerLeads(cpId, params = {}) {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+
+      const url = `/admin/channel-partners/${cpId}/leads${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      
+      const response = await apiRequest(url, { method: 'GET' });
+      return response;
+    } catch (error) {
+      console.error('Error fetching channel partner leads:', error);
+      throw error;
+    }
   }
 }
 
