@@ -251,7 +251,8 @@ exports.resendOTP = asyncHandler(async (req, res, next) => {
 // @route   GET /api/channel-partner/profile
 // @access  Private
 exports.getCPProfile = asyncHandler(async (req, res, next) => {
-  const channelPartner = await ChannelPartner.findById(req.channelPartner.id);
+  const channelPartner = await ChannelPartner.findById(req.channelPartner.id)
+    .populate('salesTeamLeadId', 'name email phone role isTeamLead');
   
   res.status(200).json({
     success: true,

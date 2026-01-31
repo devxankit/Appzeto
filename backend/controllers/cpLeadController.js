@@ -8,6 +8,11 @@ const Lead = require('../models/Lead');
 const Sales = require('../models/Sales');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
+const {
+  calculateCommission,
+  distributeCommission,
+  determineCPCommissionScenario
+} = require('../services/cpCommissionService');
 
 // Helper function to create notification
 const createNotification = async (channelPartnerId, type, title, message, reference = null, actionUrl = null) => {
@@ -92,8 +97,14 @@ exports.getLeads = asyncHandler(async (req, res, next) => {
   const cpId = req.channelPartner.id;
   const { status, priority, category, search, page = 1, limit = 20 } = req.query;
 
-  // Build query
-  const query = { assignedTo: cpId };
+  // Build query - exclude shared leads (they should only appear in shared leads page)
+  const query = { 
+    assignedTo: cpId,
+    $or: [
+      { 'sharedWithSales.0': { $exists: false } }, // No sharedWithSales array
+      { sharedWithSales: { $size: 0 } } // Empty sharedWithSales array
+    ]
+  };
 
   if (status && status !== 'undefined' && status !== 'all') {
     query.status = status;
@@ -111,12 +122,25 @@ exports.getLeads = asyncHandler(async (req, res, next) => {
   }
 
   if (search && search !== 'undefined' && search.trim() !== '') {
-    query.$or = [
+    // Combine search with existing $or conditions
+    const searchConditions = [
       { name: { $regex: search, $options: 'i' } },
       { phone: { $regex: search, $options: 'i' } },
       { email: { $regex: search, $options: 'i' } },
       { company: { $regex: search, $options: 'i' } }
     ];
+    
+    // If query already has $or, we need to combine them properly
+    if (query.$or) {
+      const existingOr = query.$or;
+      query.$and = [
+        { $or: existingOr },
+        { $or: searchConditions }
+      ];
+      delete query.$or;
+    } else {
+      query.$or = searchConditions;
+    }
   }
 
   const pageNum = parseInt(page, 10);
@@ -186,6 +210,11 @@ exports.updateLead = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Lead not found', 404));
   }
 
+  // Prevent updates if lead is shared (read-only mode)
+  if (lead.sharedWithSales && lead.sharedWithSales.length > 0) {
+    return next(new ErrorResponse('Cannot update: Lead is shared with sales team and is read-only', 403));
+  }
+
   // Update fields
   if (name !== undefined) lead.name = name;
   if (company !== undefined) lead.company = company;
@@ -240,6 +269,11 @@ exports.updateLeadStatus = asyncHandler(async (req, res, next) => {
 
   if (!lead) {
     return next(new ErrorResponse('Lead not found', 404));
+  }
+
+  // Prevent status updates if lead is shared (read-only mode)
+  if (lead.sharedWithSales && lead.sharedWithSales.length > 0) {
+    return next(new ErrorResponse('Cannot update status: Lead is shared with sales team and is read-only', 403));
   }
 
   try {
@@ -576,6 +610,13 @@ exports.convertLeadToClient = asyncHandler(async (req, res, next) => {
     paymentScreenshot
   } = req.body;
 
+  // Parse and validate totalCost - this is the actual project cost from conversion form
+  const actualProjectCost = totalCost ? parseFloat(totalCost) : 0;
+  
+  if (!actualProjectCost || actualProjectCost <= 0) {
+    return next(new ErrorResponse('Project total cost is required and must be greater than 0', 400));
+  }
+
   const lead = await CPLead.findOne({
     _id: leadId,
     assignedTo: cpId
@@ -587,6 +628,11 @@ exports.convertLeadToClient = asyncHandler(async (req, res, next) => {
 
   if (lead.status === 'converted') {
     return next(new ErrorResponse('Lead is already converted', 400));
+  }
+
+  // Prevent conversion if lead is shared (read-only mode)
+  if (lead.sharedWithSales && lead.sharedWithSales.length > 0) {
+    return next(new ErrorResponse('Cannot convert: Lead is shared with sales team and is read-only', 403));
   }
 
   // Create client
@@ -607,13 +653,14 @@ exports.convertLeadToClient = asyncHandler(async (req, res, next) => {
   await lead.save();
 
   // Update lead profile conversion data if exists
+  // Use actualProjectCost (from conversion form) as the source of truth
   if (lead.leadProfile) {
     await CPLeadProfile.findByIdAndUpdate(lead.leadProfile._id, {
       conversionData: {
         projectName,
         finishedDays,
-        totalCost,
-        advanceReceived,
+        totalCost: actualProjectCost, // Use parsed actual project cost
+        advanceReceived: advanceReceived ? parseFloat(advanceReceived) : 0,
         includeGST,
         paymentScreenshot
       }
@@ -638,11 +685,50 @@ exports.convertLeadToClient = asyncHandler(async (req, res, next) => {
     `/cp-converted`
   );
 
-  // Update Channel Partner revenue
-  if (totalCost) {
-    await ChannelPartner.findByIdAndUpdate(cpId, {
-      $inc: { totalRevenue: totalCost }
-    });
+  // Update Channel Partner revenue - use actualProjectCost from conversion form
+  await ChannelPartner.findByIdAndUpdate(cpId, {
+    $inc: { totalRevenue: actualProjectCost }
+  });
+
+  // Calculate and distribute commission
+  // IMPORTANT: Use actualProjectCost (from conversion form), NOT lead.value
+  // The actual project cost entered during conversion is the source of truth
+  let commissionData = null;
+  if (actualProjectCost && actualProjectCost > 0) {
+    try {
+      // Determine commission scenario
+      const scenario = determineCPCommissionScenario(lead);
+      
+      // Calculate commission using actualProjectCost from conversion form
+      const commissionResult = await calculateCommission(scenario, actualProjectCost);
+      
+      if (commissionResult.amount > 0) {
+        // Distribute commission to wallet
+        const description = scenario === 'own' 
+          ? `Commission for converting own lead: ${lead.name || lead.phone} (${commissionResult.percentage}% of ₹${actualProjectCost})`
+          : `Commission for converting shared lead: ${lead.name || lead.phone} (${commissionResult.percentage}% of ₹${actualProjectCost})`;
+        
+        await distributeCommission(
+          cpId,
+          commissionResult.amount,
+          description,
+          {
+            type: 'lead_conversion',
+            id: lead._id
+          },
+          commissionResult.percentage
+        );
+        
+        commissionData = {
+          amount: commissionResult.amount,
+          percentage: commissionResult.percentage,
+          scenario: scenario
+        };
+      }
+    } catch (commissionError) {
+      // Log error but don't fail the conversion
+      console.error('Error processing commission for CP lead conversion:', commissionError);
+    }
   }
 
   res.status(200).json({
@@ -650,7 +736,8 @@ exports.convertLeadToClient = asyncHandler(async (req, res, next) => {
     message: 'Lead converted to client successfully',
     data: {
       lead,
-      client
+      client,
+      commission: commissionData
     }
   });
 });
@@ -787,43 +874,298 @@ exports.getSalesTeamLeads = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Get client details (for converted leads)
+// @desc    Get assigned sales team lead details
+// @route   GET /api/cp/sales-manager
+// @access  Private (Channel Partner only)
+exports.getSalesManagerDetails = asyncHandler(async (req, res, next) => {
+  const cpId = req.channelPartner.id;
+
+  // Get channel partner with sales team lead
+  const channelPartner = await ChannelPartner.findById(cpId)
+    .populate('salesTeamLeadId', 'name email phone role isTeamLead employeeId department experience skills salesTarget currentSales lastLogin');
+
+  if (!channelPartner) {
+    return next(new ErrorResponse('Channel partner not found', 404));
+  }
+
+  if (!channelPartner.salesTeamLeadId) {
+    return res.status(200).json({
+      success: true,
+      message: 'No sales manager assigned',
+      data: null
+    });
+  }
+
+  const salesManager = channelPartner.salesTeamLeadId;
+
+  // Determine status based on lastLogin (within last 30 minutes = online)
+  const isOnline = salesManager.lastLogin && 
+    (Date.now() - new Date(salesManager.lastLogin).getTime()) < 30 * 60 * 1000;
+
+  res.status(200).json({
+    success: true,
+    data: {
+      id: salesManager._id,
+      name: salesManager.name,
+      email: salesManager.email,
+      phoneNumber: salesManager.phone,
+      role: salesManager.role,
+      employeeId: salesManager.employeeId,
+      department: salesManager.department,
+      isTeamLead: salesManager.isTeamLead,
+      experience: salesManager.experience,
+      skills: salesManager.skills || [],
+      salesTarget: salesManager.salesTarget || 0,
+      currentSales: salesManager.currentSales || 0,
+      assignedDate: channelPartner.teamLeadAssignedDate,
+      lastLogin: salesManager.lastLogin,
+      isOnline: isOnline
+    }
+  });
+});
+
+// @desc    Get all converted clients for Channel Partner
+// @route   GET /api/cp/clients
+// @access  Private (Channel Partner only)
+exports.getConvertedClients = asyncHandler(async (req, res, next) => {
+  const cpId = req.channelPartner.id;
+  const { page = 1, limit = 20, search, status } = req.query;
+
+  const pageNum = parseInt(page, 10);
+  const limitNum = parseInt(limit, 10);
+  const skip = (pageNum - 1) * limitNum;
+
+  // Build query for converted CPLeads (since Client model doesn't have createdBy/creatorModel)
+  const leadQuery = {
+    assignedTo: cpId,
+    status: 'converted',
+    convertedToClient: { $exists: true, $ne: null }
+  };
+
+  // Search filter on leads
+  if (search) {
+    leadQuery.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { company: { $regex: search, $options: 'i' } },
+      { email: { $regex: search, $options: 'i' } },
+      { phone: { $regex: search, $options: 'i' } }
+    ];
+  }
+
+  // Get total count of converted leads
+  const total = await CPLead.countDocuments(leadQuery);
+
+  // Get converted leads with populated client and lead profile
+  const convertedLeads = await CPLead.find(leadQuery)
+    .populate('leadProfile')
+    .populate({
+      path: 'convertedToClient',
+      select: 'name companyName email phoneNumber projects createdAt',
+      populate: {
+        path: 'projects',
+        select: 'name status progress budget financialDetails startDate',
+        match: { status: { $ne: 'cancelled' } }
+      }
+    })
+    .sort({ convertedAt: -1, createdAt: -1 })
+    .skip(skip)
+    .limit(limitNum);
+
+  // Format response with project and commission data
+  const formattedClients = convertedLeads
+    .filter(lead => lead.convertedToClient) // Filter out any null clients
+    .map(lead => {
+      const client = lead.convertedToClient;
+      // IMPORTANT: Use conversionData.totalCost as the source of truth (actual project cost from conversion form)
+      // lead.value is just an initial estimate, conversionData.totalCost is the actual project cost
+      const leadData = {
+        convertedAt: lead.convertedAt || lead.createdAt,
+        totalCost: lead.leadProfile?.conversionData?.totalCost || lead.value || 0, // Prioritize conversion data
+        advanceReceived: lead.leadProfile?.conversionData?.advanceReceived || 0,
+        projectName: lead.leadProfile?.conversionData?.projectName || 'Project'
+      };
+      const project = client.projects && client.projects.length > 0 ? client.projects[0] : null;
+      
+      return {
+        id: client._id,
+        name: client.name,
+        companyName: client.companyName,
+        email: client.email,
+        phoneNumber: client.phoneNumber,
+        convertedAt: leadData.convertedAt,
+        project: project ? {
+          name: project.name || leadData.projectName,
+          status: project.status,
+          progress: project.progress || 0,
+          totalValue: project.financialDetails?.totalCost || leadData.totalCost || 0,
+          paidAmount: project.financialDetails?.advanceReceived || leadData.advanceReceived || 0,
+          pendingAmount: (project.financialDetails?.totalCost || leadData.totalCost || 0) - 
+                        (project.financialDetails?.advanceReceived || leadData.advanceReceived || 0)
+        } : {
+          name: leadData.projectName || 'Project',
+          status: 'pending-assignment',
+          progress: 0,
+          totalValue: leadData.totalCost || 0,
+          paidAmount: leadData.advanceReceived || 0,
+          pendingAmount: (leadData.totalCost || 0) - (leadData.advanceReceived || 0)
+        }
+      };
+    });
+
+  res.status(200).json({
+    success: true,
+    count: formattedClients.length,
+    total,
+    page: pageNum,
+    pages: Math.ceil(total / limitNum),
+    data: formattedClients
+  });
+});
+
+// @desc    Get client details (for converted leads) with project progress
 // @route   GET /api/cp/clients/:id
 // @access  Private (Channel Partner only)
 exports.getClientDetails = asyncHandler(async (req, res, next) => {
   const cpId = req.channelPartner.id;
   const clientId = req.params.id;
 
-  // Verify client was created by this CP
-  const client = await Client.findOne({
-    _id: clientId,
-    createdBy: cpId,
-    creatorModel: 'ChannelPartner'
+  // Find the converted lead that created this client
+  const convertedLead = await CPLead.findOne({
+    assignedTo: cpId,
+    convertedToClient: clientId,
+    status: 'converted'
   })
-    .populate('projects')
-    .populate('createdBy', 'name');
+    .populate('leadProfile')
+    .populate('category', 'name');
 
-  if (!client) {
+  if (!convertedLead) {
     return next(new ErrorResponse('Client not found or not authorized', 404));
   }
 
-  // Get payments for client's projects
+  // Get client with projects
+  const client = await Client.findById(clientId)
+    .populate({
+      path: 'projects',
+      populate: {
+        path: 'projectManager',
+        select: 'name email'
+      }
+    });
+
+  if (!client) {
+    return next(new ErrorResponse('Client not found', 404));
+  }
+
+  // Get project details (use first project or create default)
   const Project = require('../models/Project');
+  const Milestone = require('../models/Milestone');
   const Payment = require('../models/Payment');
+  const Activity = require('../models/Activity');
   
-  const projects = await Project.find({ client: clientId });
+  const projects = await Project.find({ client: clientId })
+    .populate('projectManager', 'name email')
+    .populate('milestones')
+    .sort({ createdAt: -1 });
+
+  const project = projects.length > 0 ? projects[0] : null;
+  
+  // Get milestones if project exists
+  let milestones = [];
+  if (project && project.milestones && project.milestones.length > 0) {
+    const Milestone = require('../models/Milestone');
+    milestones = await Milestone.find({ _id: { $in: project.milestones } })
+      .sort({ dueDate: 1 });
+  }
+
+  // Get payments for projects
   const projectIds = projects.map(p => p._id);
-  
   const payments = await Payment.find({ project: { $in: projectIds } })
     .populate('project', 'name')
     .sort({ createdAt: -1 });
 
+  // Get project activities
+  let activities = [];
+  if (project) {
+    const Activity = require('../models/Activity');
+    activities = await Activity.find({ project: project._id })
+      .populate('performedBy', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(10);
+  }
+
+  // Get conversion data from lead profile
+  // IMPORTANT: Use conversionData.totalCost as the source of truth (actual project cost from conversion form)
+  // convertedLead.value is just an initial estimate, conversionData.totalCost is the actual project cost
+  const conversionData = convertedLead.leadProfile?.conversionData || {};
+  const leadData = {
+    totalCost: conversionData.totalCost || convertedLead.value || 0, // Prioritize conversion data
+    advanceReceived: conversionData.advanceReceived || 0,
+    projectName: conversionData.projectName || project?.name || 'Project',
+    finishedDays: conversionData.finishedDays
+  };
+
+  // Format response
+  const responseData = {
+    client: {
+      id: client._id,
+      name: client.name,
+      companyName: client.companyName,
+      email: client.email,
+      phoneNumber: client.phoneNumber
+    },
+    project: project ? {
+      id: project._id,
+      name: project.name || leadData.projectName,
+      description: project.description,
+      type: project.projectType ? Object.keys(project.projectType).filter(k => project.projectType[k]).join(', ') : 'N/A',
+      status: project.status,
+      progress: project.progress || 0,
+      startDate: project.startDate,
+      dueDate: project.dueDate,
+      projectManager: project.projectManager ? {
+        name: project.projectManager.name,
+        email: project.projectManager.email
+      } : null,
+      totalCost: project.financialDetails?.totalCost || leadData.totalCost,
+      advanceReceived: project.financialDetails?.advanceReceived || leadData.advanceReceived,
+      milestones: milestones.map(m => ({
+        id: m._id,
+        name: m.name,
+        status: m.status,
+        dueDate: m.dueDate,
+        completedDate: m.completedDate
+      })),
+      activities: activities.map(a => ({
+        id: a._id,
+        text: a.description || a.type,
+        user: a.performedBy ? `${a.performedBy.name}${a.performedBy.email ? ` (${a.performedBy.email})` : ''}` : 'System',
+        time: a.createdAt
+      })),
+      attachments: project.attachments || []
+    } : {
+      name: leadData.projectName,
+      status: 'pending-assignment',
+      progress: 0,
+      totalCost: leadData.totalCost,
+      advanceReceived: leadData.advanceReceived,
+      milestones: [],
+      activities: [],
+      attachments: []
+    },
+    payments: payments.map(p => ({
+      id: p._id,
+      amount: p.amount,
+      date: p.paymentDate || p.createdAt,
+      invoice: p.invoiceNumber || `INV-${p._id.toString().slice(-6)}`,
+      status: p.status || 'Received',
+      method: p.paymentMethod || 'Bank Transfer',
+      project: p.project?.name || 'Project'
+    })),
+    convertedAt: convertedLead.convertedAt || convertedLead.createdAt
+  };
+
   res.status(200).json({
     success: true,
-    data: {
-      client,
-      projects,
-      payments
-    }
+    data: responseData
   });
 });

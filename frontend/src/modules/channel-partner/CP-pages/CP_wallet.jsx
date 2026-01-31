@@ -1,57 +1,128 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     FiDollarSign, FiClock, FiCreditCard, FiArrowUpRight,
     FiArrowDownLeft, FiFilter, FiDownload, FiAlertCircle
 } from 'react-icons/fi';
 import CP_navbar from '../CP-components/CP_navbar';
-
-// --- Mock Data ---
-const WALLET_DATA = {
-    balance: '₹2,450.00',
-    pending: '₹850.00',
-    lifetime: '₹15,200.00',
-    transactions: [
-        { id: 1, type: 'credit', amount: '+₹500.00', source: 'Commission - TechSolutions', date: 'Today, 10:30 AM', status: 'Completed' },
-        { id: 2, type: 'credit', amount: '+₹150.00', source: 'Reward - Silver Badge', date: 'Yesterday', status: 'Completed' },
-        { id: 3, type: 'pending', amount: '+₹350.00', source: 'Commission - Green Energy', date: '20 Oct', status: 'Pending' },
-        { id: 4, type: 'debit', amount: '-₹1,000.00', source: 'Withdrawal to Bank', date: '15 Oct', status: 'Completed' },
-    ],
-    dues: [
-        { id: 101, client: 'Local Bistro', amount: '₹200.00', dueDate: '25 Oct', status: 'Overdue' }
-    ]
-};
+import { cpWalletService } from '../CP-services/cpWalletService';
+import { useToast } from '../../../contexts/ToastContext';
 
 // --- Components ---
 
 const TransactionItem = ({ item }) => {
-    const isCredit = item.type === 'credit' || item.type === 'pending';
+    const isCredit = item.type === 'credit';
+    const isPending = item.status === 'pending';
+    const amount = item.amount || 0;
+    const formattedAmount = isCredit ? `+₹${amount.toLocaleString('en-IN')}` : `-₹${amount.toLocaleString('en-IN')}`;
+    
+    const formatDate = (dateString) => {
+        if (!dateString) return '—';
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffTime = Math.abs(now - date);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 0) return 'Today';
+        if (diffDays === 1) return 'Yesterday';
+        if (diffDays < 7) return `${diffDays} days ago`;
+        return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    };
 
     return (
         <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-100 shadow-sm mb-3">
             <div className="flex items-center gap-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${item.type === 'debit' ? 'bg-red-50 text-red-600' :
-                    item.type === 'pending' ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'
+                    isPending ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'
                     }`}>
                     {item.type === 'debit' ? <FiArrowUpRight /> : isCredit ? <FiArrowDownLeft /> : <FiClock />}
                 </div>
                 <div>
-                    <h4 className="font-bold text-gray-900 text-sm">{item.source}</h4>
-                    <p className="text-xs text-gray-500">{item.date} • {item.status}</p>
+                    <h4 className="font-bold text-gray-900 text-sm">{item.description || 'Transaction'}</h4>
+                    <p className="text-xs text-gray-500">{formatDate(item.createdAt)} • {item.status || 'Completed'}</p>
                 </div>
             </div>
             <div className="text-right">
                 <p className={`font-bold ${item.type === 'debit' ? 'text-gray-900' : 'text-green-600'}`}>
-                    {item.amount}
+                    {formattedAmount}
                 </p>
-                {item.type === 'pending' && <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">PENDING</span>}
+                {isPending && <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">PENDING</span>}
             </div>
         </div>
     );
 };
 
 const CP_wallet = () => {
+    const { addToast } = useToast();
     const [activeTab, setActiveTab] = useState('transactions');
+    const [loading, setLoading] = useState(true);
+    const [walletData, setWalletData] = useState({
+        balance: 0,
+        totalEarned: 0,
+        totalWithdrawn: 0,
+        pendingWithdrawals: 0
+    });
+    const [transactions, setTransactions] = useState([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+
+    useEffect(() => {
+        const fetchWalletData = async () => {
+            try {
+                setLoading(true);
+                
+                // Fetch wallet summary
+                const summaryResponse = await cpWalletService.getWalletSummary();
+                if (summaryResponse.success && summaryResponse.data) {
+                    const wallet = summaryResponse.data.wallet || {};
+                    setWalletData({
+                        balance: wallet.balance || 0,
+                        totalEarned: wallet.totalEarned || 0,
+                        totalWithdrawn: wallet.totalWithdrawn || 0,
+                        pendingWithdrawals: summaryResponse.data.pendingWithdrawals || 0
+                    });
+                }
+
+                // Fetch transactions
+                const transactionsResponse = await cpWalletService.getTransactions({
+                    page: currentPage,
+                    limit: 20
+                });
+                if (transactionsResponse.success && transactionsResponse.data) {
+                    setTransactions(transactionsResponse.data || []);
+                    setTotalPages(transactionsResponse.pages || 1);
+                }
+            } catch (error) {
+                console.error('Error fetching wallet data:', error);
+                addToast('Failed to load wallet data', 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchWalletData();
+    }, [currentPage, addToast]);
+
+    const formatCurrency = (amount) => {
+        return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#F9F9F9] pb-24 md:pb-0 font-sans text-[#1E1E1E]">
+                <CP_navbar />
+                <main className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-8">
+                    <div className="animate-pulse space-y-8">
+                        <div className="h-8 bg-gray-200 rounded w-32"></div>
+                        <div className="h-48 bg-gray-200 rounded-[28px]"></div>
+                        <div className="space-y-3">
+                            {[1, 2, 3].map(i => <div key={i} className="h-20 bg-gray-200 rounded-2xl"></div>)}
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#F9F9F9] pb-24 md:pb-0 font-sans text-[#1E1E1E]">
@@ -74,7 +145,7 @@ const CP_wallet = () => {
 
                     <div className="relative z-10">
                         <p className="text-indigo-200 text-sm font-medium mb-1">Available Balance</p>
-                        <h2 className="text-4xl font-bold mb-6">{WALLET_DATA.balance}</h2>
+                        <h2 className="text-4xl font-bold mb-6">{formatCurrency(walletData.balance)}</h2>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-white/10 backdrop-blur-sm p-3 rounded-2xl border border-white/10">
@@ -82,14 +153,14 @@ const CP_wallet = () => {
                                     <FiClock className="w-4 h-4" />
                                     <span className="text-xs font-bold uppercase tracking-wide">Pending</span>
                                 </div>
-                                <p className="font-bold text-lg">{WALLET_DATA.pending}</p>
+                                <p className="font-bold text-lg">{formatCurrency(walletData.pendingWithdrawals * 0)}</p>
                             </div>
                             <div className="bg-white/10 backdrop-blur-sm p-3 rounded-2xl border border-white/10">
                                 <div className="flex items-center gap-2 mb-1 text-green-300">
                                     <FiDollarSign className="w-4 h-4" />
                                     <span className="text-xs font-bold uppercase tracking-wide">Lifetime</span>
                                 </div>
-                                <p className="font-bold text-lg">{WALLET_DATA.lifetime}</p>
+                                <p className="font-bold text-lg">{formatCurrency(walletData.totalEarned)}</p>
                             </div>
                         </div>
                     </div>
@@ -97,29 +168,6 @@ const CP_wallet = () => {
 
                 {/* Note: In a real app, logic for withdrawal/bank linking would go here */}
 
-                {/* Dues Alert Section */}
-                {WALLET_DATA.dues.length > 0 && (
-                    <div className="mb-8">
-                        <div className="flex items-center gap-2 mb-3">
-                            <FiAlertCircle className="text-red-500" />
-                            <h3 className="font-bold text-gray-800">Pending Dues</h3>
-                        </div>
-                        {WALLET_DATA.dues.map(due => (
-                            <div key={due.id} className="bg-red-50 border border-red-100 p-6 rounded-[24px] flex items-center justify-between">
-                                <div>
-                                    <p className="font-bold text-red-900">{due.client}</p>
-                                    <p className="text-xs text-red-600">Due by {due.dueDate}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="font-bold text-red-700">{due.amount}</p>
-                                    <button className="text-xs font-bold bg-white text-red-600 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm mt-1 hover:bg-red-50">
-                                        Pay Now
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
 
                 {/* Tabs */}
                 <div className="flex gap-4 mb-6 border-b border-gray-200">
@@ -154,9 +202,38 @@ const CP_wallet = () => {
                             </div>
 
                             <div>
-                                {WALLET_DATA.transactions.map(item => (
-                                    <TransactionItem key={item.id} item={item} />
-                                ))}
+                                {transactions.length > 0 ? (
+                                    <>
+                                        {transactions.map((item, index) => (
+                                            <TransactionItem key={item._id || index} item={item} />
+                                        ))}
+                                        {totalPages > 1 && (
+                                            <div className="flex justify-center gap-2 mt-6">
+                                                <button
+                                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                                    disabled={currentPage === 1}
+                                                    className="px-4 py-2 bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    Previous
+                                                </button>
+                                                <span className="px-4 py-2 text-sm text-gray-600">
+                                                    Page {currentPage} of {totalPages}
+                                                </span>
+                                                <button
+                                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                                    disabled={currentPage === totalPages}
+                                                    className="px-4 py-2 bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    Next
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="text-center py-12">
+                                        <p className="text-gray-500 text-sm">No transactions found</p>
+                                    </div>
+                                )}
                             </div>
                         </motion.div>
                     ) : (

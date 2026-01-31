@@ -118,6 +118,7 @@ const createChannelPartner = asyncHandler(async (req, res, next) => {
     name, 
     email, 
     phoneNumber, 
+    partnerId,
     dateOfBirth, 
     gender,
     joiningDate, 

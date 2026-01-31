@@ -3500,12 +3500,60 @@ const convertLeadToClient = async (req, res) => {
       }
     }
 
+    // Check if this lead was shared from a Channel Partner and distribute commission
+    let cpCommissionData = null;
+    if (totalCost && totalCost > 0) {
+      try {
+        const { findSharedCPLead, calculateCommission, distributeCommission } = require('../services/cpCommissionService');
+        
+        // Find if there's a CPLead that was shared with this Sales employee
+        const sharedCPLeadInfo = await findSharedCPLead(phoneNumber, req.sales.id);
+        
+        if (sharedCPLeadInfo && sharedCPLeadInfo.cpLead) {
+          // Calculate commission for shared conversion scenario
+          const commissionResult = await calculateCommission('shared', totalCost);
+          
+          if (commissionResult.amount > 0) {
+            // Distribute commission to the CP who shared the lead
+            const description = `Commission for shared lead conversion by Sales: ${client.name || 'Client'} (${commissionResult.percentage}% of ₹${totalCost})`;
+            
+            await distributeCommission(
+              sharedCPLeadInfo.channelPartnerId,
+              commissionResult.amount,
+              description,
+              {
+                type: 'lead_conversion',
+                id: sharedCPLeadInfo.cpLead._id
+              },
+              commissionResult.percentage
+            );
+            
+            // Mark the CPLead as converted (since Sales converted it)
+            sharedCPLeadInfo.cpLead.status = 'converted';
+            sharedCPLeadInfo.cpLead.convertedToClient = client._id;
+            sharedCPLeadInfo.cpLead.convertedAt = new Date();
+            await sharedCPLeadInfo.cpLead.save();
+            
+            cpCommissionData = {
+              channelPartnerId: sharedCPLeadInfo.channelPartnerId,
+              channelPartnerName: sharedCPLeadInfo.channelPartnerName,
+              amount: commissionResult.amount,
+              percentage: commissionResult.percentage
+            };
+          }
+        }
+      } catch (cpCommissionError) {
+        // Log error but don't fail the conversion
+        console.error('Error processing CP commission for Sales lead conversion:', cpCommissionError);
+      }
+    }
+
     // Respond
     const populatedProject = await Project.findById(newProject._id).populate('client');
     return res.status(201).json({
       success: true,
       message: 'Lead converted successfully',
-      data: { client, project: populatedProject, lead }
+      data: { client, project: populatedProject, lead, cpCommission: cpCommissionData }
     });
   } catch (error) {
     console.error('Convert lead error:', error);

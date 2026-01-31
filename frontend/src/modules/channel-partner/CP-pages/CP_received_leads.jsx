@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiSearch, FiFilter, FiPhone, FiShare2, FiMoreVertical, 
@@ -8,64 +8,8 @@ import {
 } from 'react-icons/fi';
 import { FaWhatsapp, FaRupeeSign } from 'react-icons/fa';
 import CP_navbar from '../CP-components/CP_navbar';
-
-// --- Mock Data ---
-const RECEIVED_LEADS = [
-  {
-    id: '1',
-    name: 'TechSolutions Inc',
-    projectType: 'Mobile App',
-    source: 'sales',
-    status: 'Connected',
-    lastUpdated: '1d ago',
-    phone: '+1987654321',
-    email: 'contact@techsolutions.com',
-    value: '₹12,000',
-    assignedSales: 'Alex Johnson'
-  },
-  {
-    id: '2',
-    name: 'Startup Hub',
-    projectType: 'SaaS Platform',
-    source: 'sales',
-    status: 'Hot',
-    lastUpdated: '2h ago',
-    phone: '+1999888777',
-    email: 'hello@startuphub.com',
-    value: '₹15,000',
-    assignedSales: 'Alex Johnson'
-  },
-  {
-    id: '3',
-    name: 'Digital Marketing Pro',
-    projectType: 'Web Development',
-    source: 'sales',
-    status: 'Connected',
-    lastUpdated: '3d ago',
-    phone: '+1444333222',
-    email: 'info@digitalpro.com',
-    value: '₹8,500',
-    assignedSales: 'Maria Garcia'
-  },
-  {
-    id: '4',
-    name: 'Cloud Services Co',
-    projectType: 'Cloud Migration',
-    source: 'sales',
-    status: 'Lost',
-    lastUpdated: '1w ago',
-    phone: '+1555666777',
-    email: 'contact@cloudservices.com',
-    value: '₹20,000',
-    assignedSales: 'Sam Smith'
-  }
-];
-
-const SALES_REPS = [
-  { id: 's1', name: 'Alex Johnson', role: 'Senior Sales' },
-  { id: 's2', name: 'Maria Garcia', role: 'Sales Lead' },
-  { id: 's3', name: 'Sam Smith', role: 'Sales Associate' }
-];
+import { cpLeadService } from '../CP-services/cpLeadService';
+import { useToast } from '../../../contexts/ToastContext';
 
 // --- Components ---
 const StatusBadge = ({ status }) => {
@@ -168,11 +112,99 @@ const ReceivedLeadCard = ({ lead, onAction, onNavigate }) => {
 // --- Main Page Component ---
 const CP_received_leads = () => {
   const navigate = useNavigate();
-  const [leads, setLeads] = useState(RECEIVED_LEADS);
+  const { addToast } = useToast();
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [timeFilter, setTimeFilter] = useState('all-time');
   const [showFilters, setShowFilters] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [salesTeamLeads, setSalesTeamLeads] = useState([]);
+
+  // Fetch sales team leads for sharing
+  useEffect(() => {
+    const fetchSalesTeamLeads = async () => {
+      try {
+        const response = await cpLeadService.getSalesTeamLeads();
+        if (response.success) {
+          setSalesTeamLeads(response.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching sales team leads:', error);
+      }
+    };
+    fetchSalesTeamLeads();
+  }, []);
+
+  // Fetch received leads from Sales
+  useEffect(() => {
+    const fetchReceivedLeads = async () => {
+      try {
+        setLoading(true);
+        const params = {
+          page: currentPage,
+          limit: 20
+        };
+        if (searchQuery) params.search = searchQuery;
+
+        const response = await cpLeadService.getSharedLeadsFromSales(params);
+        if (response.success && response.data) {
+          // Transform backend data to frontend format
+          const transformedLeads = response.data.map(lead => {
+            const sharedFrom = lead.sharedFromSales?.[0];
+            return {
+              id: lead._id || lead.id,
+              name: lead.name || 'Unknown',
+              projectType: lead.category?.name || 'General',
+              source: 'sales',
+              status: lead.status === 'converted' ? 'Converted' : 
+                     lead.status === 'lost' ? 'Lost' :
+                     lead.priority === 'urgent' ? 'Hot' :
+                     lead.status === 'connected' ? 'Connected' :
+                     lead.status === 'followup' ? 'Follow-up' :
+                     lead.status === 'new' ? 'New' : 'Active',
+              lastUpdated: formatTimeAgo(lead.updatedAt || lead.createdAt),
+              phone: lead.phone,
+              email: lead.email,
+              value: `₹${(lead.value || 0).toLocaleString('en-IN')}`,
+              assignedSales: sharedFrom?.sharedBy?.name || 'Sales Team Lead',
+              sharedOn: sharedFrom?.sharedAt ? new Date(sharedFrom.sharedAt).toLocaleDateString() : '—',
+              rawData: lead
+            };
+          });
+          
+          setLeads(transformedLeads);
+          setTotalPages(response.pages || 1);
+        }
+      } catch (error) {
+        console.error('Error fetching received leads:', error);
+        addToast('Failed to load received leads', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReceivedLeads();
+  }, [currentPage, searchQuery, addToast]);
+
+  const formatTimeAgo = (dateString) => {
+    if (!dateString) return '—';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+    return `${Math.floor(diffDays / 30)}mo ago`;
+  };
 
   // Modal Interaction States
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -240,61 +272,125 @@ const CP_received_leads = () => {
     if (type === 'update') setIsUpdateModalOpen(true);
   };
 
-  const handleUpdateStatus = (newStatus) => {
-    if (!selectedLead) return;
-    if (newStatus === 'Converted') {
-      setIsUpdateModalOpen(false);
-      setIsConvertModalOpen(true);
-    } else {
-      setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, status: newStatus, lastUpdated: 'Just now' } : l));
-      setIsUpdateModalOpen(false);
-      setSelectedLead(null);
+  const handleUpdateStatus = async (newStatus) => {
+    if (!selectedLead || !selectedLead.rawData) return;
+    
+    try {
+      const statusMap = {
+        'New': 'new',
+        'Connected': 'connected',
+        'Follow-up': 'followup',
+        'Hot': 'connected',
+        'Lost': 'lost',
+        'Converted': 'converted'
+      };
+      
+      const backendStatus = statusMap[newStatus] || newStatus.toLowerCase();
+      
+      if (newStatus === 'Converted') {
+        setIsUpdateModalOpen(false);
+        setIsConvertModalOpen(true);
+      } else {
+        const response = await cpLeadService.updateLeadStatus(
+          selectedLead.id,
+          backendStatus
+        );
+        
+        if (response.success) {
+          setLeads(prev => prev.map(l => 
+            l.id === selectedLead.id 
+              ? { ...l, status: newStatus, lastUpdated: 'Just now', rawData: response.data } 
+              : l
+          ));
+          addToast('Lead status updated successfully', 'success');
+        }
+        setIsUpdateModalOpen(false);
+        setSelectedLead(null);
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error);
+      addToast('Failed to update lead status', 'error');
     }
   };
 
-  const handleShareLead = (salesRepId) => {
+  const handleShareLead = async (salesRepId) => {
     if (!selectedLead) return;
-    setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, sharedWith: SALES_REPS.find(s => s.id === salesRepId)?.name, lastUpdated: 'Just now' } : l));
-    setIsShareModalOpen(false);
-    setSelectedLead(null);
+    
+    try {
+      const response = await cpLeadService.shareLeadWithSales(selectedLead.id, salesRepId);
+      
+      if (response.success) {
+        addToast('Lead shared successfully', 'success');
+        setLeads(prev => prev.map(l => 
+          l.id === selectedLead.id 
+            ? { ...l, sharedWith: 'Sales Team Lead', lastUpdated: 'Just now', rawData: response.data } 
+            : l
+        ));
+        setIsShareModalOpen(false);
+        setSelectedLead(null);
+      }
+    } catch (error) {
+      console.error('Error sharing lead:', error);
+      addToast('Failed to share lead', 'error');
+    }
   };
 
-  const handleConvertToClient = () => {
+  const handleConvertToClient = async () => {
     // Validate required fields
     if (!conversionData.projectName.trim()) {
-      alert('Please enter project name');
+      addToast('Please enter project name', 'error');
       return;
     }
     if (!conversionData.totalCost.trim() || parseFloat(conversionData.totalCost) < 0) {
-      alert('Please enter a valid total cost');
+      addToast('Please enter a valid total cost', 'error');
       return;
     }
     if (!conversionData.projectType.web && !conversionData.projectType.app && !conversionData.projectType.taxi) {
-      alert('Please select at least one project type');
+      addToast('Please select at least one project type', 'error');
       return;
     }
 
-    // Update lead status to converted
-    if (selectedLead) {
-      setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, status: 'Converted', lastUpdated: 'Just now' } : l));
-    }
+    if (!selectedLead) return;
 
-    // Reset form and close modal
-    setConversionData({
-      projectName: '',
-      projectType: { web: false, app: false, taxi: false },
-      totalCost: '',
-      finishedDays: '',
-      advanceReceived: '',
-      includeGST: false,
-      description: '',
-      screenshot: null
-    });
-    setIsConvertModalOpen(false);
-    setSelectedLead(null);
-    
-    // Navigate to converted clients page
-    navigate('/cp-converted');
+    try {
+      const response = await cpLeadService.convertLeadToClient(selectedLead.id, {
+        projectName: conversionData.projectName,
+        projectType: conversionData.projectType,
+        totalCost: parseFloat(conversionData.totalCost),
+        finishedDays: conversionData.finishedDays ? parseInt(conversionData.finishedDays) : undefined,
+        advanceReceived: conversionData.advanceReceived ? parseFloat(conversionData.advanceReceived) : 0,
+        includeGST: conversionData.includeGST,
+        description: conversionData.description
+      });
+
+      if (response.success) {
+        addToast('Lead converted to client successfully!', 'success');
+        
+        setLeads(prev => prev.map(l => 
+          l.id === selectedLead.id 
+            ? { ...l, status: 'Converted', lastUpdated: 'Just now' } 
+            : l
+        ));
+
+        setConversionData({
+          projectName: '',
+          projectType: { web: false, app: false, taxi: false },
+          totalCost: '',
+          finishedDays: '',
+          advanceReceived: '',
+          includeGST: false,
+          description: '',
+          screenshot: null
+        });
+        setIsConvertModalOpen(false);
+        setSelectedLead(null);
+        
+        navigate('/cp-converted');
+      }
+    } catch (error) {
+      console.error('Error converting lead:', error);
+      addToast('Failed to convert lead', 'error');
+    }
   };
 
   return (
@@ -380,30 +476,65 @@ const CP_received_leads = () => {
 
         {/* Leads List */}
         <AnimatePresence mode='popLayout'>
-          <div className="space-y-4">
-            {filteredLeads.length > 0 ? (
-              filteredLeads.map(lead => (
-                <ReceivedLeadCard
-                  key={lead.id}
-                  lead={lead}
-                  onAction={handleAction}
-                  onNavigate={(id) => navigate(`/cp-lead-details/${id}`)}
-                />
-              ))
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-center py-16"
-              >
-                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-4xl shadow-sm">
-                  📥
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 animate-pulse">
+                  <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+                  <div className="h-20 bg-gray-200 rounded"></div>
                 </div>
-                <h3 className="text-gray-900 font-bold mb-1">No received leads found</h3>
-                <p className="text-gray-500 text-sm">Clear filters or wait for sales team to assign leads.</p>
-              </motion.div>
-            )}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredLeads.length > 0 ? (
+                <>
+                  {filteredLeads.map(lead => (
+                    <ReceivedLeadCard
+                      key={lead.id}
+                      lead={lead}
+                      onAction={handleAction}
+                      onNavigate={(id) => navigate(`/cp-lead-details/${id}`)}
+                    />
+                  ))}
+                  {totalPages > 1 && (
+                    <div className="flex justify-center items-center gap-4 mt-6">
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className="px-4 py-2 bg-white rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-sm text-gray-600">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        className="px-4 py-2 bg-white rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center py-16"
+                >
+                  <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-4xl shadow-sm">
+                    📥
+                  </div>
+                  <h3 className="text-gray-900 font-bold mb-1">No received leads found</h3>
+                  <p className="text-gray-500 text-sm">Clear filters or wait for sales team to assign leads.</p>
+                </motion.div>
+              )}
+            </div>
+          )}
         </AnimatePresence>
       </main>
 
@@ -427,17 +558,24 @@ const CP_received_leads = () => {
             >
               <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 md:hidden" />
               <h3 className="font-bold text-xl text-gray-900 mb-4">Share with Sales Team</h3>
-              <div className="space-y-3">
-                {SALES_REPS.map((rep) => (
-                  <button 
-                    key={rep.id} 
-                    onClick={() => handleShareLead(rep.id)} 
-                    className="w-full text-left p-4 rounded-xl bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700 font-medium transition-colors flex justify-between items-center group"
-                  >
-                    {rep.name}
-                    <span className="opacity-0 group-hover:opacity-100 text-sm font-bold bg-indigo-200 text-indigo-700 px-2 py-1 rounded">Select</span>
-                  </button>
-                ))}
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {salesTeamLeads.length > 0 ? (
+                  salesTeamLeads.map((rep) => (
+                    <button 
+                      key={rep._id || rep.id} 
+                      onClick={() => handleShareLead(rep._id || rep.id)} 
+                      className="w-full text-left p-4 rounded-xl bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700 font-medium transition-colors flex justify-between items-center group"
+                    >
+                      <div>
+                        <p className="font-semibold">{rep.name}</p>
+                        {rep.email && <p className="text-xs text-gray-500">{rep.email}</p>}
+                      </div>
+                      <span className="opacity-0 group-hover:opacity-100 text-sm font-bold bg-indigo-200 text-indigo-700 px-2 py-1 rounded">Select</span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-center text-gray-500 py-4">No sales team leads available</p>
+                )}
               </div>
               <button 
                 onClick={() => setIsShareModalOpen(false)} 

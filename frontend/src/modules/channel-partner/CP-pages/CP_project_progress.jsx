@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -7,75 +7,19 @@ import {
     FiPlus, FiX, FiCalendar, FiFile
 } from 'react-icons/fi';
 import { FaRupeeSign } from 'react-icons/fa';
-import CP_navbar from '../CP-components/CP_navbar';
-
-// --- Mock Data ---
-const PROJECT_DATA = {
-    id: '1',
-    projectName: 'E-commerce App Redesign',
-    clientName: 'Global Tech Solutions',
-    type: 'Mobile App',
-    startDate: '10 Oct, 2023',
-    expectedDelivery: '15 Dec, 2023',
-    pmName: 'Vikram Singh',
-    status: 'In Progress',
-    progress: 65,
-    phases: ['Discovery', 'Design', 'Dev', 'Testing', 'Delivery'],
-    currentPhase: 'Dev',
-    milestones: [
-        { id: 1, name: 'Wireframes Approval', status: 'Completed', date: '15 Oct' },
-        { id: 2, name: 'UI Design Finalization', status: 'Completed', date: '25 Oct' },
-        { id: 3, name: 'Frontend Development', status: 'In Progress', date: 'Due: 20 Nov' },
-        { id: 4, name: 'Backend Integration', status: 'Pending', date: 'Due: 30 Nov' },
-    ],
-    activities: [
-        { id: 101, text: 'Frontend homepage module completed', user: 'Dev Team', time: '2 hours ago' },
-        { id: 102, text: 'Client approved secondary color palette', user: 'Vikram Singh (PM)', time: 'Yesterday' },
-        { id: 103, text: 'Milestone "UI Design" marked as Complete', user: 'Vikram Singh (PM)', time: '25 Oct' },
-    ],
-    files: [
-        { id: 201, name: 'Project_Scope_v2.pdf', size: '2.4 MB', type: 'doc' },
-        { id: 202, name: 'UI_Design_Preview.png', size: '5.1 MB', type: 'image' },
-    ],
-    payment: {
-        total: '₹12,000',
-        paid: '₹5,000',
-        pending: '₹7,000',
-        lastPayment: '20 Oct, 2023',
-        payments: [
-            {
-                id: 1,
-                amount: '₹3,000',
-                date: '20 Oct, 2023',
-                invoice: 'INV-2023-001',
-                status: 'Received',
-                method: 'Bank Transfer'
-            },
-            {
-                id: 2,
-                amount: '₹2,000',
-                date: '15 Oct, 2023',
-                invoice: 'INV-2023-002',
-                status: 'Received',
-                method: 'UPI'
-            }
-        ]
-    },
-    adminNotes: [
-        { id: 301, text: 'Waiting for client assets for the About Us page.', type: 'warning' },
-        { id: 302, text: 'Project is on track for mid-December delivery.', type: 'info' }
-    ]
-};
+import { cpLeadService } from '../CP-services/cpLeadService';
+import { useToast } from '../../../contexts/ToastContext';
 
 const CP_project_progress = () => {
     const navigate = useNavigate();
     const { id } = useParams();
-    const project = PROJECT_DATA; // Fetch by ID in real app
+    const { addToast } = useToast();
+    const [loading, setLoading] = useState(true);
+    const [projectData, setProjectData] = useState(null);
 
     const [isRecoverySheetOpen, setIsRecoverySheetOpen] = useState(false);
     const [isPaymentDetailsSheetOpen, setIsPaymentDetailsSheetOpen] = useState(false);
-    const [payments, setPayments] = useState(project.payment.payments || []);
-    
+    const [payments, setPayments] = useState([]);
     const [recoveryData, setRecoveryData] = useState({
         amount: '',
         date: new Date().toISOString().split('T')[0],
@@ -84,16 +28,181 @@ const CP_project_progress = () => {
         notes: ''
     });
 
+    // Format date
+    const formatDate = (dateString) => {
+        if (!dateString) return '—';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    // Format time ago
+    const formatTimeAgo = (dateString) => {
+        if (!dateString) return '—';
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays === 1) return 'Yesterday';
+        if (diffDays < 7) return `${diffDays}d ago`;
+        return formatDate(dateString);
+    };
+
+    // Format currency
+    const formatCurrency = (amount) => {
+        return `₹${amount.toLocaleString('en-IN')}`;
+    };
+
+    // Get status display
+    const getStatusDisplay = (status) => {
+        const statusMap = {
+            'pending-assignment': 'Planning',
+            'untouched': 'Planning',
+            'started': 'In Progress',
+            'active': 'In Progress',
+            'on-hold': 'On Hold',
+            'testing': 'Testing',
+            'completed': 'Completed',
+            'cancelled': 'Cancelled'
+        };
+        return statusMap[status] || status;
+    };
+
+    // Get milestone status
+    const getMilestoneStatus = (milestone) => {
+        if (milestone.completedDate) return 'Completed';
+        if (milestone.dueDate && new Date(milestone.dueDate) < new Date()) return 'Overdue';
+        return 'Pending';
+    };
+
+    // Fetch project data
+    useEffect(() => {
+        const fetchProjectData = async () => {
+            try {
+                setLoading(true);
+                const response = await cpLeadService.getClientDetails(id);
+                
+                if (response.success && response.data) {
+                    const data = response.data;
+                    const project = data.project || {};
+                    const client = data.client || {};
+                    
+                    // Format project data
+                    const formattedData = {
+                        id: project.id || id,
+                        projectName: project.name || 'Project',
+                        clientName: client.name || 'Client',
+                        companyName: client.companyName || '',
+                        type: project.type || 'N/A',
+                        startDate: formatDate(project.startDate),
+                        expectedDelivery: formatDate(project.dueDate),
+                        pmName: project.projectManager?.name || 'Not Assigned',
+                        status: getStatusDisplay(project.status || 'pending-assignment'),
+                        progress: project.progress || 0,
+                        milestones: (project.milestones || []).map(m => ({
+                            id: m.id,
+                            name: m.name,
+                            status: getMilestoneStatus(m),
+                            date: m.completedDate ? formatDate(m.completedDate) : (m.dueDate ? `Due: ${formatDate(m.dueDate)}` : '—')
+                        })),
+                        activities: (project.activities || []).map(a => ({
+                            id: a.id,
+                            text: a.text,
+                            user: a.user,
+                            time: formatTimeAgo(a.time)
+                        })),
+                        files: (project.attachments || []).map((f, idx) => ({
+                            id: f.public_id || idx,
+                            name: f.originalName || f.original_filename || 'File',
+                            size: f.size ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : '—',
+                            type: f.format || 'file',
+                            url: f.secure_url
+                        })),
+                        payment: {
+                            total: formatCurrency(project.totalCost || 0),
+                            paid: formatCurrency(project.advanceReceived || 0),
+                            pending: formatCurrency((project.totalCost || 0) - (project.advanceReceived || 0)),
+                            lastPayment: payments.length > 0 ? formatDate(payments[0].date) : '—',
+                            payments: payments
+                        },
+                        adminNotes: [] // Can be added later if needed
+                    };
+                    
+                    setProjectData(formattedData);
+                    setPayments((data.payments || []).map(p => ({
+                        id: p.id,
+                        amount: formatCurrency(p.amount),
+                        date: formatDate(p.date),
+                        invoice: p.invoice,
+                        status: p.status,
+                        method: p.method
+                    })));
+                }
+            } catch (error) {
+                console.error('Error fetching project data:', error);
+                addToast('Failed to load project data', 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (id) {
+            fetchProjectData();
+        }
+    }, [id, addToast]);
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#F9F9F9] pb-20 md:pb-0 font-sans text-[#1E1E1E]">
+                <div className="sticky top-0 bg-white border-b border-gray-200 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
+                    <div className="h-6 w-48 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+                <main className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-6">
+                    {[1, 2, 3, 4, 5].map(i => (
+                        <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 animate-pulse">
+                            <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+                            <div className="h-3 bg-gray-200 rounded w-full"></div>
+                        </div>
+                    ))}
+                </main>
+            </div>
+        );
+    }
+
+    if (!projectData) {
+        return (
+            <div className="min-h-screen bg-[#F9F9F9] pb-20 md:pb-0 font-sans text-[#1E1E1E]">
+                <div className="sticky top-0 bg-white border-b border-gray-200 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
+                    <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600">
+                        <FiArrowLeft className="w-5 h-5" />
+                    </button>
+                </div>
+                <main className="max-w-md mx-auto md:max-w-7xl px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+                    <div className="text-center py-20">
+                        <p className="text-gray-500">Project not found</p>
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
+    const project = projectData;
+
     const handleAddRecovery = () => {
         if (!recoveryData.amount || !recoveryData.date) {
-            alert('Please fill in required fields');
+            addToast('Please fill in required fields', 'error');
             return;
         }
 
         const newPayment = {
             id: Date.now(),
-            amount: `₹${recoveryData.amount}`,
-            date: new Date(recoveryData.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+            amount: formatCurrency(parseFloat(recoveryData.amount)),
+            date: formatDate(recoveryData.date),
             invoice: recoveryData.invoice || `INV-${Date.now()}`,
             status: 'Received',
             method: recoveryData.method
@@ -102,9 +211,24 @@ const CP_project_progress = () => {
         setPayments([newPayment, ...payments]);
         
         // Update project payment totals
-        const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount.replace('₹', '').replace(',', '')), 0) + parseFloat(recoveryData.amount);
-        const totalAmount = parseFloat(project.payment.total.replace('₹', '').replace(',', ''));
+        const totalPaid = payments.reduce((sum, p) => {
+            const amt = parseFloat(p.amount.replace('₹', '').replace(/,/g, ''));
+            return sum + (isNaN(amt) ? 0 : amt);
+        }, 0) + parseFloat(recoveryData.amount);
+        
+        const totalAmount = parseFloat(project.payment.total.replace('₹', '').replace(/,/g, ''));
         const pending = totalAmount - totalPaid;
+
+        // Update project data
+        setProjectData({
+            ...project,
+            payment: {
+                ...project.payment,
+                paid: formatCurrency(totalPaid),
+                pending: formatCurrency(pending),
+                lastPayment: formatDate(recoveryData.date)
+            }
+        });
 
         // Reset form
         setRecoveryData({
@@ -115,6 +239,7 @@ const CP_project_progress = () => {
             notes: ''
         });
         setIsRecoverySheetOpen(false);
+        addToast('Payment added successfully', 'success');
     };
 
     return (
@@ -252,18 +377,31 @@ const CP_project_progress = () => {
                 <div>
                     <h3 className="font-bold text-gray-900 mb-3 px-1">Files & Deliverables</h3>
                     <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar">
-                        {project.files.map(file => (
-                            <div key={file.id} className="flex-none w-40 bg-white p-3 rounded-xl border border-gray-100 flex flex-col items-center text-center">
-                                <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center mb-2">
-                                    <FiFileText />
+                        {project.files && project.files.length > 0 ? (
+                            project.files.map(file => (
+                                <div key={file.id} className="flex-none w-40 bg-white p-3 rounded-xl border border-gray-100 flex flex-col items-center text-center">
+                                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center mb-2">
+                                        <FiFileText />
+                                    </div>
+                                    <p className="text-xs font-bold text-gray-800 truncate w-full">{file.name}</p>
+                                    <p className="text-[10px] text-gray-400 mb-2">{file.size}</p>
+                                    {file.url && (
+                                        <a 
+                                            href={file.url} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-[10px] font-bold text-indigo-600 border border-indigo-100 px-2 py-1 rounded hover:bg-indigo-50 flex items-center gap-1"
+                                        >
+                                            <FiDownload /> Download
+                                        </a>
+                                    )}
                                 </div>
-                                <p className="text-xs font-bold text-gray-800 truncate w-full">{file.name}</p>
-                                <p className="text-[10px] text-gray-400 mb-2">{file.size}</p>
-                                <button className="text-[10px] font-bold text-indigo-600 border border-indigo-100 px-2 py-1 rounded hover:bg-indigo-50 flex items-center gap-1">
-                                    <FiDownload /> Download
-                                </button>
+                            ))
+                        ) : (
+                            <div className="text-center py-8 text-gray-500 text-sm">
+                                No files available
                             </div>
-                        ))}
+                        )}
                     </div>
                 </div>
 

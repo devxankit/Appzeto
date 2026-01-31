@@ -316,11 +316,18 @@ const Admin_user_management = () => {
       return
     }
     
-      let response
+      let response;
+      const dataToSave = { ...formData };
+
+      // Clean phone number before sending to backend
+      if (dataToSave.phone) {
+        dataToSave.phone = dataToSave.phone.replace(/\D/g, ''); // Remove all non-digits
+      }
+
       if (showCreateModal) {
         // Create new user
-        response = await adminUserService.createUser(formData)
-        addToast({ type: 'success', message: 'User created successfully' })
+        response = await adminUserService.createUser(dataToSave);
+        addToast({ type: 'success', message: 'User created successfully' });
       } else {
         // Update existing user
         const userType = selectedUser.userType

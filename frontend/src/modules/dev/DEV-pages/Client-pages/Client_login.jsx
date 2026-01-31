@@ -86,7 +86,7 @@ const Client_login = () => {
         setOtpTimer(60) // 60 seconds timer
         
         // Auto-fill OTP if available in response (development mode)
-        if (response.otp) {
+        if (process.env.NODE_ENV === 'development' && response.otp) {
           setFormData(prev => ({
             ...prev,
             otp: response.otp
@@ -174,7 +174,7 @@ const Client_login = () => {
         setOtpTimer(60) // Reset timer
         
         // Auto-fill OTP if available in response (development mode)
-        if (response.otp) {
+        if (process.env.NODE_ENV === 'development' && response.otp) {
           setFormData(prev => ({
             ...prev,
             otp: response.otp

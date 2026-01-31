@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -7,72 +7,8 @@ import {
 } from 'react-icons/fi';
 import { FaWhatsapp } from 'react-icons/fa';
 import CP_navbar from '../CP-components/CP_navbar';
-
-// --- Mock Data ---
-const SHARED_LEADS = [
-    {
-        id: '1',
-        name: 'TechFlow Systems',
-        projectType: 'Web Application',
-        status: 'Connected',
-        sharedWith: 'Alex Johnson',
-        sharedOn: '21 Oct, 2023',
-        lastUpdated: '2h ago',
-        phone: '+1234567890',
-        email: 'techflow@example.com',
-        value: '₹15,000',
-        lastUpdate: 'Client asked for proposal',
-        updateTime: '2 hours ago'
-    },
-    {
-        id: '2',
-        name: 'Apex Innovations',
-        projectType: 'Cloud Migration',
-        status: 'Converted',
-        sharedWith: 'Maria Garcia',
-        sharedOn: '18 Oct, 2023',
-        lastUpdated: '1d ago',
-        phone: '+1987654321',
-        email: 'apex@example.com',
-        value: '₹22,000',
-        lastUpdate: 'Proposal under review',
-        updateTime: '1 day ago'
-    },
-    {
-        id: '3',
-        name: 'GreenLeaf Organics',
-        projectType: 'E-commerce Store',
-        status: 'Hot',
-        sharedWith: 'Sam Smith',
-        sharedOn: '15 Oct, 2023',
-        lastUpdated: '3d ago',
-        phone: '+1555666777',
-        email: 'greenleaf@example.com',
-        value: '₹8,500',
-        lastUpdate: 'Price negotiation ongoing',
-        updateTime: '3 days ago'
-    },
-    {
-        id: '4',
-        name: 'Digital Solutions',
-        projectType: 'Mobile App',
-        status: 'Lost',
-        sharedWith: 'Alex Johnson',
-        sharedOn: '10 Oct, 2023',
-        lastUpdated: '1w ago',
-        phone: '+1444333222',
-        email: 'digital@example.com',
-        value: '₹12,000',
-        lastUpdate: 'Client declined',
-        updateTime: '1 week ago'
-    }
-];
-
-const SALES_REPS = [
-    { id: 's1', name: 'Alex Johnson', role: 'Senior Sales' },
-    { id: 's2', name: 'Maria Garcia', role: 'Sales Lead' },
-    { id: 's3', name: 'Sam Smith', role: 'Sales Associate' }
-];
+import { cpLeadService } from '../CP-services/cpLeadService';
+import { useToast } from '../../../contexts/ToastContext';
 
 // --- Components ---
 const StatusBadge = ({ status }) => {
@@ -163,9 +99,21 @@ const SharedLeadCard = ({ lead, onNavigate }) => {
                         <FaWhatsapp className="w-4 h-4" />
                     </a>
                 </div>
-                <div className="text-xs text-gray-400 font-medium">
-                    View Progress <FiArrowRight className="w-3 h-3 inline ml-1" />
-                </div>
+                {lead.status === 'Converted' && lead.rawData?.convertedToClient ? (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onNavigate(`/cp-project-progress/${lead.rawData.convertedToClient}`);
+                        }}
+                        className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center gap-1"
+                    >
+                        View Project <FiArrowRight className="w-3 h-3" />
+                    </button>
+                ) : (
+                    <div className="text-xs text-gray-400 font-medium">
+                        Read-Only <FiArrowRight className="w-3 h-3 inline ml-1" />
+                    </div>
+                )}
             </div>
         </motion.div>
     );
@@ -173,11 +121,87 @@ const SharedLeadCard = ({ lead, onNavigate }) => {
 
 const CP_shared_leads = () => {
     const navigate = useNavigate();
+    const { addToast } = useToast();
     const [showFilters, setShowFilters] = useState(false);
-    const [leads, setLeads] = useState(SHARED_LEADS);
+    const [leads, setLeads] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('all');
     const [timeFilter, setTimeFilter] = useState('all-time');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+
+    // Fetch shared leads
+    useEffect(() => {
+        const fetchSharedLeads = async () => {
+            try {
+                setLoading(true);
+                const params = {
+                    page: currentPage,
+                    limit: 20
+                };
+                if (searchQuery) params.search = searchQuery;
+
+                const response = await cpLeadService.getSharedLeadsWithSales(params);
+                if (response.success && response.data) {
+                    // Transform backend data to frontend format
+                    const transformedLeads = response.data.map(lead => {
+                        const sharedWith = lead.sharedWithSales?.[0];
+                        return {
+                            id: lead._id || lead.id,
+                            name: lead.name || 'Unknown',
+                            projectType: lead.category?.name || 'General',
+                            status: lead.status === 'converted' ? 'Converted' : 
+                                   lead.status === 'lost' ? 'Lost' :
+                                   lead.priority === 'urgent' ? 'Hot' :
+                                   lead.status === 'connected' ? 'Connected' :
+                                   lead.status === 'followup' ? 'Follow-up' :
+                                   lead.status === 'new' ? 'New' : 'Active',
+                            sharedWith: sharedWith?.salesId?.name || 'Sales Team Lead',
+                            sharedOn: sharedWith?.sharedAt ? new Date(sharedWith.sharedAt).toLocaleDateString() : '—',
+                            lastUpdated: formatTimeAgo(lead.updatedAt || lead.createdAt),
+                            phone: lead.phone,
+                            email: lead.email,
+                            value: `₹${(lead.value || 0).toLocaleString('en-IN')}`,
+                            lastUpdate: lead.activities?.[lead.activities.length - 1]?.description || 'No updates',
+                            updateTime: lead.activities?.[lead.activities.length - 1]?.timestamp 
+                                ? formatTimeAgo(lead.activities[lead.activities.length - 1].timestamp) 
+                                : '—',
+                            convertedToClient: lead.convertedToClient?._id || lead.convertedToClient, // For project progress link
+                            rawData: lead
+                        };
+                    });
+                    
+                    setLeads(transformedLeads);
+                    setTotalPages(response.pages || 1);
+                }
+            } catch (error) {
+                console.error('Error fetching shared leads:', error);
+                addToast('Failed to load shared leads', 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchSharedLeads();
+    }, [currentPage, searchQuery, addToast]);
+
+    const formatTimeAgo = (dateString) => {
+        if (!dateString) return '—';
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+        return `${Math.floor(diffDays / 30)}mo ago`;
+    };
 
     const TABS = [
         { id: 'all', label: 'All', count: leads.length },
@@ -304,32 +328,67 @@ const CP_shared_leads = () => {
 
                 {/* Shared Lead Cards */}
                 <AnimatePresence mode='popLayout'>
-                    <div className="space-y-4">
-                        {filteredLeads.length > 0 ? (
-                            filteredLeads.map((lead) => (
-                                <SharedLeadCard
-                                    key={lead.id}
-                                    lead={lead}
-                                    onNavigate={(id) => navigate(`/cp-lead-details/${id}`)}
-                                />
-                            ))
-                        ) : (
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="text-center py-16"
-                            >
-                                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-4xl shadow-sm">
-                                    🤝
+                    {loading ? (
+                        <div className="space-y-4">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 animate-pulse">
+                                    <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                                    <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+                                    <div className="h-20 bg-gray-200 rounded"></div>
                                 </div>
-                                <h3 className="text-gray-900 font-bold mb-1">No shared leads found</h3>
-                                <p className="text-gray-500 text-sm mb-6">Clear filters or share leads with sales team first!</p>
-                                <button onClick={() => navigate('/cp-leads')} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-indigo-700 transition-colors">
-                                    Go to Leads
-                                </button>
-                            </motion.div>
-                        )}
-                    </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {filteredLeads.length > 0 ? (
+                                <>
+                                    {filteredLeads.map((lead) => (
+                                        <SharedLeadCard
+                                            key={lead.id}
+                                            lead={lead}
+                                            onNavigate={(id) => navigate(`/cp-lead-details/${id}`)}
+                                        />
+                                    ))}
+                                    {totalPages > 1 && (
+                                        <div className="flex justify-center items-center gap-4 mt-6">
+                                            <button
+                                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                                disabled={currentPage === 1}
+                                                className="px-4 py-2 bg-white rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                            >
+                                                Previous
+                                            </button>
+                                            <span className="text-sm text-gray-600">
+                                                Page {currentPage} of {totalPages}
+                                            </span>
+                                            <button
+                                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                                disabled={currentPage === totalPages}
+                                                className="px-4 py-2 bg-white rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="text-center py-16"
+                                >
+                                    <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-4xl shadow-sm">
+                                        🤝
+                                    </div>
+                                    <h3 className="text-gray-900 font-bold mb-1">No shared leads found</h3>
+                                    <p className="text-gray-500 text-sm mb-6">Clear filters or share leads with sales team first!</p>
+                                    <button onClick={() => navigate('/cp-leads')} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-indigo-700 transition-colors">
+                                        Go to Leads
+                                    </button>
+                                </motion.div>
+                            )}
+                        </div>
+                    )}
                 </AnimatePresence>
             </main>
         </div>

@@ -130,7 +130,19 @@ export const cpLeadService = {
     return await apiRequest('/cp/sales-team-leads', { method: 'GET' });
   },
 
-  // Get client details
+  // Get assigned sales manager details
+  getSalesManagerDetails: async () => {
+    return await apiRequest('/cp/sales-manager', { method: 'GET' });
+  },
+
+  // Get all converted clients
+  getConvertedClients: async (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = `/cp/clients${queryParams ? `?${queryParams}` : ''}`;
+    return await apiRequest(url, { method: 'GET' });
+  },
+
+  // Get client details with project progress
   getClientDetails: async (clientId) => {
     return await apiRequest(`/cp/clients/${clientId}`, { method: 'GET' });
   },

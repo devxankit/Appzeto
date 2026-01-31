@@ -378,6 +378,36 @@ class AdminChannelPartnerService {
       throw error;
     }
   }
+
+  // Get commission settings
+  async getCommissionSettings() {
+    try {
+      const response = await apiRequest('/admin/channel-partners/commission-settings', {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      console.error('Error fetching commission settings:', error);
+      throw error;
+    }
+  }
+
+  // Update commission settings
+  async updateCommissionSettings(settings) {
+    try {
+      const response = await apiRequest('/admin/channel-partners/commission-settings', {
+        method: 'PUT',
+        body: JSON.stringify(settings),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response;
+    } catch (error) {
+      console.error('Error updating commission settings:', error);
+      throw error;
+    }
+  }
 }
 
 export const adminChannelPartnerService = new AdminChannelPartnerService();

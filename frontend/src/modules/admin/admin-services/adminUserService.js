@@ -243,6 +243,8 @@ class AdminUserService {
     }
     if (!userData.phone?.trim()) {
       errors.push('Phone number is required');
+    } else if (!/^[6-9]\d{9}$/.test(userData.phone.trim())) {
+      errors.push('Please enter a valid 10-digit Indian mobile number');
     }
     if (!userData.dateOfBirth) {
       errors.push('Date of birth is required');

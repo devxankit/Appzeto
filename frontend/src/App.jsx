@@ -115,6 +115,7 @@ import CP_notice_board from './modules/channel-partner/CP-pages/CP_notice_board'
 import CP_my_team from './modules/channel-partner/CP-pages/CP_my_team'
 import CP_notifications from './modules/channel-partner/CP-pages/CP_notifications'
 import CP_public_profile from './modules/channel-partner/CP-pages/CP_public_profile'
+import CP_sales_manager_details from './modules/channel-partner/CP-pages/CP_sales_manager_details'
 
 
 //Admin pages start here //
@@ -591,6 +592,11 @@ function App() {
             <Route path="/cp-profile" element={
               <CPProtectedRoute>
                 <CP_profile />
+              </CPProtectedRoute>
+            } />
+            <Route path="/cp-sales-manager/:id" element={
+              <CPProtectedRoute>
+                <CP_sales_manager_details />
               </CPProtectedRoute>
             } />
 

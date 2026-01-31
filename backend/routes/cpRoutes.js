@@ -9,6 +9,7 @@ const cpRewardController = require('../controllers/cpRewardController');
 const cpPaymentRecoveryController = require('../controllers/cpPaymentRecoveryController');
 const cpNotificationController = require('../controllers/cpNotificationController');
 const cpDashboardController = require('../controllers/cpDashboardController');
+const cpQuotationController = require('../controllers/cpQuotationController');
 
 // All routes are protected
 router.use(protect);
@@ -23,6 +24,7 @@ router.get('/dashboard/revenue-chart', cpDashboardController.getRevenueChart);
 // Lead routes
 router.get('/lead-categories', cpLeadController.getLeadCategories);
 router.get('/sales-team-leads', cpLeadController.getSalesTeamLeads);
+router.get('/sales-manager', cpLeadController.getSalesManagerDetails);
 router.post('/leads', cpLeadController.createLead);
 router.get('/leads', cpLeadController.getLeads);
 router.get('/leads/shared/from-sales', cpLeadController.getSharedLeadsFromSales);
@@ -38,6 +40,7 @@ router.put('/leads/:id/profile', cpLeadController.updateLeadProfile);
 router.post('/leads/:id/convert', cpLeadController.convertLeadToClient);
 router.post('/leads/:id/followup', cpLeadController.addFollowUp);
 router.put('/leads/:id/followup/:followupId', cpLeadController.updateFollowUp);
+router.get('/clients', cpLeadController.getConvertedClients);
 router.get('/clients/:id', cpLeadController.getClientDetails);
 
 // Wallet routes
@@ -62,5 +65,11 @@ router.get('/notifications', cpNotificationController.getNotifications);
 router.get('/notifications/unread-count', cpNotificationController.getUnreadCount);
 router.patch('/notifications/:id/read', cpNotificationController.markAsRead);
 router.patch('/notifications/read-all', cpNotificationController.markAllAsRead);
+
+// Quotation routes
+router.get('/quotations', cpQuotationController.getQuotations);
+router.get('/quotations/categories', cpQuotationController.getQuotationCategories);
+router.get('/quotations/:id', cpQuotationController.getQuotationById);
+router.post('/quotations/:id/share', cpQuotationController.shareQuotation);
 
 module.exports = router;

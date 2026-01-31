@@ -10,35 +10,58 @@ const ErrorResponse = require('../utils/errorResponse');
 // @access  Private (Channel Partner only)
 exports.getRewards = asyncHandler(async (req, res, next) => {
   const cpId = req.channelPartner.id;
-  const { page = 1, limit = 20 } = req.query;
 
-  const pageNum = parseInt(page, 10);
-  const limitNum = parseInt(limit, 10);
-  const skip = (pageNum - 1) * limitNum;
+  // Get all active rewards set by admin
+  const CPReward = require('../models/CPReward');
+  const rewards = await CPReward.find({ isActive: true })
+    .sort({ order: 1, createdAt: -1 })
+    .select('name description level requirement rewardAmount order');
 
-  // Get all credit transactions (rewards, incentives, commissions)
-  const transactions = await CPWalletTransaction.find({
+  // Get CP's conversion count to determine which rewards are unlocked
+  const convertedLeads = await CPLead.countDocuments({
+    assignedTo: cpId,
+    status: 'converted'
+  });
+
+  // Check which rewards this CP has received (from wallet transactions)
+  const receivedRewardTransactions = await CPWalletTransaction.find({
     channelPartner: cpId,
     type: 'credit',
-    transactionType: { $in: ['reward', 'incentive', 'commission'] }
-  })
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limitNum);
+    transactionType: 'reward'
+  }).select('description createdAt');
 
-  const total = await CPWalletTransaction.countDocuments({
-    channelPartner: cpId,
-    type: 'credit',
-    transactionType: { $in: ['reward', 'incentive', 'commission'] }
+  // Map rewards with status
+  const rewardsWithStatus = rewards.map(reward => {
+    const requirementValue = reward.requirement?.value || 0;
+    const requirementType = reward.requirement?.type || 'conversions';
+    
+    // Check if CP has received this reward
+    const hasReceived = receivedRewardTransactions.some(transaction => 
+      transaction.description && transaction.description.includes(reward.name)
+    );
+
+    // Determine status
+    let status = 'locked';
+    if (hasReceived) {
+      status = 'unlocked';
+    } else if (requirementType === 'conversions' && convertedLeads >= requirementValue) {
+      status = 'unlocked'; // Eligible but not yet distributed
+    } else if (requirementType === 'conversions' && convertedLeads > 0 && convertedLeads < requirementValue) {
+      status = 'in-progress';
+    }
+
+    return {
+      ...reward.toObject(),
+      status,
+      currentProgress: requirementType === 'conversions' ? convertedLeads : 0,
+      requirementValue
+    };
   });
 
   res.status(200).json({
     success: true,
-    count: transactions.length,
-    total,
-    page: pageNum,
-    pages: Math.ceil(total / limitNum),
-    data: transactions
+    count: rewardsWithStatus.length,
+    data: rewardsWithStatus
   });
 });
 
@@ -117,6 +140,58 @@ exports.getPerformanceMetrics = asyncHandler(async (req, res, next) => {
     return acc;
   }, {});
 
+  // Get current level based on rewards
+  const CPReward = require('../models/CPReward');
+  const allRewards = await CPReward.find({ isActive: true })
+    .sort({ order: 1, 'requirement.value': 1 });
+
+  // Find current level (highest unlocked reward)
+  let currentLevel = 'Bronze Partner';
+  let nextLevel = 'Silver Partner';
+  let progress = 0;
+
+  // Check which rewards the CP has received
+  const receivedRewardTransactions = await CPWalletTransaction.find({
+    channelPartner: cpId,
+    type: 'credit',
+    transactionType: 'reward'
+  }).select('description');
+
+  // Find the highest level reward the CP has received
+  let highestUnlockedReward = null;
+  for (const reward of allRewards) {
+    const hasReceived = receivedRewardTransactions.some(transaction => 
+      transaction.description && transaction.description.includes(reward.name)
+    );
+    if (hasReceived) {
+      highestUnlockedReward = reward;
+      currentLevel = reward.level;
+    }
+  }
+
+  // Find next level
+  const nextReward = allRewards.find(reward => {
+    if (highestUnlockedReward) {
+      return reward.order > highestUnlockedReward.order || 
+             (reward.requirement.value > (highestUnlockedReward.requirement.value || 0));
+    } else {
+      return reward.requirement.value > convertedLeads;
+    }
+  });
+
+  if (nextReward) {
+    nextLevel = nextReward.level;
+    const currentRequirement = highestUnlockedReward?.requirement?.value || 0;
+    const nextRequirement = nextReward.requirement.value;
+    const progressValue = nextRequirement > currentRequirement 
+      ? ((convertedLeads - currentRequirement) / (nextRequirement - currentRequirement)) * 100
+      : 0;
+    progress = Math.max(0, Math.min(100, progressValue));
+  } else {
+    // If no next reward, CP has reached the highest level
+    progress = 100;
+  }
+
   res.status(200).json({
     success: true,
     data: {
@@ -132,7 +207,11 @@ exports.getPerformanceMetrics = asyncHandler(async (req, res, next) => {
       revenue: {
         total: totalRevenue
       },
-      earnings: earningsBreakdown
+      earnings: earningsBreakdown,
+      currentLevel,
+      nextLevel,
+      progress: parseFloat(progress.toFixed(2)),
+      convertedLeads
     }
   });
 });

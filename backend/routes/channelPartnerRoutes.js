@@ -21,6 +21,10 @@ const {
   getChannelPartnerLeadsBreakdown,
   getChannelPartnerLeads
 } = require('../controllers/channelPartnerLeadsController');
+const {
+  getCommissionSettings,
+  updateCommissionSettings
+} = require('../controllers/cpCommissionSettingsController');
 const { protect, authorize } = require('../middlewares/auth');
 
 // Apply authentication and authorization to all routes
@@ -31,6 +35,16 @@ const { protect, authorize } = require('../middlewares/auth');
 // @desc    Get channel partner statistics
 // @access  Private (Admin only)
 router.get('/statistics', getChannelPartnerStatistics);
+
+// @route   GET /api/admin/channel-partners/commission-settings
+// @desc    Get current commission settings
+// @access  Private (Admin only)
+router.get('/commission-settings', getCommissionSettings);
+
+// @route   PUT /api/admin/channel-partners/commission-settings
+// @desc    Update commission settings
+// @access  Private (Admin only)
+router.put('/commission-settings', updateCommissionSettings);
 
 // @route   GET /api/admin/channel-partners/wallets
 // @desc    Get all channel partner wallets with earnings data

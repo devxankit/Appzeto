@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -7,60 +7,8 @@ import {
     Clock, ChevronRight, AlertCircle
 } from 'lucide-react';
 import CP_navbar from '../CP-components/CP_navbar';
-
-// --- Mock Data ---
-const NOTIFICATIONS = [
-    {
-        id: 'n1',
-        type: 'payment',
-        title: 'Payment Pending',
-        message: 'Invoice #inv-2024-001 for TechCorp is pending. Amount: ₹25,000',
-        time: '2 hours ago',
-        isRead: false,
-        isPinned: true,
-        path: '/cp-wallet' // Deep link
-    },
-    {
-        id: 'n2',
-        type: 'lead',
-        title: 'New Lead Assigned',
-        message: 'A new lead "Green Valley Hospital" has been assigned to you.',
-        time: '5 hours ago',
-        isRead: false,
-        isPinned: false,
-        path: '/cp-leads'
-    },
-    {
-        id: 'n3',
-        type: 'admin',
-        title: 'System Maintenance',
-        message: 'Dashboard will be down for maintenance on 24th Jan, 2 AM - 4 AM.',
-        time: 'Yesterday',
-        isRead: true,
-        isPinned: false,
-        path: '/cp-notice-board'
-    },
-    {
-        id: 'n4',
-        type: 'reward',
-        title: 'Reward Unlocked!',
-        message: 'Congratulations! You have unlocked "Silver Partner" badge.',
-        time: '2 days ago',
-        isRead: true,
-        isPinned: false,
-        path: '/cp-rewards'
-    },
-    {
-        id: 'n5',
-        type: 'lead',
-        title: 'Follow-up Reminder',
-        message: 'Call with Mr. Rajesh (Sunrise Schools) is scheduled for today at 4 PM.',
-        time: 'Today, 9:00 AM',
-        isRead: false,
-        isPinned: true,
-        path: '/cp-leads'
-    }
-];
+import { cpNotificationService } from '../CP-services/cpNotificationService';
+import { useToast } from '../../../contexts/ToastContext';
 
 const TABS = [
     { id: 'all', label: 'All' },
@@ -70,25 +18,159 @@ const TABS = [
     { id: 'admin', label: 'Admin' }
 ];
 
+// Map backend notification types to frontend display types
+const mapNotificationType = (backendType) => {
+    if (backendType?.startsWith('lead_')) return 'lead';
+    if (backendType?.startsWith('payment_') || backendType?.startsWith('wallet_') || backendType?.startsWith('withdrawal_')) return 'payment';
+    if (backendType?.startsWith('reward_') || backendType?.startsWith('incentive_')) return 'reward';
+    if (backendType === 'system') return 'admin';
+    return 'other';
+};
+
 const CP_notifications = () => {
     const navigate = useNavigate();
+    const { addToast } = useToast();
     const [activeTab, setActiveTab] = useState('all');
-    const [notifications, setNotifications] = useState(NOTIFICATIONS);
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [loading, setLoading] = useState(true);
+
+    // Format time ago
+    const formatTimeAgo = (dateString) => {
+        if (!dateString) return '—';
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays === 1) return 'Yesterday';
+        if (diffDays < 7) return `${diffDays}d ago`;
+        if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+        return `${Math.floor(diffDays / 30)}mo ago`;
+    };
+
+    // Fetch notifications
+    useEffect(() => {
+        const fetchNotifications = async () => {
+            try {
+                setLoading(true);
+                // Fetch all notifications - filtering will be done client-side
+                const params = {};
+
+                const [notificationsResponse, unreadResponse] = await Promise.all([
+                    cpNotificationService.getNotifications(params),
+                    cpNotificationService.getUnreadCount()
+                ]);
+
+                if (notificationsResponse.success) {
+                    const formattedNotifications = notificationsResponse.data.map(notif => ({
+                        id: notif._id || notif.id,
+                        type: mapNotificationType(notif.type),
+                        backendType: notif.type, // Keep original for filtering
+                        title: notif.title,
+                        message: notif.message,
+                        time: formatTimeAgo(notif.createdAt),
+                        isRead: notif.read || false,
+                        isPinned: notif.priority === 'urgent' || notif.priority === 'high',
+                        path: notif.actionUrl || getDefaultPath(notif.type, notif.reference),
+                        rawData: notif
+                    }));
+
+                    setNotifications(formattedNotifications);
+                }
+
+                if (unreadResponse.success) {
+                    setUnreadCount(unreadResponse.data?.unreadCount || 0);
+                }
+            } catch (error) {
+                console.error('Error fetching notifications:', error);
+                addToast('Failed to load notifications', 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchNotifications();
+    }, [addToast]);
+
+    // Get default path based on notification type and reference
+    const getDefaultPath = (type, reference) => {
+        if (type?.startsWith('lead_')) {
+            if (reference?.id) return `/cp-lead-details/${reference.id}`;
+            return '/cp-leads';
+        }
+        if (type?.startsWith('payment_') || type?.startsWith('wallet_') || type?.startsWith('withdrawal_')) {
+            return '/cp-wallet';
+        }
+        if (type?.startsWith('reward_') || type?.startsWith('incentive_')) {
+            return '/cp-rewards';
+        }
+        if (type === 'system') {
+            return '/cp-notice-board';
+        }
+        return null;
+    };
 
     const filteredNotifications = notifications.filter(n => {
         if (activeTab === 'all') return true;
+        if (activeTab === 'lead') {
+            return n.backendType?.startsWith('lead_');
+        }
+        if (activeTab === 'payment') {
+            return n.backendType?.startsWith('payment_') || 
+                   n.backendType?.startsWith('wallet_') || 
+                   n.backendType?.startsWith('withdrawal_');
+        }
+        if (activeTab === 'reward') {
+            return n.backendType?.startsWith('reward_') || 
+                   n.backendType?.startsWith('incentive_');
+        }
+        if (activeTab === 'admin') {
+            return n.backendType === 'system';
+        }
         return n.type === activeTab;
-    }).sort((a, b) => (b.isPinned === a.isPinned ? 0 : b.isPinned ? 1 : -1)); // Pinned first
+    }).sort((a, b) => {
+        // Sort: unread first, then pinned, then by date
+        if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
+        if (a.isPinned !== b.isPinned) return b.isPinned ? 1 : -1;
+        return 0;
+    });
 
-    const unreadCount = notifications.filter(n => !n.isRead).length;
-
-    const markAllRead = () => {
-        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    const markAllRead = async () => {
+        try {
+            const response = await cpNotificationService.markAllAsRead();
+            if (response.success) {
+                setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+                setUnreadCount(0);
+                addToast('All notifications marked as read', 'success');
+            }
+        } catch (error) {
+            console.error('Error marking all as read:', error);
+            addToast('Failed to mark all as read', 'error');
+        }
     };
 
-    const handleNotificationClick = (id, path) => {
-        // Mark as read
-        setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    const handleNotificationClick = async (id, path) => {
+        const notification = notifications.find(n => n.id === id);
+        
+        // Mark as read if not already read
+        if (notification && !notification.isRead) {
+            try {
+                await cpNotificationService.markAsRead(id);
+                setNotifications(prev => prev.map(n => 
+                    n.id === id ? { ...n, isRead: true } : n
+                ));
+                setUnreadCount(prev => Math.max(0, prev - 1));
+            } catch (error) {
+                console.error('Error marking notification as read:', error);
+            }
+        }
+        
         // Navigate
         if (path) navigate(path);
     };
@@ -143,7 +225,15 @@ const CP_notifications = () => {
                 <div className="max-w-xl mx-auto px-4 pb-0 overflow-hidden">
                     <div className="flex gap-2 overflow-x-auto hide-scrollbar py-3">
                         {TABS.map(tab => {
-                            const count = notifications.filter(n => !n.isRead && (tab.id === 'all' || n.type === tab.id)).length;
+                            const count = notifications.filter(n => {
+                                if (n.isRead) return false;
+                                if (tab.id === 'all') return true;
+                                if (tab.id === 'lead') return n.backendType?.startsWith('lead_');
+                                if (tab.id === 'payment') return n.backendType?.startsWith('payment_') || n.backendType?.startsWith('wallet_') || n.backendType?.startsWith('withdrawal_');
+                                if (tab.id === 'reward') return n.backendType?.startsWith('reward_') || n.backendType?.startsWith('incentive_');
+                                if (tab.id === 'admin') return n.backendType === 'system';
+                                return n.type === tab.id;
+                            }).length;
                             return (
                                 <button
                                     key={tab.id}
@@ -165,9 +255,25 @@ const CP_notifications = () => {
             </div>
 
             <main className="max-w-xl mx-auto px-4 py-4 space-y-3">
-                <AnimatePresence mode='popLayout'>
-                    {filteredNotifications.length > 0 ? (
-                        filteredNotifications.map(notification => (
+                {loading ? (
+                    <div className="space-y-3">
+                        {[1, 2, 3, 4, 5].map(i => (
+                            <div key={i} className="bg-white rounded-[24px] p-6 border border-gray-100 animate-pulse">
+                                <div className="flex gap-4">
+                                    <div className="w-12 h-12 bg-gray-200 rounded-2xl"></div>
+                                    <div className="flex-1 space-y-2">
+                                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                                        <div className="h-3 bg-gray-200 rounded w-full"></div>
+                                        <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <AnimatePresence mode='popLayout'>
+                        {filteredNotifications.length > 0 ? (
+                            filteredNotifications.map(notification => (
                             <motion.div
                                 layout
                                 initial={{ opacity: 0, y: 10 }}
@@ -220,8 +326,9 @@ const CP_notifications = () => {
                             <h3 className="text-gray-900 font-bold mb-1">You're all caught up!</h3>
                             <p className="text-gray-500 text-sm">No new notifications for now.</p>
                         </motion.div>
-                    )}
-                </AnimatePresence>
+                        )}
+                    </AnimatePresence>
+                )}
             </main>
         </div>
     );

@@ -44,7 +44,11 @@ import {
   ArrowRight,
   Sparkles,
   Crown,
-  Flame
+  Flame,
+  X,
+  ChevronDown,
+  CalendarDays,
+  Check
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Button } from '../../../components/ui/button'
@@ -87,6 +91,13 @@ const Admin_dashboard = () => {
   const [recentActivities, setRecentActivities] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+
+  // Filter state - default to 'month'
+  const [filterType, setFilterType] = useState('month') // 'day', 'week', 'month', 'year', 'custom'
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false)
+  const [showDateRangePicker, setShowDateRangePicker] = useState(false)
 
   // Dashboard data - loaded from API
   const [dashboardData, setDashboardData] = useState({
@@ -266,57 +277,155 @@ const Admin_dashboard = () => {
     return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
   }
 
-  useEffect(() => {
-    // Load dashboard data from API
-    const loadDashboardData = async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
-        
-        // Fetch dashboard stats and finance statistics in parallel
-        // Fetch both all-time and monthly finance statistics
-        const [dashboardResponse, financeResponseAll, financeResponseMonth] = await Promise.all([
-          adminDashboardService.getDashboardStats(),
-          adminFinanceService.getFinanceStatistics('all').catch(err => {
-            console.error('Error fetching finance statistics (all):', err)
-            return null
-          }),
-          adminFinanceService.getFinanceStatistics('month').catch(err => {
-            console.error('Error fetching finance statistics (month):', err)
-            return null
-          })
-        ])
-        
-        if (dashboardResponse.success && dashboardResponse.data) {
+  // Helper function to get date range based on filter type
+  const getDateRange = () => {
+    const today = new Date()
+    today.setHours(23, 59, 59, 999) // End of today
+    
+    let start, end
+    
+    switch (filterType) {
+      case 'day':
+        start = new Date(today)
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'week':
+        start = new Date(today)
+        start.setDate(today.getDate() - 6) // Last 7 days
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'month':
+        start = new Date(today.getFullYear(), today.getMonth(), 1)
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'year':
+        start = new Date(today.getFullYear(), 0, 1)
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'custom':
+        if (startDate && endDate) {
+          start = new Date(startDate)
+          start.setHours(0, 0, 0, 0)
+          end = new Date(endDate)
+          end.setHours(23, 59, 59, 999)
+        } else {
+          // Default to current month if custom dates not set
+          start = new Date(today.getFullYear(), today.getMonth(), 1)
+          start.setHours(0, 0, 0, 0)
+          end = today
+        }
+        break
+      default:
+        start = new Date(today.getFullYear(), today.getMonth(), 1)
+        start.setHours(0, 0, 0, 0)
+        end = today
+    }
+    
+    return {
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0],
+      startISO: start.toISOString(),
+      endISO: end.toISOString()
+    }
+  }
+
+  // Helper function to get filter label
+  const getFilterLabel = () => {
+    switch (filterType) {
+      case 'day':
+        return 'Today'
+      case 'week':
+        return 'This Week'
+      case 'month':
+        return 'This Month'
+      case 'year':
+        return 'This Year'
+      case 'custom':
+        if (startDate && endDate) {
+          const start = new Date(startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+          const end = new Date(endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+          return `${start} - ${end}`
+        }
+        return 'Custom Range'
+      default:
+        return 'This Month'
+    }
+  }
+
+  // Load dashboard data with filters
+  const loadDashboardData = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      // Get date range based on filter
+      const dateRange = getDateRange()
+
+      // Map filter type to API timeFilter
+      let timeFilter = 'month' // default
+      if (filterType === 'day') timeFilter = 'day'
+      else if (filterType === 'week') timeFilter = 'week'
+      else if (filterType === 'month') timeFilter = 'month'
+      else if (filterType === 'year') timeFilter = 'year'
+      else if (filterType === 'custom') timeFilter = 'custom'
+
+      // Prepare finance statistics params
+      const financeParams = {}
+      if (filterType === 'custom' && dateRange.startDate && dateRange.endDate) {
+        financeParams.startDate = dateRange.startDate
+        financeParams.endDate = dateRange.endDate
+      }
+
+      // Fetch dashboard stats and finance statistics in parallel
+      const [dashboardResponse, financeResponse] = await Promise.all([
+        adminDashboardService.getDashboardStats().catch(err => {
+          console.error('Error fetching dashboard stats:', err)
+          return null
+        }),
+        adminFinanceService.getFinanceStatistics(timeFilter, financeParams).catch(err => {
+          console.error('Error fetching finance statistics:', err)
+          return null
+        })
+      ])
+
+      if (dashboardResponse?.success && dashboardResponse.data) {
           let dashboardData = { ...dashboardResponse.data }
           
           // Override financial data with comprehensive finance statistics if available
-          const financeData = financeResponseAll?.success && financeResponseAll?.data ? financeResponseAll.data : null
-          const financeDataMonth = financeResponseMonth?.success && financeResponseMonth?.data ? financeResponseMonth.data : null
+          const financeData = financeResponse?.success && financeResponse?.data ? financeResponse.data : null
           
           if (financeData) {
-            // Update finance section with comprehensive data
+            // Update finance section with filtered data
             dashboardData.finance = {
               totalRevenue: financeData.totalRevenue || 0,
-              monthlyRevenue: financeDataMonth?.totalRevenue || financeData.totalRevenue || 0, // Use monthly data if available
+              monthlyRevenue: financeData.totalRevenue || 0, // Use filtered revenue
               outstandingPayments: financeData.pendingAmounts?.totalPendingReceivables || 0,
               expenses: financeData.totalExpenses || 0,
               profit: financeData.netProfit || 0,
               profitMargin: parseFloat(financeData.profitMargin || 0),
-              growth: parseFloat(financeDataMonth?.revenueChange || financeData.revenueChange || 0)
+              growth: parseFloat(financeData.revenueChange || 0)
             }
             
-            // Update today's financial metrics with accurate data
+            // Update financial metrics with filtered data (not "today" but filtered period)
             dashboardData.today = {
               ...dashboardData.today,
-              earnings: financeData.todayEarnings || dashboardData.today.earnings || 0,
-              expenses: financeData.todayExpenses || dashboardData.today.expenses || 0,
-              sales: financeData.todayEarnings || dashboardData.today.sales || 0, // Today sales = today earnings
+              earnings: financeData.totalRevenue || financeData.todayEarnings || dashboardData.today.earnings || 0,
+              expenses: financeData.totalExpenses || dashboardData.today.expenses || 0,
+              sales: financeData.totalRevenue || dashboardData.today.sales || 0,
               pendingAmount: financeData.pendingAmounts?.totalPendingReceivables || dashboardData.today.pendingAmount || 0,
-              profit: financeData.todayProfit || dashboardData.today.profit || 0,
-              loss: (financeData.todayExpenses || 0) > (financeData.todayEarnings || 0) 
-                ? (financeData.todayExpenses - financeData.todayEarnings) 
-                : 0
+              profit: financeData.netProfit || dashboardData.today.profit || 0,
+              loss: (financeData.totalExpenses || 0) > (financeData.totalRevenue || 0) 
+                ? (financeData.totalExpenses - financeData.totalRevenue) 
+                : 0,
+              earningsGrowth: parseFloat(financeData.revenueChange || 0),
+              expensesGrowth: parseFloat(financeData.expenseChange || 0),
+              salesGrowth: parseFloat(financeData.revenueChange || 0),
+              profitGrowth: parseFloat(financeData.profitChange || 0),
+              lossGrowth: 0
             }
           }
           
@@ -374,15 +483,28 @@ const Admin_dashboard = () => {
       }
     }
 
+  useEffect(() => {
     loadDashboardData()
-    
+
     // Set up interval to refresh activities every 30 seconds
     const activityInterval = setInterval(() => {
       fetchRecentActivities()
     }, 30000)
-    
+
     return () => clearInterval(activityInterval)
-  }, [])
+  }, [filterType, startDate, endDate])
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showFilterDropdown && !event.target.closest('.filter-dropdown-container')) {
+        setShowFilterDropdown(false)
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showFilterDropdown])
 
   const handleQuickAction = (action) => {
     switch(action) {
@@ -447,64 +569,7 @@ const Admin_dashboard = () => {
               <h3 className="text-lg font-semibold text-red-900 mb-2">Error Loading Dashboard</h3>
               <p className="text-red-700 mb-4">{error}</p>
               <Button 
-                onClick={async () => {
-                  setIsLoading(true)
-                  setError(null)
-                  try {
-                    // Fetch dashboard stats and finance statistics in parallel
-                    const [dashboardResponse, financeResponseAll, financeResponseMonth] = await Promise.all([
-                      adminDashboardService.getDashboardStats(),
-                      adminFinanceService.getFinanceStatistics('all').catch(err => {
-                        console.error('Error fetching finance statistics (all):', err)
-                        return null
-                      }),
-                      adminFinanceService.getFinanceStatistics('month').catch(err => {
-                        console.error('Error fetching finance statistics (month):', err)
-                        return null
-                      })
-                    ])
-                    
-                    if (dashboardResponse.success && dashboardResponse.data) {
-                      let dashboardData = { ...dashboardResponse.data }
-                      
-                      const financeData = financeResponseAll?.success && financeResponseAll?.data ? financeResponseAll.data : null
-                      const financeDataMonth = financeResponseMonth?.success && financeResponseMonth?.data ? financeResponseMonth.data : null
-                      
-                      if (financeData) {
-                        dashboardData.finance = {
-                          totalRevenue: financeData.totalRevenue || 0,
-                          monthlyRevenue: financeDataMonth?.totalRevenue || financeData.totalRevenue || 0,
-                          outstandingPayments: financeData.pendingAmounts?.totalPendingReceivables || 0,
-                          expenses: financeData.totalExpenses || 0,
-                          profit: financeData.netProfit || 0,
-                          profitMargin: parseFloat(financeData.profitMargin || 0),
-                          growth: parseFloat(financeDataMonth?.revenueChange || financeData.revenueChange || 0)
-                        }
-                        
-                        dashboardData.today = {
-                          ...dashboardData.today,
-                          earnings: financeData.todayEarnings || dashboardData.today.earnings || 0,
-                          expenses: financeData.todayExpenses || dashboardData.today.expenses || 0,
-                          sales: financeData.todayEarnings || dashboardData.today.sales || 0,
-                          pendingAmount: financeData.pendingAmounts?.totalPendingReceivables || dashboardData.today.pendingAmount || 0,
-                          profit: financeData.todayProfit || dashboardData.today.profit || 0,
-                          loss: (financeData.todayExpenses || 0) > (financeData.todayEarnings || 0) 
-                            ? (financeData.todayExpenses - financeData.todayEarnings) 
-                            : 0
-                        }
-                      }
-                      
-                      setDashboardData(dashboardData)
-                    }
-                    
-                    // Fetch recent activities
-                    await fetchRecentActivities()
-                  } catch (err) {
-                    setError(err.message || 'Failed to load dashboard data')
-                  } finally {
-                    setIsLoading(false)
-                  }
-                }}
+                onClick={loadDashboardData}
                 variant="outline"
               >
                 Retry
@@ -543,71 +608,174 @@ const Admin_dashboard = () => {
                 Welcome back! Here's what's happening with your business today.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Filter Dropdown */}
+              <div className="relative filter-dropdown-container">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2 shadow-sm hover:shadow border-gray-200 bg-white hover:bg-gray-50"
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                >
+                  <Filter className="h-4 w-4 text-blue-600" />
+                  <span className="font-medium text-gray-700">{getFilterLabel()}</span>
+                  <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showFilterDropdown ? 'rotate-180' : ''}`} />
+                </Button>
+                
+                {/* Filter Dropdown Menu */}
+                {showFilterDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 mt-2 w-60 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-gray-200/80 z-50 overflow-hidden"
+                  >
+                    <div className="px-3 pt-3 pb-2">
+                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                        Date range
+                      </p>
+                      <div className="space-y-0.5">
+                        {[
+                          { type: 'day', label: 'Today', Icon: Calendar },
+                          { type: 'week', label: 'This Week', Icon: Calendar },
+                          { type: 'month', label: 'This Month', Icon: BarChart3 },
+                          { type: 'year', label: 'This Year', Icon: TrendingUp }
+                        ].map(({ type, label, Icon }) => (
+                          <button
+                            key={type}
+                            onClick={() => {
+                              setFilterType(type)
+                              setStartDate('')
+                              setEndDate('')
+                              setShowFilterDropdown(false)
+                            }}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                              filterType === type
+                                ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                            }`}
+                          >
+                            <div className={`p-1.5 rounded-lg ${filterType === type ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                              <Icon className={`h-3.5 w-3.5 ${filterType === type ? 'text-blue-600' : 'text-gray-500'}`} />
+                            </div>
+                            <span className="flex-1 text-left">{label}</span>
+                            {filterType === type && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
+                      <button
+                        onClick={() => {
+                          setFilterType('custom')
+                          setShowDateRangePicker(true)
+                          setShowFilterDropdown(false)
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                          filterType === 'custom'
+                            ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        <div className={`p-1.5 rounded-lg ${filterType === 'custom' ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                          <CalendarDays className={`h-3.5 w-3.5 ${filterType === 'custom' ? 'text-blue-600' : 'text-gray-500'}`} />
+                        </div>
+                        <span className="flex-1 text-left">Custom range</span>
+                        {filterType === 'custom' && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Date Range Picker Modal */}
+              {showDateRangePicker && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+                  onClick={() => setShowDateRangePicker(false)}
+                >
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Select Date Range</h3>
+                      <button
+                        onClick={() => setShowDateRangePicker(false)}
+                        className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
+                        <X className="h-5 w-5 text-gray-500" />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Start Date
+                        </label>
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          max={endDate || new Date().toISOString().split('T')[0]}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          End Date
+                        </label>
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          min={startDate}
+                          max={new Date().toISOString().split('T')[0]}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      
+                      <div className="flex gap-3 pt-4">
+                        <Button
+                          onClick={() => {
+                            if (startDate && endDate) {
+                              setFilterType('custom')
+                              setShowDateRangePicker(false)
+                            }
+                          }}
+                          className="flex-1"
+                          disabled={!startDate || !endDate}
+                        >
+                          Apply Filter
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setStartDate('')
+                            setEndDate('')
+                            setFilterType('month')
+                            setShowDateRangePicker(false)
+                          }}
+                        >
+                          Reset
+                        </Button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+
               <Button 
                 variant="outline" 
                 size="sm" 
                 className="gap-2"
-                onClick={async () => {
-                  setIsLoading(true)
-                  try {
-                    // Fetch dashboard stats and finance statistics in parallel
-                    // Fetch both all-time and monthly finance statistics
-                    const [dashboardResponse, financeResponseAll, financeResponseMonth] = await Promise.all([
-                      adminDashboardService.getDashboardStats(),
-                      adminFinanceService.getFinanceStatistics('all').catch(err => {
-                        console.error('Error fetching finance statistics (all):', err)
-                        return null
-                      }),
-                      adminFinanceService.getFinanceStatistics('month').catch(err => {
-                        console.error('Error fetching finance statistics (month):', err)
-                        return null
-                      })
-                    ])
-                    
-                    if (dashboardResponse.success && dashboardResponse.data) {
-                      let dashboardData = { ...dashboardResponse.data }
-                      
-                      // Override financial data with comprehensive finance statistics if available
-                      const financeData = financeResponseAll?.success && financeResponseAll?.data ? financeResponseAll.data : null
-                      const financeDataMonth = financeResponseMonth?.success && financeResponseMonth?.data ? financeResponseMonth.data : null
-                      
-                      if (financeData) {
-                        dashboardData.finance = {
-                          totalRevenue: financeData.totalRevenue || 0,
-                          monthlyRevenue: financeDataMonth?.totalRevenue || financeData.totalRevenue || 0,
-                          outstandingPayments: financeData.pendingAmounts?.totalPendingReceivables || 0,
-                          expenses: financeData.totalExpenses || 0,
-                          profit: financeData.netProfit || 0,
-                          profitMargin: parseFloat(financeData.profitMargin || 0),
-                          growth: parseFloat(financeDataMonth?.revenueChange || financeData.revenueChange || 0)
-                        }
-                        
-                        dashboardData.today = {
-                          ...dashboardData.today,
-                          earnings: financeData.todayEarnings || dashboardData.today.earnings || 0,
-                          expenses: financeData.todayExpenses || dashboardData.today.expenses || 0,
-                          sales: financeData.todayEarnings || dashboardData.today.sales || 0,
-                          pendingAmount: financeData.pendingAmounts?.totalPendingReceivables || dashboardData.today.pendingAmount || 0,
-                          profit: financeData.todayProfit || dashboardData.today.profit || 0,
-                          loss: (financeData.todayExpenses || 0) > (financeData.todayEarnings || 0) 
-                            ? (financeData.todayExpenses - financeData.todayEarnings) 
-                            : 0
-                        }
-                      }
-                      
-                      setDashboardData(dashboardData)
-                    }
-                    
-                    // Refresh recent activities
-                    await fetchRecentActivities()
-                  } catch (err) {
-                    console.error('Error refreshing dashboard:', err)
-                    setError(err.message || 'Failed to refresh dashboard')
-                  } finally {
-                    setIsLoading(false)
-                  }
-                }}
+                onClick={loadDashboardData}
               >
                 <RefreshCw className="h-4 w-4" />
                 Refresh
@@ -626,7 +794,7 @@ const Admin_dashboard = () => {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 lg:gap-4"
           >
-            {/* Today Earnings */}
+            {/* Earnings */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-emerald-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-emerald-400/20 to-green-500/20 rounded-full -translate-y-6 translate-x-6"></div>
               <div className="relative z-10">
@@ -634,21 +802,15 @@ const Admin_dashboard = () => {
                   <div className="p-2 rounded-lg bg-emerald-500/10">
                     <TrendingUp className="h-4 w-4 text-emerald-600" />
                   </div>
-                  <div className="text-right">
-                    <p className={`text-xs font-medium ${dashboardData.today.earningsGrowth >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                      {dashboardData.today.earningsGrowth >= 0 ? '+' : ''}{dashboardData.today.earningsGrowth?.toFixed(1) || 0}%
-                    </p>
-                    <p className="text-xs text-emerald-600">vs yesterday</p>
-                  </div>
+                  <p className="text-xs font-medium text-emerald-700 text-right">{getFilterLabel()} Earnings</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-emerald-700 mb-1">Today Earnings</p>
                   <p className="text-lg font-bold text-emerald-800">{formatCurrency(dashboardData.today.earnings)}</p>
                 </div>
               </div>
             </div>
 
-            {/* Today Expense */}
+            {/* Expense */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
               <div className="relative z-10">
@@ -656,21 +818,15 @@ const Admin_dashboard = () => {
                   <div className="p-2 rounded-lg bg-red-500/10">
                     <TrendingDown className="h-4 w-4 text-red-600" />
                   </div>
-                  <div className="text-right">
-                    <p className={`text-xs font-medium ${dashboardData.today.expensesGrowth >= 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                      {dashboardData.today.expensesGrowth >= 0 ? '+' : ''}{dashboardData.today.expensesGrowth?.toFixed(1) || 0}%
-                    </p>
-                    <p className="text-xs text-red-600">vs yesterday</p>
-                  </div>
+                  <p className="text-xs font-medium text-red-700 text-right">{getFilterLabel()} Expense</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-red-700 mb-1">Today Expense</p>
                   <p className="text-lg font-bold text-red-800">{formatCurrency(dashboardData.today.expenses)}</p>
                 </div>
               </div>
             </div>
 
-            {/* Today Sales */}
+            {/* Sales */}
             <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-blue-200/50">
               <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-blue-400/20 to-indigo-500/20 rounded-full -translate-y-6 translate-x-6"></div>
               <div className="relative z-10">
@@ -678,15 +834,9 @@ const Admin_dashboard = () => {
                   <div className="p-2 rounded-lg bg-blue-500/10">
                     <IndianRupee className="h-4 w-4 text-blue-600" />
                   </div>
-                  <div className="text-right">
-                    <p className={`text-xs font-medium ${dashboardData.today.salesGrowth >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
-                      {dashboardData.today.salesGrowth >= 0 ? '+' : ''}{dashboardData.today.salesGrowth?.toFixed(1) || 0}%
-                    </p>
-                    <p className="text-xs text-blue-600">vs yesterday</p>
-                  </div>
+                  <p className="text-xs font-medium text-blue-700 text-right">{getFilterLabel()} Sales</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-blue-700 mb-1">Today Sales</p>
                   <p className="text-lg font-bold text-blue-800">{formatCurrency(dashboardData.today.sales)}</p>
                 </div>
               </div>
@@ -700,20 +850,9 @@ const Admin_dashboard = () => {
                   <div className="p-2 rounded-lg bg-orange-500/10">
                     <CreditCard className="h-4 w-4 text-orange-600" />
                   </div>
-                  {dashboardData.today.pendingAmount > 0 && (
-                    <div className="text-right">
-                      <p className="text-xs font-medium text-orange-700">Yes</p>
-                      <p className="text-xs text-orange-600">pending</p>
-                    </div>
-                  )}
-                  {dashboardData.today.pendingAmount === 0 && (
-                    <div className="text-right">
-                      <p className="text-xs font-medium text-orange-700">No pending</p>
-                    </div>
-                  )}
+                  <p className="text-xs font-medium text-orange-700 text-right">Pending Amount</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-orange-700 mb-1">Pending Amount</p>
                   <p className="text-lg font-bold text-orange-800">{formatCurrency(dashboardData.today.pendingAmount)}</p>
                 </div>
               </div>
@@ -727,15 +866,9 @@ const Admin_dashboard = () => {
                   <div className="p-2 rounded-lg bg-teal-500/10">
                     <Plus className="h-4 w-4 text-teal-600" />
                   </div>
-                  <div className="text-right">
-                    <p className={`text-xs font-medium ${dashboardData.today.profitGrowth >= 0 ? 'text-teal-700' : 'text-red-700'}`}>
-                      {dashboardData.today.profitGrowth >= 0 ? '+' : ''}{dashboardData.today.profitGrowth?.toFixed(1) || 0}%
-                    </p>
-                    <p className="text-xs text-teal-600">vs yesterday</p>
-                  </div>
+                  <p className="text-xs font-medium text-teal-700 text-right">{getFilterLabel()} Profit</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-teal-700 mb-1">Profit</p>
                   <p className="text-lg font-bold text-teal-800">{formatCurrency(dashboardData.today.profit)}</p>
                 </div>
               </div>
@@ -749,17 +882,9 @@ const Admin_dashboard = () => {
                   <div className="p-2 rounded-lg bg-rose-500/10">
                     <Minus className="h-4 w-4 text-rose-600" />
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-rose-700">
-                      {dashboardData.today.lossGrowth !== undefined 
-                        ? `${dashboardData.today.lossGrowth >= 0 ? '+' : ''}${dashboardData.today.lossGrowth?.toFixed(1) || 0}%`
-                        : '0%'}
-                    </p>
-                    <p className="text-xs text-rose-600">vs yesterday</p>
-                  </div>
+                  <p className="text-xs font-medium text-rose-700 text-right">{getFilterLabel()} Loss</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-rose-700 mb-1">Loss</p>
                   <p className="text-lg font-bold text-rose-800">{formatCurrency(dashboardData.today.loss)}</p>
                 </div>
               </div>
@@ -773,21 +898,15 @@ const Admin_dashboard = () => {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
           >
-            {/* Monthly Revenue */}
+            {/* Revenue */}
             <div className="bg-white/80 backdrop-blur-sm rounded-xl p-3 shadow-md border border-emerald-200/50 hover:shadow-lg transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
                 <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-100 to-green-100">
                   <DollarSign className="h-3 w-3 text-emerald-600" />
                 </div>
-                <div className="text-right">
-                  <p className={`text-xs font-medium ${dashboardData.finance.growth >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {dashboardData.finance.growth >= 0 ? '+' : ''}{dashboardData.finance.growth?.toFixed(1) || 0}%
-                  </p>
-                  <p className="text-xs text-emerald-600">this month</p>
-                </div>
+                <p className="text-xs font-medium text-emerald-700 text-right">{getFilterLabel()} Revenue</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Monthly Revenue</p>
                 <p className="text-lg font-bold text-emerald-700">{formatCurrency(dashboardData.finance.monthlyRevenue || dashboardData.finance.totalRevenue)}</p>
                 <p className="text-xs text-gray-500 mt-1">Total earnings</p>
               </div>
@@ -799,15 +918,9 @@ const Admin_dashboard = () => {
                 <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-100 to-amber-100">
                   <Trophy className="h-3 w-3 text-orange-600" />
                 </div>
-                <div className="text-right">
-                  <p className={`text-xs font-medium ${dashboardData.sales.growth >= 0 ? 'text-orange-700' : 'text-red-700'}`}>
-                    {dashboardData.sales.growth >= 0 ? '+' : ''}{dashboardData.sales.growth?.toFixed(1) || 0}%
-                  </p>
-                  <p className="text-xs text-orange-600">this month</p>
-                </div>
+                <p className="text-xs font-medium text-orange-700 text-right">{getFilterLabel()} Converted Leads</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Converted Leads</p>
                 <p className="text-lg font-bold text-orange-700">{formatNumber(dashboardData.sales.converted)}</p>
                 <p className="text-xs text-gray-500 mt-1">Total conversions</p>
               </div>
@@ -819,17 +932,11 @@ const Admin_dashboard = () => {
                 <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100">
                   <Target className="h-3 w-3 text-blue-600" />
                 </div>
-                <div className="text-right">
-                  <p className="text-xs font-medium text-blue-700">
-                    {dashboardData.sales.conversionRate?.toFixed(2) || 0}%
-                  </p>
-                  <p className="text-xs text-blue-600">conversion</p>
-                </div>
+                <p className="text-xs font-medium text-blue-700 text-right">Conversion Rate</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Conversion Rate</p>
                 <p className="text-lg font-bold text-blue-700">{dashboardData.sales.conversionRate?.toFixed(2) || 0}%</p>
-                <p className="text-xs text-gray-500 mt-1">Lead to customer</p>
+                <p className="text-xs text-gray-500 mt-1">Lead to client</p>
               </div>
             </div>
 
@@ -839,15 +946,9 @@ const Admin_dashboard = () => {
                 <div className="p-1.5 rounded-lg bg-gradient-to-br from-red-100 to-rose-100">
                   <AlertTriangle className="h-3 w-3 text-red-600" />
                 </div>
-                <div className="text-right">
-                  <p className="text-xs font-medium text-red-700">
-                    {dashboardData.projects.overdue || 0}
-                  </p>
-                  <p className="text-xs text-red-600">projects</p>
-                </div>
+                <p className="text-xs font-medium text-red-700 text-right">Overdue Projects</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Overdue Projects</p>
                 <p className="text-lg font-bold text-red-700">{formatNumber(dashboardData.projects.overdue)}</p>
                 <p className="text-xs text-gray-500 mt-1">Need attention</p>
               </div>
@@ -859,15 +960,9 @@ const Admin_dashboard = () => {
                 <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-100 to-purple-100">
                   <Users className="h-3 w-3 text-indigo-600" />
                 </div>
-                <div className="text-right">
-                  <p className={`text-xs font-medium ${dashboardData.users.growth >= 0 ? 'text-indigo-700' : 'text-red-700'}`}>
-                    {dashboardData.users.growth >= 0 ? '+' : ''}{dashboardData.users.growth?.toFixed(1) || 0}%
-                  </p>
-                  <p className="text-xs text-indigo-600">this month</p>
-                </div>
+                <p className="text-xs font-medium text-indigo-700 text-right">Total Clients</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Total Clients</p>
                 <p className="text-lg font-bold text-indigo-700">{formatNumber(dashboardData.users.clients)}</p>
                 <p className="text-xs text-gray-500 mt-1">Active clients</p>
               </div>

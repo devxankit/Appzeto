@@ -427,9 +427,20 @@ export const adminFinanceService = {
   // ========== FINANCE STATISTICS ==========
 
   // Get comprehensive finance statistics
-  getFinanceStatistics: async (timeFilter = 'all') => {
+  getFinanceStatistics: async (timeFilter = 'all', params = {}) => {
     try {
-      const response = await apiRequest(`/admin/finance/statistics?timeFilter=${timeFilter}`, {
+      const queryParams = new URLSearchParams();
+      queryParams.append('timeFilter', timeFilter);
+      
+      // Add date parameters if provided
+      if (params.startDate) {
+        queryParams.append('startDate', params.startDate);
+      }
+      if (params.endDate) {
+        queryParams.append('endDate', params.endDate);
+      }
+      
+      const response = await apiRequest(`/admin/finance/statistics?${queryParams.toString()}`, {
         method: 'GET'
       });
       return response;

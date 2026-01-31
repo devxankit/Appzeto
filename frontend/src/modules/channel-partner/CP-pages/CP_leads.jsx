@@ -9,6 +9,9 @@ import {
 } from 'react-icons/fi';
 import { FaWhatsapp, FaRupeeSign } from 'react-icons/fa';
 import CP_navbar from '../CP-components/CP_navbar';
+import { cpLeadService } from '../CP-services/cpLeadService';
+import { cpAuthService } from '../CP-services/cpAuthService';
+import { useToast } from '../../../contexts/ToastContext';
 
 // --- Mock Data ---
 const MOCK_LEADS = [
@@ -84,11 +87,6 @@ const MOCK_LEADS = [
   }
 ];
 
-const SALES_REPS = [
-  { id: 's1', name: 'Alex Johnson', role: 'Senior Sales' },
-  { id: 's2', name: 'Maria Garcia', role: 'Sales Lead' },
-  { id: 's3', name: 'Sam Smith', role: 'Sales Associate' }
-];
 
 // --- Components ---
 
@@ -183,12 +181,22 @@ const LeadCard = ({ lead, onAction, onNavigate }) => {
 
 const CP_leads = () => {
   const navigate = useNavigate();
-  const location = useLocation(); // Add useLocation
-  const [leads, setLeads] = useState(MOCK_LEADS);
+  const location = useLocation();
+  const { addToast } = useToast();
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState([]);
+  const [salesTeamLeads, setSalesTeamLeads] = useState([]);
 
   // Initialize state from location if available, otherwise default
   const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'all');
   const [searchQuery, setSearchQuery] = useState(location.state?.searchQuery || '');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalLeads, setTotalLeads] = useState(0);
 
   const [timeFilter, setTimeFilter] = useState('all-time'); // all-time, yesterday, this-week, last-30-days
   const [showFilters, setShowFilters] = useState(false);
@@ -219,68 +227,146 @@ const CP_leads = () => {
     businessName: '',
     phone: '',
     email: '',
-    projectType: 'Web Development',
+    category: '',
     budget: '',
     priority: 'Medium',
     notes: ''
   });
 
-  // Calculate counts for shared and received leads
-  const sharedLeadsCount = useMemo(() => {
-    return leads.filter(l => l.source === 'self' && (l.status === 'Shared' || l.sharedWith)).length;
-  }, [leads]);
+  // Fetch leads from API
+  useEffect(() => {
+    const fetchLeads = async () => {
+      try {
+        setLoading(true);
+        const params = {
+          page: currentPage,
+          limit: 20
+        };
+        
+        // Map activeTab to status filter
+        if (activeTab !== 'all') {
+          if (activeTab === 'converted') params.status = 'converted';
+          else if (activeTab === 'lost') params.status = 'lost';
+          else if (activeTab === 'hot') params.priority = 'urgent';
+          else if (activeTab === 'active') {
+            // Active means not converted and not lost
+            params.status = { $nin: ['converted', 'lost'] };
+          }
+        }
+        
+        if (searchQuery) params.search = searchQuery;
+        if (statusFilter !== 'all') params.status = statusFilter;
+        if (priorityFilter !== 'all') params.priority = priorityFilter;
+        if (categoryFilter !== 'all') params.category = categoryFilter;
 
-  const receivedLeadsCount = useMemo(() => {
-    return leads.filter(l => l.source === 'sales' || l.assignedSales).length;
-  }, [leads]);
+        const response = await cpLeadService.getLeads(params);
+        if (response.success && response.data) {
+          // Transform backend data to frontend format
+          const transformedLeads = response.data.map(lead => ({
+            id: lead._id || lead.id,
+            name: lead.name || 'Unknown',
+            projectType: lead.category?.name || 'General',
+            source: lead.sharedFromSales && lead.sharedFromSales.length > 0 ? 'sales' : 'self',
+            status: lead.status === 'converted' ? 'Converted' : 
+                   lead.status === 'lost' ? 'Lost' :
+                   lead.status === 'not_converted' ? 'Lost' :
+                   lead.priority === 'urgent' ? 'Hot' :
+                   lead.status === 'connected' ? 'Connected' :
+                   lead.status === 'followup' ? 'Follow-up' :
+                   lead.status === 'new' ? 'New' : 'Active',
+            lastUpdated: formatTimeAgo(lead.updatedAt || lead.createdAt),
+            phone: lead.phone,
+            email: lead.email,
+            value: `₹${(lead.value || 0).toLocaleString('en-IN')}`,
+            assignedSales: lead.sharedFromSales?.[0]?.sharedBy?.name,
+            sharedWith: lead.sharedWithSales?.map(s => s.salesId?.name).join(', '),
+            category: lead.category,
+            priority: lead.priority,
+            rawData: lead // Keep raw data for API calls
+          }));
+          
+          setLeads(transformedLeads);
+          setTotalPages(response.pages || 1);
+          setTotalLeads(response.total || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching leads:', error);
+        addToast('Failed to load leads', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Filters logic - Only show own leads (not shared, not received from sales team)
+    fetchLeads();
+  }, [currentPage, activeTab, searchQuery, statusFilter, priorityFilter, categoryFilter, addToast]);
+
+  const [assignedSalesManager, setAssignedSalesManager] = useState(null);
+  const [isConfirmShareOpen, setIsConfirmShareOpen] = useState(false);
+  const [pendingShareSalesId, setPendingShareSalesId] = useState(null);
+  const [sharedLeadsCount, setSharedLeadsCount] = useState(0);
+  const [receivedLeadsCount, setReceivedLeadsCount] = useState(0);
+
+  // Fetch categories, assigned sales manager, and counts
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const [categoriesRes, salesManagerRes, sharedLeadsRes, receivedLeadsRes] = await Promise.all([
+          cpLeadService.getLeadCategories(),
+          cpLeadService.getSalesManagerDetails(),
+          cpLeadService.getSharedLeadsWithSales({ page: 1, limit: 1 }), // Just get count
+          cpLeadService.getSharedLeadsFromSales({ page: 1, limit: 1 }) // Just get count
+        ]);
+        
+        if (categoriesRes.success) setCategories(categoriesRes.data || []);
+        if (salesManagerRes.success && salesManagerRes.data) {
+          // Only show assigned sales manager in share modal
+          setAssignedSalesManager(salesManagerRes.data);
+          setSalesTeamLeads(salesManagerRes.data ? [salesManagerRes.data] : []);
+        }
+        if (sharedLeadsRes.success) {
+          setSharedLeadsCount(sharedLeadsRes.total || 0);
+        }
+        if (receivedLeadsRes.success) {
+          setReceivedLeadsCount(receivedLeadsRes.total || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+      }
+    };
+
+    fetchInitialData();
+  }, []);
+
+  const formatTimeAgo = (dateString) => {
+    if (!dateString) return '—';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+    return `${Math.floor(diffDays / 30)}mo ago`;
+  };
+
+  // Counts are now fetched from backend API (see useEffect above)
+
+  // Filter leads (already filtered by backend, but can add client-side filtering if needed)
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
-      // Only show leads that are:
-      // 1. Added by channel partner (source === 'self')
-      // 2. NOT shared with sales team (status !== 'Shared' && !sharedWith)
-      // 3. NOT received from sales team (source !== 'sales' && !assignedSales)
-      const isOwnLead = lead.source === 'self' && 
-                       lead.status !== 'Shared' && 
-                       !lead.sharedWith && 
-                       lead.source !== 'sales' && 
-                       !lead.assignedSales;
-
-      if (!isOwnLead) return false;
-
-      const matchesSearch = lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.projectType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.status.toLowerCase().includes(searchQuery.toLowerCase());
-
-      if (!matchesSearch) return false;
-
-      // Time Filter Logic (Mock Data Parsing)
-      let matchesTime = true;
-      if (timeFilter !== 'all-time') {
-        const timeStr = lead.lastUpdated; // e.g., '2h ago', '1d ago', '1w ago'
-        if (timeFilter === 'yesterday') {
-          matchesTime = timeStr.includes('1d ago');
-        } else if (timeFilter === 'this-week') {
-          // Matches 'm ago', 'h ago', 'd ago' (excluding > 6d potentially, but simple check for now)
-          matchesTime = timeStr.includes('m ago') || timeStr.includes('h ago') || (timeStr.includes('d ago') && parseInt(timeStr) < 7);
-        } else if (timeFilter === 'last-30-days') {
-          // Matches anything except months/years if we assume mock data is recent. 
-          // Let's filter out 'mo ago', 'y ago' if they existed, but for now accept w, d, h, m.
-          matchesTime = !timeStr.includes('mo ago') && !timeStr.includes('y ago');
-        }
+      // Only show own leads (not shared with sales, not received from sales)
+      // Backend should handle this, but add client-side check
+      if (activeTab === 'my-leads') {
+        return lead.source === 'self' && !lead.sharedWith;
       }
-      if (!matchesTime) return false;
-
-      if (activeTab === 'all') return true;
-      if (activeTab === 'my-leads') return lead.source === 'self';
-      if (activeTab === 'converted') return lead.status === 'Converted';
-      if (activeTab === 'lost') return lead.status === 'Lost';
-      if (activeTab === 'hot') return lead.status === 'Hot';
-      if (activeTab === 'active') return lead.status !== 'Converted' && lead.status !== 'Lost';
       return true;
     });
-  }, [leads, activeTab, searchQuery, timeFilter]);
+  }, [leads, activeTab]);
 
   const handleAction = (type, lead) => {
     setSelectedLead(lead);
@@ -288,87 +374,222 @@ const CP_leads = () => {
     if (type === 'update') setIsUpdateModalOpen(true);
   };
 
-  const handleUpdateStatus = (newStatus) => {
-    if (!selectedLead) return;
-    if (newStatus === 'Converted') {
-      setIsUpdateModalOpen(false);
-      setIsConvertModalOpen(true);
-    } else {
-      setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, status: newStatus, lastUpdated: 'Just now' } : l));
-      setIsUpdateModalOpen(false);
-      setSelectedLead(null);
+  const handleUpdateStatus = async (newStatus) => {
+    if (!selectedLead || !selectedLead.rawData) return;
+    
+    try {
+      // Map frontend status to backend status
+      const statusMap = {
+        'New': 'new',
+        'Connected': 'connected',
+        'Follow-up': 'followup',
+        'Hot': 'connected', // Hot is a priority, not status
+        'Lost': 'lost',
+        'Converted': 'converted'
+      };
+      
+      const backendStatus = statusMap[newStatus] || newStatus.toLowerCase();
+      
+      if (newStatus === 'Converted') {
+        setIsUpdateModalOpen(false);
+        setIsConvertModalOpen(true);
+      } else {
+        const response = await cpLeadService.updateLeadStatus(
+          selectedLead.id,
+          backendStatus
+        );
+        
+        if (response.success) {
+          // Update local state
+          setLeads(prev => prev.map(l => 
+            l.id === selectedLead.id 
+              ? { ...l, status: newStatus, lastUpdated: 'Just now', rawData: response.data } 
+              : l
+          ));
+          addToast('Lead status updated successfully', 'success');
+        }
+        setIsUpdateModalOpen(false);
+        setSelectedLead(null);
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error);
+      addToast('Failed to update lead status', 'error');
     }
   };
 
-  const handleConvertToClient = () => {
+  const handleConvertToClient = async () => {
     // Validate required fields
     if (!conversionData.projectName.trim()) {
-      alert('Please enter project name');
+      addToast('Please enter project name', 'error');
       return;
     }
     if (!conversionData.totalCost.trim() || parseFloat(conversionData.totalCost) < 0) {
-      alert('Please enter a valid total cost');
+      addToast('Please enter a valid total cost', 'error');
       return;
     }
     if (!conversionData.projectType.web && !conversionData.projectType.app && !conversionData.projectType.taxi) {
-      alert('Please select at least one project type');
+      addToast('Please select at least one project type', 'error');
       return;
     }
 
-    // Update lead status to converted
-    if (selectedLead) {
-      setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, status: 'Converted', lastUpdated: 'Just now' } : l));
+    if (!selectedLead) return;
+
+    try {
+      const response = await cpLeadService.convertLeadToClient(selectedLead.id, {
+        projectName: conversionData.projectName,
+        projectType: conversionData.projectType,
+        totalCost: parseFloat(conversionData.totalCost),
+        finishedDays: conversionData.finishedDays ? parseInt(conversionData.finishedDays) : undefined,
+        advanceReceived: conversionData.advanceReceived ? parseFloat(conversionData.advanceReceived) : 0,
+        includeGST: conversionData.includeGST,
+        description: conversionData.description
+      });
+
+      if (response.success) {
+        addToast('Lead converted to client successfully!', 'success');
+        
+        // Update local state
+        setLeads(prev => prev.map(l => 
+          l.id === selectedLead.id 
+            ? { ...l, status: 'Converted', lastUpdated: 'Just now' } 
+            : l
+        ));
+
+        // Reset form and close modal
+        setConversionData({
+          projectName: '',
+          projectType: { web: false, app: false, taxi: false },
+          totalCost: '',
+          finishedDays: '',
+          advanceReceived: '',
+          includeGST: false,
+          description: '',
+          screenshot: null
+        });
+        setIsConvertModalOpen(false);
+        setSelectedLead(null);
+        
+        // Navigate to converted clients page
+        navigate('/cp-converted');
+      }
+    } catch (error) {
+      console.error('Error converting lead:', error);
+      addToast('Failed to convert lead', 'error');
+    }
+  };
+
+  const handleShareLeadClick = (salesRepId) => {
+    // Show confirmation modal first
+    setPendingShareSalesId(salesRepId);
+    setIsConfirmShareOpen(true);
+  };
+
+  const handleConfirmShare = async () => {
+    if (!selectedLead || !pendingShareSalesId) return;
+    
+    try {
+      const response = await cpLeadService.shareLeadWithSales(selectedLead.id, pendingShareSalesId);
+      
+      if (response.success) {
+        addToast('Lead shared successfully', 'success');
+        
+        // Remove lead from current list (it will now appear in shared leads page)
+        setLeads(prev => prev.filter(l => l.id !== selectedLead.id));
+        
+        // Update shared leads count
+        setSharedLeadsCount(prev => prev + 1);
+        
+        setIsShareModalOpen(false);
+        setIsConfirmShareOpen(false);
+        setSelectedLead(null);
+        setPendingShareSalesId(null);
+      }
+    } catch (error) {
+      console.error('Error sharing lead:', error);
+      addToast('Failed to share lead', 'error');
+      setIsConfirmShareOpen(false);
+      setPendingShareSalesId(null);
+    }
+  };
+
+  const handleCancelShare = () => {
+    setIsConfirmShareOpen(false);
+    setPendingShareSalesId(null);
+  };
+
+  const handleAddLead = async (e) => {
+    e.preventDefault();
+    if (!newLead.name || !newLead.phone) {
+      addToast('Name and phone number are required', 'error');
+      return;
     }
 
-    // Reset form and close modal
-    setConversionData({
-      projectName: '',
-      projectType: { web: false, app: false, taxi: false },
-      totalCost: '',
-      finishedDays: '',
-      advanceReceived: '',
-      includeGST: false,
-      description: '',
-      screenshot: null
-    });
-    setIsConvertModalOpen(false);
-    setSelectedLead(null);
-    
-    // Navigate to converted clients page
-    navigate('/cp-converted');
-  };
+    // Get selected category
+    const selectedCategory = categories.find(cat => 
+      (cat._id || cat.id) === newLead.category
+    );
 
-  const handleShareLead = (salesRepId) => {
-    if (!selectedLead) return;
-    setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, status: 'Shared', sharedWith: SALES_REPS.find(s => s.id === salesRepId)?.name, lastUpdated: 'Just now' } : l));
-    setIsShareModalOpen(false);
-    setSelectedLead(null);
-  };
+    if (!selectedCategory) {
+      addToast('Please select a category', 'error');
+      return;
+    }
 
-  const handleAddLead = (e) => {
-    e.preventDefault();
-    if (!newLead.name || !newLead.phone) return;
+    try {
+      // Map priority
+      const priorityMap = {
+        'Low': 'low',
+        'Medium': 'medium',
+        'High': 'high',
+        'Urgent': 'urgent'
+      };
 
-    const lead = {
-      id: Date.now().toString(),
-      ...newLead,
-      source: 'self',
-      status: 'Hot',
-      lastUpdated: 'Just now',
-      value: newLead.budget ? `₹${newLead.budget}` : 'Pending'
-    };
-    setLeads([lead, ...leads]);
-    setIsAddSheetOpen(false);
-    setNewLead({
-      name: '',
-      businessName: '',
-      phone: '',
-      email: '',
-      projectType: 'Web Development',
-      budget: '',
-      priority: 'Medium',
-      notes: ''
-    });
+      const leadData = {
+        name: newLead.name,
+        phone: newLead.phone.replace(/\D/g, ''), // Remove non-digits
+        email: newLead.email || undefined,
+        company: newLead.businessName || undefined,
+        category: selectedCategory._id || selectedCategory.id,
+        priority: priorityMap[newLead.priority] || 'medium',
+        value: newLead.budget ? parseFloat(newLead.budget) : 0,
+        notes: newLead.notes || undefined
+      };
+
+      const response = await cpLeadService.createLead(leadData);
+      
+      if (response.success && response.data) {
+        addToast('Lead created successfully', 'success');
+        
+        // Add new lead to list
+        const newLeadFormatted = {
+          id: response.data._id || response.data.id,
+          name: response.data.name || newLead.name,
+          projectType: response.data.category?.name || selectedCategory.name,
+          source: 'self',
+          status: response.data.priority === 'urgent' ? 'Hot' : 'New',
+          lastUpdated: 'Just now',
+          phone: response.data.phone,
+          email: response.data.email,
+          value: newLead.budget ? `₹${parseFloat(newLead.budget).toLocaleString('en-IN')}` : '₹0',
+          rawData: response.data
+        };
+        
+        setLeads([newLeadFormatted, ...leads]);
+        setIsAddSheetOpen(false);
+        setNewLead({
+          name: '',
+          businessName: '',
+          phone: '',
+          email: '',
+          category: '',
+          budget: '',
+          priority: 'Medium',
+          notes: ''
+        });
+      }
+    } catch (error) {
+      console.error('Error creating lead:', error);
+      addToast(error.message || 'Failed to create lead', 'error');
+    }
   };
 
   // Calculate own leads (for tabs count)
@@ -512,30 +733,65 @@ const CP_leads = () => {
 
         {/* Leads List */}
         <AnimatePresence mode='popLayout'>
-          <div className="space-y-4">
-            {filteredLeads.length > 0 ? (
-              filteredLeads.map(lead => (
-                <LeadCard
-                  key={lead.id}
-                  lead={lead}
-                  onAction={handleAction}
-                  onNavigate={(id) => navigate(`/cp-lead-details/${id}`)}
-                />
-              ))
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-center py-16"
-              >
-                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-4xl shadow-sm">
-                  📪
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 animate-pulse">
+                  <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+                  <div className="h-20 bg-gray-200 rounded"></div>
                 </div>
-                <h3 className="text-gray-900 font-bold mb-1">No leads found</h3>
-                <p className="text-gray-500 text-sm">Clear filters or create a new lead.</p>
-              </motion.div>
-            )}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredLeads.length > 0 ? (
+                <>
+                  {filteredLeads.map(lead => (
+                    <LeadCard
+                      key={lead.id}
+                      lead={lead}
+                      onAction={handleAction}
+                      onNavigate={(id) => navigate(`/cp-lead-details/${id}`)}
+                    />
+                  ))}
+                  {totalPages > 1 && (
+                    <div className="flex justify-center items-center gap-4 mt-6">
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className="px-4 py-2 bg-white rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-sm text-gray-600">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        className="px-4 py-2 bg-white rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center py-16"
+                >
+                  <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-4xl shadow-sm">
+                    📪
+                  </div>
+                  <h3 className="text-gray-900 font-bold mb-1">No leads found</h3>
+                  <p className="text-gray-500 text-sm">Clear filters or create a new lead.</p>
+                </motion.div>
+              )}
+            </div>
+          )}
         </AnimatePresence>
       </main>
 
@@ -636,17 +892,19 @@ const CP_leads = () => {
                 {/* Project Details */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Project Type</label>
+                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Category <span className="text-red-500">*</span></label>
                     <select
-                      value={newLead.projectType}
-                      onChange={e => setNewLead({ ...newLead, projectType: e.target.value })}
+                      required
+                      value={newLead.category || ''}
+                      onChange={e => setNewLead({ ...newLead, category: e.target.value })}
                       className="w-full px-4 py-3 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 font-medium appearance-none"
                     >
-                      <option>Web Development</option>
-                      <option>Mobile App</option>
-                      <option>Digital Marketing</option>
-                      <option>Custom Software</option>
-                      <option>Consulting</option>
+                      <option value="">Select Category</option>
+                      {categories.map(cat => (
+                        <option key={cat._id || cat.id} value={cat._id || cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-1.5">
@@ -728,17 +986,21 @@ const CP_leads = () => {
             >
               <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 md:hidden" />
               <h3 className="font-bold text-xl text-gray-900 mb-4">Share with Sales Team</h3>
-              <div className="space-y-3">
-                {SALES_REPS.map((rep) => (
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {assignedSalesManager ? (
                   <button 
-                    key={rep.id} 
-                    onClick={() => handleShareLead(rep.id)} 
+                    onClick={() => handleShareLeadClick(assignedSalesManager._id || assignedSalesManager.id)} 
                     className="w-full text-left p-4 rounded-xl bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700 font-medium transition-colors flex justify-between items-center group"
                   >
-                    {rep.name}
+                    <div>
+                      <p className="font-semibold">{assignedSalesManager.name}</p>
+                      {assignedSalesManager.email && <p className="text-xs text-gray-500">{assignedSalesManager.email}</p>}
+                    </div>
                     <span className="opacity-0 group-hover:opacity-100 text-sm font-bold bg-indigo-200 text-indigo-700 px-2 py-1 rounded">Select</span>
                   </button>
-                ))}
+                ) : (
+                  <p className="text-center text-gray-500 py-4">No assigned sales manager available</p>
+                )}
               </div>
               <button 
                 onClick={() => setIsShareModalOpen(false)} 
@@ -746,6 +1008,47 @@ const CP_leads = () => {
               >
                 Cancel
               </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Modal for Sharing */}
+      <AnimatePresence>
+        {isConfirmShareOpen && selectedLead && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleCancelShare}
+              className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-3xl p-6 z-50 max-w-md w-full mx-4 shadow-xl"
+            >
+              <h3 className="font-bold text-xl text-gray-900 mb-2">Confirm Share Lead</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Are you sure you want to share <span className="font-bold">{selectedLead.name}</span> with your assigned sales manager? 
+                Once shared, you will have read-only access and cannot modify the lead status.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelShare}
+                  className="flex-1 py-3 px-4 rounded-xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmShare}
+                  className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors"
+                >
+                  Confirm Share
+                </button>
+              </div>
             </motion.div>
           </>
         )}

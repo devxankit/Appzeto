@@ -42,7 +42,9 @@ import {
   Database,
   Shield,
   ChevronDown,
-  Check
+  Check,
+  Percent,
+  Settings
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
@@ -413,6 +415,22 @@ const Admin_channel_partner_management = () => {
     currency: 'INR',
     status: 'active',
     pdfDocument: null
+  })
+  
+  // Commission settings states
+  const [commissionSettings, setCommissionSettings] = useState({
+    ownConversionCommission: 30,
+    sharedConversionCommission: 10
+  })
+  const [commissionSettingsLoading, setCommissionSettingsLoading] = useState(false)
+  const [commissionSettingsSaving, setCommissionSettingsSaving] = useState(false)
+  const [commissionSettingsError, setCommissionSettingsError] = useState(null)
+  const [commissionLastUpdated, setCommissionLastUpdated] = useState(null)
+  const [commissionUpdatedBy, setCommissionUpdatedBy] = useState(null)
+  const [isEditingCommission, setIsEditingCommission] = useState(false)
+  const [commissionFormData, setCommissionFormData] = useState({
+    ownConversionCommission: 30,
+    sharedConversionCommission: 10
   })
   
   // Team lead assignments - will be loaded from API or initialized from partners
@@ -997,6 +1015,77 @@ const Admin_channel_partner_management = () => {
     }
   }
 
+  // Load commission settings when commission tab is active
+  const loadCommissionSettings = async () => {
+    setCommissionSettingsLoading(true)
+    setCommissionSettingsError(null)
+    try {
+      const response = await adminChannelPartnerService.getCommissionSettings()
+      if (response.success && response.data) {
+        setCommissionSettings({
+          ownConversionCommission: response.data.ownConversionCommission || 30,
+          sharedConversionCommission: response.data.sharedConversionCommission || 10
+        })
+        setCommissionFormData({
+          ownConversionCommission: response.data.ownConversionCommission || 30,
+          sharedConversionCommission: response.data.sharedConversionCommission || 10
+        })
+        setCommissionLastUpdated(response.data.updatedAt)
+        setCommissionUpdatedBy(response.data.updatedBy)
+      }
+    } catch (error) {
+      console.error('Error loading commission settings:', error)
+      setCommissionSettingsError('Failed to load commission settings')
+      addToast('Failed to load commission settings', 'error')
+    } finally {
+      setCommissionSettingsLoading(false)
+    }
+  }
+
+  // Save commission settings
+  const saveCommissionSettings = async () => {
+    // Validation
+    if (commissionFormData.ownConversionCommission < 0 || commissionFormData.ownConversionCommission > 100) {
+      addToast('Own conversion commission must be between 0 and 100', 'error')
+      return
+    }
+    if (commissionFormData.sharedConversionCommission < 0 || commissionFormData.sharedConversionCommission > 100) {
+      addToast('Shared conversion commission must be between 0 and 100', 'error')
+      return
+    }
+
+    setCommissionSettingsSaving(true)
+    setCommissionSettingsError(null)
+    try {
+      const response = await adminChannelPartnerService.updateCommissionSettings(commissionFormData)
+      if (response.success && response.data) {
+        setCommissionSettings({
+          ownConversionCommission: response.data.ownConversionCommission,
+          sharedConversionCommission: response.data.sharedConversionCommission
+        })
+        setCommissionLastUpdated(response.data.updatedAt)
+        setCommissionUpdatedBy(response.data.updatedBy)
+        setIsEditingCommission(false)
+        addToast('Commission settings updated successfully', 'success')
+      } else {
+        throw new Error(response.message || 'Failed to update commission settings')
+      }
+    } catch (error) {
+      console.error('Error saving commission settings:', error)
+      setCommissionSettingsError(error.message || 'Failed to update commission settings')
+      addToast(error.message || 'Failed to update commission settings', 'error')
+    } finally {
+      setCommissionSettingsSaving(false)
+    }
+  }
+
+  // Load commission settings when commission tab is active
+  useEffect(() => {
+    if (activeTab === 'commission') {
+      loadCommissionSettings()
+    }
+  }, [activeTab])
+
   // Load team leads when team tab is active
   useEffect(() => {
     if (activeTab === 'team') {
@@ -1159,7 +1248,8 @@ const Admin_channel_partner_management = () => {
     { key: 'rewards', label: 'Rewards', icon: Award },
     { key: 'converted', label: 'Converted', icon: CheckCircle },
     { key: 'quotations', label: 'Quotations', icon: FileText },
-    { key: 'team', label: 'Assign Team Leads', icon: UserCheck }
+    { key: 'team', label: 'Assign Team Leads', icon: UserCheck },
+    { key: 'commission', label: 'Commission Settings', icon: Percent }
   ]
   
   // Partner status tabs (for partners section only)
@@ -1214,6 +1304,7 @@ const Admin_channel_partner_management = () => {
                 {activeTab === 'converted' && 'Track converted clients and project progress'}
                 {activeTab === 'quotations' && 'View quotations shared by channel partners'}
                 {activeTab === 'team' && 'Assign sales team leads to channel partners'}
+                {activeTab === 'commission' && 'Configure commission percentages for channel partners'}
               </p>
             </div>
             {activeTab === 'partners' && (
@@ -2544,6 +2635,194 @@ const Admin_channel_partner_management = () => {
                       )
                     })()}
                   </>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Commission Settings Section */}
+          {activeTab === 'commission' && (
+            <Card className="shadow-sm border border-gray-200">
+              <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
+                    Commission Settings
+                  </CardTitle>
+                  {!isEditingCommission && (
+                    <Button
+                      onClick={() => setIsEditingCommission(true)}
+                      className="gap-2 w-full sm:w-auto text-sm"
+                      size="sm"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                      Edit Settings
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="p-3 lg:p-6">
+                {commissionSettingsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loading size="medium" />
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Commission Scenarios Table */}
+                    <div className="bg-gray-50 rounded-lg p-4 lg:p-6">
+                      <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-4">Commission Scenarios</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="border-b border-gray-300 bg-white">
+                              <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Lead Source</th>
+                              <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Converter</th>
+                              <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">CP Commission</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr className="border-b border-gray-200 hover:bg-gray-50">
+                              <td className="py-3 px-4 text-sm text-gray-700">Channel Partner</td>
+                              <td className="py-3 px-4 text-sm text-gray-700">Channel Partner</td>
+                              <td className="py-3 px-4 text-sm font-semibold text-gray-900 text-right">
+                                {isEditingCommission ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                    value={commissionFormData.ownConversionCommission}
+                                    onChange={(e) => setCommissionFormData({
+                                      ...commissionFormData,
+                                      ownConversionCommission: parseFloat(e.target.value) || 0
+                                    })}
+                                    className="w-20 px-2 py-1 text-sm border border-gray-300 rounded text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  />
+                                ) : (
+                                  `${commissionSettings.ownConversionCommission}%`
+                                )}
+                              </td>
+                            </tr>
+                            <tr className="border-b border-gray-200 hover:bg-gray-50">
+                              <td className="py-3 px-4 text-sm text-gray-700">Channel Partner</td>
+                              <td className="py-3 px-4 text-sm text-gray-700">Sales Team Lead</td>
+                              <td className="py-3 px-4 text-sm font-semibold text-gray-900 text-right">
+                                {isEditingCommission ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                    value={commissionFormData.sharedConversionCommission}
+                                    onChange={(e) => setCommissionFormData({
+                                      ...commissionFormData,
+                                      sharedConversionCommission: parseFloat(e.target.value) || 0
+                                    })}
+                                    className="w-20 px-2 py-1 text-sm border border-gray-300 rounded text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  />
+                                ) : (
+                                  `${commissionSettings.sharedConversionCommission}%`
+                                )}
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="py-3 px-4 text-sm text-gray-700">Sales Team Lead</td>
+                              <td className="py-3 px-4 text-sm text-gray-700">Channel Partner</td>
+                              <td className="py-3 px-4 text-sm font-semibold text-gray-900 text-right">
+                                {isEditingCommission ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                    value={commissionFormData.sharedConversionCommission}
+                                    onChange={(e) => setCommissionFormData({
+                                      ...commissionFormData,
+                                      sharedConversionCommission: parseFloat(e.target.value) || 0
+                                    })}
+                                    className="w-20 px-2 py-1 text-sm border border-gray-300 rounded text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  />
+                                ) : (
+                                  `${commissionSettings.sharedConversionCommission}%`
+                                )}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Current Settings Display */}
+                    {!isEditingCommission && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                          <p className="text-xs font-medium text-blue-700 mb-1">Own Conversion Commission</p>
+                          <p className="text-2xl font-bold text-blue-800">{commissionSettings.ownConversionCommission}%</p>
+                          <p className="text-xs text-blue-600 mt-1">When CP converts their own lead</p>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                          <p className="text-xs font-medium text-green-700 mb-1">Shared Conversion Commission</p>
+                          <p className="text-2xl font-bold text-green-800">{commissionSettings.sharedConversionCommission}%</p>
+                          <p className="text-xs text-green-600 mt-1">When lead is shared and converted by other party</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Last Updated Info */}
+                    {commissionLastUpdated && !isEditingCommission && (
+                      <div className="text-xs text-gray-500 pt-4 border-t border-gray-200">
+                        {commissionUpdatedBy && (
+                          <p>Last updated by: {commissionUpdatedBy.name || commissionUpdatedBy.email || 'Admin'}</p>
+                        )}
+                        <p>Last updated: {new Date(commissionLastUpdated).toLocaleString()}</p>
+                      </div>
+                    )}
+
+                    {/* Error Message */}
+                    {commissionSettingsError && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <p className="text-sm text-red-800">{commissionSettingsError}</p>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    {isEditingCommission && (
+                      <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                        <Button
+                          onClick={() => {
+                            setIsEditingCommission(false)
+                            setCommissionFormData({
+                              ownConversionCommission: commissionSettings.ownConversionCommission,
+                              sharedConversionCommission: commissionSettings.sharedConversionCommission
+                            })
+                            setCommissionSettingsError(null)
+                          }}
+                          variant="outline"
+                          size="sm"
+                          disabled={commissionSettingsSaving}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={saveCommissionSettings}
+                          size="sm"
+                          disabled={commissionSettingsSaving}
+                          className="gap-2"
+                        >
+                          {commissionSettingsSaving ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-4 w-4" />
+                              Save Settings
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>
