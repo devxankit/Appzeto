@@ -42,6 +42,7 @@ import { MultiSelect } from '../../../components/ui/multi-select'
 import Loading from '../../../components/ui/loading'
 import CloudinaryUpload from '../../../components/ui/cloudinary-upload'
 import { useToast } from '../../../contexts/ToastContext'
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 
 const formatDateForInput = (date) => {
   if (!date) return ''
@@ -848,7 +849,9 @@ const Admin_project_management = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
@@ -2078,960 +2081,1150 @@ function getFinancialSummary(project) {
             <div className="p-4">
               {/* Pending Projects Tab */}
               {activeTab === 'pending-projects' && (
-                <div className="space-y-6">
-                  {/* Header Section */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">Pending Projects</h2>
-                      <p className="text-gray-600 mt-1">Projects from sales team waiting for PM assignment</p>
-                    </div>
-                    <div className="bg-orange-100 text-orange-800 px-4 py-2 rounded-lg text-sm font-semibold">
-                      {pendingProjects.length} pending assignment
-                    </div>
-                  </div>
-
-                  {/* Search and Filters */}
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1 relative">
-                      <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <input
-                        type="text"
-                        placeholder="Search pending projects..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      />
-                    </div>
-                    <select
-                      value={selectedFilter}
-                      onChange={(e) => setSelectedFilter(e.target.value)}
-                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    >
-                      <option value="all">All Priority</option>
-                      <option value="urgent">Urgent</option>
-                      <option value="high">High</option>
-                      <option value="normal">Normal</option>
-                      <option value="low">Low</option>
-                    </select>
-                  </div>
-
-                  {/* Pending Projects Grid */}
-                  {pendingProjects.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                      {pendingProjects.map((pendingProject, index) => {
-                        const pendingKey = pendingProject.id || pendingProject._id || pendingProject.projectId || `pending-${index}`
-                        return (
-                        <div key={pendingKey} className="bg-white rounded-lg border border-orange-200 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 overflow-hidden">
-                          {/* Header with Priority Badge */}
-                          <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-3 border-b border-orange-100">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1 min-w-0 pr-2">
-                                <h4 className="text-sm font-bold text-gray-900 truncate mb-0.5">{pendingProject.name}</h4>
-                                <p className="text-xs text-gray-600 font-medium truncate">
-                                  {typeof pendingProject.client === 'string' 
-                                    ? pendingProject.client 
-                                    : pendingProject.client?.name || 'Unknown Client'
-                                  }
-                                </p>
-                              </div>
-                              <span className={`inline-flex px-2 py-0.5 text-xs font-bold rounded-full ${getPriorityColor(pendingProject.priority)} flex-shrink-0`}>
-                                {pendingProject.priority}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Content Section */}
-                          <div className="p-3 space-y-3">
-                            {/* Client Contact */}
-                            {(pendingProject.clientContact || pendingProject.clientPhone) && (
-                              <div className="flex items-center space-x-2">
-                                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                  <FiUser className="h-3 w-3 text-blue-600" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  {pendingProject.clientContact && (
-                                    <p className="text-xs font-medium text-gray-900 truncate">{pendingProject.clientContact}</p>
-                                  )}
-                                  {pendingProject.clientPhone && (
-                                    <p className="text-xs text-gray-500 truncate">{pendingProject.clientPhone}</p>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Total Cost Row */}
-                            <div className="grid grid-cols-1 gap-2">
-                              <div className="bg-green-50 rounded-md p-2">
-                                <div className="text-xs text-green-600 font-medium mb-0.5">Total Cost</div>
-                                <div className="text-xs font-bold text-green-700">{formatCurrency(pendingProject.financialDetails?.totalCost || pendingProject.budget || 0)}</div>
-                              </div>
-                            </div>
-
-                            {/* Submission Info */}
-                            <div className="bg-gray-50 rounded-md p-2">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="text-xs text-gray-600 font-medium">Submitted</div>
-                                  <div className="text-xs font-semibold text-gray-900">{formatDate(pendingProject.submittedDate)}</div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-xs text-gray-600 font-medium">By</div>
-                                  <div className="text-xs font-semibold text-gray-900 truncate max-w-16">
-                                    {typeof pendingProject.submittedBy === 'string' 
-                                      ? pendingProject.submittedBy.split(' - ')[1] || pendingProject.submittedBy
-                                      : pendingProject.submittedBy?.name || 'Unknown'
-                                    }
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Action Buttons */}
-                          <div className="px-3 pb-3">
-                            <div className="flex space-x-1.5">
-                              <button
-                                onClick={() => handleViewPendingDetails(pendingProject)}
-                                className="flex-1 bg-blue-500 text-white rounded-md py-2 px-2 text-xs font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center space-x-1"
-                              >
-                                <FiEye className="h-3 w-3" />
-                                <span>Details</span>
-                              </button>
-                              <button
-                                onClick={() => handleAssignPM(pendingProject)}
-                                className="flex-1 bg-orange-500 text-white rounded-md py-2 px-2 text-xs font-semibold hover:bg-orange-600 transition-colors flex items-center justify-center space-x-1"
-                              >
-                                <FiUser className="h-3 w-3" />
-                                <span>Assign</span>
-                              </button>
-                            </div>
-                          </div>
+                <Card className="shadow-sm border border-gray-200">
+                  <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
+                          Pending Projects
+                        </CardTitle>
+                        <p className="text-sm text-gray-600 mt-1">Projects from sales team waiting for PM assignment</p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        <div className="relative">
+                          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <input
+                            type="text"
+                            placeholder="Search pending projects..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-64 text-sm"
+                          />
                         </div>
-                      )})}
-                    </div>
-                  ) : (
-                    <div className="text-center py-16">
-                      <div className="max-w-md mx-auto">
-                        <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                          <FiClock className="text-orange-500 text-3xl" />
+                        <select
+                          value={selectedFilter}
+                          onChange={(e) => setSelectedFilter(e.target.value)}
+                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto"
+                        >
+                          <option value="all">All Priority</option>
+                          <option value="urgent">Urgent</option>
+                          <option value="high">High</option>
+                          <option value="normal">Normal</option>
+                          <option value="low">Low</option>
+                        </select>
+                        <div className="bg-orange-100 text-orange-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
+                          {pendingProjects.length} pending
                         </div>
-                        <h3 className="text-2xl font-semibold text-gray-900 mb-4">No pending projects</h3>
-                        <p className="text-gray-600 text-lg">
-                          All projects have been assigned to project managers. New projects from the sales team will appear here.
-                        </p>
                       </div>
                     </div>
-                  )}
-                </div>
+                  </CardHeader>
+
+                  <CardContent className="p-0">
+                    {pendingProjects.length > 0 ? (
+                      <div className="p-2 lg:p-4">
+                        <div className="overflow-x-auto -mx-2 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          <table className="w-full min-w-[900px] border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-200 bg-gray-50">
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[160px]">Project Name</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Client</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden md:table-cell">Contact</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Priority</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Total Cost</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden lg:table-cell">Submitted Date</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden lg:table-cell">Submitted By</th>
+                                <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {pendingProjects.map((pendingProject, index) => {
+                                const pendingKey = pendingProject.id || pendingProject._id || pendingProject.projectId || `pending-${index}`
+                                return (
+                                  <tr key={pendingKey} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
+                                          {pendingProject.name?.charAt(0)?.toUpperCase() || 'P'}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-semibold text-gray-900 truncate">{pendingProject.name}</p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs text-gray-900 truncate max-w-[120px]">
+                                        {typeof pendingProject.client === 'string' 
+                                          ? pendingProject.client 
+                                          : pendingProject.client?.name || 'Unknown Client'
+                                        }
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden md:table-cell">
+                                      <div className="space-y-0.5">
+                                        {(pendingProject.clientContact || (typeof pendingProject.client === 'object' && pendingProject.client?.contactPerson)) && (
+                                          <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                            <FiUser className="h-3 w-3 flex-shrink-0" />
+                                            <span className="truncate max-w-[100px]">
+                                              {pendingProject.clientContact || (typeof pendingProject.client === 'object' && pendingProject.client?.contactPerson) || ''}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {(pendingProject.clientPhone || (typeof pendingProject.client === 'object' && pendingProject.client?.phoneNumber)) && (
+                                          <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                            <FiUser className="h-3 w-3 flex-shrink-0" />
+                                            <span className="truncate max-w-[100px]">
+                                              {typeof pendingProject.client === 'object' && pendingProject.client?.phoneNumber 
+                                                ? pendingProject.client.phoneNumber 
+                                                : pendingProject.clientPhone || ''}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {!pendingProject.clientContact && 
+                                         !(typeof pendingProject.client === 'object' && pendingProject.client?.contactPerson) &&
+                                         !pendingProject.clientPhone && 
+                                         !(typeof pendingProject.client === 'object' && pendingProject.client?.phoneNumber) && (
+                                          <span className="text-xs text-gray-400">N/A</span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getPriorityColor(pendingProject.priority)}`}>
+                                        {pendingProject.priority}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs font-semibold text-green-700">
+                                        {formatCurrency(pendingProject.financialDetails?.totalCost || pendingProject.budget || 0)}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden lg:table-cell">
+                                      <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                        <FiCalendar className="h-3 w-3 flex-shrink-0" />
+                                        <span className="truncate">{formatDate(pendingProject.submittedDate || pendingProject.createdAt || pendingProject.submittedAt)}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden lg:table-cell">
+                                      <div className="text-xs text-gray-600 truncate max-w-[100px]">
+                                        {typeof pendingProject.submittedBy === 'string' 
+                                          ? pendingProject.submittedBy.split(' - ')[1] || pendingProject.submittedBy
+                                          : pendingProject.submittedBy?.name || 'Unknown'
+                                        }
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center justify-end space-x-1">
+                                        <button
+                                          onClick={() => handleViewPendingDetails(pendingProject)}
+                                          className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all"
+                                          title="View Details"
+                                        >
+                                          <FiEye className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleAssignPM(pendingProject)}
+                                          className="text-gray-400 hover:text-orange-600 p-1.5 rounded hover:bg-orange-50 transition-all"
+                                          title="Assign PM"
+                                        >
+                                          <FiUser className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-16">
+                        <div className="max-w-md mx-auto">
+                          <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FiClock className="text-orange-500 text-3xl" />
+                          </div>
+                          <h3 className="text-2xl font-semibold text-gray-900 mb-4">No pending projects</h3>
+                          <p className="text-gray-600 text-lg">
+                            All projects have been assigned to project managers. New projects from the sales team will appear here.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               {/* Active Projects Tab */}
               {activeTab === 'active-projects' && (
-                <div className="space-y-6">
-                  {/* Header Section */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">Active Projects</h2>
-                      <p className="text-gray-600 mt-1">Projects currently in progress with assigned PMs</p>
+                <Card className="shadow-sm border border-gray-200">
+                  <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
+                          Active Projects
+                        </CardTitle>
+                        <p className="text-sm text-gray-600 mt-1">Projects currently in progress with assigned PMs</p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        <div className="relative">
+                          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <input
+                            type="text"
+                            placeholder="Search active projects..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-64 text-sm"
+                          />
+                        </div>
+                        <select
+                          value={selectedFilter}
+                          onChange={(e) => setSelectedFilter(e.target.value)}
+                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto"
+                        >
+                          <option value="all">All Status</option>
+                          <option value="active">Active</option>
+                          <option value="untouched">Untouched</option>
+                          <option value="in-progress">In Progress</option>
+                          <option value="completed">Completed</option>
+                          <option value="on-hold">On Hold</option>
+                          <option value="overdue">Overdue</option>
+                        </select>
+                        <div className="bg-green-100 text-green-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
+                          {projects.length} active
+                        </div>
+                      </div>
                     </div>
-                    <div className="bg-green-100 text-green-800 px-4 py-2 rounded-lg text-sm font-semibold">
-                      {projects.length} active projects
-                    </div>
-                  </div>
+                  </CardHeader>
 
-                  {/* Search and Filters */}
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1 relative">
-                      <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <input
-                        type="text"
-                        placeholder="Search active projects..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      />
-                    </div>
-                    <select
-                      value={selectedFilter}
-                      onChange={(e) => setSelectedFilter(e.target.value)}
-                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="active">Active</option>
-                      <option value="untouched">Untouched</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="completed">Completed</option>
-                      <option value="on-hold">On Hold</option>
-                      <option value="overdue">Overdue</option>
-                    </select>
-                  </div>
-
-                  {/* Projects Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {paginatedData.map((project, index) => {
-                      const projectKey = project.id || project._id || project.projectId || `project-${index}`
-                      return (
-                        <div key={projectKey} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
-                          {/* Header Section */}
-                          <div className="mb-3">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1 min-w-0">
-                                <h3 className="text-sm font-bold text-gray-900 truncate mb-1">{project.name}</h3>
-                                <p className="text-xs text-gray-600 font-medium mb-1">
-                                  {typeof project.client === 'string'
-                                    ? project.client
-                                    : project.client?.name || 'Unknown Client'}
-                                </p>
-                                <p className="text-xs text-gray-400">
-                                  PM: {project.pm || (typeof project.projectManager === 'object' && project.projectManager?.name) || (typeof project.projectManager === 'string' && project.projectManager) || 'Unassigned'}
-                                </p>
-                              </div>
-                              <div className="flex flex-col space-y-1 ml-2">
-                                <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border ${getStatusColor(project.status)}`}>
-                                  {project.status}
-                                </span>
-                                <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full ${getPriorityColor(project.priority)}`}>
-                                  {project.priority}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Progress Section */}
-                          <div className="mb-3">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-semibold text-gray-700">Progress</span>
-                              <span className="text-sm font-bold text-primary">
-                                {(project.progress !== null && project.progress !== undefined)
+                  <CardContent className="p-0">
+                    {paginatedData.length > 0 ? (
+                      <div className="p-2 lg:p-4">
+                        <div className="overflow-x-auto -mx-2 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          <table className="w-full min-w-[900px] border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-200 bg-gray-50">
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[160px]">Project Name</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Client</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">PM</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Status</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Progress</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px] hidden md:table-cell">Due Date</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px] hidden md:table-cell">Team</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Total Cost</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px] hidden lg:table-cell">Start Date</th>
+                                <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paginatedData.map((project, index) => {
+                                const projectKey = project.id || project._id || project.projectId || `project-${index}`
+                                const progressValue = (project.progress !== null && project.progress !== undefined)
                                   ? project.progress
-                                  : (project.status === 'completed' ? 100 : 0)}%
-                              </span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                              <div
-                                className="bg-gradient-to-r from-primary to-primary-dark h-1.5 rounded-full transition-all duration-500"
-                                style={{ width: `${(project.progress !== null && project.progress !== undefined) ? project.progress : (project.status === 'completed' ? 100 : 0)}%` }}
-                              ></div>
-                            </div>
-                          </div>
+                                  : (project.status === 'completed' ? 100 : 0)
+                                return (
+                                  <tr key={projectKey} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-dark text-white rounded-full flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
+                                          {project.name?.charAt(0)?.toUpperCase() || 'P'}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-semibold text-gray-900 truncate">{project.name}</p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs text-gray-900 truncate max-w-[120px]">
+                                        {typeof project.client === 'string'
+                                          ? project.client
+                                          : project.client?.name || 'Unknown Client'}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs text-gray-600 truncate max-w-[100px]">
+                                        {project.pm || (typeof project.projectManager === 'object' && project.projectManager?.name) || (typeof project.projectManager === 'string' && project.projectManager) || 'Unassigned'}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(project.status)}`}>
+                                        {project.status}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="space-y-0.5">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-xs font-semibold text-gray-700">{progressValue}%</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+                                          <div
+                                            className="bg-gradient-to-r from-primary to-primary-dark h-1 rounded-full transition-all duration-500"
+                                            style={{ width: `${progressValue}%` }}
+                                          ></div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden md:table-cell">
+                                      <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                        <FiCalendar className="h-3 w-3 flex-shrink-0" />
+                                        <span className="truncate">{formatDate(project.dueDate)}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden md:table-cell">
+                                      <div className="text-xs font-semibold text-gray-700">
+                                        {project.teamSize !== null && project.teamSize !== undefined
+                                          ? project.teamSize
+                                          : project.assignedTeam?.length || 0}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs font-semibold text-green-700">
+                                        {formatCurrency(project.financialDetails?.totalCost || project.budget || 0)}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden lg:table-cell">
+                                      <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                        <FiCalendar className="h-3 w-3 flex-shrink-0" />
+                                        <span className="truncate">{formatDate(project.startDate)}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center justify-end space-x-1">
+                                        <button
+                                          onClick={() => handleView(project, 'project')}
+                                          className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all"
+                                          title="View"
+                                        >
+                                          <FiEye className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleEdit(project, 'project')}
+                                          className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all"
+                                          title="Edit"
+                                        >
+                                          <FiEdit3 className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(project, 'project')}
+                                          className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all"
+                                          title="Delete"
+                                        >
+                                          <FiTrash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
 
-                          {/* Key Metrics */}
-                          <div className="grid grid-cols-2 gap-2 mb-3">
-                            <div className="bg-blue-50 rounded-lg p-2">
-                              <div className="text-xs text-blue-600 font-medium mb-1">Due Date</div>
-                              <div className="text-xs font-bold text-blue-800">{formatDate(project.dueDate)}</div>
-                            </div>
-                            <div className="bg-purple-50 rounded-lg p-2">
-                              <div className="text-xs text-purple-600 font-medium mb-1">Team Size</div>
-                              <div className="text-xs font-bold text-purple-800">
-                                {project.teamSize !== null && project.teamSize !== undefined
-                                  ? project.teamSize
-                                  : project.assignedTeam?.length || 0}
-                              </div>
-                            </div>
+                        {/* Pagination */}
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                          <div className="text-sm text-gray-700">
+                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} projects
                           </div>
-
-                          {/* Total Cost Highlight */}
-                          <div className="bg-green-50 rounded-lg p-2 mb-3">
-                            <div className="text-xs text-green-600 font-medium mb-1">Total Cost</div>
-                            <div className="text-sm font-bold text-green-700">{formatCurrency(project.financialDetails?.totalCost || project.budget || 0)}</div>
-                          </div>
-
-                          {/* Footer */}
-                          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                            <div className="flex items-center space-x-1">
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                              disabled={currentPage === 1}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Previous
+                            </button>
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                               <button
-                                onClick={() => handleView(project, 'project')}
-                                className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all duration-200 group-hover:text-primary"
+                                key={page}
+                                onClick={() => setCurrentPage(page)}
+                                className={`px-3 py-1 border rounded-md text-sm font-medium ${
+                                  currentPage === page
+                                    ? 'border-primary bg-primary text-white'
+                                    : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                                }`}
                               >
-                                <FiEye className="h-3 w-3" />
+                                {page}
                               </button>
-                              <button
-                                onClick={() => handleEdit(project, 'project')}
-                                className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
-                              >
-                                <FiEdit3 className="h-3 w-3" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(project, 'project')}
-                                className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all duration-200 group-hover:text-red-600"
-                              >
-                                <FiTrash2 className="h-3 w-3" />
-                              </button>
-                            </div>
-                            <div className="text-xs text-gray-400 font-medium">
-                              {formatDate(project.startDate)}
-                            </div>
+                            ))}
+                            <button
+                              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                              disabled={currentPage === totalPages}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Next
+                            </button>
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-
-                  {/* Pagination */}
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-700">
-                      Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} projects
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Previous
-                      </button>
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-1 border rounded-md text-sm font-medium ${
-                            currentPage === page
-                              ? 'border-primary bg-primary text-white'
-                              : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-16">
+                        <div className="max-w-md mx-auto">
+                          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FiFolder className="text-green-500 text-3xl" />
+                          </div>
+                          <h3 className="text-2xl font-semibold text-gray-900 mb-4">No active projects</h3>
+                          <p className="text-gray-600 text-lg">
+                            There are no active projects at the moment.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               {/* Completed Projects Tab */}
               {activeTab === 'completed-projects' && (
-                <div className="space-y-6">
-                  {/* Header Section */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">Completed Projects</h2>
-                      <p className="text-gray-600 mt-1">Successfully completed projects with full details</p>
+                <Card className="shadow-sm border border-gray-200">
+                  <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
+                          Completed Projects
+                        </CardTitle>
+                        <p className="text-sm text-gray-600 mt-1">Successfully completed projects with full details</p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        <div className="relative">
+                          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <input
+                            type="text"
+                            placeholder="Search completed projects..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-64 text-sm"
+                          />
+                        </div>
+                        <select
+                          value={selectedFilter}
+                          onChange={(e) => setSelectedFilter(e.target.value)}
+                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto"
+                        >
+                          <option value="all">All Priority</option>
+                          <option value="urgent">Urgent</option>
+                          <option value="high">High</option>
+                          <option value="normal">Normal</option>
+                          <option value="low">Low</option>
+                        </select>
+                        <div className="bg-green-100 text-green-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
+                          {completedProjects.length} completed
+                        </div>
+                      </div>
                     </div>
-                    <div className="bg-green-100 text-green-800 px-4 py-2 rounded-lg text-sm font-semibold">
-                      {completedProjects.length} completed projects
-                    </div>
-                  </div>
+                  </CardHeader>
 
-                  {/* Search and Filters */}
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1 relative">
-                      <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <input
-                        type="text"
-                        placeholder="Search completed projects..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      />
-                    </div>
-                    <select
-                      value={selectedFilter}
-                      onChange={(e) => setSelectedFilter(e.target.value)}
-                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    >
-                      <option value="all">All Priority</option>
-                      <option value="urgent">Urgent</option>
-                      <option value="high">High</option>
-                      <option value="normal">Normal</option>
-                      <option value="low">Low</option>
-                    </select>
-                  </div>
-
-                  {/* Completed Projects Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {paginatedData.map((project, index) => {
-                      const completedKey = project.id || project._id || project.projectId || `completed-${index}`
-                      return (
-                      <div key={completedKey} className="bg-white rounded-lg border border-green-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
-                        {/* Header Section */}
-                        <div className="mb-3">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-sm font-bold text-gray-900 truncate mb-1">{project.name}</h3>
-                              <p className="text-xs text-gray-600 font-medium mb-1">
-                                {typeof project.client === 'string' 
-                                  ? project.client 
-                                  : project.client?.name || 'Unknown Client'
-                                }
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                PM: {project.pm || (typeof project.projectManager === 'object' && project.projectManager?.name) || (typeof project.projectManager === 'string' && project.projectManager) || 'Unassigned'}
-                              </p>
-                            </div>
-                            <div className="flex flex-col space-y-1 ml-2">
-                              <span className="inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border bg-green-100 text-green-800 border-green-200">
-                                Completed
-                              </span>
-                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full ${getPriorityColor(project.priority)}`}>
-                                {project.priority}
-                              </span>
-                            </div>
-                          </div>
+                  <CardContent className="p-0">
+                    {paginatedData.length > 0 ? (
+                      <div className="p-2 lg:p-4">
+                        <div className="overflow-x-auto -mx-2 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          <table className="w-full min-w-[750px] border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-200 bg-gray-50">
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[160px]">Project Name</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Client</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">PM</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Priority</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Progress</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px] hidden md:table-cell">Completed</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px] hidden md:table-cell">Team</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Total Cost</th>
+                                <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paginatedData.map((project, index) => {
+                                const completedKey = project.id || project._id || project.projectId || `completed-${index}`
+                                const progressValue = (project.progress !== null && project.progress !== undefined) ? project.progress : (project.status === 'completed' ? 100 : 0)
+                                const duration = project.duration !== null && project.duration !== undefined 
+                                  ? `${project.duration} days`
+                                  : project.completedDate && project.createdAt
+                                  ? `${Math.ceil((new Date(project.completedDate || project.updatedAt) - new Date(project.createdAt)) / (1000 * 60 * 60 * 24))} days`
+                                  : 'N/A'
+                                return (
+                                  <tr key={completedKey} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
+                                          {project.name?.charAt(0)?.toUpperCase() || 'P'}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-semibold text-gray-900 truncate">{project.name}</p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs text-gray-900 truncate max-w-[120px]">
+                                        {typeof project.client === 'string' 
+                                          ? project.client 
+                                          : project.client?.name || 'Unknown Client'}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs text-gray-600 truncate max-w-[100px]">
+                                        {project.pm || (typeof project.projectManager === 'object' && project.projectManager?.name) || (typeof project.projectManager === 'string' && project.projectManager) || 'Unassigned'}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full ${getPriorityColor(project.priority)}`}>
+                                        {project.priority}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="space-y-0.5">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-xs font-semibold text-green-600">{progressValue}%</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+                                          <div
+                                            className="bg-gradient-to-r from-green-500 to-emerald-500 h-1 rounded-full transition-all duration-500"
+                                            style={{ width: `${progressValue}%` }}
+                                          ></div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden md:table-cell">
+                                      <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                        <FiCalendar className="h-3 w-3 flex-shrink-0" />
+                                        <span className="truncate">{formatDate(project.completedDate || project.completedAt || project.updatedAt || (project.status === 'completed' && project.dueDate ? project.dueDate : null))}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden md:table-cell">
+                                      <div className="text-xs font-semibold text-gray-700">
+                                        {project.teamSize !== null && project.teamSize !== undefined 
+                                          ? project.teamSize 
+                                          : project.assignedTeam?.length || 0}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs font-semibold text-green-700">
+                                        {formatCurrency(project.financialDetails?.totalCost || project.budget || 0)}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center justify-end space-x-1">
+                                        <button
+                                          onClick={() => handleView(project, 'project')}
+                                          className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all"
+                                          title="View"
+                                        >
+                                          <FiEye className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleEdit(project, 'project')}
+                                          className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all"
+                                          title="Edit"
+                                        >
+                                          <FiEdit3 className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(project, 'project')}
+                                          className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all"
+                                          title="Delete"
+                                        >
+                                          <FiTrash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
                         </div>
 
-                        {/* Progress Section */}
-                        <div className="mb-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-semibold text-gray-700">Progress</span>
-                            <span className="text-sm font-bold text-green-600">{(project.progress !== null && project.progress !== undefined) ? project.progress : (project.status === 'completed' ? 100 : 0)}%</span>
+                        {/* Pagination */}
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                          <div className="text-sm text-gray-700">
+                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} completed projects
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                            <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${(project.progress !== null && project.progress !== undefined) ? project.progress : (project.status === 'completed' ? 100 : 0)}%` }}></div>
-                          </div>
-                        </div>
-
-                        {/* Completion Info */}
-                        <div className="mb-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-semibold text-gray-700">Completed</span>
-                            <span className="text-sm font-bold text-green-600">{formatDate(project.completedDate)}</span>
-                          </div>
-                        </div>
-
-                        {/* Client Contact */}
-                        {((typeof project.client === 'object' && (project.client?.name || project.client?.phoneNumber || project.client?.email)) || (typeof project.client === 'string' && project.client)) && (
-                          <div className="flex items-center space-x-2 mb-3">
-                            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                              <FiUser className="h-3 w-3 text-blue-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              {typeof project.client === 'object' ? (
-                                <>
-                                  {project.client?.name && (
-                                    <p className="text-xs font-medium text-gray-900 truncate">{project.client.name}</p>
-                                  )}
-                                  {project.client?.phoneNumber && (
-                                    <p className="text-xs text-gray-500 truncate">{project.client.phoneNumber}</p>
-                                  )}
-                                  {project.client?.email && !project.client?.phoneNumber && (
-                                    <p className="text-xs text-gray-500 truncate">{project.client.email}</p>
-                                  )}
-                                </>
-                              ) : (
-                                <p className="text-xs font-medium text-gray-900 truncate">{project.client}</p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Key Metrics */}
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          <div className="bg-blue-50 rounded-lg p-2">
-                            <div className="text-xs text-blue-600 font-medium mb-1">Duration</div>
-                            <div className="text-xs font-bold text-blue-800">
-                              {project.duration !== null && project.duration !== undefined 
-                                ? `${project.duration} days`
-                                : project.completedDate && project.createdAt
-                                ? `${Math.ceil((new Date(project.completedDate || project.updatedAt) - new Date(project.createdAt)) / (1000 * 60 * 60 * 24))} days`
-                                : 'N/A'}
-                            </div>
-                          </div>
-                          <div className="bg-purple-50 rounded-lg p-2">
-                            <div className="text-xs text-purple-600 font-medium mb-1">Team Size</div>
-                            <div className="text-xs font-bold text-purple-800">
-                              {project.teamSize !== null && project.teamSize !== undefined 
-                                ? project.teamSize 
-                                : project.assignedTeam?.length || 0}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Total Cost Highlight */}
-                        <div className="bg-green-50 rounded-lg p-2 mb-3">
-                          <div className="text-xs text-green-600 font-medium mb-1">Total Cost</div>
-                          <div className="text-sm font-bold text-green-700">{formatCurrency(project.financialDetails?.totalCost || project.budget || 0)}</div>
-                        </div>
-
-                        {/* Footer */}
-                        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                          <div className="flex items-center space-x-1">
+                          <div className="flex items-center space-x-2">
                             <button
-                              onClick={() => handleView(project, 'project')}
-                              className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all duration-200 group-hover:text-primary"
+                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                              disabled={currentPage === 1}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <FiEye className="h-3 w-3" />
+                              Previous
                             </button>
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                              <button
+                                key={page}
+                                onClick={() => setCurrentPage(page)}
+                                className={`px-3 py-1 border rounded-md text-sm font-medium ${
+                                  currentPage === page
+                                    ? 'border-primary bg-primary text-white'
+                                    : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            ))}
                             <button
-                              onClick={() => handleEdit(project, 'project')}
-                              className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
+                              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                              disabled={currentPage === totalPages}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <FiEdit3 className="h-3 w-3" />
+                              Next
                             </button>
-                            <button 
-                              onClick={() => handleDelete(project, 'project')}
-                              className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all duration-200 group-hover:text-red-600"
-                            >
-                              <FiTrash2 className="h-3 w-3" />
-                            </button>
-                          </div>
-                          <div className="text-xs text-gray-400 font-medium">
-                            {formatDate(project.startDate)}
                           </div>
                         </div>
                       </div>
-                    )})}
-                  </div>
-
-                  {/* Pagination */}
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-700">
-                      Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} completed projects
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Previous
-                      </button>
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-1 border rounded-md text-sm font-medium ${
-                            currentPage === page
-                              ? 'border-primary bg-primary text-white'
-                              : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                    ) : (
+                      <div className="text-center py-16">
+                        <div className="max-w-md mx-auto">
+                          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FiCheckCircle className="text-green-500 text-3xl" />
+                          </div>
+                          <h3 className="text-2xl font-semibold text-gray-900 mb-4">No completed projects</h3>
+                          <p className="text-gray-600 text-lg">
+                            There are no completed projects at the moment.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               {/* Employees Tab */}
               {activeTab === 'employees' && (
-                <div className="space-y-6">
-                  {/* Search and Filters */}
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1 relative">
-                      <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <input
-                        type="text"
-                        placeholder="Search employees..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      />
+                <Card className="shadow-sm border border-gray-200">
+                  <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
+                          Employees
+                        </CardTitle>
+                        <p className="text-sm text-gray-600 mt-1">Manage your development team members</p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        <div className="relative">
+                          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <input
+                            type="text"
+                            placeholder="Search employees..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-64 text-sm"
+                          />
+                        </div>
+                        <select
+                          value={selectedFilter}
+                          onChange={(e) => setSelectedFilter(e.target.value)}
+                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto"
+                        >
+                          <option value="all">All Status</option>
+                          <option value="active">Active</option>
+                          <option value="on-leave">On Leave</option>
+                        </select>
+                      </div>
                     </div>
-                    <select
-                      value={selectedFilter}
-                      onChange={(e) => setSelectedFilter(e.target.value)}
-                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="active">Active</option>
-                      <option value="on-leave">On Leave</option>
-                    </select>
-                  </div>
+                  </CardHeader>
 
-                  {/* Employees Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {paginatedData.map((employee, index) => {
-                      const employeeKey = employee.id || employee._id || employee.userId || `employee-${index}`
-                      return (
-                      <div key={employeeKey} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
-                        {/* Header Section */}
-                        <div className="flex items-center space-x-3 mb-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-dark text-white rounded-full flex items-center justify-center font-bold text-sm shadow-md">
-                            {employee.avatar}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-bold text-gray-900 truncate">{employee.name}</h3>
-                            <p className="text-xs text-gray-600 font-medium">{employee.role}</p>
-                            <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border mt-1 ${getStatusColor(employee.status)}`}>
-                              {employee.status}
-                            </span>
-                          </div>
-                        </div>
-                        {/* Key Metrics */}
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          <div className="bg-blue-50 rounded-lg p-2">
-                            <div className="text-xs text-blue-600 font-medium mb-1">Department</div>
-                            <div className="text-xs font-bold text-blue-800">{employee.department}</div>
-                          </div>
-                          <div className="bg-purple-50 rounded-lg p-2">
-                            <div className="text-xs text-purple-600 font-medium mb-1">Projects</div>
-                            <div className="text-xs font-bold text-purple-800">{employee.projects}</div>
-                          </div>
-                        </div>
-                        
-                        {/* Workload Metrics */}
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          <div className="bg-orange-50 rounded-lg p-2">
-                            <div className="text-xs text-orange-600 font-medium mb-1">Tasks</div>
-                            <div className="text-xs font-bold text-orange-800">{employee.tasks}</div>
-                          </div>
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <div className="text-xs text-gray-600 font-medium mb-1">Joined</div>
-                            <div className="text-xs font-bold text-gray-800">{formatDate(employee.joinDate)}</div>
-                          </div>
+                  <CardContent className="p-0">
+                    {paginatedData.length > 0 ? (
+                      <div className="p-2 lg:p-4">
+                        <div className="overflow-x-auto -mx-2 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          <table className="w-full min-w-[800px] border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-200 bg-gray-50">
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[160px]">Name</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Role</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Department</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Status</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Projects</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px] hidden md:table-cell">Tasks</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[150px] hidden md:table-cell">Email</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden lg:table-cell">Joined</th>
+                                <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paginatedData.map((employee, index) => {
+                                const employeeKey = employee.id || employee._id || employee.userId || `employee-${index}`
+                                return (
+                                  <tr key={employeeKey} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-dark text-white rounded-full flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
+                                          {employee.avatar || employee.name?.charAt(0)?.toUpperCase() || 'E'}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-semibold text-gray-900 truncate">{employee.name}</p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs text-gray-600 truncate max-w-[120px]">{employee.role}</div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs text-gray-700 truncate max-w-[100px]">{employee.department}</div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(employee.status)}`}>
+                                        {employee.status}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs font-semibold text-gray-700">{employee.projects}</div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden md:table-cell">
+                                      <div className="text-xs font-semibold text-gray-700">{employee.tasks}</div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden md:table-cell">
+                                      <a href={`mailto:${employee.email}`} className="text-xs text-blue-600 hover:text-blue-800 truncate max-w-[150px] block">
+                                        {employee.email}
+                                      </a>
+                                    </td>
+                                    <td className="py-2 px-2 hidden lg:table-cell">
+                                      <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                        <FiCalendar className="h-3 w-3 flex-shrink-0" />
+                                        <span className="truncate">{formatDate(employee.joinDate)}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center justify-end space-x-1">
+                                        <button
+                                          onClick={() => handleView(employee, 'employee')}
+                                          className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all"
+                                          title="View"
+                                        >
+                                          <FiEye className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleEdit(employee, 'employee')}
+                                          className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all"
+                                          title="Edit"
+                                        >
+                                          <FiEdit3 className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(employee, 'employee')}
+                                          className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all"
+                                          title="Delete"
+                                        >
+                                          <FiTrash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
                         </div>
 
-                        {/* Footer */}
-                        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                          <div className="flex items-center space-x-1">
-                            <button 
-                              onClick={() => handleView(employee, 'employee')}
-                              className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all duration-200 group-hover:text-primary"
+                        {/* Pagination */}
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                          <div className="text-sm text-gray-700">
+                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} employees
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                              disabled={currentPage === 1}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <FiEye className="h-3 w-3" />
+                              Previous
                             </button>
-                            <button 
-                              onClick={() => handleEdit(employee, 'employee')}
-                              className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                              <button
+                                key={page}
+                                onClick={() => setCurrentPage(page)}
+                                className={`px-3 py-1 border rounded-md text-sm font-medium ${
+                                  currentPage === page
+                                    ? 'border-primary bg-primary text-white'
+                                    : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            ))}
+                            <button
+                              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                              disabled={currentPage === totalPages}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <FiEdit3 className="h-3 w-3" />
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(employee, 'employee')}
-                              className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all duration-200 group-hover:text-red-600"
-                            >
-                              <FiTrash2 className="h-3 w-3" />
+                              Next
                             </button>
                           </div>
-                          <a href={`mailto:${employee.email}`} className="text-xs text-gray-400 hover:text-gray-600 truncate max-w-20 font-medium">
-                            {employee.email}
-                          </a>
                         </div>
                       </div>
-                    )})}
-                  </div>
-
-                  {/* Pagination */}
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-700">
-                      Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} employees
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Previous
-                      </button>
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-1 border rounded-md text-sm font-medium ${
-                            currentPage === page
-                              ? 'border-primary bg-primary text-white'
-                              : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                    ) : (
+                      <div className="text-center py-16">
+                        <div className="max-w-md mx-auto">
+                          <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FiUsers className="text-primary text-3xl" />
+                          </div>
+                          <h3 className="text-2xl font-semibold text-gray-900 mb-4">No employees found</h3>
+                          <p className="text-gray-600 text-lg">
+                            There are no employees at the moment.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               {/* Clients Tab */}
               {activeTab === 'clients' && (
-                <div className="space-y-6">
-                  {/* Search and Filters */}
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1 relative">
-                      <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <input
-                        type="text"
-                        placeholder="Search clients..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      />
+                <Card className="shadow-sm border border-gray-200">
+                  <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
+                          Clients
+                        </CardTitle>
+                        <p className="text-sm text-gray-600 mt-1">Manage your client relationships</p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        <div className="relative">
+                          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <input
+                            type="text"
+                            placeholder="Search clients..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-64 text-sm"
+                          />
+                        </div>
+                        <select
+                          value={selectedFilter}
+                          onChange={(e) => setSelectedFilter(e.target.value)}
+                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto"
+                        >
+                          <option value="all">All Status</option>
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </div>
                     </div>
-                    <select
-                      value={selectedFilter}
-                      onChange={(e) => setSelectedFilter(e.target.value)}
-                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-                  </div>
+                  </CardHeader>
 
-                  {/* Clients Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {paginatedData.map((client, index) => {
-                      const clientKey = client.id || client._id || client.userId || `client-${index}`
-                      return (
-                      <div key={clientKey} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
-                        {/* Header Section */}
-                        <div className="mb-3">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <h3 className="text-sm font-bold text-gray-900 mb-1">{client.name}</h3>
-                              <p className="text-xs text-gray-600 font-medium mb-1">{client.contact}</p>
-                              <p className="text-xs text-gray-400">{client.email}</p>
-                            </div>
-                            <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border ${getStatusColor(client.status)}`}>
-                              {client.status}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        {/* Revenue Highlight */}
-                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-2 mb-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-green-700">Total Spent</span>
-                            <span className="text-sm font-bold text-green-600">{formatCurrency(client.totalSpent)}</span>
-                          </div>
-                        </div>
-                        
-                        {/* Key Metrics */}
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          <div className="bg-blue-50 rounded-lg p-2">
-                            <div className="text-xs text-blue-600 font-medium mb-1">Projects</div>
-                            <div className="text-xs font-bold text-blue-800">{client.projects}</div>
-                          </div>
-                          <div className="bg-purple-50 rounded-lg p-2">
-                            <div className="text-xs text-purple-600 font-medium mb-1">Joined</div>
-                            <div className="text-xs font-bold text-purple-800">{formatDate(client.joinDate)}</div>
-                          </div>
-                        </div>
-                        
-                        {/* Activity Status */}
-                        <div className="bg-gray-50 rounded-lg p-2 mb-3">
-                          <div className="text-xs text-gray-600 font-medium mb-1">Last Activity</div>
-                          <div className="text-xs font-bold text-gray-800">{formatDate(client.lastActive)}</div>
+                  <CardContent className="p-0">
+                    {paginatedData.length > 0 ? (
+                      <div className="p-2 lg:p-4">
+                        <div className="overflow-x-auto -mx-2 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          <table className="w-full min-w-[800px] border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-200 bg-gray-50">
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[160px]">Name</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Contact</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[150px] hidden md:table-cell">Email</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Status</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Total Spent</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px] hidden md:table-cell">Projects</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden lg:table-cell">Joined</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden lg:table-cell">Last Activity</th>
+                                <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paginatedData.map((client, index) => {
+                                const clientKey = client.id || client._id || client.userId || `client-${index}`
+                                return (
+                                  <tr key={clientKey} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-cyan-600 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
+                                          {client.name?.charAt(0)?.toUpperCase() || 'C'}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-semibold text-gray-900 truncate">{client.name}</p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs text-gray-600 truncate max-w-[120px]">{client.contact}</div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden md:table-cell">
+                                      <div className="text-xs text-gray-600 truncate max-w-[150px]">{client.email}</div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(client.status)}`}>
+                                        {client.status}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs font-semibold text-green-700">
+                                        {formatCurrency(client.totalSpent)}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden md:table-cell">
+                                      <div className="text-xs font-semibold text-gray-700">{client.projects}</div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden lg:table-cell">
+                                      <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                        <FiCalendar className="h-3 w-3 flex-shrink-0" />
+                                        <span className="truncate">{formatDate(client.joinDate)}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden lg:table-cell">
+                                      <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                        <FiCalendar className="h-3 w-3 flex-shrink-0" />
+                                        <span className="truncate">{formatDate(client.lastActive)}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center justify-end space-x-1">
+                                        <button
+                                          onClick={() => handleView(client, 'client')}
+                                          className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all"
+                                          title="View"
+                                        >
+                                          <FiEye className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleEdit(client, 'client')}
+                                          className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all"
+                                          title="Edit"
+                                        >
+                                          <FiEdit3 className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(client, 'client')}
+                                          className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all"
+                                          title="Delete"
+                                        >
+                                          <FiTrash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
                         </div>
 
-                        {/* Footer */}
-                        <div className="flex items-center justify-end pt-3 border-t border-gray-100">
-                          <div className="flex items-center space-x-1">
-                            <button 
-                              onClick={() => handleView(client, 'client')}
-                              className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all duration-200 group-hover:text-primary"
+                        {/* Pagination */}
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                          <div className="text-sm text-gray-700">
+                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} clients
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                              disabled={currentPage === 1}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <FiEye className="h-3 w-3" />
+                              Previous
                             </button>
-                            <button 
-                              onClick={() => handleEdit(client, 'client')}
-                              className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                              <button
+                                key={page}
+                                onClick={() => setCurrentPage(page)}
+                                className={`px-3 py-1 border rounded-md text-sm font-medium ${
+                                  currentPage === page
+                                    ? 'border-primary bg-primary text-white'
+                                    : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            ))}
+                            <button
+                              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                              disabled={currentPage === totalPages}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <FiEdit3 className="h-3 w-3" />
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(client, 'client')}
-                              className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all duration-200 group-hover:text-red-600"
-                            >
-                              <FiTrash2 className="h-3 w-3" />
+                              Next
                             </button>
                           </div>
                         </div>
                       </div>
-                    )})}
-                  </div>
-
-                  {/* Pagination */}
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-700">
-                      Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} clients
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Previous
-                      </button>
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-1 border rounded-md text-sm font-medium ${
-                            currentPage === page
-                              ? 'border-primary bg-primary text-white'
-                              : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                    ) : (
+                      <div className="text-center py-16">
+                        <div className="max-w-md mx-auto">
+                          <div className="w-20 h-20 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FiHome className="text-teal-500 text-3xl" />
+                          </div>
+                          <h3 className="text-2xl font-semibold text-gray-900 mb-4">No clients found</h3>
+                          <p className="text-gray-600 text-lg">
+                            There are no clients at the moment.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               {/* Project Managers Tab */}
               {activeTab === 'project-managers' && (
-                <div className="space-y-6">
-                  {/* Search and Filters */}
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1 relative">
-                      <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <input
-                        type="text"
-                        placeholder="Search project managers..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      />
+                <Card className="shadow-sm border border-gray-200">
+                  <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
+                          Project Managers
+                        </CardTitle>
+                        <p className="text-sm text-gray-600 mt-1">Manage project managers and their assignments</p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        <div className="relative">
+                          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <input
+                            type="text"
+                            placeholder="Search project managers..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-64 text-sm"
+                          />
+                        </div>
+                        <select
+                          value={selectedFilter}
+                          onChange={(e) => setSelectedFilter(e.target.value)}
+                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto"
+                        >
+                          <option value="all">All Status</option>
+                          <option value="active">Active</option>
+                          <option value="on-leave">On Leave</option>
+                        </select>
+                      </div>
                     </div>
-                    <select
-                      value={selectedFilter}
-                      onChange={(e) => setSelectedFilter(e.target.value)}
-                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="active">Active</option>
-                      <option value="on-leave">On Leave</option>
-                    </select>
-                  </div>
+                  </CardHeader>
 
-                  {/* PMs Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {paginatedData.map((pm) => (
-                      <div key={pm.id} className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 hover:scale-105 group">
-                        {/* Header Section */}
-                        <div className="flex items-center space-x-3 mb-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-md">
-                            {pm.name.split(' ').map(n => n[0]).join('')}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-bold text-gray-900 truncate">{pm.name}</h3>
-                            <p className="text-xs text-gray-600 font-medium">Project Manager</p>
-                            <span className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded-full border mt-1 ${getStatusColor(pm.status)}`}>
-                              {pm.status}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        {/* Performance Metrics */}
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-2">
-                            <div className="text-xs text-green-600 font-medium mb-1">Completion</div>
-                            <div className="text-sm font-bold text-green-700">{pm.completionRate}%</div>
-                          </div>
-                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-2">
-                            <div className="text-xs text-blue-600 font-medium mb-1">Performance</div>
-                            <div className="text-sm font-bold text-blue-700">{pm.performance}%</div>
-                          </div>
-                        </div>
-                        
-                        {/* Management Metrics */}
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                          <div className="bg-purple-50 rounded-lg p-2">
-                            <div className="text-xs text-purple-600 font-medium mb-1">Projects</div>
-                            <div className="text-xs font-bold text-purple-800">{pm.projects}</div>
-                          </div>
-                          <div className="bg-orange-50 rounded-lg p-2">
-                            <div className="text-xs text-orange-600 font-medium mb-1">Team Size</div>
-                            <div className="text-xs font-bold text-orange-800">{pm.teamSize}</div>
-                          </div>
-                        </div>
-                        
-                        {/* Join Date */}
-                        <div className="bg-gray-50 rounded-lg p-2 mb-3">
-                          <div className="text-xs text-gray-600 font-medium mb-1">Joined</div>
-                          <div className="text-xs font-bold text-gray-800">{formatDate(pm.joinDate)}</div>
+                  <CardContent className="p-0">
+                    {paginatedData.length > 0 ? (
+                      <div className="p-2 lg:p-4">
+                        <div className="overflow-x-auto -mx-2 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          <table className="w-full min-w-[800px] border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-200 bg-gray-50">
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[160px]">Name</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Status</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Completion</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Performance</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Projects</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px] hidden md:table-cell">Team</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[150px] hidden md:table-cell">Email</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden lg:table-cell">Joined</th>
+                                <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paginatedData.map((pm) => (
+                                <tr key={pm.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                  <td className="py-2 px-2">
+                                    <div className="flex items-center space-x-2">
+                                      <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
+                                        {pm.name.split(' ').map(n => n[0]).join('')}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-semibold text-gray-900 truncate">{pm.name}</p>
+                                        <p className="text-xs text-gray-500">PM</p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="py-2 px-2">
+                                    <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(pm.status)}`}>
+                                      {pm.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-2">
+                                    <div className="text-xs font-semibold text-green-700">{pm.completionRate}%</div>
+                                  </td>
+                                  <td className="py-2 px-2">
+                                    <div className="text-xs font-semibold text-blue-700">{pm.performance}%</div>
+                                  </td>
+                                  <td className="py-2 px-2">
+                                    <div className="text-xs font-semibold text-gray-700">{pm.projects}</div>
+                                  </td>
+                                  <td className="py-2 px-2 hidden md:table-cell">
+                                    <div className="text-xs font-semibold text-gray-700">{pm.teamSize}</div>
+                                  </td>
+                                  <td className="py-2 px-2 hidden md:table-cell">
+                                    <a href={`mailto:${pm.email}`} className="text-xs text-blue-600 hover:text-blue-800 truncate max-w-[150px] block">
+                                      {pm.email}
+                                    </a>
+                                  </td>
+                                  <td className="py-2 px-2 hidden lg:table-cell">
+                                    <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                      <FiCalendar className="h-3 w-3 flex-shrink-0" />
+                                      <span className="truncate">{formatDate(pm.joinDate)}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-2 px-2">
+                                    <div className="flex items-center justify-end space-x-1">
+                                      <button
+                                        onClick={() => handleView(pm, 'pm')}
+                                        className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all"
+                                        title="View"
+                                      >
+                                        <FiEye className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleEdit(pm, 'pm')}
+                                        className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all"
+                                        title="Edit"
+                                      >
+                                        <FiEdit3 className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDelete(pm, 'pm')}
+                                        className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all"
+                                        title="Delete"
+                                      >
+                                        <FiTrash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
 
-                        {/* Footer */}
-                        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                          <div className="flex items-center space-x-1">
-                            <button 
-                              onClick={() => handleView(pm, 'pm')}
-                              className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all duration-200 group-hover:text-primary"
+                        {/* Pagination */}
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                          <div className="text-sm text-gray-700">
+                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} project managers
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                              disabled={currentPage === 1}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <FiEye className="h-3 w-3" />
+                              Previous
                             </button>
-                            <button 
-                              onClick={() => handleEdit(pm, 'pm')}
-                              className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all duration-200 group-hover:text-blue-600"
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                              <button
+                                key={page}
+                                onClick={() => setCurrentPage(page)}
+                                className={`px-3 py-1 border rounded-md text-sm font-medium ${
+                                  currentPage === page
+                                    ? 'border-primary bg-primary text-white'
+                                    : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            ))}
+                            <button
+                              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                              disabled={currentPage === totalPages}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <FiEdit3 className="h-3 w-3" />
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(pm, 'pm')}
-                              className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all duration-200 group-hover:text-red-600"
-                            >
-                              <FiTrash2 className="h-3 w-3" />
+                              Next
                             </button>
                           </div>
-                          <a href={`mailto:${pm.email}`} className="text-xs text-gray-400 hover:text-gray-600 truncate max-w-20 font-medium">
-                            {pm.email}
-                          </a>
                         </div>
                       </div>
-                    ))}
-                  </div>
-
-                  {/* Pagination */}
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-700">
-                      Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} project managers
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Previous
-                      </button>
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-1 border rounded-md text-sm font-medium ${
-                            currentPage === page
-                              ? 'border-primary bg-primary text-white'
-                              : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                    ) : (
+                      <div className="text-center py-16">
+                        <div className="max-w-md mx-auto">
+                          <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <FiUser className="text-indigo-500 text-3xl" />
+                          </div>
+                          <h3 className="text-2xl font-semibold text-gray-900 mb-4">No project managers found</h3>
+                          <p className="text-gray-600 text-lg">
+                            There are no project managers at the moment.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
           </div>
         </div>
