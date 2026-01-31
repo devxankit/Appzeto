@@ -504,7 +504,9 @@ exports.createLeadProfile = asyncHandler(async (req, res, next) => {
     name,
     businessName,
     email,
-    projectType,
+    categoryId,
+    category,
+    projectType, // Legacy support
     estimatedCost,
     description,
     location,
@@ -517,7 +519,7 @@ exports.createLeadProfile = asyncHandler(async (req, res, next) => {
   const lead = await CPLead.findOne({
     _id: leadId,
     assignedTo: cpId
-  });
+  }).populate('category');
 
   if (!lead) {
     return next(new ErrorResponse('Lead not found or not assigned to you', 404));
@@ -527,12 +529,16 @@ exports.createLeadProfile = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Lead profile already exists', 400));
   }
 
+  // Use categoryId from request, or lead's category, or fall back to legacy projectType
+  const categoryIdToUse = categoryId || category || lead.category?._id || lead.category || null;
+  
   const leadProfile = await CPLeadProfile.create({
     lead: leadId,
     name: name || lead.name,
     businessName,
     email: email || lead.email,
-    projectType: projectType || { web: false, app: false, taxi: false, other: false },
+    category: categoryIdToUse, // Use category (preferred)
+    projectType: projectType || { web: false, app: false, taxi: false, other: false }, // Legacy support
     estimatedCost: estimatedCost || 0,
     description,
     location,
@@ -1117,7 +1123,7 @@ exports.getClientDetails = asyncHandler(async (req, res, next) => {
       id: project._id,
       name: project.name || leadData.projectName,
       description: project.description,
-      type: project.projectType ? Object.keys(project.projectType).filter(k => project.projectType[k]).join(', ') : 'N/A',
+      type: project.category ? (typeof project.category === 'object' ? project.category.name : 'N/A') : (project.projectType ? Object.keys(project.projectType).filter(k => project.projectType[k]).join(', ') : 'N/A'),
       status: project.status,
       progress: project.progress || 0,
       startDate: project.startDate,

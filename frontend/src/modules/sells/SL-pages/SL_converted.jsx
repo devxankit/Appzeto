@@ -176,8 +176,23 @@ const SL_converted = () => {
   // Mobile Client Card Component
   const MobileClientCard = ({ client }) => {
     const categoryInfo = getCategoryInfo(client.category)
-    const projectType = client.project?.projectType || client.leadProfile?.projectType || {}
-    const projectTypeLabel = projectType.web ? 'Web' : projectType.app ? 'App' : projectType.taxi ? 'Taxi' : 'N/A'
+    // Use category first (preferred), then fall back to legacy projectType flags
+    const projectCategory = client.project?.category || client.leadProfile?.category
+    let projectTypeLabel = 'N/A'
+    if (projectCategory) {
+      // If category is populated (object), use its name
+      if (typeof projectCategory === 'object' && projectCategory.name) {
+        projectTypeLabel = projectCategory.name
+      } else {
+        // Category is just an ID, try to find it in categories array if available
+        // Note: This assumes categories are loaded - if not, will show ID or fall back
+        projectTypeLabel = projectCategory.toString() || 'N/A'
+      }
+    } else {
+      // Legacy: fall back to projectType flags
+      const projectType = client.project?.projectType || client.leadProfile?.projectType || {}
+      projectTypeLabel = projectType.web ? 'Web' : projectType.app ? 'App' : projectType.taxi ? 'Taxi' : 'N/A'
+    }
     const totalCost = client.project?.financialDetails?.totalCost || client.project?.budget || client.leadProfile?.estimatedCost || 0
     const displayName = client.leadProfile?.name || client.name || 'Unknown'
     const displayBusiness = client.leadProfile?.businessName || client.company || 'No company'

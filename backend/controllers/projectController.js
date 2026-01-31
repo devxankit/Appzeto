@@ -16,6 +16,8 @@ const createProject = asyncHandler(async (req, res, next) => {
     name,
     description,
     client,
+    category,
+    categoryId,
     priority,
     status,
     dueDate,
@@ -35,6 +37,7 @@ const createProject = asyncHandler(async (req, res, next) => {
     name,
     description,
     client,
+    category: category || categoryId, // Use category (preferred)
     projectManager: req.user.id,
     status: projectStatus, // Use provided status or default to 'active'
     priority,
@@ -227,6 +230,7 @@ const updateProject = asyncHandler(async (req, res, next) => {
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;
   if (client !== undefined) updateData.client = client;
+  if (category !== undefined || categoryId !== undefined) updateData.category = category || categoryId;
   if (priority !== undefined) updateData.priority = priority;
   if (status !== undefined) {
     // Validate status if provided

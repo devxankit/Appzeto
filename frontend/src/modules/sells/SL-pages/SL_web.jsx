@@ -43,7 +43,7 @@ const SL_web = () => {
   const [selectedLeadForConversion, setSelectedLeadForConversion] = useState(null)
   const [conversionFormData, setConversionFormData] = useState({
     projectName: '',
-    projectType: '',
+    categoryId: '',
     estimatedBudget: '',
     startDate: '',
     notes: ''
@@ -162,7 +162,7 @@ const SL_web = () => {
       // Reset form and close modal
       setConversionFormData({
         projectName: '',
-        projectType: '',
+        categoryId: '',
         estimatedBudget: '',
         startDate: '',
         notes: ''
@@ -776,21 +776,20 @@ const SL_web = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Project Type *
+                    Category *
                   </label>
                   <select
-                    value={conversionFormData.projectType}
-                    onChange={(e) => setConversionFormData(prev => ({ ...prev, projectType: e.target.value }))}
+                    value={conversionFormData.categoryId}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, categoryId: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                     required
                   >
-                    <option value="">Select project type</option>
-                    <option value="Website Development">Website Development</option>
-                    <option value="E-commerce Website">E-commerce Website</option>
-                    <option value="Corporate Website">Corporate Website</option>
-                    <option value="Restaurant Website">Restaurant Website</option>
-                    <option value="Portfolio Website">Portfolio Website</option>
-                    <option value="Blog Website">Blog Website</option>
+                    <option value="">Select Category</option>
+                    {categories.map((cat) => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

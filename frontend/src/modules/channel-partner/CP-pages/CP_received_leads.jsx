@@ -115,6 +115,7 @@ const CP_received_leads = () => {
   const { addToast } = useToast();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState([]);
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [timeFilter, setTimeFilter] = useState('all-time');
@@ -122,6 +123,21 @@ const CP_received_leads = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [salesTeamLeads, setSalesTeamLeads] = useState([]);
+
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await cpLeadService.getLeadCategories();
+        if (response.success) {
+          setCategories(response.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   // Fetch sales team leads for sharing
   useEffect(() => {
@@ -215,7 +231,7 @@ const CP_received_leads = () => {
   // Convert to Client Form State
   const [conversionData, setConversionData] = useState({
     projectName: '',
-    projectType: { web: false, app: false, taxi: false },
+    categoryId: '',
     totalCost: '',
     finishedDays: '',
     advanceReceived: '',
@@ -345,8 +361,8 @@ const CP_received_leads = () => {
       addToast('Please enter a valid total cost', 'error');
       return;
     }
-    if (!conversionData.projectType.web && !conversionData.projectType.app && !conversionData.projectType.taxi) {
-      addToast('Please select at least one project type', 'error');
+    if (!conversionData.categoryId) {
+      addToast('Please select a category', 'error');
       return;
     }
 
@@ -355,7 +371,7 @@ const CP_received_leads = () => {
     try {
       const response = await cpLeadService.convertLeadToClient(selectedLead.id, {
         projectName: conversionData.projectName,
-        projectType: conversionData.projectType,
+        categoryId: conversionData.categoryId,
         totalCost: parseFloat(conversionData.totalCost),
         finishedDays: conversionData.finishedDays ? parseInt(conversionData.finishedDays) : undefined,
         advanceReceived: conversionData.advanceReceived ? parseFloat(conversionData.advanceReceived) : 0,
@@ -374,7 +390,7 @@ const CP_received_leads = () => {
 
         setConversionData({
           projectName: '',
-          projectType: { web: false, app: false, taxi: false },
+          categoryId: '',
           totalCost: '',
           finishedDays: '',
           advanceReceived: '',
@@ -727,45 +743,20 @@ const CP_received_leads = () => {
 
                   {/* Project Type */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Project Type <span className="text-red-500">*</span></label>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={conversionData.projectType.web}
-                          onChange={(e) => setConversionData({
-                            ...conversionData,
-                            projectType: { ...conversionData.projectType, web: e.target.checked }
-                          })}
-                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                        />
-                        <span className="ml-2 text-sm text-gray-700 font-medium">Web</span>
-                      </label>
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={conversionData.projectType.app}
-                          onChange={(e) => setConversionData({
-                            ...conversionData,
-                            projectType: { ...conversionData.projectType, app: e.target.checked }
-                          })}
-                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                        />
-                        <span className="ml-2 text-sm text-gray-700 font-medium">App</span>
-                      </label>
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={conversionData.projectType.taxi}
-                          onChange={(e) => setConversionData({
-                            ...conversionData,
-                            projectType: { ...conversionData.projectType, taxi: e.target.checked }
-                          })}
-                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                        />
-                        <span className="ml-2 text-sm text-gray-700 font-medium">Taxi</span>
-                      </label>
-                    </div>
+                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Category <span className="text-red-500">*</span></label>
+                    <select
+                      value={conversionData.categoryId}
+                      onChange={(e) => setConversionData({ ...conversionData, categoryId: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      required
+                    >
+                      <option value="">Select Category</option>
+                      {categories.map((cat) => (
+                        <option key={cat._id} value={cat._id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Description */}

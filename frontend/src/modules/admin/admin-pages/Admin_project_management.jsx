@@ -5,6 +5,7 @@ import Admin_sidebar from '../admin-components/Admin_sidebar'
 import { adminProjectService } from '../admin-services/adminProjectService'
 import { adminFinanceService } from '../admin-services/adminFinanceService'
 import { adminUserService } from '../admin-services/adminUserService'
+import { adminSalesService } from '../admin-services/adminSalesService'
 import { 
   FiUsers, 
   FiFolder, 
@@ -183,6 +184,7 @@ const Admin_project_management = () => {
     name: '',
     description: '',
     client: '',
+    category: '',
     projectManager: '',
     assignedTeam: [],
     priority: 'normal',
@@ -197,6 +199,7 @@ const Admin_project_management = () => {
   const [clientOptions, setClientOptions] = useState([])
   const [pmSelectOptions, setPmSelectOptions] = useState([])
   const [employeeOptions, setEmployeeOptions] = useState([])
+  const [categories, setCategories] = useState([])
   const [createModalLoading, setCreateModalLoading] = useState(false)
   const [createModalError, setCreateModalError] = useState(null)
   const [isSubmittingProject, setIsSubmittingProject] = useState(false)
@@ -661,11 +664,16 @@ const Admin_project_management = () => {
     setCreateModalError(null)
 
     try {
-      const [clients, pms, employees] = await Promise.all([
+      const [clients, pms, employees, categoriesRes] = await Promise.all([
         fetchFullList(adminProjectService.getClients.bind(adminProjectService)),
         fetchFullList(adminProjectService.getPMs.bind(adminProjectService)),
-        fetchFullList(adminProjectService.getEmployees.bind(adminProjectService))
+        fetchFullList(adminProjectService.getEmployees.bind(adminProjectService)),
+        adminSalesService.getAllLeadCategories().catch(() => ({ data: [] }))
       ])
+      
+      if (categoriesRes?.data) {
+        setCategories(categoriesRes.data)
+      }
 
       const clientOpts = clients
         .map((client) => ({
@@ -919,10 +927,12 @@ const projectFinancialSummary =
         ? item.assignedTeam.map(member => typeof member === 'object' ? (member._id || member.id) : member)
         : []
       
+      const categoryId = typeof item.category === 'object' ? (item.category?._id || item.category?.id) : item.category
       setProjectForm({
         name: item.name || '',
         description: item.description || '',
         client: clientId?.toString() || '',
+        category: categoryId?.toString() || '',
         projectManager: pmId?.toString() || '',
         assignedTeam: teamIds.map(id => id?.toString()).filter(Boolean),
         priority: item.priority || 'normal',
@@ -1685,6 +1695,8 @@ function getFinancialSummary(project) {
         name: projectForm.name.trim(),
         description: projectForm.description.trim(),
         client: projectForm.client,
+        category: projectForm.category || undefined,
+        categoryId: projectForm.category || undefined,
         projectManager: projectForm.projectManager,
         status: projectForm.status,
         priority: projectForm.priority,
@@ -3129,6 +3141,21 @@ function getFinancialSummary(project) {
                           {projectFormErrors.name && (
                             <p className="mt-1 text-xs text-red-500">{projectFormErrors.name}</p>
                           )}
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">Category</label>
+                          <select
+                            value={projectForm.category}
+                            onChange={(e) => setProjectForm(prev => ({ ...prev, category: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary"
+                          >
+                            <option value="">Select Category (Optional)</option>
+                            {categories.map((cat) => (
+                              <option key={cat._id} value={cat._id}>
+                                {cat.name}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div>
                           <label className="mb-2 block text-sm font-medium text-gray-700">Client</label>

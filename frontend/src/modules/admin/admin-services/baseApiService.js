@@ -93,6 +93,27 @@ export const apiRequest = async (url, options = {}) => {
 
     return data;
   } catch (error) {
+    // Check if it's a connection error (backend not running)
+    const isConnectionError = error && (
+      error.name === 'TypeError' || 
+      String(error).includes('Failed to fetch') || 
+      String(error).includes('ERR_CONNECTION_REFUSED') ||
+      String(error).includes('NetworkError') ||
+      (error.message && (
+        error.message.includes('Failed to fetch') ||
+        error.message.includes('ERR_CONNECTION_REFUSED') ||
+        error.message.includes('NetworkError')
+      ))
+    );
+
+    // If connection error, throw a more helpful error message
+    if (isConnectionError) {
+      const connectionError = new Error('Backend server is not running. Please start the backend server on port 5000.');
+      connectionError.name = 'ConnectionError';
+      connectionError.originalError = error;
+      throw connectionError;
+    }
+
     // Fallback: if direct host failed (e.g., backend not running on 5000), try same-origin /api path
     try {
       if (error && (error.name === 'TypeError' || String(error).includes('Failed to fetch') || String(error).includes('ERR_CONNECTION_REFUSED'))) {

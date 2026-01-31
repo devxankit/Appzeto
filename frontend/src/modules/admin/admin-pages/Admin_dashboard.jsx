@@ -82,13 +82,14 @@ import QuickActionButton from '../admin-components/QuickActionButton'
 // Import dashboard service
 import adminDashboardService from '../admin-services/adminDashboardService'
 import { adminFinanceService } from '../admin-services/adminFinanceService'
+import { adminChannelPartnerService } from '../admin-services/adminChannelPartnerService'
+import adminSalesService from '../admin-services/adminSalesService'
 
 const Admin_dashboard = () => {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('overview')
   const [timeRange, setTimeRange] = useState('7d')
   const [notifications, setNotifications] = useState([])
-  const [recentActivities, setRecentActivities] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -96,8 +97,13 @@ const Admin_dashboard = () => {
   const [filterType, setFilterType] = useState('month') // 'day', 'week', 'month', 'year', 'custom'
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [tempStartDate, setTempStartDate] = useState('') // Temporary state for date picker
+  const [tempEndDate, setTempEndDate] = useState('')   // Temporary state for date picker
   const [showFilterDropdown, setShowFilterDropdown] = useState(false)
   const [showDateRangePicker, setShowDateRangePicker] = useState(false)
+  const [topChannelPartners, setTopChannelPartners] = useState([])
+  const [projectCategoryPerformance, setProjectCategoryPerformance] = useState([])
+  const [categoryFinancialDetails, setCategoryFinancialDetails] = useState([])
 
   // Dashboard data - loaded from API
   const [dashboardData, setDashboardData] = useState({
@@ -219,22 +225,102 @@ const Admin_dashboard = () => {
     }
   ]
 
-  // Fetch recent activities
-  const fetchRecentActivities = async () => {
+
+  // Fetch top channel partners
+  const fetchTopChannelPartners = async () => {
     try {
-      const response = await adminDashboardService.getRecentActivities(3)
-      if (response.success && response.data) {
-        // Sort by time and take only top 3
-        const sortedActivities = response.data
-          .sort((a, b) => new Date(b.time) - new Date(a.time))
-          .slice(0, 3)
-        setRecentActivities(sortedActivities)
+      const [partnersResponse, leadsBreakdownResponse] = await Promise.all([
+        adminChannelPartnerService.getAllChannelPartners(),
+        adminChannelPartnerService.getChannelPartnerLeadsBreakdown()
+      ]);
+
+      if (partnersResponse.success && partnersResponse.data && leadsBreakdownResponse.success && leadsBreakdownResponse.data) {
+        const partners = partnersResponse.data;
+        const leadsBreakdown = leadsBreakdownResponse.data;
+
+        const partnersWithConversions = partners.map(partner => {
+          const breakdown = leadsBreakdown.find(lb => lb._id === partner._id || lb.channelPartnerId === partner._id);
+          const totalLeads = breakdown ? breakdown.totalLeads : 0;
+          const convertedLeads = breakdown ? breakdown.convertedLeads : 0;
+          const conversionRate = totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0;
+
+          return {
+            ...partner,
+            totalLeads,
+            convertedLeads,
+            conversionRate
+          };
+        });
+
+        const sortedPartners = partnersWithConversions.sort((a, b) => b.convertedLeads - a.convertedLeads);
+        setTopChannelPartners(sortedPartners.slice(0, 3));
+      } else {
+        setTopChannelPartners([]);
       }
     } catch (err) {
-      console.error('Error fetching recent activities:', err)
-      // Keep existing activities on error
+      console.error('Error fetching top channel partners:', err);
+      setTopChannelPartners([]);
     }
-  }
+  };
+
+  // Fetch project category performance
+  const fetchProjectCategoryPerformance = async () => {
+    try {
+      // Get date range based on current filter
+      const dateRange = getDateRange();
+      
+      // Build query params with date filters for ALL filter types
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate
+      };
+      
+      const response = await adminSalesService.getCategoryAnalytics(params);
+      if (response.success && response.data) {
+        // Map and sort categories - show ALL categories (backend now returns all categories)
+        const sortedCategories = response.data
+          .map(category => ({
+            name: category.categoryName || 'Uncategorized',
+            convertedLeads: category.convertedLeads || 0,
+            totalLeads: category.totalLeads || 0,
+            conversionRate: category.conversionRate || 0,
+            convertedValue: category.convertedValue || 0,
+            totalValue: category.totalValue || 0,
+            color: category.categoryColor || '#6366f1'
+          }))
+          // Don't filter - show all categories even if they have 0 data
+          .sort((a, b) => {
+            // Sort by converted leads first, then by total leads
+            if (b.convertedLeads !== a.convertedLeads) {
+              return b.convertedLeads - a.convertedLeads;
+            }
+            return b.totalLeads - a.totalLeads;
+          });
+        
+        setProjectCategoryPerformance(sortedCategories);
+      } else {
+        setProjectCategoryPerformance([]);
+      }
+    } catch (err) {
+      console.error('Error fetching project category performance:', err);
+      setProjectCategoryPerformance([]);
+    }
+  };
+
+  // Fetch category financial details
+  const fetchCategoryFinancialDetails = async () => {
+    try {
+      const response = await adminSalesService.getCategoryFinancialDetails();
+      if (response.success && response.data) {
+        setCategoryFinancialDetails(response.data);
+      } else {
+        setCategoryFinancialDetails([]);
+      }
+    } catch (err) {
+      console.error('Error fetching category financial details:', err);
+      setCategoryFinancialDetails([]);
+    }
+  };
 
   // Helper function to get icon component based on icon name
   const getActivityIcon = (iconName, color) => {
@@ -373,14 +459,12 @@ const Admin_dashboard = () => {
       else if (filterType === 'year') timeFilter = 'year'
       else if (filterType === 'custom') timeFilter = 'custom'
 
-      // Prepare finance statistics params
       const financeParams = {}
       if (filterType === 'custom' && dateRange.startDate && dateRange.endDate) {
         financeParams.startDate = dateRange.startDate
         financeParams.endDate = dateRange.endDate
       }
 
-      // Fetch dashboard stats and finance statistics in parallel
       const [dashboardResponse, financeResponse] = await Promise.all([
         adminDashboardService.getDashboardStats().catch(err => {
           console.error('Error fetching dashboard stats:', err)
@@ -392,7 +476,7 @@ const Admin_dashboard = () => {
         })
       ])
 
-      if (dashboardResponse?.success && dashboardResponse.data) {
+      if (dashboardResponse && dashboardResponse.success && dashboardResponse.data) {
           let dashboardData = { ...dashboardResponse.data }
           
           // Override financial data with comprehensive finance statistics if available
@@ -413,11 +497,11 @@ const Admin_dashboard = () => {
             // Update financial metrics with filtered data (not "today" but filtered period)
             dashboardData.today = {
               ...dashboardData.today,
-              earnings: financeData.totalRevenue || financeData.todayEarnings || dashboardData.today.earnings || 0,
-              expenses: financeData.totalExpenses || dashboardData.today.expenses || 0,
-              sales: financeData.totalRevenue || dashboardData.today.sales || 0,
-              pendingAmount: financeData.pendingAmounts?.totalPendingReceivables || dashboardData.today.pendingAmount || 0,
-              profit: financeData.netProfit || dashboardData.today.profit || 0,
+              earnings: financeData.totalRevenue || financeData.todayEarnings || 0,
+              expenses: financeData.totalExpenses || 0,
+              sales: financeData.totalRevenue || 0,
+              pendingAmount: financeData.pendingAmounts?.totalPendingReceivables || 0,
+              profit: financeData.netProfit || 0,
               loss: (financeData.totalExpenses || 0) > (financeData.totalRevenue || 0) 
                 ? (financeData.totalExpenses - financeData.totalRevenue) 
                 : 0,
@@ -471,11 +555,30 @@ const Admin_dashboard = () => {
           throw new Error('Failed to load dashboard data')
         }
         
-        // Fetch recent activities separately
-        await fetchRecentActivities()
+        // Fetch top channel partners, category performance, and financial details separately
+        await Promise.all([
+          fetchTopChannelPartners(),
+          fetchProjectCategoryPerformance(),
+          fetchCategoryFinancialDetails()
+        ])
       } catch (err) {
         console.error('Error loading dashboard data:', err)
-        setError(err.message || 'Failed to load dashboard data')
+        
+        // Check if it's a connection error
+        const errorMessage = err.message || 'Failed to load dashboard data'
+        const isConnectionError = err.name === 'ConnectionError' ||
+                                  errorMessage.includes('Backend server is not running') ||
+                                  errorMessage.includes('Failed to fetch') || 
+                                  errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+                                  errorMessage.includes('NetworkError') ||
+                                  String(err).includes('ERR_CONNECTION_REFUSED')
+        
+        if (isConnectionError) {
+          setError('Backend server is not running. Please start the backend server on port 5000.')
+        } else {
+          setError(errorMessage)
+        }
+        
         // Set notifications with mock data on error
         setNotifications(mockNotifications)
       } finally {
@@ -484,14 +587,11 @@ const Admin_dashboard = () => {
     }
 
   useEffect(() => {
-    loadDashboardData()
+    // Only load dashboard data if filterType or actual date range changes
+    if (filterType !== 'custom' || (startDate && endDate)) {
+      loadDashboardData()
+    }
 
-    // Set up interval to refresh activities every 30 seconds
-    const activityInterval = setInterval(() => {
-      fetchRecentActivities()
-    }, 30000)
-
-    return () => clearInterval(activityInterval)
   }, [filterType, startDate, endDate])
 
   // Close filter dropdown when clicking outside
@@ -506,36 +606,13 @@ const Admin_dashboard = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showFilterDropdown])
 
-  const handleQuickAction = (action) => {
-    switch(action) {
-      case 'users':
-        navigate('/admin-project-management')
-        break
-      case 'projects':
-        navigate('/admin-project-management')
-        break
-      case 'finance':
-        navigate('/admin-finance-management')
-        break
-      case 'sales':
-        navigate('/admin-sales-management')
-        break
-      case 'rewards':
-        navigate('/admin-reward-management')
-        break
-      case 'leaderboard':
-        navigate('/admin-leaderboard')
-        break
-      default:
-        break
-    }
-  }
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      minimumFractionDigits: 0
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount)
   }
 
@@ -558,19 +635,38 @@ const Admin_dashboard = () => {
   }
 
   if (error) {
+    const isConnectionError = error.includes('Backend server is not running') || 
+                              error.includes('ERR_CONNECTION_REFUSED') ||
+                              error.includes('Failed to fetch');
+    
     return (
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
         <Admin_sidebar />
         <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-              <AlertTriangle className="h-12 w-12 text-red-600 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-red-900 mb-2">Error Loading Dashboard</h3>
-              <p className="text-red-700 mb-4">{error}</p>
+            <div className={`${isConnectionError ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'} border rounded-lg p-6 text-center`}>
+              <AlertTriangle className={`h-12 w-12 ${isConnectionError ? 'text-yellow-600' : 'text-red-600'} mx-auto mb-4`} />
+              <h3 className={`text-lg font-semibold ${isConnectionError ? 'text-yellow-900' : 'text-red-900'} mb-2`}>
+                {isConnectionError ? 'Backend Server Not Running' : 'Error Loading Dashboard'}
+              </h3>
+              <p className={`${isConnectionError ? 'text-yellow-700' : 'text-red-700'} mb-4`}>{error}</p>
+              {isConnectionError && (
+                <div className="bg-white rounded-lg p-4 mb-4 text-left max-w-2xl mx-auto">
+                  <p className="text-sm font-semibold text-gray-900 mb-2">To start the backend server:</p>
+                  <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside">
+                    <li>Open a terminal/command prompt</li>
+                    <li>Navigate to the backend directory: <code className="bg-gray-100 px-2 py-1 rounded">cd backend</code></li>
+                    <li>Run: <code className="bg-gray-100 px-2 py-1 rounded">npm run dev</code> (for development) or <code className="bg-gray-100 px-2 py-1 rounded">npm start</code> (for production)</li>
+                    <li>Wait for the server to start on port 5000</li>
+                    <li>Then click Retry below</li>
+                  </ol>
+                </div>
+              )}
               <Button 
                 onClick={loadDashboardData}
                 variant="outline"
+                className={isConnectionError ? 'border-yellow-300 text-yellow-700 hover:bg-yellow-100' : ''}
               >
                 Retry
               </Button>
@@ -645,9 +741,9 @@ const Admin_dashboard = () => {
                           <button
                             key={type}
                             onClick={() => {
-                              setFilterType(type)
                               setStartDate('')
                               setEndDate('')
+                              setFilterType(type)
                               setShowFilterDropdown(false)
                             }}
                             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
@@ -668,10 +764,11 @@ const Admin_dashboard = () => {
                     <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
                       <button
                         onClick={() => {
-                          setFilterType('custom')
-                          setShowDateRangePicker(true)
-                          setShowFilterDropdown(false)
-                        }}
+                            setTempStartDate(startDate)
+                            setTempEndDate(endDate)
+                            setFilterType('custom')
+                            setShowDateRangePicker(true)
+                          }}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                           filterType === 'custom'
                             ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
@@ -701,6 +798,10 @@ const Admin_dashboard = () => {
                     initial={{ scale: 0.95, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     onClick={(e) => e.stopPropagation()}
+                    onMount={() => {
+                      setTempStartDate(startDate)
+                      setTempEndDate(endDate)
+                    }}
                     className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md"
                   >
                     <div className="flex items-center justify-between mb-4">
@@ -720,9 +821,9 @@ const Admin_dashboard = () => {
                         </label>
                         <input
                           type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                          max={endDate || new Date().toISOString().split('T')[0]}
+                          value={tempStartDate}
+                          onChange={(e) => setTempStartDate(e.target.value)}
+                          max={tempEndDate || new Date().toISOString().split('T')[0]}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
@@ -733,9 +834,9 @@ const Admin_dashboard = () => {
                         </label>
                         <input
                           type="date"
-                          value={endDate}
-                          onChange={(e) => setEndDate(e.target.value)}
-                          min={startDate}
+                          value={tempEndDate}
+                          onChange={(e) => setTempEndDate(e.target.value)}
+                          min={tempStartDate}
                           max={new Date().toISOString().split('T')[0]}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
@@ -744,19 +845,23 @@ const Admin_dashboard = () => {
                       <div className="flex gap-3 pt-4">
                         <Button
                           onClick={() => {
-                            if (startDate && endDate) {
+                            if (tempStartDate && tempEndDate) {
+                              setStartDate(tempStartDate)
+                              setEndDate(tempEndDate)
                               setFilterType('custom')
                               setShowDateRangePicker(false)
                             }
                           }}
                           className="flex-1"
-                          disabled={!startDate || !endDate}
+                          disabled={!tempStartDate || !tempEndDate}
                         >
                           Apply Filter
                         </Button>
                         <Button
                           variant="outline"
                           onClick={() => {
+                            setTempStartDate('')
+                            setTempEndDate('')
                             setStartDate('')
                             setEndDate('')
                             setFilterType('month')
@@ -1088,142 +1193,252 @@ const Admin_dashboard = () => {
             </div>
           </motion.div>
 
-          {/* Quick Actions & Recent Activity */}
+          {/* Project Category Performance & Top Performing Channel Partners */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
             className="grid grid-cols-1 lg:grid-cols-2 gap-8"
           >
-            {/* Quick Actions */}
+            {/* Project Category Performance */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-4 lg:p-6 shadow-xl border border-gray-200/50 h-full flex flex-col">
+              <div className="flex items-center justify-between mb-4 shrink-0">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">Project Category Performance</h3>
+                  <p className="text-sm text-gray-600">Performance by category ({getFilterLabel()})</p>
+                </div>
+                <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 shrink-0">
+                  <BarChart3 className="h-5 w-5 text-indigo-600" />
+                </div>
+              </div>
+              <div className="flex-1 flex flex-col min-h-0">
+                {projectCategoryPerformance.length > 0 ? (
+                  <>
+                    {/* Best Performing Category Badge */}
+                    {projectCategoryPerformance[0] && (
+                      <div className="mb-3 p-2.5 rounded-lg bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <Trophy className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                          <span className="text-xs font-medium text-emerald-900 leading-tight">
+                            Best: <span className="font-bold">{projectCategoryPerformance[0].name}</span> 
+                            {' '}({projectCategoryPerformance[0].convertedLeads} leads, {projectCategoryPerformance[0].conversionRate.toFixed(1)}%)
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    {/* Column Chart */}
+                    <div className="flex-1 min-h-[280px] max-h-[400px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart 
+                          data={projectCategoryPerformance}
+                          margin={{ top: 10, right: 10, left: 5, bottom: 50 }}
+                          barCategoryGap="15%"
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+                          <XAxis 
+                            dataKey="name" 
+                            angle={-45}
+                            textAnchor="end"
+                            height={50}
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#6B7280', fontSize: 9, fontWeight: 500 }}
+                            interval={0}
+                          />
+                          <YAxis 
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#9CA3AF', fontSize: 9 }}
+                            width={35}
+                          />
+                          <Tooltip 
+                            contentStyle={{
+                              backgroundColor: 'white',
+                              border: '1px solid #E5E7EB',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                              fontSize: '11px',
+                              padding: '6px 10px'
+                            }}
+                            cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
+                            formatter={(value, name) => {
+                              if (name === 'convertedLeads') {
+                                return [value, 'Converted Leads'];
+                              }
+                              return [value, name];
+                            }}
+                          />
+                          <Bar 
+                            dataKey="convertedLeads" 
+                            radius={[3, 3, 0, 0]}
+                            maxBarSize={40}
+                          >
+                            {projectCategoryPerformance.map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={entry.color || '#6366f1'}
+                                style={{ transition: 'opacity 0.2s' }}
+                              />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    {/* Legend */}
+                    <div className="mt-2 flex items-center justify-center gap-4 text-xs text-gray-600 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-sm bg-indigo-500"></div>
+                        <span className="font-medium">Converted Leads</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center py-8 text-gray-500 flex-1">
+                    <div className="text-center">
+                      <BarChart3 className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                      <p className="text-sm">No category performance data available</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Top Performing Channel Partners */}
             <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-4 lg:p-6 shadow-xl border border-gray-200/50 h-full flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">Quick Actions</h3>
-                  <p className="text-sm text-gray-600">Access frequently used features</p>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">Top Performing Channel Partners</h3>
+                  <p className="text-sm text-gray-600">Based on converted leads</p>
                 </div>
                 <div className="p-2 rounded-xl bg-gradient-to-br from-purple-100 to-indigo-100">
-                  <Settings className="h-5 w-5 text-purple-600" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 flex-1">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                    onClick={() => handleQuickAction('users')}
-                  className="group p-3 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 hover:from-blue-100 hover:to-indigo-200 transition-all duration-300 border border-blue-200/50"
-                >
-                  <div className="flex items-center space-x-2 mb-2">
-                    <div className="p-1.5 rounded-lg bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
-                      <Users className="h-4 w-4 text-blue-600" />
-                    </div>
-                    <ArrowRight className="h-3 w-3 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  <h4 className="text-sm font-semibold text-blue-900 mb-1">Manage Users</h4>
-                  <p className="text-xs text-blue-700">View and manage all users</p>
-                </motion.button>
-
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                    onClick={() => handleQuickAction('projects')}
-                  className="group p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 hover:from-emerald-100 hover:to-green-200 transition-all duration-300 border border-emerald-200/50"
-                >
-                  <div className="flex items-center space-x-2 mb-2">
-                    <div className="p-1.5 rounded-lg bg-emerald-500/10 group-hover:bg-emerald-500/20 transition-colors">
-                      <FolderOpen className="h-4 w-4 text-emerald-600" />
-                    </div>
-                    <ArrowRight className="h-3 w-3 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  <h4 className="text-sm font-semibold text-emerald-900 mb-1">View Projects</h4>
-                  <p className="text-xs text-emerald-700">Monitor all projects</p>
-                </motion.button>
-
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                    onClick={() => handleQuickAction('finance')}
-                  className="group p-3 rounded-xl bg-gradient-to-br from-purple-50 to-violet-100 hover:from-purple-100 hover:to-violet-200 transition-all duration-300 border border-purple-200/50"
-                >
-                  <div className="flex items-center space-x-2 mb-2">
-                    <div className="p-1.5 rounded-lg bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
-                      <IndianRupee className="h-4 w-4 text-purple-600" />
-                    </div>
-                    <ArrowRight className="h-3 w-3 text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  <h4 className="text-sm font-semibold text-purple-900 mb-1">Financial Reports</h4>
-                  <p className="text-xs text-purple-700">View financial analytics</p>
-                </motion.button>
-
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                    onClick={() => handleQuickAction('sales')}
-                  className="group p-3 rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 hover:from-orange-100 hover:to-amber-200 transition-all duration-300 border border-orange-200/50"
-                >
-                  <div className="flex items-center space-x-2 mb-2">
-                    <div className="p-1.5 rounded-lg bg-orange-500/10 group-hover:bg-orange-500/20 transition-colors">
-                      <TrendingUp className="h-4 w-4 text-orange-600" />
-                    </div>
-                    <ArrowRight className="h-3 w-3 text-orange-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  <h4 className="text-sm font-semibold text-orange-900 mb-1">Sales Management</h4>
-                  <p className="text-xs text-orange-700">Monitor sales performance</p>
-                </motion.button>
-              </div>
-                </div>
-
-            {/* Recent Activity & Notifications */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-4 lg:p-6 shadow-xl border border-gray-200/50 h-full flex flex-col">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">Recent Activity</h3>
-                  <p className="text-sm text-gray-600">Latest updates and notifications</p>
-                </div>
-                <div className="p-2 rounded-xl bg-gradient-to-br from-rose-100 to-pink-100">
-                  <Bell className="h-5 w-5 text-rose-600" />
+                  <Crown className="h-5 w-5 text-purple-600" />
                 </div>
               </div>
               <div className="space-y-3 flex-1">
-                {recentActivities.length > 0 ? (
-                  recentActivities.map((activity, index) => {
-                    const iconColor = activity.color || 'blue'
-                    return (
-                      <motion.div
-                        key={activity.id || `activity-${index}`}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.5 + index * 0.1 }}
-                        className="flex items-start space-x-3 p-3 rounded-xl bg-gray-50/50 hover:bg-gray-100/50 transition-colors"
-                      >
-                        <div className={`p-1.5 rounded-lg ${
-                          iconColor === 'green' ? 'bg-emerald-100' :
-                          iconColor === 'red' ? 'bg-red-100' :
-                          iconColor === 'blue' ? 'bg-blue-100' :
-                          iconColor === 'purple' ? 'bg-purple-100' :
-                          'bg-gray-100'
-                        }`}>
-                          {getActivityIcon(activity.icon || 'activity', iconColor)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-semibold text-gray-900">{activity.title}</h4>
-                          <p className="text-xs text-gray-600 mt-1 line-clamp-2">{activity.message}</p>
-                          <p className="text-xs text-gray-500 mt-1">{formatTimeAgo(activity.time)}</p>
-                        </div>
-                      </motion.div>
-                    )
-                  })
+                {topChannelPartners.length > 0 ? (
+                  topChannelPartners.map((partner, index) => (
+                    <motion.div
+                      key={partner._id || `partner-${index}`}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.5 + index * 0.1 }}
+                      className="flex items-center space-x-3 p-3 rounded-xl bg-gray-50/50 hover:bg-gray-100/50 transition-colors"
+                    >
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-600 font-semibold text-sm shrink-0">
+                        {adminChannelPartnerService.generateAvatar(partner.name)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-semibold text-gray-900">{partner.name}</h4>
+                        <p className="text-xs text-gray-600 mt-0.5">Converted Leads: {partner.convertedLeads || 0}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-medium text-emerald-600 block">
+                          {partner.conversionRate ? partner.conversionRate.toFixed(1) : '0.0'}%
+                        </span>
+                        <span className="text-xs text-gray-500">Conversion</span>
+                      </div>
+                    </motion.div>
+                  ))
                 ) : (
                   <div className="flex items-center justify-center py-8 text-gray-500">
                     <div className="text-center">
-                      <Activity className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                      <p className="text-sm">No recent activities</p>
+                      <Crown className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                      <p className="text-sm">No top performing channel partners yet.</p>
                     </div>
                   </div>
                 )}
               </div>
             </div>
           </motion.div>
+
+          {/* Category Financial Details Cards */}
+          {categoryFinancialDetails.length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.6 }}
+              className="w-full"
+            >
+              <div className="mb-3">
+                <h2 className="text-xl font-bold text-gray-900">Category Financial Overview</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Financial performance by category</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4">
+                {categoryFinancialDetails.map((category, index) => (
+                  <motion.div
+                    key={category.categoryName || `category-${index}`}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.7 + index * 0.05 }}
+                    className="bg-white/80 backdrop-blur-sm rounded-xl p-3 lg:p-4 shadow-md border border-gray-200/50 hover:shadow-lg transition-shadow"
+                  >
+                    {/* Category Header */}
+                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
+                      <div 
+                        className="w-8 h-8 rounded-md flex items-center justify-center text-white font-semibold text-xs shrink-0"
+                        style={{ backgroundColor: category.categoryColor || '#6366f1' }}
+                      >
+                        {category.categoryName?.charAt(0).toUpperCase() || 'C'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-bold text-gray-900 truncate">{category.categoryName || 'Uncategorized'}</h3>
+                        <p className="text-xs text-gray-400">{category.totalProjects || 0} Projects</p>
+                      </div>
+                    </div>
+
+                    {/* Financial Details - Compact Grid */}
+                    <div className="space-y-1.5">
+                      {/* Total Project Cost */}
+                      <div className="flex items-center justify-between py-1 px-1.5 rounded bg-gray-50/80">
+                        <div className="flex items-center gap-1">
+                          <IndianRupee className="h-3 w-3 text-blue-600" />
+                          <span className="text-[10px] font-medium text-gray-600">Cost</span>
+                        </div>
+                        <span className="text-xs font-bold text-blue-700">
+                          ₹{formatNumber(Math.round(category.totalProjectCost || 0))}
+                        </span>
+                      </div>
+
+                      {/* Total Recovery */}
+                      <div className="flex items-center justify-between py-1 px-1.5 rounded bg-gray-50/80">
+                        <div className="flex items-center gap-1">
+                          <TrendingUp className="h-3 w-3 text-emerald-600" />
+                          <span className="text-[10px] font-medium text-gray-600">Recovery</span>
+                        </div>
+                        <span className="text-xs font-bold text-emerald-700">
+                          ₹{formatNumber(Math.round(category.totalRecovery || 0))}
+                        </span>
+                      </div>
+
+                      {/* Total Pending Recovery */}
+                      <div className="flex items-center justify-between py-1 px-1.5 rounded bg-gray-50/80">
+                        <div className="flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3 text-orange-600" />
+                          <span className="text-[10px] font-medium text-gray-600">Pending Recovery</span>
+                        </div>
+                        <span className="text-xs font-bold text-orange-700">
+                          ₹{formatNumber(Math.round(category.totalPendingRecovery || 0))}
+                        </span>
+                      </div>
+
+                      {/* Conversion Ratio */}
+                      <div className="flex items-center justify-between py-1 px-1.5 rounded bg-gray-50/80">
+                        <div className="flex items-center gap-1">
+                          <Target className="h-3 w-3 text-purple-600" />
+                          <span className="text-[10px] font-medium text-gray-600">Conv.</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-bold text-purple-700">
+                            {category.conversionRatio ? category.conversionRatio.toFixed(1) : '0.0'}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
           </div>
         </div>

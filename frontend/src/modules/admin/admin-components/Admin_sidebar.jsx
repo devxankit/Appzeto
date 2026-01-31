@@ -12,7 +12,8 @@ import {
   Users,
   UserCheck,
   FileText,
-  Handshake
+  Handshake,
+  Activity
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { adminStorage } from '../admin-services/baseApiService'
@@ -123,6 +124,12 @@ const Admin_sidebar = ({ isOpen, onClose }) => {
       label: 'Notice Board',
       path: '/admin-notice-board',
       icon: FileText
+    },
+    {
+      id: 'recent-activities',
+      label: 'Recent Activities',
+      path: '/admin-recent-activities',
+      icon: Activity
     }
   ]
 

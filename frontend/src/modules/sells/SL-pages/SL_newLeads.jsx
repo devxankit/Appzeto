@@ -32,7 +32,7 @@ const SL_newLeads = () => {
   const [connectedForm, setConnectedForm] = useState({
     name: '',
     description: '',
-    projectType: 'web',
+    categoryId: '',
     estimatedPrice: '50000',
     quotationSent: false,
     demoSent: false
@@ -254,11 +254,7 @@ const SL_newLeads = () => {
         name: connectedForm.name,
         businessName: connectedForm.name, // Using name as business name for now
         email: '', // Will be filled later if available
-        projectType: {
-          web: connectedForm.projectType === 'web',
-          app: connectedForm.projectType === 'app',
-          taxi: connectedForm.projectType === 'taxi'
-        },
+        categoryId: connectedForm.categoryId, // Use category (preferred)
         estimatedCost: parseInt(connectedForm.estimatedPrice) || 0,
         description: connectedForm.description,
         quotationSent: connectedForm.quotationSent,
@@ -282,7 +278,7 @@ const SL_newLeads = () => {
       setConnectedForm({
         name: '',
         description: '',
-        projectType: 'web',
+        categoryId: '',
         estimatedPrice: '50000',
         quotationSent: false,
         demoSent: false
@@ -737,44 +733,22 @@ const SL_newLeads = () => {
                   </div>
                 </div>
 
-                {/* Project Type */}
+                {/* Category */}
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-gray-700">Project Type</label>
-                  <div className="flex space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => handleConnectedFormChange('projectType', 'web')}
-                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
-                        connectedForm.projectType === 'web'
-                          ? 'bg-teal-500 text-white shadow-md'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      Web
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleConnectedFormChange('projectType', 'app')}
-                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
-                        connectedForm.projectType === 'app'
-                          ? 'bg-teal-500 text-white shadow-md'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      App
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleConnectedFormChange('projectType', 'taxi')}
-                      className={`flex-1 py-3 px-3 rounded-lg font-medium transition-all duration-200 text-sm ${
-                        connectedForm.projectType === 'taxi'
-                          ? 'bg-teal-500 text-white shadow-md'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      Taxi
-                    </button>
-                  </div>
+                  <label className="text-sm font-semibold text-gray-700">Category <span className="text-red-500">*</span></label>
+                  <select
+                    value={connectedForm.categoryId}
+                    onChange={(e) => handleConnectedFormChange('categoryId', e.target.value)}
+                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
+                    required
+                  >
+                    <option value="">Select Category</option>
+                    {categories.map((cat) => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Estimated Price */}

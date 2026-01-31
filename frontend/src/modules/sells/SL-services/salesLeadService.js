@@ -265,7 +265,14 @@ export const convertLeadToClient = async (leadId, projectData) => {
       
       // Append all fields to FormData
       formData.append('projectName', projectData.projectName || '');
-      formData.append('projectType', JSON.stringify(projectData.projectType || { web: false, app: false, taxi: false }));
+      // Send categoryId (preferred) or fall back to legacy projectType
+      if (projectData.categoryId || projectData.category) {
+        formData.append('categoryId', projectData.categoryId || projectData.category);
+      }
+      // Legacy support: still send projectType if provided
+      if (projectData.projectType) {
+        formData.append('projectType', JSON.stringify(projectData.projectType));
+      }
       formData.append('totalCost', projectData.totalCost || 0);
       if (projectData.finishedDays) formData.append('finishedDays', projectData.finishedDays);
       formData.append('advanceReceived', projectData.advanceReceived || 0);

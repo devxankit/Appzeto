@@ -497,12 +497,28 @@ class AdminSalesService {
   }
 
   // Get category analytics
-  async getCategoryAnalytics() {
+  async getCategoryAnalytics(params = {}) {
     try {
-      const response = await apiRequest('/admin/sales/analytics/categories', { method: 'GET' });
+      const queryParams = new URLSearchParams();
+      if (params.startDate) queryParams.append('startDate', params.startDate);
+      if (params.endDate) queryParams.append('endDate', params.endDate);
+      
+      const url = `/admin/sales/analytics/categories${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await apiRequest(url, { method: 'GET' });
       return response;
     } catch (error) {
       console.error('Error fetching category analytics:', error);
+      throw error;
+    }
+  }
+
+  // Get category financial details
+  async getCategoryFinancialDetails() {
+    try {
+      const response = await apiRequest('/admin/sales/analytics/categories/financial', { method: 'GET' });
+      return response;
+    } catch (error) {
+      console.error('Error fetching category financial details:', error);
       throw error;
     }
   }

@@ -30,7 +30,13 @@ const leadProfileSchema = new mongoose.Schema({
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Valid email required']
   },
   
-  // Project requirements
+  // Project category (synced with lead category)
+  category: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LeadCategory'
+  },
+  
+  // Legacy project type flags (kept for backward compatibility)
   projectType: {
     web: { type: Boolean, default: false },
     app: { type: Boolean, default: false },
@@ -100,10 +106,12 @@ const leadProfileSchema = new mongoose.Schema({
 // Note: lead index is created automatically by unique: true, so we don't need explicit index
 leadProfileSchema.index({ createdBy: 1 });
 leadProfileSchema.index({ createdAt: -1 });
+leadProfileSchema.index({ category: 1 });
 
-// Virtual to check if at least one project type is selected
+// Virtual to check if category or project type is set
 leadProfileSchema.virtual('hasProjectType').get(function() {
-  return this.projectType.web || this.projectType.app || this.projectType.taxi;
+  // Check category first (preferred), then fall back to legacy projectType flags
+  return !!this.category || this.projectType.web || this.projectType.app || this.projectType.taxi;
 });
 
 // Method to add a note to the profile
@@ -153,9 +161,9 @@ leadProfileSchema.methods.markDemoSent = function() {
 
 // Pre-save validation
 leadProfileSchema.pre('save', function(next) {
-  // Ensure at least one project type is selected
-  if (!this.hasProjectType) {
-    return next(new Error('At least one project type must be selected'));
+  // Ensure category is set OR at least one legacy project type is selected (for backward compatibility)
+  if (!this.category && !this.hasProjectType) {
+    return next(new Error('Category or at least one project type must be selected'));
   }
   
   // Validate conversion data if provided

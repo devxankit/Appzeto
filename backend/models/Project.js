@@ -129,7 +129,12 @@ const projectSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Lead'
   },
-  // Project type flags
+  // Project category (synced with lead category)
+  category: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LeadCategory'
+  },
+  // Legacy project type flags (kept for backward compatibility with existing projects)
   projectType: {
     web: { type: Boolean, default: false },
     app: { type: Boolean, default: false },
@@ -295,6 +300,7 @@ projectSchema.index({ status: 1 });
 projectSchema.index({ priority: 1 });
 projectSchema.index({ dueDate: 1 });
 projectSchema.index({ createdAt: -1 });
+projectSchema.index({ category: 1 });
 
 // Virtual for calculating completion percentage from milestones
 projectSchema.virtual('completionPercentage').get(function() {
@@ -432,7 +438,14 @@ projectSchema.methods.createFromLeadConversion = function(leadProfileData, sales
   this.submittedBy = salesId;
   this.status = 'pending-assignment';
   
-  // Set project type from lead profile
+  // Set category from lead's category (preferred)
+  if (leadProfileData.categoryId) {
+    this.category = leadProfileData.categoryId;
+  } else if (leadProfileData.leadCategory) {
+    this.category = leadProfileData.leadCategory;
+  }
+  
+  // Legacy: Set project type from lead profile (for backward compatibility)
   if (leadProfileData.projectType) {
     this.projectType = {
       web: leadProfileData.projectType.web || false,
@@ -483,7 +496,13 @@ projectSchema.methods.updateFinancialDetails = function(financialData) {
   return this.save();
 };
 
-// Method to update project type
+// Method to update project category
+projectSchema.methods.updateCategory = function(categoryId) {
+  this.category = categoryId;
+  return this.save();
+};
+
+// Legacy method: Update project type (for backward compatibility)
 projectSchema.methods.updateProjectType = function(projectTypeData) {
   this.projectType = {
     ...this.projectType,

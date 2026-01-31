@@ -43,7 +43,7 @@ const SL_app_client = () => {
   const [selectedLeadForConversion, setSelectedLeadForConversion] = useState(null)
   const [conversionFormData, setConversionFormData] = useState({
     projectName: '',
-    projectType: '',
+    categoryId: '',
     estimatedBudget: '',
     startDate: '',
     notes: ''
@@ -162,7 +162,7 @@ const SL_app_client = () => {
       // Reset form and close modal
       setConversionFormData({
         projectName: '',
-        projectType: '',
+        categoryId: '',
         estimatedBudget: '',
         startDate: '',
         notes: ''
@@ -776,20 +776,20 @@ const SL_app_client = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Project Type *
+                    Category *
                   </label>
                   <select
-                    value={conversionFormData.projectType}
-                    onChange={(e) => setConversionFormData(prev => ({ ...prev, projectType: e.target.value }))}
+                    value={conversionFormData.categoryId}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, categoryId: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     required
                   >
-                    <option value="">Select project type</option>
-                    <option value="Mobile App">Mobile App</option>
-                    <option value="iOS App">iOS App</option>
-                    <option value="Android App">Android App</option>
-                    <option value="Cross Platform">Cross Platform</option>
-                    <option value="Web App">Web App</option>
+                    <option value="">Select Category</option>
+                    {categories.map((cat) => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

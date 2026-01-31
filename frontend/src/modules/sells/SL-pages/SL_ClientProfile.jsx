@@ -544,7 +544,9 @@ const SL_ClientProfile = () => {
           
           <div className="mt-4 text-sm text-gray-600">
             <p>Status: <span className="font-medium text-teal-700">{formatProjectStatus(project?.status)}</span></p>
-            <p>Project: <span className="text-teal-600">{project?.projectType || 'N/A'}</span></p>
+            <p>Project: <span className="text-teal-600">
+              {project?.category ? (typeof project.category === 'object' ? project.category.name : project.category) : (project?.projectType ? (project.projectType.web ? 'Web' : project.projectType.app ? 'App' : project.projectType.taxi ? 'Taxi' : 'N/A') : 'N/A')}
+            </span></p>
           </div>
         </motion.div>
 

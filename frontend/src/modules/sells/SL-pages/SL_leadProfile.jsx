@@ -40,6 +40,7 @@ const SL_leadProfile = () => {
   // State management
   const [lead, setLead] = useState(null)
   const [leadProfile, setLeadProfile] = useState(null)
+  const [categories, setCategories] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const [status, setStatus] = useState({
@@ -122,6 +123,8 @@ const SL_leadProfile = () => {
         setSalesTeam(team || [])
         const cl = await salesMeetingsService.getMyConvertedClients()
         setMyClients(cl || [])
+        const cats = await salesLeadService.getLeadCategories()
+        setCategories(cats || [])
       } catch (e) {
         // ignore
       }
@@ -153,11 +156,7 @@ const SL_leadProfile = () => {
         
         setConversionData({
           projectName: lp?.businessName || '',
-          projectType: {
-            web: lp?.projectType?.web || false,
-            app: lp?.projectType?.app || false,
-            taxi: lp?.projectType?.taxi || false
-          },
+          categoryId: lp?.category?._id || lp?.category || '',
           totalCost: lp?.estimatedCost?.toString() || '',
           finishedDays: '',
           advanceReceived: '',
@@ -677,7 +676,7 @@ const SL_leadProfile = () => {
       // Prepare project data
       const projectData = {
         projectName: conversionData.projectName.trim(),
-        projectType: conversionData.projectType,
+        categoryId: conversionData.categoryId,
         totalCost: parseFloat(conversionData.totalCost) || 0,
         finishedDays: conversionData.finishedDays ? parseInt(conversionData.finishedDays) : undefined,
         advanceReceived: conversionData.advanceReceived ? parseFloat(conversionData.advanceReceived) : 0,
@@ -694,7 +693,7 @@ const SL_leadProfile = () => {
       // Reset form
       setConversionData({
         projectName: '',
-        projectType: { web: false, app: false, taxi: false },
+        categoryId: '',
         totalCost: '',
         finishedDays: '',
         advanceReceived: '',
@@ -1169,47 +1168,22 @@ const SL_leadProfile = () => {
                   </div>
                 </div>
 
-                {/* Project Type */}
+                {/* Category */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Project Type <span className="text-red-500">*</span></label>
-                  <div className="flex flex-wrap gap-4">
-                    <label className="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={conversionData.projectType.web}
-                        onChange={(e) => setConversionData({
-                          ...conversionData,
-                          projectType: { ...conversionData.projectType, web: e.target.checked }
-                        })}
-                        className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">Web</span>
-                    </label>
-                    <label className="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={conversionData.projectType.app}
-                        onChange={(e) => setConversionData({
-                          ...conversionData,
-                          projectType: { ...conversionData.projectType, app: e.target.checked }
-                        })}
-                        className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">App</span>
-                    </label>
-                    <label className="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={conversionData.projectType.taxi}
-                        onChange={(e) => setConversionData({
-                          ...conversionData,
-                          projectType: { ...conversionData.projectType, taxi: e.target.checked }
-                        })}
-                        className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">Taxi</span>
-                    </label>
-                  </div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category <span className="text-red-500">*</span></label>
+                  <select
+                    value={conversionData.categoryId}
+                    onChange={(e) => setConversionData({ ...conversionData, categoryId: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    required
+                  >
+                    <option value="">Select Category</option>
+                    {categories.map((cat) => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Description */}

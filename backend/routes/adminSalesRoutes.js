@@ -40,6 +40,7 @@ const {
   // Analytics
   getSalesOverview,
   getCategoryAnalytics,
+  getCategoryFinancialDetails,
   getTeamPerformance
 } = require('../controllers/adminSalesController');
 const { protect, authorize } = require('../middlewares/auth');
@@ -192,6 +193,11 @@ router.get('/overview', getSalesOverview);
 // @desc    Get category analytics
 // @access  Private (Admin/HR only)
 router.get('/analytics/categories', getCategoryAnalytics);
+
+// @route   GET /api/admin/sales/analytics/categories/financial
+// @desc    Get category financial details
+// @access  Private (Admin/HR only)
+router.get('/analytics/categories/financial', getCategoryFinancialDetails);
 
 // @route   GET /api/admin/sales/analytics/team
 // @desc    Get team performance analytics

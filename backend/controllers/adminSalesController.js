@@ -532,7 +532,19 @@ const deleteLeadCategory = asyncHandler(async (req, res, next) => {
 // @route   GET /api/admin/sales/categories/performance
 // @access  Private (Admin/HR only)
 const getCategoryPerformance = asyncHandler(async (req, res, next) => {
-  const stats = await LeadCategory.getCategoryStatistics();
+  // Build date filter from query parameters
+  const dateFilter = {};
+  if (req.query.startDate || req.query.endDate) {
+    dateFilter.createdAt = {};
+    if (req.query.startDate) {
+      dateFilter.createdAt.$gte = new Date(req.query.startDate);
+    }
+    if (req.query.endDate) {
+      dateFilter.createdAt.$lte = new Date(req.query.endDate);
+    }
+  }
+  
+  const stats = await LeadCategory.getCategoryStatistics(dateFilter);
 
   res.status(200).json({
     success: true,
@@ -1431,12 +1443,41 @@ const getSalesOverview = asyncHandler(async (req, res, next) => {
 // @route   GET /api/admin/sales/analytics/categories
 // @access  Private (Admin/HR only)
 const getCategoryAnalytics = asyncHandler(async (req, res, next) => {
-  const stats = await LeadCategory.getCategoryStatistics();
+  // Build date filter from query parameters
+  const dateFilter = {};
+  if (req.query.startDate || req.query.endDate) {
+    dateFilter.createdAt = {};
+    if (req.query.startDate) {
+      const startDate = new Date(req.query.startDate);
+      startDate.setHours(0, 0, 0, 0); // Start of day
+      dateFilter.createdAt.$gte = startDate;
+    }
+    if (req.query.endDate) {
+      const endDate = new Date(req.query.endDate);
+      endDate.setHours(23, 59, 59, 999); // End of day
+      dateFilter.createdAt.$lte = endDate;
+    }
+  }
+  
+  const stats = await LeadCategory.getCategoryStatistics(dateFilter);
 
   res.status(200).json({
     success: true,
     count: stats.length,
     data: stats
+  });
+});
+
+// @desc    Get category financial details
+// @route   GET /api/admin/sales/analytics/categories/financial
+// @access  Private (Admin/HR only)
+const getCategoryFinancialDetails = asyncHandler(async (req, res, next) => {
+  const details = await LeadCategory.getCategoryFinancialDetails();
+  
+  res.status(200).json({
+    success: true,
+    count: details.length,
+    data: details
   });
 });
 
@@ -1595,5 +1636,6 @@ module.exports = {
   // Analytics
   getSalesOverview,
   getCategoryAnalytics,
+  getCategoryFinancialDetails,
   getTeamPerformance
 };

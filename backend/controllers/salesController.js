@@ -1628,19 +1628,48 @@ const getSalesDashboardStats = async (req, res) => {
     
     statusCounts.quotation_sent = actualQuotationSentCount;
 
-    // Count app_client leads: status='app_client' OR leadProfile.projectType.app=true
-    const actualAppClientCount = leadsWithProfiles.filter(lead => 
-      lead.status === 'app_client' || 
-      (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.app === true)
-    ).length;
+    // Count app_client leads: status='app_client' OR leadProfile.category='App' OR leadProfile.projectType.app=true (legacy)
+    const LeadCategory = require('../models/LeadCategory');
+    let appCategoryId = null;
+    try {
+      const appCategory = await LeadCategory.findOne({ name: 'App' });
+      if (appCategory) appCategoryId = appCategory._id.toString();
+    } catch (err) {
+      console.error('Error finding App category:', err);
+    }
+    
+    const actualAppClientCount = leadsWithProfiles.filter(lead => {
+      if (lead.status === 'app_client') return true;
+      if (lead.leadProfile) {
+        // Check category first (preferred)
+        if (appCategoryId && lead.leadProfile.category && lead.leadProfile.category.toString() === appCategoryId) return true;
+        // Legacy: fall back to projectType flag
+        if (lead.leadProfile.projectType && lead.leadProfile.projectType.app === true) return true;
+      }
+      return false;
+    }).length;
     
     statusCounts.app_client = actualAppClientCount;
 
-    // Count web leads: status='web' OR leadProfile.projectType.web=true
-    const actualWebCount = leadsWithProfiles.filter(lead => 
-      lead.status === 'web' || 
-      (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.web === true)
-    ).length;
+    // Count web leads: status='web' OR leadProfile.category='Web' OR leadProfile.projectType.web=true (legacy)
+    let webCategoryId = null;
+    try {
+      const webCategory = await LeadCategory.findOne({ name: 'Web' });
+      if (webCategory) webCategoryId = webCategory._id.toString();
+    } catch (err) {
+      console.error('Error finding Web category:', err);
+    }
+    
+    const actualWebCount = leadsWithProfiles.filter(lead => {
+      if (lead.status === 'web') return true;
+      if (lead.leadProfile) {
+        // Check category first (preferred)
+        if (webCategoryId && lead.leadProfile.category && lead.leadProfile.category.toString() === webCategoryId) return true;
+        // Legacy: fall back to projectType flag
+        if (lead.leadProfile.projectType && lead.leadProfile.projectType.web === true) return true;
+      }
+      return false;
+    }).length;
     
     statusCounts.web = actualWebCount;
 
@@ -1918,7 +1947,8 @@ const getLeadsByStatus = async (req, res) => {
         leadProfile: { $exists: true, $ne: null }
       };
     } else if (status === 'app_client') {
-      // Show leads with status='app_client' OR leadProfile.projectType.app=true
+      // Show leads with status='app_client' OR leadProfile.category='App' OR leadProfile.projectType.app=true (legacy)
+      // Note: Category filtering will be done in post-query filter since MongoDB doesn't support nested field filtering easily
       filter = { 
         assignedTo: assignedToValue,
         $or: [
@@ -1927,7 +1957,8 @@ const getLeadsByStatus = async (req, res) => {
         ]
       };
     } else if (status === 'web') {
-      // Show leads with status='web' OR leadProfile.projectType.web=true
+      // Show leads with status='web' OR leadProfile.category='Web' OR leadProfile.projectType.web=true (legacy)
+      // Note: Category filtering will be done in post-query filter since MongoDB doesn't support nested field filtering easily
       filter = { 
         assignedTo: assignedToValue,
         $or: [
@@ -2083,21 +2114,51 @@ const getLeadsByStatus = async (req, res) => {
       // Apply pagination after filtering
       leads = filteredLeads.slice(skip, skip + limitNum);
     } else if (status === 'app_client') {
-      // Get all leads matching the filter, then filter by projectType.app flag
+      // Get all leads matching the filter, then filter by category='App' or projectType.app flag (legacy)
+      const LeadCategory = require('../models/LeadCategory');
+      let appCategoryId = null;
+      try {
+        const appCategory = await LeadCategory.findOne({ name: 'App' });
+        if (appCategory) appCategoryId = appCategory._id.toString();
+      } catch (err) {
+        console.error('Error finding App category:', err);
+      }
+      
       const allLeads = await query;
-      const filteredLeads = allLeads.filter(lead => 
-        lead.status === 'app_client' || 
-        (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.app === true)
-      );
+      const filteredLeads = allLeads.filter(lead => {
+        if (lead.status === 'app_client') return true;
+        if (lead.leadProfile) {
+          // Check category first (preferred)
+          if (appCategoryId && lead.leadProfile.category && lead.leadProfile.category.toString() === appCategoryId) return true;
+          // Legacy: fall back to projectType flag
+          if (lead.leadProfile.projectType && lead.leadProfile.projectType.app === true) return true;
+        }
+        return false;
+      });
       // Apply pagination after filtering
       leads = filteredLeads.slice(skip, skip + limitNum);
     } else if (status === 'web') {
-      // Get all leads matching the filter, then filter by projectType.web flag
+      // Get all leads matching the filter, then filter by category='Web' or projectType.web flag (legacy)
+      const LeadCategory = require('../models/LeadCategory');
+      let webCategoryId = null;
+      try {
+        const webCategory = await LeadCategory.findOne({ name: 'Web' });
+        if (webCategory) webCategoryId = webCategory._id.toString();
+      } catch (err) {
+        console.error('Error finding Web category:', err);
+      }
+      
       const allLeads = await query;
-      const filteredLeads = allLeads.filter(lead => 
-        lead.status === 'web' || 
-        (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.web === true)
-      );
+      const filteredLeads = allLeads.filter(lead => {
+        if (lead.status === 'web') return true;
+        if (lead.leadProfile) {
+          // Check category first (preferred)
+          if (webCategoryId && lead.leadProfile.category && lead.leadProfile.category.toString() === webCategoryId) return true;
+          // Legacy: fall back to projectType flag
+          if (lead.leadProfile.projectType && lead.leadProfile.projectType.web === true) return true;
+        }
+        return false;
+      });
       // Apply pagination after filtering
       leads = filteredLeads.slice(skip, skip + limitNum);
     } else if (status === 'followup') {
@@ -2138,7 +2199,8 @@ const getLeadsByStatus = async (req, res) => {
           { client: { $in: clientIds } }
         ]
       })
-        .select('originLead client financialDetails budget projectType status progress')
+        .select('originLead client financialDetails budget projectType category status progress')
+        .populate('category', 'name')
         .lean();
       // Clients are already fetched above, no need to query again
       
@@ -2331,19 +2393,49 @@ const getLeadsByStatus = async (req, res) => {
         (lead.leadProfile && lead.leadProfile.quotationSent === true)
       ).length;
     } else if (status === 'app_client') {
+      const LeadCategory = require('../models/LeadCategory');
+      let appCategoryId = null;
+      try {
+        const appCategory = await LeadCategory.findOne({ name: 'App' });
+        if (appCategory) appCategoryId = appCategory._id.toString();
+      } catch (err) {
+        console.error('Error finding App category:', err);
+      }
+      
       const allLeads = await Lead.find(filter)
-        .populate('leadProfile', 'projectType');
-      totalLeads = allLeads.filter(lead => 
-        lead.status === 'app_client' || 
-        (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.app === true)
-      ).length;
+        .populate('leadProfile', 'projectType category');
+      totalLeads = allLeads.filter(lead => {
+        if (lead.status === 'app_client') return true;
+        if (lead.leadProfile) {
+          // Check category first (preferred)
+          if (appCategoryId && lead.leadProfile.category && lead.leadProfile.category.toString() === appCategoryId) return true;
+          // Legacy: fall back to projectType flag
+          if (lead.leadProfile.projectType && lead.leadProfile.projectType.app === true) return true;
+        }
+        return false;
+      }).length;
     } else if (status === 'web') {
+      const LeadCategory = require('../models/LeadCategory');
+      let webCategoryId = null;
+      try {
+        const webCategory = await LeadCategory.findOne({ name: 'Web' });
+        if (webCategory) webCategoryId = webCategory._id.toString();
+      } catch (err) {
+        console.error('Error finding Web category:', err);
+      }
+      
       const allLeads = await Lead.find(filter)
-        .populate('leadProfile', 'projectType');
-      totalLeads = allLeads.filter(lead => 
-        lead.status === 'web' || 
-        (lead.leadProfile && lead.leadProfile.projectType && lead.leadProfile.projectType.web === true)
-      ).length;
+        .populate('leadProfile', 'projectType category');
+      totalLeads = allLeads.filter(lead => {
+        if (lead.status === 'web') return true;
+        if (lead.leadProfile) {
+          // Check category first (preferred)
+          if (webCategoryId && lead.leadProfile.category && lead.leadProfile.category.toString() === webCategoryId) return true;
+          // Legacy: fall back to projectType flag
+          if (lead.leadProfile.projectType && lead.leadProfile.projectType.web === true) return true;
+        }
+        return false;
+      }).length;
     } else {
       totalLeads = await Lead.countDocuments(filter);
     }
@@ -3084,13 +3176,13 @@ const createLeadProfile = async (req, res) => {
   try {
     const salesId = req.sales.id;
     const leadId = req.params.id;
-    const { name, businessName, email, projectType, estimatedCost, description, quotationSent, demoSent } = req.body;
+    const { name, businessName, email, categoryId, category, projectType, estimatedCost, description, quotationSent, demoSent } = req.body;
 
     // Find lead and verify ownership
     const lead = await Lead.findOne({ 
       _id: leadId, 
       assignedTo: salesId 
-    });
+    }).populate('category');
 
     if (!lead) {
       return res.status(404).json({
@@ -3107,6 +3199,9 @@ const createLeadProfile = async (req, res) => {
       });
     }
 
+    // Use categoryId from request, or lead's category, or fall back to legacy projectType
+    const categoryIdToUse = categoryId || category || lead.category?._id || lead.category || null;
+    
     // Create lead profile
     const LeadProfile = require('../models/LeadProfile');
     const leadProfile = await LeadProfile.create({
@@ -3114,7 +3209,8 @@ const createLeadProfile = async (req, res) => {
       name,
       businessName,
       email,
-      projectType: projectType || { web: false, app: false, taxi: false },
+      category: categoryIdToUse, // Use category (preferred)
+      projectType: projectType || { web: false, app: false, taxi: false }, // Legacy support
       estimatedCost: estimatedCost || 0,
       description,
       quotationSent: quotationSent || false,
@@ -3209,7 +3305,8 @@ const convertLeadToClient = async (req, res) => {
       // FormData request - parse fields
       projectData = {
         projectName: req.body.projectName,
-        projectType: req.body.projectType ? (typeof req.body.projectType === 'string' ? JSON.parse(req.body.projectType) : req.body.projectType) : { web: false, app: false, taxi: false },
+        categoryId: req.body.categoryId || req.body.category,
+        projectType: req.body.projectType ? (typeof req.body.projectType === 'string' ? JSON.parse(req.body.projectType) : req.body.projectType) : null, // Legacy support
         totalCost: req.body.totalCost ? parseFloat(req.body.totalCost) : 0,
         finishedDays: req.body.finishedDays ? parseInt(req.body.finishedDays) : undefined,
         advanceReceived: req.body.advanceReceived ? parseFloat(req.body.advanceReceived) : 0,
@@ -3219,7 +3316,7 @@ const convertLeadToClient = async (req, res) => {
     }
 
     const { uploadToCloudinary } = require('../services/cloudinaryService');
-    const lead = await Lead.findById(id).populate('leadProfile');
+    const lead = await Lead.findById(id).populate('leadProfile').populate('category');
 
     if (!lead) {
       return res.status(404).json({ success: false, message: 'Lead not found' });
@@ -3280,7 +3377,10 @@ const convertLeadToClient = async (req, res) => {
 
     const name = projectData?.projectName || 'Sales Converted Project';
     const description = projectData?.description || lead.leadProfile.description || 'Created from sales conversion';
-    const projectType = projectData?.projectType || lead.leadProfile.projectType || { web: false, app: false, taxi: false };
+    // Use category from request, lead's category, or leadProfile's category (in that order)
+    const categoryId = projectData?.categoryId || lead.category?._id || lead.category || lead.leadProfile?.category || null;
+    // Legacy: Keep projectType for backward compatibility
+    const projectType = projectData?.projectType || lead.leadProfile?.projectType || { web: false, app: false, taxi: false };
     const finishedDays = projectData?.finishedDays ? parseInt(projectData.finishedDays) : undefined;
 
     // Handle screenshot upload if present
@@ -3329,7 +3429,8 @@ const convertLeadToClient = async (req, res) => {
       name,
       description,
       client: client._id,
-      projectType,
+      category: categoryId, // Use category (preferred)
+      projectType, // Legacy support for existing projects
       status: 'pending-assignment',
       budget: totalCost,
       startDate: new Date(),
@@ -3836,7 +3937,8 @@ const getClientProfile = async (req, res) => {
     // Reload project with fresh data to ensure financialDetails are up-to-date
     if (primaryProject) {
       primaryProject = await Project.findById(primaryProject._id)
-        .select('name description status progress projectType financialDetails budget startDate dueDate finishedDays installmentPlan');
+        .select('name description status progress projectType category financialDetails budget startDate dueDate finishedDays installmentPlan')
+        .populate('category', 'name');
     }
 
     // Calculate financial summary from primary project
@@ -3900,12 +4002,25 @@ const getClientProfile = async (req, res) => {
       workProgress = primaryProject.progress || 0;
       status = primaryProject.status || 'N/A';
       
-      // Format project type
-      const pt = primaryProject.projectType || {};
-      if (pt.web) projectType = 'Web';
-      else if (pt.app) projectType = 'App';
-      else if (pt.taxi) projectType = 'Taxi';
-      else projectType = 'N/A';
+      // Format project type - use category first, then fall back to legacy projectType
+      if (primaryProject.category) {
+        // If category is populated, use its name
+        if (typeof primaryProject.category === 'object' && primaryProject.category.name) {
+          projectType = primaryProject.category.name;
+        } else {
+          // Category is just an ObjectId, need to populate it
+          const LeadCategory = require('../models/LeadCategory');
+          const categoryDoc = await LeadCategory.findById(primaryProject.category);
+          projectType = categoryDoc ? categoryDoc.name : 'N/A';
+        }
+      } else {
+        // Legacy: fall back to projectType flags
+        const pt = primaryProject.projectType || {};
+        if (pt.web) projectType = 'Web';
+        else if (pt.app) projectType = 'App';
+        else if (pt.taxi) projectType = 'Taxi';
+        else projectType = 'N/A';
+      }
 
       startDate = primaryProject.startDate;
       expectedCompletion = primaryProject.dueDate;

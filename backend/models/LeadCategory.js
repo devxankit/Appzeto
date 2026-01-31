@@ -109,10 +109,29 @@ leadCategorySchema.statics.getAllWithPerformance = async function() {
 };
 
 // Static method to get category statistics
-leadCategorySchema.statics.getCategoryStatistics = async function() {
+// Now includes both Leads and Projects for comprehensive category performance
+leadCategorySchema.statics.getCategoryStatistics = async function(dateFilter = {}) {
   const Lead = mongoose.model('Lead');
+  const Project = mongoose.model('Project');
   
-  const stats = await Lead.aggregate([
+  // Get ALL categories first (to show all categories even if they have 0 data)
+  const allCategories = await this.find({}).sort({ name: 1 });
+  
+  // Build match filter for leads
+  const leadMatchFilter = { category: { $exists: true, $ne: null } };
+  if (dateFilter.createdAt && (dateFilter.createdAt.$gte || dateFilter.createdAt.$lte)) {
+    leadMatchFilter.createdAt = dateFilter.createdAt;
+  }
+  
+  // Build match filter for projects
+  const projectMatchFilter = { category: { $exists: true, $ne: null } };
+  if (dateFilter.createdAt && (dateFilter.createdAt.$gte || dateFilter.createdAt.$lte)) {
+    projectMatchFilter.createdAt = dateFilter.createdAt;
+  }
+  
+  // Get lead statistics grouped by category
+  const leadStats = await Lead.aggregate([
+    { $match: leadMatchFilter },
     {
       $group: {
         _id: '$category',
@@ -129,44 +148,287 @@ leadCategorySchema.statics.getCategoryStatistics = async function() {
           }
         }
       }
-    },
+    }
+  ]);
+  
+  // Get project statistics grouped by category
+  const projectStats = await Project.aggregate([
+    { $match: projectMatchFilter },
     {
-      $lookup: {
-        from: 'leadcategories',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'category'
-      }
-    },
-    {
-      $unwind: '$category'
-    },
-    {
-      $project: {
-        categoryName: '$category.name',
-        categoryColor: '$category.color',
-        categoryIcon: '$category.icon',
-        totalLeads: 1,
-        convertedLeads: 1,
-        conversionRate: {
-          $multiply: [
-            { $divide: ['$convertedLeads', '$totalLeads'] },
-            100
+      $addFields: {
+        projectValue: {
+          $ifNull: [
+            '$financialDetails.totalCost',
+            { $ifNull: ['$budget', 0] }
           ]
-        },
-        totalValue: 1,
-        convertedValue: 1,
-        averageValue: {
-          $divide: ['$totalValue', '$totalLeads']
         }
       }
     },
     {
-      $sort: { totalLeads: -1 }
+      $group: {
+        _id: '$category',
+        totalProjects: { $sum: 1 },
+        completedProjects: {
+          $sum: {
+            $cond: [{ $eq: ['$status', 'completed'] }, 1, 0]
+          }
+        },
+        totalProjectValue: { $sum: '$projectValue' },
+        completedProjectValue: {
+          $sum: {
+            $cond: [
+              { $eq: ['$status', 'completed'] },
+              '$projectValue',
+              0
+            ]
+          }
+        }
+      }
     }
   ]);
+  
+  // Combine lead and project stats by category
+  const combinedStats = {};
+  
+  // Initialize stats for ALL categories (so we show all categories even with 0 data)
+  allCategories.forEach(category => {
+    const categoryId = category._id.toString();
+    combinedStats[categoryId] = {
+      categoryId: categoryId,
+      totalLeads: 0,
+      convertedLeads: 0,
+      totalValue: 0,
+      convertedValue: 0,
+      totalProjects: 0,
+      completedProjects: 0,
+      totalProjectValue: 0,
+      completedProjectValue: 0
+    };
+  });
+  
+  // Process lead stats and merge
+  leadStats.forEach(stat => {
+    const categoryId = stat._id?.toString();
+    if (categoryId && combinedStats[categoryId]) {
+      combinedStats[categoryId].totalLeads = stat.totalLeads || 0;
+      combinedStats[categoryId].convertedLeads = stat.convertedLeads || 0;
+      combinedStats[categoryId].totalValue = stat.totalValue || 0;
+      combinedStats[categoryId].convertedValue = stat.convertedValue || 0;
+    }
+  });
+  
+  // Process project stats and merge
+  projectStats.forEach(stat => {
+    const categoryId = stat._id?.toString();
+    if (categoryId && combinedStats[categoryId]) {
+      combinedStats[categoryId].totalProjects = stat.totalProjects || 0;
+      combinedStats[categoryId].completedProjects = stat.completedProjects || 0;
+      combinedStats[categoryId].totalProjectValue = stat.totalProjectValue || 0;
+      combinedStats[categoryId].completedProjectValue = stat.completedProjectValue || 0;
+    }
+  });
+  
+  // Build final result with category details - include ALL categories
+  const result = allCategories.map(category => {
+    const stat = combinedStats[category._id.toString()];
+    if (!stat) {
+      // Fallback if category not in stats (shouldn't happen, but safety check)
+      return {
+        categoryName: category.name,
+        categoryColor: category.color,
+        categoryIcon: category.icon,
+        totalLeads: 0,
+        convertedLeads: 0,
+        conversionRate: 0,
+        totalValue: 0,
+        convertedValue: 0,
+        totalProjects: 0,
+        completedProjects: 0,
+        totalProjectValue: 0,
+        completedProjectValue: 0,
+        averageValue: 0
+      };
+    }
+    
+    const totalLeads = stat.totalLeads || 0;
+    const convertedLeads = stat.convertedLeads || 0;
+    const totalProjects = stat.totalProjects || 0;
+    
+    return {
+      categoryName: category.name,
+      categoryColor: category.color,
+      categoryIcon: category.icon,
+      totalLeads: totalLeads,
+      convertedLeads: convertedLeads,
+      conversionRate: totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0,
+      totalValue: stat.totalValue || 0,
+      convertedValue: stat.convertedValue || 0,
+      totalProjects: totalProjects,
+      completedProjects: stat.completedProjects || 0,
+      totalProjectValue: stat.totalProjectValue || 0,
+      completedProjectValue: stat.completedProjectValue || 0,
+      averageValue: totalLeads > 0 ? (stat.totalValue || 0) / totalLeads : 0
+    };
+  });
+  
+  // Sort by converted leads (performance metric) - categories with 0 will be at the end
+  result.sort((a, b) => {
+    // First sort by converted leads (descending)
+    if (b.convertedLeads !== a.convertedLeads) {
+      return b.convertedLeads - a.convertedLeads;
+    }
+    // If same converted leads, sort by total leads
+    return b.totalLeads - a.totalLeads;
+  });
+  
+  return result;
+};
 
-  return stats;
+// Static method to get category financial details including recovery
+leadCategorySchema.statics.getCategoryFinancialDetails = async function() {
+  const Project = mongoose.model('Project');
+  const Lead = mongoose.model('Lead');
+  const PaymentReceipt = require('./PaymentReceipt');
+  
+  // Get ALL categories
+  const allCategories = await this.find({}).sort({ name: 1 });
+  
+  // Get all projects - include those with direct category AND those with originLead
+  const projects = await Project.find({})
+    .select('category originLead financialDetails.totalCost financialDetails.advanceReceived budget installmentPlan')
+    .populate('originLead', 'category')
+    .lean();
+  
+  // Create a map of leadId -> categoryId for projects without direct category
+  const leadCategoryMap = {};
+  const leadIds = projects
+    .filter(p => p.originLead && !p.category)
+    .map(p => p.originLead?._id || p.originLead);
+  
+  if (leadIds.length > 0) {
+    const leads = await Lead.find({ _id: { $in: leadIds } })
+      .select('category')
+      .lean();
+    leads.forEach(lead => {
+      if (lead.category) {
+        leadCategoryMap[lead._id.toString()] = lead.category.toString();
+      }
+    });
+  }
+  
+  // Get all approved payment receipts for all projects
+  const projectIds = projects.map(p => p._id);
+  const approvedReceipts = await PaymentReceipt.find({
+    project: { $in: projectIds },
+    status: 'approved'
+  }).select('project amount').lean();
+  
+  // Create map of projectId -> total recovery
+  const recoveryByProject = {};
+  approvedReceipts.forEach(receipt => {
+    const projectId = receipt.project?.toString();
+    if (projectId) {
+      if (!recoveryByProject[projectId]) {
+        recoveryByProject[projectId] = 0;
+      }
+      recoveryByProject[projectId] += Number(receipt.amount || 0);
+    }
+  });
+  
+  // Calculate paid installments for each project
+  projects.forEach(project => {
+    const projectId = project._id.toString();
+    if (project.installmentPlan && Array.isArray(project.installmentPlan.installments)) {
+      const paidInstallments = project.installmentPlan.installments
+        .filter(inst => inst.status === 'paid')
+        .reduce((sum, inst) => sum + Number(inst.amount || 0), 0);
+      
+      if (!recoveryByProject[projectId]) {
+        recoveryByProject[projectId] = 0;
+      }
+      recoveryByProject[projectId] += paidInstallments;
+    }
+  });
+  
+  // Aggregate by category
+  const categoryStats = {};
+  
+  allCategories.forEach(category => {
+    const categoryId = category._id.toString();
+    categoryStats[categoryId] = {
+      categoryId: categoryId,
+      categoryName: category.name,
+      categoryColor: category.color,
+      totalProjectCost: 0,
+      totalRecovery: 0,
+      totalPendingRecovery: 0,
+      totalProjects: 0
+    };
+  });
+  
+  projects.forEach(project => {
+    // Get category: direct category first, then from originLead, then from leadCategoryMap
+    let categoryId = null;
+    if (project.category) {
+      categoryId = project.category.toString();
+    } else if (project.originLead?.category) {
+      categoryId = project.originLead.category.toString();
+    } else if (project.originLead?._id) {
+      categoryId = leadCategoryMap[project.originLead._id.toString()];
+    }
+    
+    if (!categoryId || !categoryStats[categoryId]) return;
+    
+    // Calculate project cost: prefer financialDetails.totalCost, then budget, then 0
+    const projectCost = Number(
+      project.financialDetails?.totalCost || 
+      project.budget || 
+      0
+    );
+    
+    // Get recovery amount
+    const projectRecovery = recoveryByProject[project._id.toString()] || 0;
+    
+    // Only count projects with actual cost > 0 (to avoid counting empty projects)
+    if (projectCost > 0 || projectRecovery > 0) {
+      categoryStats[categoryId].totalProjectCost += projectCost;
+      categoryStats[categoryId].totalRecovery += projectRecovery;
+      // Calculate pending recovery (total cost - recovery)
+      const pendingRecovery = Math.max(0, projectCost - projectRecovery);
+      categoryStats[categoryId].totalPendingRecovery += pendingRecovery;
+      categoryStats[categoryId].totalProjects += 1;
+    }
+  });
+  
+  // Get conversion data from getCategoryStatistics
+  const conversionStats = await this.getCategoryStatistics({});
+  const conversionMap = {};
+  conversionStats.forEach(stat => {
+    // Map by categoryName since getCategoryStatistics returns names
+    conversionMap[stat.categoryName] = {
+      totalLeads: stat.totalLeads || 0,
+      convertedLeads: stat.convertedLeads || 0,
+      conversionRate: stat.conversionRate || 0
+    };
+  });
+  
+  // Combine data - return all categories with their financial details
+  const result = Object.values(categoryStats).map(stat => {
+    const conversion = conversionMap[stat.categoryName] || { totalLeads: 0, convertedLeads: 0, conversionRate: 0 };
+    return {
+      categoryName: stat.categoryName,
+      categoryColor: stat.categoryColor,
+      totalProjectCost: stat.totalProjectCost,
+      totalRecovery: stat.totalRecovery,
+      totalPendingRecovery: stat.totalPendingRecovery,
+      totalProjects: stat.totalProjects,
+      conversionRatio: conversion.conversionRate || 0,
+      totalLeads: conversion.totalLeads || 0,
+      convertedLeads: conversion.convertedLeads || 0
+    };
+  });
+  
+  return result;
 };
 
 // Pre-delete middleware to check if category has leads

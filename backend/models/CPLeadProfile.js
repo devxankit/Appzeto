@@ -30,7 +30,13 @@ const cpLeadProfileSchema = new mongoose.Schema({
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Valid email required']
   },
   
-  // Project requirements (custom for Channel Partners)
+  // Project category (synced with lead category)
+  category: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LeadCategory'
+  },
+  
+  // Legacy project type flags (kept for backward compatibility)
   projectType: {
     web: { type: Boolean, default: false },
     app: { type: Boolean, default: false },
@@ -117,10 +123,12 @@ const cpLeadProfileSchema = new mongoose.Schema({
 cpLeadProfileSchema.index({ createdBy: 1 });
 cpLeadProfileSchema.index({ createdAt: -1 });
 cpLeadProfileSchema.index({ 'location.city': 1 });
+cpLeadProfileSchema.index({ category: 1 });
 
-// Virtual to check if at least one project type is selected
+// Virtual to check if category or project type is set
 cpLeadProfileSchema.virtual('hasProjectType').get(function() {
-  return this.projectType.web || this.projectType.app || this.projectType.taxi || this.projectType.other;
+  // Check category first (preferred), then fall back to legacy projectType flags
+  return !!this.category || this.projectType.web || this.projectType.app || this.projectType.taxi || this.projectType.other;
 });
 
 // Method to add a note to the profile
