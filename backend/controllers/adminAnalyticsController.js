@@ -11,10 +11,73 @@ const AdminFinance = require('../models/AdminFinance');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 
+// Helper function to get date range based on filter
+const getDateRangeFromFilter = (timeFilter, startDate, endDate) => {
+  const now = new Date();
+  let dateFilter = {};
+  let periodStart, periodEnd;
+  
+  // If no timeFilter or 'all', return empty filter (show all data)
+  if (!timeFilter || timeFilter === 'all') {
+    return { dateFilter: null, periodStart: null, periodEnd: null };
+  }
+  
+  if (timeFilter === 'custom' && startDate && endDate) {
+    periodStart = new Date(startDate);
+    periodStart.setHours(0, 0, 0, 0);
+    periodEnd = new Date(endDate);
+    periodEnd.setHours(23, 59, 59, 999);
+    dateFilter = { $gte: periodStart, $lte: periodEnd };
+  } else {
+    switch (timeFilter) {
+      case 'day':
+        periodStart = new Date(now);
+        periodStart.setHours(0, 0, 0, 0);
+        periodEnd = new Date(now);
+        periodEnd.setHours(23, 59, 59, 999);
+        dateFilter = { $gte: periodStart, $lte: periodEnd };
+        break;
+      case 'week':
+        periodStart = new Date(now);
+        periodStart.setDate(periodStart.getDate() - 6);
+        periodStart.setHours(0, 0, 0, 0);
+        periodEnd = new Date(now);
+        periodEnd.setHours(23, 59, 59, 999);
+        dateFilter = { $gte: periodStart, $lte: periodEnd };
+        break;
+      case 'month':
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodStart.setHours(0, 0, 0, 0);
+        periodEnd = new Date(now);
+        periodEnd.setHours(23, 59, 59, 999);
+        dateFilter = { $gte: periodStart, $lte: periodEnd };
+        break;
+      case 'year':
+        periodStart = new Date(now.getFullYear(), 0, 1);
+        periodStart.setHours(0, 0, 0, 0);
+        periodEnd = new Date(now);
+        periodEnd.setHours(23, 59, 59, 999);
+        dateFilter = { $gte: periodStart, $lte: periodEnd };
+        break;
+      default:
+        // Default to current month
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodStart.setHours(0, 0, 0, 0);
+        periodEnd = new Date(now);
+        periodEnd.setHours(23, 59, 59, 999);
+        dateFilter = { $gte: periodStart, $lte: periodEnd };
+    }
+  }
+  
+  return { dateFilter, periodStart, periodEnd };
+};
+
 // @desc    Get admin dashboard statistics
 // @route   GET /api/admin/analytics/dashboard
 // @access  Admin only
 const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
+  const { timeFilter, startDate, endDate } = req.query;
+  
   const now = new Date();
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
@@ -28,26 +91,47 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  
+  // Get date range based on filter (null if 'all' or no filter)
+  const { dateFilter, periodStart, periodEnd } = getDateRangeFromFilter(timeFilter, startDate, endDate);
 
-  // Get user statistics
+  // Get user statistics - apply date filter for clients if filter is provided
+  const clientFilter = (timeFilter && dateFilter) ? { createdAt: dateFilter } : {};
   const [totalEmployees, totalPMs, totalSales, totalClients, activeEmployees, activePMs, activeSales, activeClients] = await Promise.all([
     Employee.countDocuments(),
     PM.countDocuments(),
     Sales.countDocuments(),
-    Client.countDocuments(),
+    Client.countDocuments((timeFilter && dateFilter) ? clientFilter : {}),
     Employee.countDocuments({ isActive: true }),
     PM.countDocuments({ isActive: true }),
     Sales.countDocuments({ isActive: true }),
-    Client.countDocuments({ isActive: true })
+    Client.countDocuments({ 
+      isActive: true,
+      ...((timeFilter && dateFilter) ? { createdAt: dateFilter } : {})
+    })
   ]);
 
-  // Users new this month
-  const newUsersThisMonth = await Promise.all([
-    Employee.countDocuments({ createdAt: { $gte: currentMonthStart } }),
-    PM.countDocuments({ createdAt: { $gte: currentMonthStart } }),
-    Sales.countDocuments({ createdAt: { $gte: currentMonthStart } }),
-    Client.countDocuments({ createdAt: { $gte: currentMonthStart } })
-  ]).then(([employees, pms, sales, clients]) => employees + pms + sales + clients);
+  // Users new in the filtered period (or this month if no filter, or all time if 'all')
+  const newUsersPeriod = (timeFilter && dateFilter && periodStart)
+    ? await Promise.all([
+        Employee.countDocuments({ createdAt: dateFilter }),
+        PM.countDocuments({ createdAt: dateFilter }),
+        Sales.countDocuments({ createdAt: dateFilter }),
+        Client.countDocuments({ createdAt: dateFilter })
+      ]).then(([employees, pms, sales, clients]) => employees + pms + sales + clients)
+    : (!timeFilter || timeFilter === 'all')
+    ? await Promise.all([
+        Employee.countDocuments(),
+        PM.countDocuments(),
+        Sales.countDocuments(),
+        Client.countDocuments()
+      ]).then(([employees, pms, sales, clients]) => employees + pms + sales + clients)
+    : await Promise.all([
+        Employee.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+        PM.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+        Sales.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+        Client.countDocuments({ createdAt: { $gte: currentMonthStart } })
+      ]).then(([employees, pms, sales, clients]) => employees + pms + sales + clients);
 
   // Calculate user growth
   const totalUsersLastMonth = await Promise.all([
@@ -62,16 +146,28 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
     ? ((totalUsersNow - totalUsersLastMonth) / totalUsersLastMonth) * 100 
     : 0;
 
-  // Get project statistics
+  // Get project statistics - apply date filter for overdue projects if filter is provided
+  // For overdue projects, filter by creation date to show overdue projects created during the period
+  // This is simpler and more intuitive - shows overdue projects from the selected time period
+  let overdueFilter = {
+    dueDate: { $lt: now }, // Must be overdue
+    status: { $nin: ['completed', 'cancelled'] }
+  };
+  
+  // If filter is provided, add creation date filter to show overdue projects from that period
+  if (timeFilter && dateFilter && periodStart && periodEnd) {
+    overdueFilter = {
+      ...overdueFilter,
+      createdAt: dateFilter // Created during the filter period
+    };
+  }
+  
   const [totalProjects, activeProjects, completedProjects, onHoldProjects, overdueProjects] = await Promise.all([
     Project.countDocuments(),
     Project.countDocuments({ status: { $in: ['planning', 'active', 'on-hold', 'testing'] } }),
     Project.countDocuments({ status: 'completed' }),
     Project.countDocuments({ status: 'on-hold' }),
-    Project.countDocuments({
-      dueDate: { $lt: now },
-      status: { $nin: ['completed', 'cancelled'] }
-    })
+    Project.countDocuments(overdueFilter)
   ]);
 
   // Get project financial data
@@ -94,10 +190,14 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
     ? (projectFinancialData.completedProjects / projectFinancialData.totalProjects) * 100 
     : 0;
 
-  // Get sales statistics
+  // Get sales statistics - apply date filter if provided
+  const leadDateFilter = (timeFilter && dateFilter) ? { createdAt: dateFilter } : {};
   const [totalLeads, convertedLeads] = await Promise.all([
-    Lead.countDocuments(),
-    Lead.countDocuments({ status: 'converted' })
+    Lead.countDocuments((timeFilter && dateFilter) ? leadDateFilter : {}),
+    Lead.countDocuments({ 
+      status: 'converted',
+      ...((timeFilter && dateFilter) ? { createdAt: dateFilter } : {})
+    })
   ]);
 
   const conversionRate = totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0;
@@ -289,10 +389,19 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
   }
 
   // Add overdue count (projects with dueDate in past and not completed/cancelled)
-  const overdueCount = await Project.countDocuments({
+  // Apply date filter if provided - filter by createdAt to show overdue projects from that period
+  let overdueCountFilter = {
     dueDate: { $lt: now },
     status: { $nin: ['completed', 'cancelled'] }
-  });
+  };
+  // If filter is provided, add creation date filter
+  if (timeFilter && dateFilter && periodStart && periodEnd) {
+    overdueCountFilter = {
+      ...overdueCountFilter,
+      createdAt: dateFilter // Created during the filter period
+    };
+  }
+  const overdueCount = await Project.countDocuments(overdueCountFilter);
 
   if (overdueCount > 0) {
     statusCounts['Overdue'] = {
@@ -334,7 +443,7 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
       employees: totalEmployees,
       clients: totalClients,
       active: activeEmployees + activePMs + activeSales + activeClients,
-      newThisMonth: newUsersThisMonth,
+      newThisMonth: newUsersPeriod,
       growth: parseFloat(userGrowth.toFixed(2))
     },
     projects: {

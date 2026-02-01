@@ -2,9 +2,19 @@ import { apiRequest } from './baseApiService';
 
 class AdminDashboardService {
   // Get comprehensive dashboard statistics
-  async getDashboardStats() {
+  async getDashboardStats(params = {}) {
     try {
-      const response = await apiRequest('/admin/analytics/dashboard', { method: 'GET' });
+      const queryParams = new URLSearchParams();
+      
+      // Add query parameters
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+
+      const url = `/admin/analytics/dashboard${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await apiRequest(url, { method: 'GET' });
       return response;
     } catch (error) {
       console.error('Error fetching dashboard statistics:', error);

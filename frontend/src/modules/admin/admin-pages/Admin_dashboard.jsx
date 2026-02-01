@@ -94,7 +94,7 @@ const Admin_dashboard = () => {
   const [error, setError] = useState(null)
 
   // Filter state - default to 'month'
-  const [filterType, setFilterType] = useState('month') // 'day', 'week', 'month', 'year', 'custom'
+  const [filterType, setFilterType] = useState('month') // 'day', 'week', 'month', 'year', 'custom', 'all'
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [tempStartDate, setTempStartDate] = useState('') // Temporary state for date picker
@@ -365,6 +365,16 @@ const Admin_dashboard = () => {
 
   // Helper function to get date range based on filter type
   const getDateRange = () => {
+    // If 'all' filter is selected, return null to indicate no date filtering
+    if (filterType === 'all') {
+      return {
+        startDate: null,
+        endDate: null,
+        startISO: null,
+        endISO: null
+      }
+    }
+    
     const today = new Date()
     today.setHours(23, 59, 59, 999) // End of today
     
@@ -430,6 +440,8 @@ const Admin_dashboard = () => {
         return 'This Month'
       case 'year':
         return 'This Year'
+      case 'all':
+        return 'All Time'
       case 'custom':
         if (startDate && endDate) {
           const start = new Date(startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
@@ -452,25 +464,38 @@ const Admin_dashboard = () => {
       const dateRange = getDateRange()
 
       // Map filter type to API timeFilter
-      let timeFilter = 'month' // default
+      let timeFilter = null // null means no filter (all time)
       if (filterType === 'day') timeFilter = 'day'
       else if (filterType === 'week') timeFilter = 'week'
       else if (filterType === 'month') timeFilter = 'month'
       else if (filterType === 'year') timeFilter = 'year'
       else if (filterType === 'custom') timeFilter = 'custom'
+      // 'all' keeps timeFilter as null
 
       const financeParams = {}
-      if (filterType === 'custom' && dateRange.startDate && dateRange.endDate) {
+      const dashboardParams = {}
+      
+      // Build dashboard params with date filters
+      if (filterType === 'all') {
+        // For 'all' filter, don't pass any timeFilter or date params
+        // This will show all-time data
+      } else if (filterType === 'custom' && dateRange.startDate && dateRange.endDate) {
+        dashboardParams.startDate = dateRange.startDate
+        dashboardParams.endDate = dateRange.endDate
         financeParams.startDate = dateRange.startDate
         financeParams.endDate = dateRange.endDate
+      } else if (filterType !== 'custom' && timeFilter) {
+        // For non-custom filters, pass the timeFilter
+        dashboardParams.timeFilter = timeFilter
       }
 
       const [dashboardResponse, financeResponse] = await Promise.all([
-        adminDashboardService.getDashboardStats().catch(err => {
+        adminDashboardService.getDashboardStats(dashboardParams).catch(err => {
           console.error('Error fetching dashboard stats:', err)
           return null
         }),
-        adminFinanceService.getFinanceStatistics(timeFilter, financeParams).catch(err => {
+        // For 'all' filter, pass 'all' to finance service, otherwise pass timeFilter
+        adminFinanceService.getFinanceStatistics(filterType === 'all' ? 'all' : (timeFilter || 'month'), financeParams).catch(err => {
           console.error('Error fetching finance statistics:', err)
           return null
         })
@@ -587,8 +612,9 @@ const Admin_dashboard = () => {
     }
 
   useEffect(() => {
-    // Only load dashboard data if filterType or actual date range changes
-    if (filterType !== 'custom' || (startDate && endDate)) {
+    // Load dashboard data when filter changes
+    // For 'all' filter, load immediately. For 'custom', only load if dates are set
+    if (filterType === 'all' || filterType !== 'custom' || (startDate && endDate)) {
       loadDashboardData()
     }
 
@@ -733,6 +759,7 @@ const Admin_dashboard = () => {
                       </p>
                       <div className="space-y-0.5">
                         {[
+                          { type: 'all', label: 'All Time', Icon: Database },
                           { type: 'day', label: 'Today', Icon: Calendar },
                           { type: 'week', label: 'This Week', Icon: Calendar },
                           { type: 'month', label: 'This Month', Icon: BarChart3 },
@@ -1037,7 +1064,7 @@ const Admin_dashboard = () => {
                 <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100">
                   <Target className="h-3 w-3 text-blue-600" />
                 </div>
-                <p className="text-xs font-medium text-blue-700 text-right">Conversion Rate</p>
+                <p className="text-xs font-medium text-blue-700 text-right">{getFilterLabel()} Conversion Rate</p>
               </div>
               <div>
                 <p className="text-lg font-bold text-blue-700">{dashboardData.sales.conversionRate?.toFixed(2) || 0}%</p>
@@ -1051,7 +1078,7 @@ const Admin_dashboard = () => {
                 <div className="p-1.5 rounded-lg bg-gradient-to-br from-red-100 to-rose-100">
                   <AlertTriangle className="h-3 w-3 text-red-600" />
                 </div>
-                <p className="text-xs font-medium text-red-700 text-right">Overdue Projects</p>
+                <p className="text-xs font-medium text-red-700 text-right">{getFilterLabel()} Overdue Projects</p>
               </div>
               <div>
                 <p className="text-lg font-bold text-red-700">{formatNumber(dashboardData.projects.overdue)}</p>
@@ -1065,7 +1092,7 @@ const Admin_dashboard = () => {
                 <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-100 to-purple-100">
                   <Users className="h-3 w-3 text-indigo-600" />
                 </div>
-                <p className="text-xs font-medium text-indigo-700 text-right">Total Clients</p>
+                <p className="text-xs font-medium text-indigo-700 text-right">{getFilterLabel()} Total Clients</p>
               </div>
               <div>
                 <p className="text-lg font-bold text-indigo-700">{formatNumber(dashboardData.users.clients)}</p>

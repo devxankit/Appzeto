@@ -37,6 +37,18 @@ import {
   FiX,
   FiFileText
 } from 'react-icons/fi'
+import { 
+  Filter,
+  Calendar,
+  BarChart3,
+  TrendingUp,
+  Database,
+  CalendarDays,
+  ChevronDown,
+  Check,
+  X as XIcon
+} from 'lucide-react'
+import { Button } from '../../../components/ui/button'
 import { Combobox } from '../../../components/ui/combobox'
 import { MultiSelect } from '../../../components/ui/multi-select'
 import Loading from '../../../components/ui/loading'
@@ -59,6 +71,18 @@ const Admin_project_management = () => {
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
+  
+  // Date range filter state
+  const [dateFilterType, setDateFilterType] = useState('all') // 'day', 'week', 'month', 'year', 'custom', 'all'
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [tempStartDate, setTempStartDate] = useState('')
+  const [tempEndDate, setTempEndDate] = useState('')
+  const [showDateFilterDropdown, setShowDateFilterDropdown] = useState(false)
+  const [showDateRangePicker, setShowDateRangePicker] = useState(false)
+  
+  // Category filter state
+  const [selectedCategory, setSelectedCategory] = useState('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -201,6 +225,7 @@ const Admin_project_management = () => {
   const [pmSelectOptions, setPmSelectOptions] = useState([])
   const [employeeOptions, setEmployeeOptions] = useState([])
   const [categories, setCategories] = useState([])
+  const [allClients, setAllClients] = useState([]) // Store all clients for category lookup
   const [createModalLoading, setCreateModalLoading] = useState(false)
   const [createModalError, setCreateModalError] = useState(null)
   const [isSubmittingProject, setIsSubmittingProject] = useState(false)
@@ -245,9 +270,183 @@ const Admin_project_management = () => {
     loadData()
   }, [])
 
+  // Helper function to get date range based on filter type
+  const getDateRange = () => {
+    if (dateFilterType === 'all') {
+      return { startDate: null, endDate: null, startISO: null, endISO: null }
+    }
+    
+    const today = new Date()
+    today.setHours(23, 59, 59, 999)
+    
+    let start, end
+    
+    switch (dateFilterType) {
+      case 'day':
+        start = new Date(today)
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'week':
+        start = new Date(today)
+        start.setDate(today.getDate() - 6)
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'month':
+        start = new Date(today.getFullYear(), today.getMonth(), 1)
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'year':
+        start = new Date(today.getFullYear(), 0, 1)
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'custom':
+        if (startDate && endDate) {
+          start = new Date(startDate)
+          start.setHours(0, 0, 0, 0)
+          end = new Date(endDate)
+          end.setHours(23, 59, 59, 999)
+        } else {
+          start = new Date(today.getFullYear(), today.getMonth(), 1)
+          start.setHours(0, 0, 0, 0)
+          end = today
+        }
+        break
+      default:
+        start = new Date(today.getFullYear(), today.getMonth(), 1)
+        start.setHours(0, 0, 0, 0)
+        end = today
+    }
+    
+    return {
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0],
+      startISO: start.toISOString(),
+      endISO: end.toISOString()
+    }
+  }
+
+  // Helper function to get filter label
+  const getDateFilterLabel = () => {
+    switch (dateFilterType) {
+      case 'day':
+        return 'Today'
+      case 'week':
+        return 'This Week'
+      case 'month':
+        return 'This Month'
+      case 'year':
+        return 'This Year'
+      case 'all':
+        return 'All Time'
+      case 'custom':
+        if (startDate && endDate) {
+          const start = new Date(startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+          const end = new Date(endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+          return `${start} - ${end}`
+        }
+        return 'Custom Range'
+      default:
+        return 'All Time'
+    }
+  }
+
+  // Helper function to check if a date is within the filter range
+  const isDateInRange = (dateString) => {
+    if (dateFilterType === 'all' || !dateString) return true
+    
+    const dateRange = getDateRange()
+    if (!dateRange.startISO || !dateRange.endISO) return true
+    
+    try {
+      // Handle different date formats
+      let date
+      if (typeof dateString === 'string') {
+        // Try parsing the date string - handle various formats
+        date = new Date(dateString)
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+          // Try parsing as ISO date without time (YYYY-MM-DD format)
+          if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            date = new Date(dateString + 'T00:00:00')
+          } else {
+            // Try other common formats
+            const parsed = Date.parse(dateString)
+            if (!isNaN(parsed)) {
+              date = new Date(parsed)
+            } else {
+              return true // If we can't parse, include it
+            }
+          }
+          
+          // Final check
+          if (isNaN(date.getTime())) {
+            return true // If still invalid, include it
+          }
+        }
+      } else if (dateString instanceof Date) {
+        date = dateString
+        if (isNaN(date.getTime())) {
+          return true // Invalid date, include it
+        }
+      } else {
+        return true // Unknown format, include it
+      }
+      
+      const start = new Date(dateRange.startISO)
+      const end = new Date(dateRange.endISO)
+      
+      // Set time to start/end of day for proper comparison
+      date.setHours(0, 0, 0, 0)
+      start.setHours(0, 0, 0, 0)
+      end.setHours(23, 59, 59, 999)
+      
+      const isInRange = date >= start && date <= end
+      return isInRange
+    } catch (error) {
+      console.error('Error checking date range:', error, dateString)
+      return true // On error, include the item
+    }
+  }
+
+  // Load categories when switching to project tabs
+  useEffect(() => {
+    if (activeTab === 'pending-projects' || activeTab === 'active-projects' || activeTab === 'completed-projects') {
+      // Ensure categories are loaded for project tabs
+      if (categories.length === 0) {
+        adminSalesService.getAllLeadCategories()
+          .then(categoriesRes => {
+            if (categoriesRes?.data && Array.isArray(categoriesRes.data)) {
+              setCategories(categoriesRes.data)
+            }
+          })
+          .catch(error => {
+            console.error('Error loading categories:', error)
+          })
+      }
+    }
+  }, [activeTab, categories.length])
+
   useEffect(() => {
     loadTabData()
-  }, [activeTab, selectedFilter, searchTerm, currentPage])
+  }, [activeTab, selectedFilter, searchTerm, currentPage, dateFilterType, startDate, endDate, selectedCategory])
+
+  // Close filter dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showDateFilterDropdown && !event.target.closest('.filter-dropdown-container')) {
+        setShowDateFilterDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showDateFilterDropdown])
 
   const loadMockData = async () => {
     setLoading(true)
@@ -634,6 +833,39 @@ const Admin_project_management = () => {
       setLoading(true)
     }
     try {
+      // Load categories first (needed for filters) - load this on every page load
+      try {
+        const categoriesRes = await adminSalesService.getAllLeadCategories()
+        console.log('Categories response:', categoriesRes)
+        if (categoriesRes?.data && Array.isArray(categoriesRes.data)) {
+          console.log('Setting categories:', categoriesRes.data.length, 'categories')
+          setCategories(categoriesRes.data)
+        } else if (categoriesRes?.success && categoriesRes?.data) {
+          // Handle case where data might be wrapped differently
+          const categoriesData = Array.isArray(categoriesRes.data) ? categoriesRes.data : []
+          console.log('Setting categories (wrapped):', categoriesData.length, 'categories')
+          setCategories(categoriesData)
+        } else {
+          console.warn('Categories data is not an array:', categoriesRes)
+          setCategories([])
+        }
+      } catch (error) {
+        console.error('Error loading categories:', error)
+        setCategories([])
+        // Don't fail the whole load if categories fail
+      }
+
+      // Load all clients for category lookup (needed for filtering projects by client category)
+      try {
+        const clientsRes = await adminProjectService.getClients({ limit: 1000 })
+        if (clientsRes?.success && clientsRes?.data && Array.isArray(clientsRes.data)) {
+          setAllClients(clientsRes.data)
+        }
+      } catch (error) {
+        console.error('Error loading clients for category lookup:', error)
+        // Don't fail if this fails
+      }
+
       // Load statistics
       const statsResponse = await adminProjectService.getProjectManagementStatistics()
       if (statsResponse.success) {
@@ -732,14 +964,15 @@ const Admin_project_management = () => {
     try {
       switch (activeTab) {
         case 'pending-projects':
+          // Fetch all pending projects without server-side filtering
+          // We'll do all filtering client-side to support date and category filters
           const pendingResponse = await adminProjectService.getPendingProjects({
-            priority: selectedFilter !== 'all' ? selectedFilter : undefined,
-            search: searchTerm || undefined,
-            page: currentPage,
-            limit: itemsPerPage
+            page: 1,
+            limit: 1000, // Fetch a large number to get all data for client-side filtering
+            populate: 'client' // Request populated client data
           })
           if (pendingResponse.success) {
-            setPendingProjects(pendingResponse.data)
+            setPendingProjects(pendingResponse.data || [])
           }
           break
 
@@ -748,10 +981,11 @@ const Admin_project_management = () => {
             status: selectedFilter !== 'all' ? selectedFilter : undefined,
             search: searchTerm || undefined,
             page: currentPage,
-            limit: itemsPerPage
+            limit: itemsPerPage,
+            populate: 'client' // Request populated client data
           })
           if (activeResponse.success) {
-            setProjects(activeResponse.data)
+            setProjects(activeResponse.data || [])
           }
           break
 
@@ -760,10 +994,11 @@ const Admin_project_management = () => {
             priority: selectedFilter !== 'all' ? selectedFilter : undefined,
             search: searchTerm || undefined,
             page: currentPage,
-            limit: itemsPerPage
+            limit: itemsPerPage,
+            populate: 'client' // Request populated client data
           })
           if (completedResponse.success) {
-            setCompletedProjects(completedResponse.data)
+            setCompletedProjects(completedResponse.data || [])
           }
           break
 
@@ -871,19 +1106,111 @@ const Admin_project_management = () => {
   }
 
   const filteredData = getCurrentData().filter(item => {
-    const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (typeof item.client === 'string' ? item.client : item.client?.name || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.clientContact?.toLowerCase().includes(searchTerm.toLowerCase())
+    if (!item) return false
     
+    // Search filter
+    const searchLower = searchTerm.toLowerCase().trim()
+    const matchesSearch = !searchTerm || searchTerm.trim() === '' || 
+                         item.name?.toLowerCase().includes(searchLower) ||
+                         item.email?.toLowerCase().includes(searchLower) ||
+                         (typeof item.client === 'string' 
+                           ? item.client?.toLowerCase().includes(searchLower)
+                           : (item.client?.name || item.client?.companyName || item.client?.company || '')?.toLowerCase().includes(searchLower)) ||
+                         item.clientContact?.toLowerCase().includes(searchLower) ||
+                         item.companyName?.toLowerCase().includes(searchLower) ||
+                         item.clientEmail?.toLowerCase().includes(searchLower) ||
+                         item.submittedBy?.toLowerCase().includes(searchLower) ||
+                         (typeof item.submittedBy === 'object' && item.submittedBy?.name?.toLowerCase().includes(searchLower))
+    
+    // Priority/Status filter
     let matchesFilter = true
     if (activeTab === 'pending-projects') {
-      matchesFilter = selectedFilter === 'all' || item.priority === selectedFilter
+      if (selectedFilter !== 'all') {
+        const itemPriority = item.priority?.toLowerCase() || ''
+        const filterPriority = selectedFilter?.toLowerCase() || ''
+        matchesFilter = itemPriority === filterPriority || item.priority === selectedFilter
+      }
     } else {
-      matchesFilter = selectedFilter === 'all' || item.status === selectedFilter
+      if (selectedFilter !== 'all') {
+        const itemStatus = item.status?.toLowerCase() || ''
+        const filterStatus = selectedFilter?.toLowerCase() || ''
+        matchesFilter = itemStatus === filterStatus || item.status === selectedFilter
+      }
     }
     
-    return matchesSearch && matchesFilter
+    // Category filter (only for project tabs) - filter by client's category
+    let matchesCategory = true
+    if ((activeTab === 'pending-projects' || activeTab === 'active-projects' || activeTab === 'completed-projects') && selectedCategory !== 'all') {
+      // Get client's category - check if client is an object with category field
+      let clientCategoryId = null
+      
+      if (typeof item.client === 'object' && item.client) {
+        // Client is already an object - check various possible category field names
+        const clientCategory = item.client.category || item.client.leadCategory || item.client.categoryId
+        if (clientCategory) {
+          clientCategoryId = typeof clientCategory === 'object' ? (clientCategory?._id || clientCategory?.id) : clientCategory
+        }
+      } else if (typeof item.client === 'string' || item.clientId) {
+        // Client is just an ID - look it up in allClients array
+        const clientId = item.client || item.clientId
+        if (clientId && allClients && allClients.length > 0) {
+          const fullClient = allClients.find(c => 
+            (c.id || c._id)?.toString() === clientId?.toString() ||
+            c._id?.toString() === clientId?.toString() ||
+            c.id?.toString() === clientId?.toString()
+          )
+          
+          if (fullClient) {
+            // Check various possible category field names in the full client object
+            const clientCategory = fullClient.category || fullClient.leadCategory || fullClient.categoryId
+            if (clientCategory) {
+              clientCategoryId = typeof clientCategory === 'object' ? (clientCategory?._id || clientCategory?.id) : clientCategory
+            }
+          }
+        }
+      }
+      
+      // Also check project's direct category as fallback
+      const projectCategoryId = typeof item.category === 'object' ? (item.category?._id || item.category?.id) : item.category
+      
+      // Match if either client category or project category matches
+      const categoryMatch = (clientCategoryId && clientCategoryId.toString() === selectedCategory.toString()) || 
+                           (projectCategoryId && projectCategoryId.toString() === selectedCategory.toString())
+      matchesCategory = categoryMatch
+    }
+    
+    // Date filter (for all tabs)
+    let matchesDate = true
+    if (dateFilterType !== 'all') {
+      let dateToCheck = null
+      
+      if (activeTab === 'pending-projects') {
+        // For pending projects: prioritize submittedDate, then createdAt, then other dates
+        dateToCheck = item.submittedDate || item.createdAt || item.startDate || item.updatedAt || item.dateCreated || item.date
+      } else if (activeTab === 'active-projects' || activeTab === 'completed-projects') {
+        // For active/completed projects: use createdAt, startDate, submittedDate, or updatedAt
+        dateToCheck = item.createdAt || item.startDate || item.submittedDate || item.updatedAt || item.dateCreated
+      } else if (activeTab === 'employees') {
+        // For employees: use createdAt, joinDate, or dateJoined
+        dateToCheck = item.createdAt || item.joinDate || item.dateJoined || item.dateCreated
+      } else if (activeTab === 'clients') {
+        // For clients: use createdAt, joinDate, or dateCreated
+        dateToCheck = item.createdAt || item.joinDate || item.dateCreated || item.lastActivity
+      } else if (activeTab === 'project-managers') {
+        // For PMs: use createdAt, joinDate, or dateJoined
+        dateToCheck = item.createdAt || item.joinDate || item.dateJoined || item.dateCreated
+      }
+      
+      // Only filter if we have a date to check, otherwise include the item
+      if (dateToCheck) {
+        matchesDate = isDateInRange(dateToCheck)
+      } else {
+        // If no date field found, include it (don't filter out items without dates)
+        matchesDate = true
+      }
+    }
+    
+    return matchesSearch && matchesFilter && matchesCategory && matchesDate
   })
 
   const paginatedData = filteredData.slice(
@@ -918,8 +1245,8 @@ const projectFinancialSummary =
     setSelectedItem(item)
     
     if (type === 'project') {
-      // Load project creation data if not already loaded
-      if (clientOptions.length === 0 || pmSelectOptions.length === 0 || employeeOptions.length === 0) {
+      // Load project creation data if not already loaded (including categories)
+      if (clientOptions.length === 0 || pmSelectOptions.length === 0 || employeeOptions.length === 0 || categories.length === 0) {
         await loadProjectCreationData()
       }
       
@@ -930,7 +1257,61 @@ const projectFinancialSummary =
         ? item.assignedTeam.map(member => typeof member === 'object' ? (member._id || member.id) : member)
         : []
       
-      const categoryId = typeof item.category === 'object' ? (item.category?._id || item.category?.id) : item.category
+      // Get category ID - handle both object and string cases
+      let categoryId = null
+      if (typeof item.category === 'object' && item.category) {
+        // Category is an object - get the ID
+        categoryId = item.category._id || item.category.id
+      } else if (typeof item.category === 'string' && item.category) {
+        // Category might be an ID string or a name string
+        // Check if it's a valid ObjectId format (24 hex characters)
+        const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(item.category)
+        if (isValidObjectId) {
+          // It's a valid ObjectId format, use it
+          categoryId = item.category
+        } else {
+          // It's a name string, find the matching category ID
+          // Use current categories state (should be loaded by loadProjectCreationData above)
+          const categoriesToSearch = categories.length > 0 ? categories : []
+          const matchingCategory = categoriesToSearch.find(cat => 
+            (cat.name || cat.categoryName) === item.category ||
+            cat._id === item.category ||
+            cat.id === item.category
+          )
+          categoryId = matchingCategory ? (matchingCategory._id || matchingCategory.id) : null
+        }
+      }
+      
+      // Get total cost from multiple possible locations with better fallback
+      let totalCostValue = ''
+      if (item.financialDetails?.totalCost && Number(item.financialDetails.totalCost) > 0) {
+        totalCostValue = Number(item.financialDetails.totalCost).toString()
+      } else if (item.budget && Number(item.budget) > 0) {
+        totalCostValue = Number(item.budget).toString()
+      } else if (item.totalCost && Number(item.totalCost) > 0) {
+        totalCostValue = Number(item.totalCost).toString()
+      } else if (item.cost && Number(item.cost) > 0) {
+        totalCostValue = Number(item.cost).toString()
+      } else {
+        // If no valid cost found, try to get any numeric value
+        const costFromFinancial = item.financialDetails?.totalCost
+        const costFromBudget = item.budget
+        const costFromTotal = item.totalCost
+        const costFromCost = item.cost
+        
+        if (costFromFinancial !== undefined && costFromFinancial !== null) {
+          totalCostValue = Number(costFromFinancial).toString()
+        } else if (costFromBudget !== undefined && costFromBudget !== null) {
+          totalCostValue = Number(costFromBudget).toString()
+        } else if (costFromTotal !== undefined && costFromTotal !== null) {
+          totalCostValue = Number(costFromTotal).toString()
+        } else if (costFromCost !== undefined && costFromCost !== null) {
+          totalCostValue = Number(costFromCost).toString()
+        } else {
+          totalCostValue = '0'
+        }
+      }
+      
       setProjectForm({
         name: item.name || '',
         description: item.description || '',
@@ -942,7 +1323,7 @@ const projectFinancialSummary =
         status: item.status || 'active',
         startDate: formatDateForInput(item.startDate || item.createdAt),
         dueDate: formatDateForInput(item.dueDate),
-        totalCost: (item.financialDetails?.totalCost || item.budget || 0).toString(),
+        totalCost: totalCostValue,
         attachments: item.attachments || []
       })
       setProjectFormErrors({})
@@ -1694,12 +2075,39 @@ function getFinancialSummary(project) {
     try {
       const projectId = selectedItem._id || selectedItem.id
       const totalCostValue = Number(projectForm.totalCost)
+      
+      // Validate and convert category to ObjectId if needed
+      let categoryValue = undefined
+      if (projectForm.category && projectForm.category.trim() !== '') {
+        const categoryStr = projectForm.category.trim()
+        // Check if it's a valid ObjectId format (24 hex characters)
+        const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(categoryStr)
+        if (isValidObjectId) {
+          // It's already a valid ObjectId, use it
+          categoryValue = categoryStr
+        } else {
+          // It might be a category name, find the matching category ID
+          const matchingCategory = categories.find(cat => 
+            (cat.name || cat.categoryName) === categoryStr ||
+            cat._id === categoryStr ||
+            cat.id === categoryStr
+          )
+          if (matchingCategory) {
+            categoryValue = matchingCategory._id || matchingCategory.id
+          } else {
+            // If we can't find a match, don't send category (or send undefined)
+            console.warn('Category not found for:', categoryStr)
+            categoryValue = undefined
+          }
+        }
+      }
+      
       const payload = {
         name: projectForm.name.trim(),
         description: projectForm.description.trim(),
         client: projectForm.client,
-        category: projectForm.category || undefined,
-        categoryId: projectForm.category || undefined,
+        category: categoryValue,
+        categoryId: categoryValue,
         projectManager: projectForm.projectManager,
         status: projectForm.status,
         priority: projectForm.priority,
@@ -2062,6 +2470,10 @@ function getFinancialSummary(project) {
                       if (activeTab === tab.key) return
                       setActiveTab(tab.key)
                       setSelectedFilter('all')
+                      setSelectedCategory('all')
+                      setDateFilterType('all')
+                      setStartDate('')
+                      setEndDate('')
                       setCurrentPage(1)
                     }}
                     className={`flex items-center space-x-1.5 py-2.5 px-3 border-b-2 font-medium text-xs transition-colors rounded-t-md ${
@@ -2091,6 +2503,107 @@ function getFinancialSummary(project) {
                         <p className="text-sm text-gray-600 mt-1">Projects from sales team waiting for PM assignment</p>
                       </div>
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        {/* Date Range Filter */}
+                        <div className="relative filter-dropdown-container">
+                          <button
+                            onClick={() => setShowDateFilterDropdown(!showDateFilterDropdown)}
+                            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                          >
+                            <Filter className="h-4 w-4 text-blue-600" />
+                            <span className="font-medium text-gray-700">{getDateFilterLabel()}</span>
+                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          {showDateFilterDropdown && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute right-0 mt-2 w-60 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-gray-200/80 z-50 overflow-hidden"
+                            >
+                              <div className="px-3 pt-3 pb-2">
+                                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                                  Date range
+                                </p>
+                                <div className="space-y-0.5">
+                                  {[
+                                    { type: 'all', label: 'All Time', Icon: Database },
+                                    { type: 'day', label: 'Today', Icon: Calendar },
+                                    { type: 'week', label: 'This Week', Icon: Calendar },
+                                    { type: 'month', label: 'This Month', Icon: BarChart3 },
+                                    { type: 'year', label: 'This Year', Icon: TrendingUp }
+                                  ].map(({ type, label, Icon }) => (
+                                    <button
+                                      key={type}
+                                      onClick={() => {
+                                        setStartDate('')
+                                        setEndDate('')
+                                        setDateFilterType(type)
+                                        setShowDateFilterDropdown(false)
+                                      }}
+                                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                        dateFilterType === type
+                                          ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                      }`}
+                                    >
+                                      <div className={`p-1.5 rounded-lg ${dateFilterType === type ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                        <Icon className={`h-3.5 w-3.5 ${dateFilterType === type ? 'text-blue-600' : 'text-gray-500'}`} />
+                                      </div>
+                                      <span className="flex-1 text-left">{label}</span>
+                                      {dateFilterType === type && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
+                                <button
+                                  onClick={() => {
+                                    setTempStartDate(startDate)
+                                    setTempEndDate(endDate)
+                                    setDateFilterType('custom')
+                                    setShowDateRangePicker(true)
+                                    setShowDateFilterDropdown(false)
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                    dateFilterType === 'custom'
+                                      ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                  }`}
+                                >
+                                  <div className={`p-1.5 rounded-lg ${dateFilterType === 'custom' ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                    <CalendarDays className={`h-3.5 w-3.5 ${dateFilterType === 'custom' ? 'text-blue-600' : 'text-gray-500'}`} />
+                                  </div>
+                                  <span className="flex-1 text-left">Custom range</span>
+                                  {dateFilterType === 'custom' && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+
+                        {/* Category Filter - Only for project tabs */}
+                        {(activeTab === 'pending-projects' || activeTab === 'active-projects' || activeTab === 'completed-projects') && (
+                          <select
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                            className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                            disabled={!categories || categories.length === 0}
+                          >
+                            <option value="all">All Categories</option>
+                            {categories && categories.length > 0 ? (
+                              categories.map((cat) => (
+                                <option key={cat._id || cat.id} value={cat._id || cat.id}>
+                                  {cat.name || cat.categoryName || 'Unnamed Category'}
+                                </option>
+                              ))
+                            ) : (
+                              <option value="" disabled>Loading categories...</option>
+                            )}
+                          </select>
+                        )}
+
                         <div className="relative">
                           <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                           <input
@@ -2113,14 +2626,14 @@ function getFinancialSummary(project) {
                           <option value="low">Low</option>
                         </select>
                         <div className="bg-orange-100 text-orange-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
-                          {pendingProjects.length} pending
+                          {filteredData.length} pending
                         </div>
                       </div>
                     </div>
                   </CardHeader>
 
                   <CardContent className="p-0">
-                    {pendingProjects.length > 0 ? (
+                    {filteredData.length > 0 ? (
                       <div className="p-2 lg:p-4">
                         <div className="overflow-x-auto -mx-2 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
                           <table className="w-full min-w-[900px] border-collapse text-xs">
@@ -2137,7 +2650,7 @@ function getFinancialSummary(project) {
                               </tr>
                             </thead>
                             <tbody>
-                              {pendingProjects.map((pendingProject, index) => {
+                              {paginatedData.map((pendingProject, index) => {
                                 const pendingKey = pendingProject.id || pendingProject._id || pendingProject.projectId || `pending-${index}`
                                 return (
                                   <tr key={pendingKey} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
@@ -2235,6 +2748,44 @@ function getFinancialSummary(project) {
                             </tbody>
                           </table>
                         </div>
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                          <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                            <div className="text-sm text-gray-700">
+                              Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} pending projects
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Previous
+                              </button>
+                              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                <button
+                                  key={page}
+                                  onClick={() => setCurrentPage(page)}
+                                  className={`px-3 py-1 border rounded-md text-sm font-medium ${
+                                    currentPage === page
+                                      ? 'border-primary bg-primary text-white'
+                                      : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              ))}
+                              <button
+                                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Next
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="text-center py-16">
@@ -2244,7 +2795,9 @@ function getFinancialSummary(project) {
                           </div>
                           <h3 className="text-2xl font-semibold text-gray-900 mb-4">No pending projects</h3>
                           <p className="text-gray-600 text-lg">
-                            All projects have been assigned to project managers. New projects from the sales team will appear here.
+                            {filteredData.length === 0 && pendingProjects.length > 0 
+                              ? 'No projects match the current filters. Try adjusting your filters.'
+                              : 'All projects have been assigned to project managers. New projects from the sales team will appear here.'}
                           </p>
                         </div>
                       </div>
@@ -2265,6 +2818,105 @@ function getFinancialSummary(project) {
                         <p className="text-sm text-gray-600 mt-1">Projects currently in progress with assigned PMs</p>
                       </div>
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        {/* Date Range Filter */}
+                        <div className="relative filter-dropdown-container">
+                          <button
+                            onClick={() => setShowDateFilterDropdown(!showDateFilterDropdown)}
+                            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                          >
+                            <Filter className="h-4 w-4 text-blue-600" />
+                            <span className="font-medium text-gray-700">{getDateFilterLabel()}</span>
+                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          {showDateFilterDropdown && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute right-0 mt-2 w-60 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-gray-200/80 z-50 overflow-hidden"
+                            >
+                              <div className="px-3 pt-3 pb-2">
+                                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                                  Date range
+                                </p>
+                                <div className="space-y-0.5">
+                                  {[
+                                    { type: 'all', label: 'All Time', Icon: Database },
+                                    { type: 'day', label: 'Today', Icon: Calendar },
+                                    { type: 'week', label: 'This Week', Icon: Calendar },
+                                    { type: 'month', label: 'This Month', Icon: BarChart3 },
+                                    { type: 'year', label: 'This Year', Icon: TrendingUp }
+                                  ].map(({ type, label, Icon }) => (
+                                    <button
+                                      key={type}
+                                      onClick={() => {
+                                        setStartDate('')
+                                        setEndDate('')
+                                        setDateFilterType(type)
+                                        setShowDateFilterDropdown(false)
+                                      }}
+                                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                        dateFilterType === type
+                                          ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                      }`}
+                                    >
+                                      <div className={`p-1.5 rounded-lg ${dateFilterType === type ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                        <Icon className={`h-3.5 w-3.5 ${dateFilterType === type ? 'text-blue-600' : 'text-gray-500'}`} />
+                                      </div>
+                                      <span className="flex-1 text-left">{label}</span>
+                                      {dateFilterType === type && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
+                                <button
+                                  onClick={() => {
+                                    setTempStartDate(startDate)
+                                    setTempEndDate(endDate)
+                                    setDateFilterType('custom')
+                                    setShowDateRangePicker(true)
+                                    setShowDateFilterDropdown(false)
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                    dateFilterType === 'custom'
+                                      ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                  }`}
+                                >
+                                  <div className={`p-1.5 rounded-lg ${dateFilterType === 'custom' ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                    <CalendarDays className={`h-3.5 w-3.5 ${dateFilterType === 'custom' ? 'text-blue-600' : 'text-gray-500'}`} />
+                                  </div>
+                                  <span className="flex-1 text-left">Custom range</span>
+                                  {dateFilterType === 'custom' && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+
+                        {/* Category Filter */}
+                        <select
+                          value={selectedCategory}
+                          onChange={(e) => setSelectedCategory(e.target.value)}
+                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                          disabled={!categories || categories.length === 0}
+                        >
+                          <option value="all">All Categories</option>
+                          {categories && categories.length > 0 ? (
+                            categories.map((cat) => (
+                              <option key={cat._id || cat.id} value={cat._id || cat.id}>
+                                {cat.name || cat.categoryName || 'Unnamed Category'}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="" disabled>Loading categories...</option>
+                          )}
+                        </select>
+
                         <div className="relative">
                           <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                           <input
@@ -2289,7 +2941,7 @@ function getFinancialSummary(project) {
                           <option value="overdue">Overdue</option>
                         </select>
                         <div className="bg-green-100 text-green-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
-                          {projects.length} active
+                          {filteredData.length} active
                         </div>
                       </div>
                     </div>
@@ -2483,6 +3135,105 @@ function getFinancialSummary(project) {
                         <p className="text-sm text-gray-600 mt-1">Successfully completed projects with full details</p>
                       </div>
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        {/* Date Range Filter */}
+                        <div className="relative filter-dropdown-container">
+                          <button
+                            onClick={() => setShowDateFilterDropdown(!showDateFilterDropdown)}
+                            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                          >
+                            <Filter className="h-4 w-4 text-blue-600" />
+                            <span className="font-medium text-gray-700">{getDateFilterLabel()}</span>
+                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          {showDateFilterDropdown && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute right-0 mt-2 w-60 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-gray-200/80 z-50 overflow-hidden"
+                            >
+                              <div className="px-3 pt-3 pb-2">
+                                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                                  Date range
+                                </p>
+                                <div className="space-y-0.5">
+                                  {[
+                                    { type: 'all', label: 'All Time', Icon: Database },
+                                    { type: 'day', label: 'Today', Icon: Calendar },
+                                    { type: 'week', label: 'This Week', Icon: Calendar },
+                                    { type: 'month', label: 'This Month', Icon: BarChart3 },
+                                    { type: 'year', label: 'This Year', Icon: TrendingUp }
+                                  ].map(({ type, label, Icon }) => (
+                                    <button
+                                      key={type}
+                                      onClick={() => {
+                                        setStartDate('')
+                                        setEndDate('')
+                                        setDateFilterType(type)
+                                        setShowDateFilterDropdown(false)
+                                      }}
+                                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                        dateFilterType === type
+                                          ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                      }`}
+                                    >
+                                      <div className={`p-1.5 rounded-lg ${dateFilterType === type ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                        <Icon className={`h-3.5 w-3.5 ${dateFilterType === type ? 'text-blue-600' : 'text-gray-500'}`} />
+                                      </div>
+                                      <span className="flex-1 text-left">{label}</span>
+                                      {dateFilterType === type && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
+                                <button
+                                  onClick={() => {
+                                    setTempStartDate(startDate)
+                                    setTempEndDate(endDate)
+                                    setDateFilterType('custom')
+                                    setShowDateRangePicker(true)
+                                    setShowDateFilterDropdown(false)
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                    dateFilterType === 'custom'
+                                      ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                  }`}
+                                >
+                                  <div className={`p-1.5 rounded-lg ${dateFilterType === 'custom' ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                    <CalendarDays className={`h-3.5 w-3.5 ${dateFilterType === 'custom' ? 'text-blue-600' : 'text-gray-500'}`} />
+                                  </div>
+                                  <span className="flex-1 text-left">Custom range</span>
+                                  {dateFilterType === 'custom' && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+
+                        {/* Category Filter */}
+                        <select
+                          value={selectedCategory}
+                          onChange={(e) => setSelectedCategory(e.target.value)}
+                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                          disabled={!categories || categories.length === 0}
+                        >
+                          <option value="all">All Categories</option>
+                          {categories && categories.length > 0 ? (
+                            categories.map((cat) => (
+                              <option key={cat._id || cat.id} value={cat._id || cat.id}>
+                                {cat.name || cat.categoryName || 'Unnamed Category'}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="" disabled>Loading categories...</option>
+                          )}
+                        </select>
+
                         <div className="relative">
                           <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                           <input
@@ -2504,8 +3255,8 @@ function getFinancialSummary(project) {
                           <option value="normal">Normal</option>
                           <option value="low">Low</option>
                         </select>
-                        <div className="bg-green-100 text-green-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
-                          {completedProjects.length} completed
+                        <div className="bg-blue-100 text-blue-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
+                          {filteredData.length} completed
                         </div>
                       </div>
                     </div>
@@ -2695,6 +3446,86 @@ function getFinancialSummary(project) {
                         <p className="text-sm text-gray-600 mt-1">Manage your development team members</p>
                       </div>
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        {/* Date Range Filter */}
+                        <div className="relative filter-dropdown-container">
+                          <button
+                            onClick={() => setShowDateFilterDropdown(!showDateFilterDropdown)}
+                            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                          >
+                            <Filter className="h-4 w-4 text-blue-600" />
+                            <span className="font-medium text-gray-700">{getDateFilterLabel()}</span>
+                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          {showDateFilterDropdown && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute right-0 mt-2 w-60 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-gray-200/80 z-50 overflow-hidden"
+                            >
+                              <div className="px-3 pt-3 pb-2">
+                                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                                  Date range
+                                </p>
+                                <div className="space-y-0.5">
+                                  {[
+                                    { type: 'all', label: 'All Time', Icon: Database },
+                                    { type: 'day', label: 'Today', Icon: Calendar },
+                                    { type: 'week', label: 'This Week', Icon: Calendar },
+                                    { type: 'month', label: 'This Month', Icon: BarChart3 },
+                                    { type: 'year', label: 'This Year', Icon: TrendingUp }
+                                  ].map(({ type, label, Icon }) => (
+                                    <button
+                                      key={type}
+                                      onClick={() => {
+                                        setStartDate('')
+                                        setEndDate('')
+                                        setDateFilterType(type)
+                                        setShowDateFilterDropdown(false)
+                                      }}
+                                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                        dateFilterType === type
+                                          ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                      }`}
+                                    >
+                                      <div className={`p-1.5 rounded-lg ${dateFilterType === type ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                        <Icon className={`h-3.5 w-3.5 ${dateFilterType === type ? 'text-blue-600' : 'text-gray-500'}`} />
+                                      </div>
+                                      <span className="flex-1 text-left">{label}</span>
+                                      {dateFilterType === type && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
+                                <button
+                                  onClick={() => {
+                                    setTempStartDate(startDate)
+                                    setTempEndDate(endDate)
+                                    setDateFilterType('custom')
+                                    setShowDateRangePicker(true)
+                                    setShowDateFilterDropdown(false)
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                    dateFilterType === 'custom'
+                                      ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                  }`}
+                                >
+                                  <div className={`p-1.5 rounded-lg ${dateFilterType === 'custom' ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                    <CalendarDays className={`h-3.5 w-3.5 ${dateFilterType === 'custom' ? 'text-blue-600' : 'text-gray-500'}`} />
+                                  </div>
+                                  <span className="flex-1 text-left">Custom range</span>
+                                  {dateFilterType === 'custom' && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+
                         <div className="relative">
                           <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                           <input
@@ -2714,6 +3545,9 @@ function getFinancialSummary(project) {
                           <option value="active">Active</option>
                           <option value="on-leave">On Leave</option>
                         </select>
+                        <div className="bg-orange-100 text-orange-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
+                          {filteredData.length} employees
+                        </div>
                       </div>
                     </div>
                   </CardHeader>
@@ -2876,6 +3710,86 @@ function getFinancialSummary(project) {
                         <p className="text-sm text-gray-600 mt-1">Manage your client relationships</p>
                       </div>
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        {/* Date Range Filter */}
+                        <div className="relative filter-dropdown-container">
+                          <button
+                            onClick={() => setShowDateFilterDropdown(!showDateFilterDropdown)}
+                            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                          >
+                            <Filter className="h-4 w-4 text-blue-600" />
+                            <span className="font-medium text-gray-700">{getDateFilterLabel()}</span>
+                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          {showDateFilterDropdown && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute right-0 mt-2 w-60 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-gray-200/80 z-50 overflow-hidden"
+                            >
+                              <div className="px-3 pt-3 pb-2">
+                                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                                  Date range
+                                </p>
+                                <div className="space-y-0.5">
+                                  {[
+                                    { type: 'all', label: 'All Time', Icon: Database },
+                                    { type: 'day', label: 'Today', Icon: Calendar },
+                                    { type: 'week', label: 'This Week', Icon: Calendar },
+                                    { type: 'month', label: 'This Month', Icon: BarChart3 },
+                                    { type: 'year', label: 'This Year', Icon: TrendingUp }
+                                  ].map(({ type, label, Icon }) => (
+                                    <button
+                                      key={type}
+                                      onClick={() => {
+                                        setStartDate('')
+                                        setEndDate('')
+                                        setDateFilterType(type)
+                                        setShowDateFilterDropdown(false)
+                                      }}
+                                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                        dateFilterType === type
+                                          ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                      }`}
+                                    >
+                                      <div className={`p-1.5 rounded-lg ${dateFilterType === type ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                        <Icon className={`h-3.5 w-3.5 ${dateFilterType === type ? 'text-blue-600' : 'text-gray-500'}`} />
+                                      </div>
+                                      <span className="flex-1 text-left">{label}</span>
+                                      {dateFilterType === type && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
+                                <button
+                                  onClick={() => {
+                                    setTempStartDate(startDate)
+                                    setTempEndDate(endDate)
+                                    setDateFilterType('custom')
+                                    setShowDateRangePicker(true)
+                                    setShowDateFilterDropdown(false)
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                    dateFilterType === 'custom'
+                                      ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                  }`}
+                                >
+                                  <div className={`p-1.5 rounded-lg ${dateFilterType === 'custom' ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                    <CalendarDays className={`h-3.5 w-3.5 ${dateFilterType === 'custom' ? 'text-blue-600' : 'text-gray-500'}`} />
+                                  </div>
+                                  <span className="flex-1 text-left">Custom range</span>
+                                  {dateFilterType === 'custom' && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+
                         <div className="relative">
                           <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                           <input
@@ -2895,6 +3809,9 @@ function getFinancialSummary(project) {
                           <option value="active">Active</option>
                           <option value="inactive">Inactive</option>
                         </select>
+                        <div className="bg-teal-100 text-teal-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
+                          {filteredData.length} clients
+                        </div>
                       </div>
                     </div>
                   </CardHeader>
@@ -3060,6 +3977,86 @@ function getFinancialSummary(project) {
                         <p className="text-sm text-gray-600 mt-1">Manage project managers and their assignments</p>
                       </div>
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        {/* Date Range Filter */}
+                        <div className="relative filter-dropdown-container">
+                          <button
+                            onClick={() => setShowDateFilterDropdown(!showDateFilterDropdown)}
+                            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                          >
+                            <Filter className="h-4 w-4 text-blue-600" />
+                            <span className="font-medium text-gray-700">{getDateFilterLabel()}</span>
+                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          {showDateFilterDropdown && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute right-0 mt-2 w-60 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-gray-200/80 z-50 overflow-hidden"
+                            >
+                              <div className="px-3 pt-3 pb-2">
+                                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                                  Date range
+                                </p>
+                                <div className="space-y-0.5">
+                                  {[
+                                    { type: 'all', label: 'All Time', Icon: Database },
+                                    { type: 'day', label: 'Today', Icon: Calendar },
+                                    { type: 'week', label: 'This Week', Icon: Calendar },
+                                    { type: 'month', label: 'This Month', Icon: BarChart3 },
+                                    { type: 'year', label: 'This Year', Icon: TrendingUp }
+                                  ].map(({ type, label, Icon }) => (
+                                    <button
+                                      key={type}
+                                      onClick={() => {
+                                        setStartDate('')
+                                        setEndDate('')
+                                        setDateFilterType(type)
+                                        setShowDateFilterDropdown(false)
+                                      }}
+                                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                        dateFilterType === type
+                                          ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                      }`}
+                                    >
+                                      <div className={`p-1.5 rounded-lg ${dateFilterType === type ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                        <Icon className={`h-3.5 w-3.5 ${dateFilterType === type ? 'text-blue-600' : 'text-gray-500'}`} />
+                                      </div>
+                                      <span className="flex-1 text-left">{label}</span>
+                                      {dateFilterType === type && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
+                                <button
+                                  onClick={() => {
+                                    setTempStartDate(startDate)
+                                    setTempEndDate(endDate)
+                                    setDateFilterType('custom')
+                                    setShowDateRangePicker(true)
+                                    setShowDateFilterDropdown(false)
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                    dateFilterType === 'custom'
+                                      ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                  }`}
+                                >
+                                  <div className={`p-1.5 rounded-lg ${dateFilterType === 'custom' ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                    <CalendarDays className={`h-3.5 w-3.5 ${dateFilterType === 'custom' ? 'text-blue-600' : 'text-gray-500'}`} />
+                                  </div>
+                                  <span className="flex-1 text-left">Custom range</span>
+                                  {dateFilterType === 'custom' && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+
                         <div className="relative">
                           <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                           <input
@@ -3079,6 +4076,9 @@ function getFinancialSummary(project) {
                           <option value="active">Active</option>
                           <option value="on-leave">On Leave</option>
                         </select>
+                        <div className="bg-indigo-100 text-indigo-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
+                          {filteredData.length} PMs
+                        </div>
                       </div>
                     </div>
                   </CardHeader>
@@ -3344,8 +4344,8 @@ function getFinancialSummary(project) {
                           >
                             <option value="">Select Category (Optional)</option>
                             {categories.map((cat) => (
-                              <option key={cat._id} value={cat._id}>
-                                {cat.name}
+                              <option key={cat._id || cat.id} value={cat._id || cat.id}>
+                                {cat.name || cat.categoryName}
                               </option>
                             ))}
                           </select>
@@ -5143,6 +6143,92 @@ function getFinancialSummary(project) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Date Range Picker Modal */}
+      {showDateRangePicker && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowDateRangePicker(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Select Date Range</h3>
+              <button
+                onClick={() => setShowDateRangePicker(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <XIcon className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={tempStartDate}
+                  onChange={(e) => setTempStartDate(e.target.value)}
+                  max={tempEndDate || new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={tempEndDate}
+                  onChange={(e) => setTempEndDate(e.target.value)}
+                  min={tempStartDate}
+                  max={new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    if (tempStartDate && tempEndDate) {
+                      setStartDate(tempStartDate)
+                      setEndDate(tempEndDate)
+                      setDateFilterType('custom')
+                      setShowDateRangePicker(false)
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!tempStartDate || !tempEndDate}
+                >
+                  Apply Filter
+                </button>
+                <button
+                  onClick={() => {
+                    setTempStartDate('')
+                    setTempEndDate('')
+                    setStartDate('')
+                    setEndDate('')
+                    setDateFilterType('all')
+                    setShowDateRangePicker(false)
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
     </div>
   )
 }
