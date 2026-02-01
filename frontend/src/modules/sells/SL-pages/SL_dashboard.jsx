@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, memo } from 'react'
+import React, { useRef, useState, useEffect, memo, useMemo } from 'react'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Sparklines, SparklinesLine, SparklinesSpots } from 'react-sparklines'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
@@ -11,7 +11,6 @@ import {
   FaArrowDown,
   FaClock,
   FaStar,
-  FaTrophy,
   FaChartLine,
   FaFire,
   FaGem,
@@ -41,6 +40,7 @@ import SL_navbar from '../SL-components/SL_navbar'
 import { Link } from 'react-router-dom'
 import { colors, gradients } from '../../../lib/colors'
 import { salesAnalyticsService } from '../SL-services'
+import { getStoredSalesData } from '../SL-services/salesAuthService'
 
 const SL_dashboard = () => {
   // Unique component ID to track renders
@@ -54,16 +54,90 @@ const SL_dashboard = () => {
   const tileCardsInView = useInView(tileCardsRef, { once: true, margin: "-100px" })
   const chartInView = useInView(chartRef, { once: true, margin: "-100px" })
 
-  // State for warning message
-  const [showWarningMessage, setShowWarningMessage] = useState(false)
-
-  const handleWarningClick = () => {
-    setShowWarningMessage(true)
-    // Auto-hide after 4 seconds
-    setTimeout(() => {
-      setShowWarningMessage(false)
-    }, 4000)
+  // Calculate danger zone IMMEDIATELY from cache on mount (before API call)
+  const calculateDangerZoneFromCache = () => {
+    try {
+      // Try to get cached data from localStorage
+      const cachedData = localStorage.getItem('sales_dashboard_lastConversion')
+      let cacheValid = false
+      
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData)
+          // Check if cache is still valid (less than 24 hours old for better accuracy)
+          if (parsed.timestamp && Date.now() - parsed.timestamp < 86400000) {
+            // If cache has pre-calculated danger zone status, use it directly
+            if (parsed.isInDangerZone !== undefined && parsed.daysSinceLastConversion !== undefined) {
+              return {
+                isInDangerZone: parsed.isInDangerZone,
+                daysSinceLastConversion: parsed.daysSinceLastConversion,
+                calculated: true
+              }
+            }
+            // Otherwise, calculate from lastConversionDate
+            if (parsed.lastConversionDate) {
+              const lastConversion = new Date(parsed.lastConversionDate)
+              const today = new Date()
+              today.setHours(0, 0, 0, 0)
+              lastConversion.setHours(0, 0, 0, 0)
+              const daysCount = Math.floor((today - lastConversion) / (1000 * 60 * 60 * 24))
+              
+              return {
+                isInDangerZone: daysCount >= 7,
+                daysSinceLastConversion: daysCount,
+                calculated: true
+              }
+            }
+            cacheValid = true
+          }
+        } catch (e) {
+          console.warn('Failed to parse cached conversion date:', e)
+        }
+      }
+      
+      // If no valid cache, check stored sales data for joining date
+      const storedSalesData = getStoredSalesData()
+      if (storedSalesData?.joiningDate) {
+        const joiningDate = new Date(storedSalesData.joiningDate)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        joiningDate.setHours(0, 0, 0, 0)
+        const daysSinceJoining = Math.floor((today - joiningDate) / (1000 * 60 * 60 * 24))
+        
+        // Only show danger zone if employee has been active for 7+ days with no conversions
+        if (daysSinceJoining >= 7) {
+          return {
+            isInDangerZone: true,
+            daysSinceLastConversion: daysSinceJoining,
+            calculated: true
+          }
+        }
+      }
+      
+      // Default: NOT in danger zone (optimistic default - better UX)
+      // This prevents showing red colors initially for employees who are doing well
+      return {
+        isInDangerZone: false,
+        daysSinceLastConversion: 0,
+        calculated: true
+      }
+    } catch (error) {
+      console.error('Error calculating danger zone from cache:', error)
+      // Default to NOT in danger zone on error (optimistic)
+      return {
+        isInDangerZone: false,
+        daysSinceLastConversion: 0,
+        calculated: true
+      }
+    }
   }
+
+  // Initialize danger zone state immediately from cache (no API wait)
+  // Default to NOT in danger zone for better UX (prevents red flash)
+  const [dangerZoneState, setDangerZoneState] = useState(() => calculateDangerZoneFromCache())
+  
+  // Destructure for easier use
+  const { isInDangerZone, daysSinceLastConversion, calculated: dangerZoneCalculated } = dangerZoneState
 
   // Live stats state
   const [statsLoading, setStatsLoading] = useState(true)
@@ -112,7 +186,8 @@ const SL_dashboard = () => {
     teamLeadTarget: 0,
     teamLeadTargetReward: 0,
     teamMonthlySales: 0,
-    teamLeadProgress: 0
+    teamLeadProgress: 0,
+    lastConversionDate: null
   })
   const [heroStatsLoading, setHeroStatsLoading] = useState(true)
   const [showAllTargetsModal, setShowAllTargetsModal] = useState(false)
@@ -132,63 +207,77 @@ const SL_dashboard = () => {
     
     let active = true
     const load = async () => {
+      // Load all API calls in PARALLEL for faster loading
       try {
         setStatsLoading(true)
-        const s = await salesAnalyticsService.getDashboardStats()
-        if (!active) return
-        const statusCounts = s?.data?.statusCounts || {}
-        const total = s?.data?.totalLeads ?? Object.values(statusCounts).reduce((a,b)=>a+b,0)
-        setTotalLeads(total)
-        setFunnelData(prev => prev.map(row => {
-          const val = Number(statusCounts[row.key] || 0)
-          return { ...row, value: total ? Math.round((val/total)*100) : 0, amount: `${val} leads` }
-        }))
-        setStatsError(null)
-      } catch (e) {
-        setStatsError(e?.message || 'Failed to load dashboard stats')
-      } finally {
-        setStatsLoading(false)
-      }
-
-      try {
         setMonthlyLoading(true)
-        const m = await salesAnalyticsService.getMonthlyConversions({ months: 12 })
-        if (!active) return
-        const items = m?.data?.items || []
-        setMonthlyData(items)
-        setBestMonth(m?.data?.best || { label: '-', converted: 0 })
-        setAvgRate(m?.data?.avgRate || 0)
-        setTotalConverted(m?.data?.totalConverted || 0)
-        setMonthlyError(null)
-      } catch (e) {
-        setMonthlyError(e?.message || 'Failed to load monthly conversions')
-      } finally {
-        setMonthlyLoading(false)
-      }
-
-      // Load tile card stats
-      try {
         setTileStatsLoading(true)
-        const tileData = await salesAnalyticsService.getTileCardStats()
-        if (!active) return
-        setTileStats(tileData?.data || {
-          paymentRecovery: { pending: 0, changeThisWeek: 0 },
-          demoRequests: { new: 0, today: 0 },
-          tasks: { pending: 0, change: 0 },
-          meetings: { today: 0, upcoming: 0 }
-        })
-      } catch (e) {
-        console.error('Failed to load tile card stats:', e)
-      } finally {
-        setTileStatsLoading(false)
-      }
-
-      // Load hero card stats
-      try {
         setHeroStatsLoading(true)
-        const heroData = await salesAnalyticsService.getDashboardHeroStats()
+        
+        // Fetch all data in parallel
+        const [dashboardStats, monthlyData, tileData, heroData] = await Promise.allSettled([
+          salesAnalyticsService.getDashboardStats(),
+          salesAnalyticsService.getMonthlyConversions({ months: 12 }),
+          salesAnalyticsService.getTileCardStats(),
+          salesAnalyticsService.getDashboardHeroStats()
+        ])
+        
         if (!active) return
-        setHeroStats(heroData?.data || {
+        
+        // Process dashboard stats
+        if (dashboardStats.status === 'fulfilled') {
+          const s = dashboardStats.value
+          const statusCounts = s?.data?.statusCounts || {}
+          const total = s?.data?.totalLeads ?? Object.values(statusCounts).reduce((a,b)=>a+b,0)
+          setTotalLeads(total)
+          setFunnelData(prev => prev.map(row => {
+            const val = Number(statusCounts[row.key] || 0)
+            return { ...row, value: total ? Math.round((val/total)*100) : 0, amount: `${val} leads` }
+          }))
+          setStatsError(null)
+        } else {
+          setStatsError(dashboardStats.reason?.message || 'Failed to load dashboard stats')
+        }
+        setStatsLoading(false)
+
+        // Process monthly conversions
+        if (monthlyData.status === 'fulfilled') {
+          const m = monthlyData.value
+          const items = m?.data?.items || []
+          setMonthlyData(items)
+          setBestMonth(m?.data?.best || { label: '-', converted: 0 })
+          setAvgRate(m?.data?.avgRate || 0)
+          setTotalConverted(m?.data?.totalConverted || 0)
+          setMonthlyError(null)
+        } else {
+          setMonthlyError(monthlyData.reason?.message || 'Failed to load monthly conversions')
+        }
+        setMonthlyLoading(false)
+
+        // Process tile card stats
+        if (tileData.status === 'fulfilled') {
+          const tile = tileData.value
+          setTileStats(tile?.data || {
+            paymentRecovery: { pending: 0, changeThisWeek: 0 },
+            demoRequests: { new: 0, today: 0 },
+            tasks: { pending: 0, change: 0 },
+            meetings: { today: 0, upcoming: 0 }
+          })
+        } else {
+          console.error('Failed to load tile card stats:', tileData.reason)
+          setTileStats({
+            paymentRecovery: { pending: 0, changeThisWeek: 0 },
+            demoRequests: { new: 0, today: 0 },
+            tasks: { pending: 0, change: 0 },
+            meetings: { today: 0, upcoming: 0 }
+          })
+        }
+        setTileStatsLoading(false)
+
+        // Process hero card stats (non-blocking - danger zone already calculated from cache)
+        if (heroData.status === 'fulfilled') {
+          const hero = heroData.value
+          const stats = hero?.data || {
           employeeName: 'Employee',
           monthlySales: 0,
           target: 0,
@@ -205,11 +294,64 @@ const SL_dashboard = () => {
           teamLeadTarget: 0,
           teamLeadTargetReward: 0,
           teamMonthlySales: 0,
-          teamLeadProgress: 0
-        })
+          teamLeadProgress: 0,
+          lastConversionDate: null
+        }
+        
+          // Recalculate danger zone with fresh data
+          let dangerZoneStatus = false
+          let daysCount = 0
+          
+          if (stats.lastConversionDate) {
+            const lastConversion = new Date(stats.lastConversionDate)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            lastConversion.setHours(0, 0, 0, 0)
+            daysCount = Math.floor((today - lastConversion) / (1000 * 60 * 60 * 24))
+            dangerZoneStatus = daysCount >= 7
+            
+            // Cache lastConversionDate AND danger zone status for instant calculation on next load
+            try {
+              localStorage.setItem('sales_dashboard_lastConversion', JSON.stringify({
+                lastConversionDate: stats.lastConversionDate,
+                isInDangerZone: dangerZoneStatus,
+                daysSinceLastConversion: daysCount,
+                timestamp: Date.now()
+              }))
+            } catch (e) {
+              console.warn('Failed to cache lastConversionDate:', e)
+            }
+          } else {
+            // No conversions yet - check joining date
+            const storedSalesData = getStoredSalesData()
+            if (storedSalesData?.joiningDate) {
+              const joiningDate = new Date(storedSalesData.joiningDate)
+              const today = new Date()
+              today.setHours(0, 0, 0, 0)
+              joiningDate.setHours(0, 0, 0, 0)
+              daysCount = Math.floor((today - joiningDate) / (1000 * 60 * 60 * 24))
+              dangerZoneStatus = daysCount >= 7
+            }
+          }
+          
+          // Update stats and danger zone atomically
+          // Use a single state update to prevent flash
+          setHeroStats(stats)
+          setDangerZoneState({
+            isInDangerZone: dangerZoneStatus,
+            daysSinceLastConversion: daysCount,
+            calculated: true
+          })
+        } else {
+          console.error('Failed to load hero stats:', heroData.reason)
+          // Don't reset danger zone on error - keep cached value
+        }
+        setHeroStatsLoading(false)
       } catch (e) {
-        console.error('Failed to load hero stats:', e)
-      } finally {
+        console.error('Error loading dashboard data:', e)
+        setStatsLoading(false)
+        setMonthlyLoading(false)
+        setTileStatsLoading(false)
         setHeroStatsLoading(false)
       }
     }
@@ -232,32 +374,57 @@ const SL_dashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20 lg:pt-20 lg:pb-4">
         <div className="space-y-6">
           {/* Hero Dashboard Card */}
+          {dangerZoneCalculated && !heroStatsLoading ? (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
-              className="relative bg-gradient-to-br from-teal-50 via-teal-100 to-teal-200 rounded-2xl p-5 lg:p-6 text-gray-900 shadow-2xl border border-teal-300/40 overflow-hidden"
+              className={`relative rounded-2xl p-5 lg:p-6 text-gray-900 shadow-2xl overflow-hidden ${
+                isInDangerZone 
+                  ? 'bg-gradient-to-br from-red-50 via-red-100 to-red-200 border border-red-300/40' 
+                  : 'bg-gradient-to-br from-teal-50 via-teal-100 to-teal-200 border border-teal-300/40'
+              }`}
               style={{
-                boxShadow: '0 25px 50px -12px rgba(20, 184, 166, 0.2), 0 0 0 1px rgba(20, 184, 166, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
+                boxShadow: isInDangerZone
+                  ? '0 25px 50px -12px rgba(239, 68, 68, 0.2), 0 0 0 1px rgba(239, 68, 68, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
+                  : '0 25px 50px -12px rgba(20, 184, 166, 0.2), 0 0 0 1px rgba(20, 184, 166, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
               }}
             >
             {/* Subtle Background Pattern */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <div className="absolute top-4 right-8 w-2 h-2 bg-teal-200/30 rounded-full animate-pulse"></div>
-              <div className="absolute top-12 right-16 w-1.5 h-1.5 bg-teal-300/25 rounded-full animate-pulse delay-1000"></div>
-              <div className="absolute top-20 right-10 w-1 h-1 bg-teal-400/20 rounded-full animate-pulse delay-2000"></div>
-              <div className="absolute bottom-16 left-8 w-1.5 h-1.5 bg-teal-200/25 rounded-full animate-pulse delay-500"></div>
-              <div className="absolute bottom-8 left-16 w-2 h-2 bg-teal-300/15 rounded-full animate-pulse delay-1500"></div>
-              <div className="absolute top-32 right-24 w-1 h-1 bg-teal-400/15 rounded-full animate-pulse delay-3000"></div>
-              <div className="absolute bottom-24 left-24 w-1.5 h-1.5 bg-teal-200/20 rounded-full animate-pulse delay-4000"></div>
-              
-              {/* Subtle grid pattern */}
-              <div className="absolute inset-0 opacity-3">
-                <div className="w-full h-full" style={{
-                  backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(20, 184, 166, 0.08) 1px, transparent 0)',
-                  backgroundSize: '20px 20px'
-                }}></div>
-              </div>
+              {isInDangerZone ? (
+                <>
+                  <div className="absolute top-4 right-8 w-2 h-2 bg-red-200/30 rounded-full animate-pulse"></div>
+                  <div className="absolute top-12 right-16 w-1.5 h-1.5 bg-red-300/25 rounded-full animate-pulse delay-1000"></div>
+                  <div className="absolute top-20 right-10 w-1 h-1 bg-red-400/20 rounded-full animate-pulse delay-2000"></div>
+                  <div className="absolute bottom-16 left-8 w-1.5 h-1.5 bg-red-200/25 rounded-full animate-pulse delay-500"></div>
+                  <div className="absolute bottom-8 left-16 w-2 h-2 bg-red-300/15 rounded-full animate-pulse delay-1500"></div>
+                  <div className="absolute top-32 right-24 w-1 h-1 bg-red-400/15 rounded-full animate-pulse delay-3000"></div>
+                  <div className="absolute bottom-24 left-24 w-1.5 h-1.5 bg-red-200/20 rounded-full animate-pulse delay-4000"></div>
+                  <div className="absolute inset-0 opacity-3">
+                    <div className="w-full h-full" style={{
+                      backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(239, 68, 68, 0.08) 1px, transparent 0)',
+                      backgroundSize: '20px 20px'
+                    }}></div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="absolute top-4 right-8 w-2 h-2 bg-teal-200/30 rounded-full animate-pulse"></div>
+                  <div className="absolute top-12 right-16 w-1.5 h-1.5 bg-teal-300/25 rounded-full animate-pulse delay-1000"></div>
+                  <div className="absolute top-20 right-10 w-1 h-1 bg-teal-400/20 rounded-full animate-pulse delay-2000"></div>
+                  <div className="absolute bottom-16 left-8 w-1.5 h-1.5 bg-teal-200/25 rounded-full animate-pulse delay-500"></div>
+                  <div className="absolute bottom-8 left-16 w-2 h-2 bg-teal-300/15 rounded-full animate-pulse delay-1500"></div>
+                  <div className="absolute top-32 right-24 w-1 h-1 bg-teal-400/15 rounded-full animate-pulse delay-3000"></div>
+                  <div className="absolute bottom-24 left-24 w-1.5 h-1.5 bg-teal-200/20 rounded-full animate-pulse delay-4000"></div>
+                  <div className="absolute inset-0 opacity-3">
+                    <div className="w-full h-full" style={{
+                      backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(20, 184, 166, 0.08) 1px, transparent 0)',
+                      backgroundSize: '20px 20px'
+                    }}></div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Enhanced Header Section */}
@@ -270,67 +437,66 @@ const SL_dashboard = () => {
               <div className="flex items-center space-x-3">
                 <motion.div 
                   whileHover={{ scale: 1.05 }}
-                  className="relative w-11 h-11 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-xl border border-teal-300/40"
+                  className={`relative w-11 h-11 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-xl ${
+                    isInDangerZone 
+                      ? 'border border-red-300/40' 
+                      : 'border border-teal-300/40'
+                  }`}
                   style={{
-                    boxShadow: '0 12px 35px -8px rgba(20, 184, 166, 0.25), 0 6px 15px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                    boxShadow: isInDangerZone
+                      ? '0 12px 35px -8px rgba(239, 68, 68, 0.25), 0 6px 15px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                      : '0 12px 35px -8px rgba(20, 184, 166, 0.25), 0 6px 15px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
                   }}
                 >
-                  <FaUser className="text-teal-700 text-lg" />
-                  <button 
-                    onClick={handleWarningClick}
-                    className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-lg animate-pulse hover:scale-110 transition-transform duration-200"
-                    style={{
-                      boxShadow: '0 6px 18px -3px rgba(239, 68, 68, 0.5), 0 3px 8px -2px rgba(0, 0, 0, 0.15), 0 1px 4px -1px rgba(0, 0, 0, 0.08)',
-                      animation: 'pulse 1.5s ease-in-out infinite'
-                    }}
-                  >
-                    <FaExclamationCircle className="text-white text-xs" />
-                  </button>
+                  <FaUser className={`text-lg ${isInDangerZone ? 'text-red-700' : 'text-teal-700'}`} />
                 </motion.div>
                 <div>
                   <h1 className="text-lg font-bold mb-0.5 text-gray-900">Hi, {heroStats.employeeName}</h1>
-                  <p className="text-teal-700 text-xs font-medium">Welcome back!</p>
+                  <p className={`text-xs font-medium ${isInDangerZone ? 'text-red-700' : 'text-teal-700'}`}>
+                    {isInDangerZone ? 'Action Required!' : 'Welcome back!'}
+                  </p>
                 </div>
               </div>
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center space-x-1.5 bg-white/70 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-teal-400/50 shadow-xl"
-                style={{
-                  boxShadow: '0 8px 25px -5px rgba(20, 184, 166, 0.25), 0 4px 12px -3px rgba(0, 0, 0, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
-                }}
-              >
-                <FaTrophy className="text-teal-700 text-sm" />
-                <span className="text-teal-800 font-bold text-xs">Top Performer</span>
-              </motion.div>
-            </motion.div>
-
-            {/* Warning Message */}
-            <AnimatePresence>
-              {showWarningMessage && (
-                <motion.div
-                  initial={{ opacity: 0, y: -20, scale: 0.9 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -20, scale: 0.9 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                  className="absolute top-16 right-4 z-50 bg-red-50 border border-red-200 rounded-lg p-3 shadow-lg max-w-xs"
-                  style={{
-                    boxShadow: '0 10px 25px -5px rgba(239, 68, 68, 0.3), 0 4px 12px -3px rgba(0, 0, 0, 0.1)'
-                  }}
-                >
-                  <div className="flex items-start space-x-2">
-                    <FaExclamationCircle className="text-red-500 text-sm mt-0.5 flex-shrink-0" />
+              
+              {/* Danger Zone Badge - Compact with hover tooltip */}
+              {isInDangerZone && (
+                <div className="relative group">
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex items-center space-x-1.5 bg-red-500/90 backdrop-blur-sm rounded-md px-2 py-1.5 border-2 border-red-600 shadow-lg cursor-pointer"
+                    style={{
+                      boxShadow: '0 6px 20px -4px rgba(239, 68, 68, 0.4), 0 3px 10px -2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                    }}
+                  >
+                    <FaExclamationCircle className="text-white text-xs animate-pulse" />
                     <div>
-                      <p className="text-red-800 text-xs font-semibold mb-1">Lead Alert</p>
-                      <p className="text-red-700 text-xs leading-relaxed">
-                        You haven't connected with leads for the last 7 days. Take immediate action to follow up.
+                      <p className="text-white text-[10px] font-bold leading-tight">Danger Zone</p>
+                      <p className="text-red-100 text-[9px] font-medium leading-tight">
+                        {daysSinceLastConversion}d
                       </p>
                     </div>
+                  </motion.div>
+                  
+                  {/* Hover Tooltip Message */}
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-red-100/95 backdrop-blur-sm border-2 border-red-300 rounded-lg p-3 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                    <div className="flex items-start space-x-2">
+                      <FaExclamationCircle className="text-red-600 text-sm mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-red-900 text-xs font-bold mb-1">⚠️ Conversion Alert</p>
+                        <p className="text-red-800 text-[11px] leading-relaxed">
+                          You haven't converted a lead to client in the last {daysSinceLastConversion} days. 
+                          <span className="font-semibold"> Convert a lead immediately to return to normal status.</span>
+                        </p>
+                      </div>
+                    </div>
+                    {/* Arrow pointing up */}
+                    <div className="absolute -top-2 right-4 w-4 h-4 bg-red-100 border-l-2 border-t-2 border-red-300 transform rotate-45"></div>
                   </div>
-                  {/* Arrow pointing to warning icon */}
-                  <div className="absolute -top-1 right-3 w-2 h-2 bg-red-50 border-l border-t border-red-200 transform rotate-45"></div>
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
+            </motion.div>
+
 
             {/* Enhanced Sales Metrics */}
             <motion.div 
@@ -341,11 +507,19 @@ const SL_dashboard = () => {
             >
               <motion.div 
                 whileHover={{ scale: 1.01, y: -1 }}
-                className="bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-teal-300/50 hover:border-teal-400/70 transition-all duration-300 shadow-md"
+                className={`bg-white/60 backdrop-blur-sm rounded-lg p-3 border transition-all duration-300 shadow-md ${
+                  isInDangerZone 
+                    ? 'border-red-300/50 hover:border-red-400/70' 
+                    : 'border-teal-300/50 hover:border-teal-400/70'
+                }`}
               >
                 <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-teal-800 text-xs font-semibold">Monthly Sales</p>
-                  <div className="w-5 h-5 bg-gradient-to-br from-teal-500 to-teal-600 rounded-md flex items-center justify-center shadow-sm">
+                  <p className={`text-xs font-semibold ${isInDangerZone ? 'text-red-800' : 'text-teal-800'}`}>Monthly Sales</p>
+                  <div className={`w-5 h-5 bg-gradient-to-br rounded-md flex items-center justify-center shadow-sm ${
+                    isInDangerZone 
+                      ? 'from-red-500 to-red-600' 
+                      : 'from-teal-500 to-teal-600'
+                  }`}>
                     <FaChartLine className="text-white text-[10px]" />
                   </div>
                 </div>
@@ -410,7 +584,7 @@ const SL_dashboard = () => {
               className="mb-5"
             >
               <div className="flex justify-between items-center mb-3">
-                <span className="text-teal-800 text-sm font-semibold">Progress to Target</span>
+                <span className={`text-sm font-semibold ${isInDangerZone ? 'text-red-800' : 'text-teal-800'}`}>Progress to Target</span>
                 <span className="text-gray-900 font-bold text-lg">{heroStats.progressToTarget}%</span>
               </div>
               <div className="relative w-full bg-white/50 rounded-full h-2.5 overflow-hidden shadow-inner">
@@ -418,7 +592,11 @@ const SL_dashboard = () => {
                   initial={{ width: 0 }}
                   animate={{ width: `${heroStats.progressToTarget}%` }}
                   transition={{ duration: 1.5, delay: 0.8, ease: "easeOut" }}
-                  className="bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700 h-2.5 rounded-full relative shadow-sm"
+                  className={`h-2.5 rounded-full relative shadow-sm ${
+                    isInDangerZone 
+                      ? 'bg-gradient-to-r from-red-500 via-red-600 to-red-700' 
+                      : 'bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700'
+                  }`}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
                   <div className="absolute right-0 top-0 w-1 h-2.5 bg-white/90 rounded-full"></div>
@@ -435,7 +613,7 @@ const SL_dashboard = () => {
                 className="mb-5"
               >
                 <div className="flex justify-between items-center mb-3">
-                  <span className="text-teal-800 text-sm font-semibold">Team Target Progress</span>
+                  <span className={`text-sm font-semibold ${isInDangerZone ? 'text-red-800' : 'text-teal-800'}`}>Team Target Progress</span>
                   <span className="text-gray-900 font-bold text-lg">{Math.round(heroStats.teamLeadProgress)}%</span>
                 </div>
                 <div className="relative w-full bg-white/50 rounded-full h-2.5 overflow-hidden shadow-inner">
@@ -449,7 +627,7 @@ const SL_dashboard = () => {
                     <div className="absolute right-0 top-0 w-1 h-2.5 bg-white/90 rounded-full"></div>
                   </motion.div>
                 </div>
-                <div className="flex justify-between items-center mt-2 text-xs text-teal-700">
+                <div className={`flex justify-between items-center mt-2 text-xs ${isInDangerZone ? 'text-red-700' : 'text-teal-700'}`}>
                   <span className="font-bold">Team Sales: ₹{heroStats.teamMonthlySales.toLocaleString()}</span>
                   <div className="flex items-center space-x-2">
                     <span className="font-bold">Target: ₹{heroStats.teamLeadTarget.toLocaleString()}</span>
@@ -549,7 +727,102 @@ const SL_dashboard = () => {
                 <p className="text-gray-900 text-lg font-bold">₹{heroStats.monthlyIncentive.toLocaleString()}</p>
               </motion.div>
             </motion.div>
-          </motion.div>
+
+            </motion.div>
+          ) : (
+            // Loading skeleton - matches the actual card structure with normal colors
+            <div className="relative rounded-2xl p-5 lg:p-6 shadow-2xl overflow-hidden bg-gradient-to-br from-teal-50 via-teal-100 to-teal-200 border border-teal-300/40"
+              style={{
+                boxShadow: '0 25px 50px -12px rgba(20, 184, 166, 0.2), 0 0 0 1px rgba(20, 184, 166, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
+              }}
+            >
+              {/* Subtle Background Pattern */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute top-4 right-8 w-2 h-2 bg-teal-200/30 rounded-full animate-pulse"></div>
+                <div className="absolute top-12 right-16 w-1.5 h-1.5 bg-teal-300/25 rounded-full animate-pulse delay-1000"></div>
+                <div className="absolute top-20 right-10 w-1 h-1 bg-teal-400/20 rounded-full animate-pulse delay-2000"></div>
+                <div className="absolute bottom-16 left-8 w-1.5 h-1.5 bg-teal-200/25 rounded-full animate-pulse delay-500"></div>
+                <div className="absolute bottom-8 left-16 w-2 h-2 bg-teal-300/15 rounded-full animate-pulse delay-1500"></div>
+              </div>
+
+              <div className="relative z-10 animate-pulse">
+                {/* Header Skeleton */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-11 h-11 bg-white/60 backdrop-blur-sm rounded-xl border border-teal-300/40"></div>
+                    <div>
+                      <div className="h-5 bg-white/60 rounded w-24 mb-1"></div>
+                      <div className="h-3 bg-white/60 rounded w-28"></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sales Metrics Skeleton */}
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <div className="bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-teal-300/50">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="h-3 bg-white/80 rounded w-24"></div>
+                      <div className="w-5 h-5 bg-white/80 rounded-md"></div>
+                    </div>
+                    <div className="h-6 bg-white/80 rounded w-20"></div>
+                  </div>
+                  <div className="bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-emerald-300/50">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="h-3 bg-white/80 rounded w-20"></div>
+                      <div className="w-5 h-5 bg-white/80 rounded-md"></div>
+                    </div>
+                    <div className="h-6 bg-white/80 rounded w-24"></div>
+                    <div className="h-2.5 bg-white/60 rounded w-32 mt-1"></div>
+                  </div>
+                </div>
+
+                {/* Progress Bar Skeleton */}
+                <div className="mb-5">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="h-4 bg-white/60 rounded w-32"></div>
+                    <div className="h-5 bg-white/60 rounded w-12"></div>
+                  </div>
+                  <div className="relative w-full bg-white/50 rounded-full h-2.5 overflow-hidden shadow-inner">
+                    <div className="h-2.5 bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700 rounded-full w-1/3"></div>
+                  </div>
+                </div>
+
+                {/* Sub-cards Skeleton */}
+                <div className="grid grid-cols-2 gap-4 mb-5">
+                  <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-cyan-300/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="h-3 bg-white/80 rounded w-20"></div>
+                      <div className="w-6 h-6 bg-white/80 rounded-lg"></div>
+                    </div>
+                    <div className="h-7 bg-white/80 rounded w-20"></div>
+                  </div>
+                  <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-indigo-300/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="h-3 bg-white/80 rounded w-24"></div>
+                      <div className="w-6 h-6 bg-white/80 rounded-lg"></div>
+                    </div>
+                    <div className="h-7 bg-white/80 rounded w-24"></div>
+                  </div>
+                </div>
+
+                {/* Bottom Metrics Skeleton */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-white/60 backdrop-blur-sm rounded-xl p-3 text-center border border-sky-300/50">
+                    <div className="h-3 bg-white/80 rounded w-20 mx-auto mb-1.5"></div>
+                    <div className="h-5 bg-white/80 rounded w-8 mx-auto"></div>
+                  </div>
+                  <div className="bg-white/60 backdrop-blur-sm rounded-xl p-3 text-center border border-emerald-300/50">
+                    <div className="h-3 bg-white/80 rounded w-20 mx-auto mb-1.5"></div>
+                    <div className="h-5 bg-white/80 rounded w-8 mx-auto"></div>
+                  </div>
+                  <div className="bg-white/60 backdrop-blur-sm rounded-xl p-3 text-center border border-violet-300/50">
+                    <div className="h-3 bg-white/80 rounded w-24 mx-auto mb-1.5"></div>
+                    <div className="h-5 bg-white/80 rounded w-16 mx-auto"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Enhanced Tile Cards Grid */}
           <motion.div 

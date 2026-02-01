@@ -73,12 +73,13 @@ const getPaymentRecovery = async (req, res) => {
     const myClients = await Client.find(clientMatch).select('_id name phoneNumber');
     const clientIds = myClients.map(c => c._id);
 
-    // Build project filter: include both clients converted by me and projects I submitted
+    // Only show projects for clients converted by me (not projects I submitted for other people's clients)
+    if (clientIds.length === 0) {
+      return res.json({ success: true, data: [], message: 'No receivables found' });
+    }
+
     const projectFilter = {
-      $or: [
-        { client: { $in: clientIds } },
-        { submittedBy: salesId }
-      ]
+      client: { $in: clientIds }
     };
     if (overdue === 'true') {
       projectFilter.dueDate = { $lt: new Date() };
@@ -1296,7 +1297,14 @@ const getDashboardHeroStats = async (req, res) => {
     
     // Get clients converted by this sales employee
     const convertedClients = await Client.find({ convertedBy: salesId })
-      .select('_id conversionDate');
+      .select('_id conversionDate')
+      .sort({ conversionDate: -1 }); // Sort by conversion date descending
+    
+    // Get last conversion date (most recent conversion)
+    let lastConversionDate = null;
+    if (convertedClients.length > 0 && convertedClients[0].conversionDate) {
+      lastConversionDate = convertedClients[0].conversionDate;
+    }
     
     // Filter clients converted this month and today
     const monthlyClientIds = convertedClients
@@ -1554,7 +1562,8 @@ const getDashboardHeroStats = async (req, res) => {
         teamLeadTarget: teamLeadTarget,
         teamLeadTargetReward: teamLeadTargetReward,
         teamMonthlySales: Math.round(teamMonthlySales),
-        teamLeadProgress: Math.round(teamLeadProgress)
+        teamLeadProgress: Math.round(teamLeadProgress),
+        lastConversionDate: lastConversionDate
       }
     });
   } catch (error) {

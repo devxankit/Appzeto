@@ -33,15 +33,18 @@ const SL_payments_recovery = () => {
     amount: '',
     accountId: '',
     method: 'upi',
-    referenceId: '',
     notes: ''
   })
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   // Fetch data
   React.useEffect(() => {
     const run = async () => {
       try {
+        setIsLoading(true)
+        setError(null)
         const [st, list] = await Promise.all([
           salesPaymentsService.getReceivableStats(),
           salesPaymentsService.getReceivables({
@@ -51,9 +54,14 @@ const SL_payments_recovery = () => {
           })
         ])
         setStats({ totalDues: st.totalDue || 0, overdueCount: st.overdueCount || 0, overdueAmount: st.overdueAmount || 0 })
-        setReceivables(list)
+        setReceivables(Array.isArray(list) ? list : [])
       } catch (e) {
         console.error('Payments fetch error', e)
+        setError(e.message || 'Failed to load payment recovery data')
+        setReceivables([])
+        setStats({ totalDues: 0, overdueCount: 0, overdueAmount: 0 })
+      } finally {
+        setIsLoading(false)
       }
     }
     run()
@@ -141,7 +149,6 @@ Thank you!`
       amount: '',
       accountId: '',
       method: 'upi',
-      referenceId: '',
       notes: ''
     })
     setShowAddPaymentDialog(true)
@@ -177,7 +184,6 @@ Thank you!`
         amount: amountValue,
         accountId: paymentForm.accountId,
         method: paymentForm.method,
-        referenceId: paymentForm.referenceId || undefined,
         notes: paymentForm.notes || undefined
       })
 
@@ -217,7 +223,6 @@ Thank you!`
         amount: '',
         accountId: '',
         method: 'upi',
-        referenceId: '',
         notes: ''
       })
       alert('Payment receipt created successfully. Pending admin approval.')
@@ -236,7 +241,6 @@ Thank you!`
       amount: '',
       accountId: '',
       method: 'upi',
-      referenceId: '',
       notes: ''
     })
   }
@@ -339,9 +343,32 @@ Thank you!`
           </motion.div>
         )}
 
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+          </div>
+        )}
+
         {/* Payments List */}
-        <div className="space-y-4">
-          {filteredPayments.map((payment) => (
+        {!isLoading && (
+          <div className="space-y-4">
+            {filteredPayments.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500 text-sm">No receivables found</p>
+                {searchTerm && (
+                  <p className="text-gray-400 text-xs mt-2">Try adjusting your search or filters</p>
+                )}
+              </div>
+            ) : (
+              filteredPayments.map((payment) => (
             <div
               key={payment.projectId}
               className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
@@ -352,13 +379,24 @@ Thank you!`
                   <h3 className="font-bold text-gray-900 text-lg mb-1">
                     {payment.clientName || 'Unknown Client'}
                   </h3>
+                  {payment.projectName && payment.projectName !== 'Unnamed Project' && (
+                    <p className="text-xs text-teal-600 font-medium mb-1">{payment.projectName}</p>
+                  )}
                   {payment.companyName && (
                     <p className="text-xs text-gray-500 mb-1">{payment.companyName}</p>
                   )}
-                  <p className="text-sm text-gray-600 flex items-center">
+                  <p className="text-sm text-gray-600 flex items-center mb-1">
                     <FiPhone className="mr-1 text-xs" />
                     {payment.phone || 'N/A'}
                   </p>
+                  {payment.email && (
+                    <p className="text-xs text-gray-500">{payment.email}</p>
+                  )}
+                  {payment.dueDate && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Due: {formatDate(payment.dueDate)}
+                    </p>
+                  )}
                 </div>
                 
                 {/* Amount Badge - Show available amount (remaining - pending) */}
@@ -490,8 +528,10 @@ Thank you!`
 
                </div>
             </div>
-          ))}
-        </div>
+              ))
+            )}
+          </div>
+        )}
       </main>
 
       {/* WhatsApp Dialog */}
@@ -568,20 +608,20 @@ Thank you!`
 
       {/* Add Recovery Payment Dialog */}
       {showAddPaymentDialog && selectedProjectForPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl"
+            className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-sm shadow-2xl my-auto max-h-[95vh] overflow-y-auto"
           >
             {/* Dialog Header */}
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-gray-900">Add Recovery Payment</h2>
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h2 className="text-base sm:text-lg font-bold text-gray-900">Add Recovery Payment</h2>
               <button
                 onClick={handleCloseAddPaymentDialog}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200"
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200 flex-shrink-0"
               >
                 <FiX className="text-lg text-gray-600" />
               </button>
@@ -589,7 +629,7 @@ Thank you!`
 
             {/* Project Info */}
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600">
+              <p className="text-xs sm:text-sm text-gray-600">
                 Client: <span className="font-semibold text-gray-900">
                   {selectedProjectForPayment.clientName || 'Unknown Client'}
                 </span>
@@ -599,7 +639,7 @@ Thank you!`
                   {selectedProjectForPayment.companyName}
                 </p>
               )}
-              <p className="text-sm text-gray-600 mt-2">
+              <p className="text-xs sm:text-sm text-gray-600 mt-2">
                 Available: <span className="font-semibold text-red-600">
                   ₹{(() => {
                     const pendingReceipts = projectPaymentReceipts[selectedProjectForPayment.projectId]?.filter(r => r.status === 'pending') || []
@@ -612,31 +652,31 @@ Thank you!`
             </div>
 
             {/* Form Fields */}
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {/* Amount Field */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Amount *</label>
+              <div className="space-y-1.5 sm:space-y-2">
+                <label className="text-xs sm:text-sm font-medium text-gray-700">Amount *</label>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
-                    <span className="text-lg">₹</span>
+                    <span className="text-base sm:text-lg">₹</span>
                   </div>
                   <input
                     type="number"
                     value={paymentForm.amount}
                     onChange={(e) => setPaymentForm(prev => ({ ...prev, amount: e.target.value }))}
                     placeholder="Enter amount"
-                    className="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                    className="w-full pl-8 pr-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                   />
                 </div>
               </div>
 
               {/* Account Field */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Account *</label>
+              <div className="space-y-1.5 sm:space-y-2">
+                <label className="text-xs sm:text-sm font-medium text-gray-700">Account *</label>
                 <select
                   value={paymentForm.accountId}
                   onChange={(e) => setPaymentForm(prev => ({ ...prev, accountId: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                  className="w-full px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                 >
                   <option value="">Select an account</option>
                   {accounts.map(account => (
@@ -648,12 +688,12 @@ Thank you!`
               </div>
 
               {/* Payment Method Field */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Payment Method *</label>
+              <div className="space-y-1.5 sm:space-y-2">
+                <label className="text-xs sm:text-sm font-medium text-gray-700">Payment Method *</label>
                 <select
                   value={paymentForm.method}
                   onChange={(e) => setPaymentForm(prev => ({ ...prev, method: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                  className="w-full px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                 >
                   <option value="upi">UPI</option>
                   <option value="bank_transfer">Bank Transfer</option>
@@ -662,32 +702,20 @@ Thank you!`
                 </select>
               </div>
 
-              {/* Reference ID Field */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Reference ID (Optional)</label>
-                <input
-                  type="text"
-                  value={paymentForm.referenceId}
-                  onChange={(e) => setPaymentForm(prev => ({ ...prev, referenceId: e.target.value }))}
-                  placeholder="Transaction/Reference ID"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
-                />
-              </div>
-
               {/* Notes Field */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Notes (Optional)</label>
+              <div className="space-y-1.5 sm:space-y-2">
+                <label className="text-xs sm:text-sm font-medium text-gray-700">Notes (Optional)</label>
                 <textarea
                   value={paymentForm.notes}
                   onChange={(e) => setPaymentForm(prev => ({ ...prev, notes: e.target.value }))}
                   placeholder="Add any additional notes..."
                   rows={3}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                  className="w-full px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 resize-none"
                 />
               </div>
 
               {/* Info Message */}
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="p-2.5 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-xs text-yellow-800">
                   <strong>Note:</strong> This payment receipt will be pending admin approval. The remaining amount will be updated immediately.
                 </p>
@@ -695,10 +723,10 @@ Thank you!`
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end space-x-3 mt-6">
+            <div className="flex items-center justify-end space-x-2 sm:space-x-3 mt-4 sm:mt-6 pt-4 border-t border-gray-200">
               <button
                 onClick={handleCloseAddPaymentDialog}
-                className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors duration-200"
+                className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:text-gray-900 transition-colors duration-200"
                 disabled={isSubmittingPayment}
               >
                 Cancel
@@ -706,7 +734,7 @@ Thank you!`
               <button
                 onClick={handleSubmitRecoveryPayment}
                 disabled={isSubmittingPayment || !paymentForm.amount || !paymentForm.accountId}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg font-medium transition-all duration-200 ${
                   isSubmittingPayment || !paymentForm.amount || !paymentForm.accountId
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-gradient-to-r from-teal-500 to-teal-600 text-white hover:from-teal-600 hover:to-teal-700'

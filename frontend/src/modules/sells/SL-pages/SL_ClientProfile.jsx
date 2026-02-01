@@ -21,7 +21,8 @@ import {
   FiEdit3,
   FiDownload,
   FiShare2,
-  FiLoader
+  FiLoader,
+  FiX
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
 import { colors, gradients } from '../../../lib/colors'
@@ -183,7 +184,6 @@ const SL_ClientProfile = () => {
         amount: amountValue,
         accountId: selectedAccountId,
         method: paymentMethod,
-        referenceId: referenceId || undefined,
         notes: paymentNotes || undefined
       })
       toast.success('Payment receipt created successfully. Pending admin approval.')
@@ -194,7 +194,6 @@ const SL_ClientProfile = () => {
       setPaymentMethod('upi')
       setReferenceId('')
       setPaymentNotes('')
-      setShowAccountDropdown(false)
       // Refresh client data to update financial info
       await fetchClientProfile()
       // Refresh payment receipts
@@ -697,33 +696,37 @@ const SL_ClientProfile = () => {
 
         {/* Add Money Modal */}
         {showAddMoneyModal && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-            onClick={() => {
-              setShowAddMoneyModal(false)
-              setAmount('')
-              setSelectedAccount('')
-              setSelectedAccountId('')
-              setPaymentMethod('upi')
-              setReferenceId('')
-              setPaymentNotes('')
-              setShowAccountDropdown(false)
-            }}
-          >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl"
-              onClick={(e) => e.stopPropagation()}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-sm shadow-2xl my-auto max-h-[95vh] overflow-y-auto"
             >
-              <h3 className="text-xl font-semibold text-gray-800 mb-4 text-center">{clientData?.client?.name || 'Client'}</h3>
-              
+              {/* Dialog Header */}
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <h2 className="text-base sm:text-lg font-bold text-gray-900">{clientData?.client?.name || 'Client'}</h2>
+                <button
+                  onClick={() => {
+                    setShowAddMoneyModal(false)
+                    setAmount('')
+                    setSelectedAccount('')
+                    setSelectedAccountId('')
+                    setPaymentMethod('upi')
+                    setReferenceId('')
+                    setPaymentNotes('')
+                  }}
+                  className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200 flex-shrink-0"
+                >
+                  <FiX className="text-lg text-gray-600" />
+                </button>
+              </div>
+
               {/* Available Amount Info */}
               {clientData?.financial && (
                 <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-xs sm:text-sm text-gray-600">
                     Available: <span className="font-semibold text-red-600">
                       ₹{(() => {
                         const pendingReceipts = paymentReceipts.filter(r => r.status === 'pending') || []
@@ -735,34 +738,55 @@ const SL_ClientProfile = () => {
                   </p>
                 </div>
               )}
-              
-              <div className="space-y-4">
-                {/* Amount Input */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Amount *</label>
+
+              {/* Form Fields */}
+              <div className="space-y-3 sm:space-y-4">
+                {/* Amount Field */}
+                <div className="space-y-1.5 sm:space-y-2">
+                  <label className="text-xs sm:text-sm font-medium text-gray-700">Amount *</label>
                   <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                      <span className="text-teal-600 font-bold text-lg">₹</span>
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <span className="text-base sm:text-lg">₹</span>
                     </div>
                     <input
                       type="number"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       placeholder="Enter amount"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                      className="w-full pl-8 pr-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                     />
                   </div>
                 </div>
 
+                {/* Account Field */}
+                <div className="space-y-1.5 sm:space-y-2">
+                  <label className="text-xs sm:text-sm font-medium text-gray-700">Account *</label>
+                  <select
+                    value={selectedAccountId}
+                    onChange={(e) => {
+                      const accountId = e.target.value
+                      const account = accounts.find(acc => (acc._id || acc.id) === accountId)
+                      setSelectedAccountId(accountId)
+                      setSelectedAccount(account ? account.name : '')
+                    }}
+                    className="w-full px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                  >
+                    <option value="">Select an account</option>
+                    {accounts.map(account => (
+                      <option key={account._id || account.id} value={account._id || account.id}>
+                        {account.name} {account.bankName ? `- ${account.bankName}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Payment Method Field */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Payment Method *
-                  </label>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <label className="text-xs sm:text-sm font-medium text-gray-700">Payment Method *</label>
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 bg-white"
+                    className="w-full px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                   >
                     <option value="upi">UPI</option>
                     <option value="bank_transfer">Bank Transfer</option>
@@ -771,102 +795,57 @@ const SL_ClientProfile = () => {
                   </select>
                 </div>
 
-                {/* Choose Account Dropdown */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Account *
-                  </label>
-                  <div className="relative" ref={dropdownRef}>
-                    <button
-                      type="button"
-                      onClick={() => setShowAccountDropdown(!showAccountDropdown)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 bg-white text-left flex items-center justify-between"
-                    >
-                      <span className="text-gray-800">{selectedAccount || 'Select Account'}</span>
-                      <svg 
-                        className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${showAccountDropdown ? 'rotate-180' : ''}`} 
-                        fill="none" 
-                        stroke="currentColor" 
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    
-                    {/* Dropdown Options */}
-                    {showAccountDropdown && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto"
-                      >
-                        {accounts.length === 0 ? (
-                          <div className="px-4 py-3 text-sm text-gray-500 text-center">
-                            No accounts available
-                          </div>
-                        ) : (
-                          accounts.map((account) => (
-                            <button
-                              key={account._id || account.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedAccount(account.name)
-                                setSelectedAccountId(account._id || account.id)
-                                setShowAccountDropdown(false)
-                              }}
-                              className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                                selectedAccountId === (account._id || account.id) ? 'bg-teal-50 text-teal-700' : 'text-gray-800'
-                              }`}
-                            >
-                              <div>
-                                <div className="font-medium">{account.name}</div>
-                                {account.bankName && (
-                                  <div className="text-xs text-gray-500">{account.bankName}</div>
-                                )}
-                              </div>
-                            </button>
-                          ))
-                        )}
-                      </motion.div>
-                    )}
-                  </div>
+                {/* Notes Field */}
+                <div className="space-y-1.5 sm:space-y-2">
+                  <label className="text-xs sm:text-sm font-medium text-gray-700">Notes (Optional)</label>
+                  <textarea
+                    value={paymentNotes}
+                    onChange={(e) => setPaymentNotes(e.target.value)}
+                    placeholder="Add any additional notes..."
+                    rows={3}
+                    className="w-full px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 resize-none"
+                  />
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={() => {
-                      setShowAddMoneyModal(false)
-                      setAmount('')
-                      setSelectedAccount('')
-                      setSelectedAccountId('')
-                      setPaymentMethod('upi')
-                      setReferenceId('')
-                      setPaymentNotes('')
-                      setShowAccountDropdown(false)
-                    }}
-                    className="flex-1 px-4 py-3 text-gray-700 font-medium hover:bg-gray-50 rounded-lg transition-colors"
-                    disabled={isSubmitting}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleAddMoney}
-                    disabled={isSubmitting || !amount || !selectedAccountId}
-                    className={`flex-1 px-4 py-3 rounded-lg text-white font-medium transition-all duration-200 ${
-                      isSubmitting || !amount || !selectedAccountId
-                        ? 'opacity-50 cursor-not-allowed'
-                        : ''
-                    }`}
-                    style={{ background: gradients.primary }}
-                  >
-                    {isSubmitting ? 'Submitting...' : 'Submit Payment'}
-                  </button>
+                {/* Info Message */}
+                <div className="p-2.5 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-xs text-yellow-800">
+                    <strong>Note:</strong> This payment receipt will be pending admin approval. The remaining amount will be updated immediately.
+                  </p>
                 </div>
               </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-2 sm:space-x-3 mt-4 sm:mt-6 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setShowAddMoneyModal(false)
+                    setAmount('')
+                    setSelectedAccount('')
+                    setSelectedAccountId('')
+                    setPaymentMethod('upi')
+                    setReferenceId('')
+                    setPaymentNotes('')
+                  }}
+                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:text-gray-900 transition-colors duration-200"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddMoney}
+                  disabled={isSubmitting || !amount || !selectedAccountId}
+                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg font-medium transition-all duration-200 ${
+                    isSubmitting || !amount || !selectedAccountId
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-teal-500 to-teal-600 text-white hover:from-teal-600 hover:to-teal-700'
+                  }`}
+                >
+                  {isSubmitting ? 'Submitting...' : 'Submit Payment'}
+                </button>
+              </div>
             </motion.div>
-          </motion.div>
+          </div>
         )}
 
         {/* Transfer Client Modal */}

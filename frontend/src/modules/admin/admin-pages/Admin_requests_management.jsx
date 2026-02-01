@@ -4,6 +4,7 @@ import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
 import adminRequestService from '../admin-services/adminRequestService'
+import { adminFinanceService } from '../admin-services'
 import { 
   FiFileText,
   FiCheckSquare,
@@ -85,8 +86,14 @@ const Admin_requests_management = () => {
     recipientId: '',
     project: '',
     category: '',
-    amount: ''
+    amount: '',
+    accountId: '',
+    method: 'upi',
+    notes: ''
   })
+  
+  // Accounts state for payment-recovery form
+  const [accounts, setAccounts] = useState([])
 
   // Load data from API
   const loadData = async () => {
@@ -185,8 +192,21 @@ const Admin_requests_management = () => {
     }
   }
 
+  // Load accounts for payment-recovery form
+  const loadAccounts = async () => {
+    try {
+      const response = await adminFinanceService.getAccounts()
+      if (response.success) {
+        setAccounts(response.data || [])
+      }
+    } catch (error) {
+      console.error('Error loading accounts:', error)
+    }
+  }
+
   useEffect(() => {
     loadData()
+    loadAccounts()
   }, [])
 
   // Reload requests when filters change
@@ -352,9 +372,15 @@ const Admin_requests_management = () => {
       return
     }
 
-    if (newRequest.type === 'payment-recovery' && !newRequest.amount) {
-      alert('Amount is required for payment recovery requests')
-      return
+    if (newRequest.type === 'payment-recovery') {
+      if (!newRequest.amount) {
+        alert('Amount is required for payment recovery requests')
+        return
+      }
+      if (!newRequest.accountId) {
+        alert('Account is required for payment recovery requests')
+        return
+      }
     }
 
     setIsSubmitting(true)
@@ -368,7 +394,10 @@ const Admin_requests_management = () => {
         recipient: newRequest.recipientId,
         recipientModel: newRequest.recipientType === 'pm' ? 'PM' : newRequest.recipientType.charAt(0).toUpperCase() + newRequest.recipientType.slice(1),
         category: newRequest.category || '',
-        amount: newRequest.type === 'payment-recovery' ? parseFloat(newRequest.amount) : undefined
+        amount: newRequest.type === 'payment-recovery' ? parseFloat(newRequest.amount) : undefined,
+        accountId: newRequest.type === 'payment-recovery' ? newRequest.accountId : undefined,
+        method: newRequest.type === 'payment-recovery' ? newRequest.method : undefined,
+        notes: newRequest.type === 'payment-recovery' ? (newRequest.notes || undefined) : undefined
       }
 
       if (newRequest.project) {
@@ -388,7 +417,10 @@ const Admin_requests_management = () => {
           recipientId: '',
           project: '',
           category: '',
-          amount: ''
+          amount: '',
+          accountId: '',
+          method: 'upi',
+          notes: ''
         })
         setShowCreateModal(false)
         // Reload data
@@ -410,6 +442,21 @@ const Admin_requests_management = () => {
     setSelectedRequest(null)
     setResponseText('')
     setResponseType('approve')
+    // Reset form when closing create modal
+    setNewRequest({
+      title: '',
+      description: '',
+      type: 'approval',
+      priority: 'normal',
+      recipientType: 'client',
+      recipientId: '',
+      project: '',
+      category: '',
+      amount: '',
+      accountId: '',
+      method: 'upi',
+      notes: ''
+    })
   }
 
   if (loading) {
@@ -1101,7 +1148,7 @@ const Admin_requests_management = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] lg:max-w-3xl max-h-[95vh] overflow-hidden flex flex-col m-4"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] lg:max-w-3xl max-h-[95vh] overflow-hidden flex flex-col m-2 sm:m-4"
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -1130,7 +1177,17 @@ const Admin_requests_management = () => {
                   <label className="block text-sm font-medium text-gray-900 mb-3">Request Type</label>
                   <select
                     value={newRequest.type}
-                    onChange={(e) => setNewRequest({...newRequest, type: e.target.value, amount: e.target.value === 'payment-recovery' ? newRequest.amount : ''})}
+                    onChange={(e) => {
+                      const newType = e.target.value
+                      setNewRequest({
+                        ...newRequest, 
+                        type: newType,
+                        amount: newType === 'payment-recovery' ? newRequest.amount : '',
+                        accountId: newType === 'payment-recovery' ? newRequest.accountId : '',
+                        method: newType === 'payment-recovery' ? newRequest.method : 'upi',
+                        notes: newType === 'payment-recovery' ? newRequest.notes : ''
+                      })
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="approval">Approval</option>
@@ -1238,20 +1295,74 @@ const Admin_requests_management = () => {
                   </div>
                 </div>
 
-                {/* Amount (for payment-recovery) */}
+                {/* Payment Recovery Form Fields */}
                 {newRequest.type === 'payment-recovery' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Amount (₹) *</label>
-                    <input
-                      type="number"
-                      value={newRequest.amount}
-                      onChange={(e) => setNewRequest({...newRequest, amount: e.target.value})}
-                      placeholder="Enter amount"
-                      min="0"
-                      step="0.01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                    />
+                  <div className="space-y-3 sm:space-y-4 border-t border-gray-200 pt-4 mt-4">
+                    {/* Amount Field */}
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <label className="text-xs sm:text-sm font-medium text-gray-700">Amount *</label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                          <span className="text-base sm:text-lg">₹</span>
+                        </div>
+                        <input
+                          type="number"
+                          value={newRequest.amount}
+                          onChange={(e) => setNewRequest({...newRequest, amount: e.target.value})}
+                          placeholder="Enter amount"
+                          min="0"
+                          step="0.01"
+                          className="w-full pl-8 pr-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Account Field */}
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <label className="text-xs sm:text-sm font-medium text-gray-700">Account *</label>
+                      <select
+                        value={newRequest.accountId}
+                        onChange={(e) => setNewRequest({...newRequest, accountId: e.target.value})}
+                        className="w-full px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                        required
+                      >
+                        <option value="">Select an account</option>
+                        {accounts.map(account => (
+                          <option key={account._id || account.id} value={account._id || account.id}>
+                            {account.accountName || account.name} {account.bankName ? `- ${account.bankName}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Payment Method Field */}
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <label className="text-xs sm:text-sm font-medium text-gray-700">Payment Method *</label>
+                      <select
+                        value={newRequest.method}
+                        onChange={(e) => setNewRequest({...newRequest, method: e.target.value})}
+                        className="w-full px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                        required
+                      >
+                        <option value="upi">UPI</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="cash">Cash</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+
+                    {/* Notes Field */}
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <label className="text-xs sm:text-sm font-medium text-gray-700">Notes (Optional)</label>
+                      <textarea
+                        value={newRequest.notes}
+                        onChange={(e) => setNewRequest({...newRequest, notes: e.target.value})}
+                        placeholder="Add any additional notes..."
+                        rows={3}
+                        className="w-full px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 resize-none"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -1267,9 +1378,9 @@ const Admin_requests_management = () => {
               </button>
               <button
                 onClick={handleCreateRequest}
-                disabled={isSubmitting || !newRequest.title.trim() || !newRequest.description.trim() || !newRequest.recipientId}
+                disabled={isSubmitting || !newRequest.title.trim() || !newRequest.description.trim() || !newRequest.recipientId || (newRequest.type === 'payment-recovery' && (!newRequest.amount || !newRequest.accountId))}
                 className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors duration-200 flex items-center space-x-2 ${
-                  isSubmitting || !newRequest.title.trim() || !newRequest.description.trim() || !newRequest.recipientId
+                  isSubmitting || !newRequest.title.trim() || !newRequest.description.trim() || !newRequest.recipientId || (newRequest.type === 'payment-recovery' && (!newRequest.amount || !newRequest.accountId))
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-green-600 hover:bg-green-700'
                 }`}
