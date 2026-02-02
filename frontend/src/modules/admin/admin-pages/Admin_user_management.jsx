@@ -29,7 +29,9 @@ import {
   RefreshCw,
   Upload,
   FileText,
-  Download
+  Download,
+  Calculator,
+  Receipt
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
@@ -52,6 +54,7 @@ const Admin_user_management = () => {
   const [showViewModal, setShowViewModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -72,6 +75,8 @@ const Admin_user_management = () => {
     total: 0,
     admins: 0,
     hr: 0,
+    accountant: 0,
+    pem: 0,
     projectManagers: 0,
     employees: 0,
     clients: 0,
@@ -157,6 +162,8 @@ const Admin_user_management = () => {
     switch (role) {
       case 'admin': return 'bg-red-100 text-red-800 border-red-200'
       case 'hr': return 'bg-orange-100 text-orange-800 border-orange-200'
+      case 'accountant': return 'bg-emerald-100 text-emerald-800 border-emerald-200'
+      case 'pem': return 'bg-teal-100 text-teal-800 border-teal-200'
       case 'project-manager': return 'bg-purple-100 text-purple-800 border-purple-200'
       case 'employee': return 'bg-blue-100 text-blue-800 border-blue-200'
       case 'client': return 'bg-green-100 text-green-800 border-green-200'
@@ -205,6 +212,10 @@ const Admin_user_management = () => {
           return user.userType === 'client'
         case 'admin-hr':
           return user.userType === 'admin' || user.role === 'hr'
+        case 'accountant':
+          return user.userType === 'accountant' || user.role === 'accountant'
+        case 'pem':
+          return user.userType === 'pem' || user.role === 'pem'
         default:
           return true
       }
@@ -310,21 +321,66 @@ const Admin_user_management = () => {
     setShowDeleteModal(true)
   }
 
+  // Handle phone number input with validation
+  const handlePhoneChange = (value) => {
+    // Remove all non-digit characters except +
+    let cleaned = value.replace(/[^\d+]/g, '')
+    
+    // Handle +91 prefix
+    if (cleaned.startsWith('+91')) {
+      // Extract digits after +91
+      const digitsAfterPrefix = cleaned.substring(3)
+      // Limit to 10 digits after +91
+      const limitedDigits = digitsAfterPrefix.slice(0, 10)
+      setFormData({...formData, phone: '+91' + limitedDigits})
+    } else if (cleaned.startsWith('91') && cleaned.length > 2) {
+      // Handle 91 prefix (without +)
+      const digitsAfterPrefix = cleaned.substring(2)
+      const limitedDigits = digitsAfterPrefix.slice(0, 10)
+      setFormData({...formData, phone: '+91' + limitedDigits})
+    } else if (cleaned.startsWith('+')) {
+      // If starts with + but not +91, remove it
+      const digitsOnly = cleaned.substring(1).slice(0, 10)
+      setFormData({...formData, phone: digitsOnly})
+    } else {
+      // No prefix, limit to 10 digits
+      const limitedDigits = cleaned.slice(0, 10)
+      setFormData({...formData, phone: limitedDigits})
+    }
+  }
+
   const handleSaveUser = async () => {
+    // Prevent multiple submissions
+    if (isSubmitting) {
+      return
+    }
+
     try {
+      setIsSubmitting(true)
+      
       // Validate user data
       const validationErrors = adminUserService.validateUserData(formData, showEditModal)
       if (validationErrors.length > 0) {
         addToast({ type: 'error', message: validationErrors[0] })
-      return
-    }
+        setIsSubmitting(false)
+        return
+      }
     
       let response;
       const dataToSave = { ...formData };
 
       // Clean phone number before sending to backend
       if (dataToSave.phone) {
-        dataToSave.phone = dataToSave.phone.replace(/\D/g, ''); // Remove all non-digits
+        // Remove +91 prefix if present, keep only digits
+        let phoneNumber = dataToSave.phone.replace(/\+91/g, '').replace(/\D/g, '')
+        // Ensure it's exactly 10 digits
+        if (phoneNumber.length === 10) {
+          dataToSave.phone = phoneNumber
+        } else {
+          addToast({ type: 'error', message: 'Phone number must be exactly 10 digits' })
+          setIsSubmitting(false)
+          return
+        }
       }
 
       if (showCreateModal) {
@@ -362,6 +418,8 @@ const Admin_user_management = () => {
     } catch (error) {
       console.error('Error saving user:', error)
       addToast({ type: 'error', message: error.response?.data?.message || 'Failed to save user' })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -416,13 +474,17 @@ const Admin_user_management = () => {
     { key: 'project-managers', label: 'Project Managers', icon: Shield, count: statistics.projectManagers || 0 },
     { key: 'employees', label: 'Employees', icon: Code, count: statistics.employees || 0 },
     { key: 'clients', label: 'Clients', icon: Home, count: statistics.clients || 0 },
-    { key: 'admin-hr', label: 'Admin & HR', icon: User, count: (statistics.admins || 0) + (statistics.hr || 0) }
+    { key: 'admin-hr', label: 'Admin & HR', icon: User, count: (statistics.admins || 0) + (statistics.hr || 0) },
+    { key: 'accountant', label: 'Accountant', icon: Calculator, count: statistics.accountant || 0 },
+    { key: 'pem', label: 'PEM', icon: Receipt, count: statistics.pem || 0 }
   ]
 
   // Combobox options
   const roleOptions = [
     { value: 'admin', label: 'Admin', icon: User },
     { value: 'hr', label: 'HR', icon: User },
+    { value: 'accountant', label: 'Accountant', icon: Calculator },
+    { value: 'pem', label: 'Project Expense Manager (PEM)', icon: Receipt },
     { value: 'project-manager', label: 'Project Manager', icon: Shield },
     { value: 'employee', label: 'Employee', icon: Code },
     { value: 'client', label: 'Client', icon: Home }
@@ -844,11 +906,17 @@ const Admin_user_management = () => {
                             <thead>
                               <tr className="border-b border-gray-200 bg-gray-50">
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[180px]">Name</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[180px]">Email</th>
+                                {activeTab !== 'clients' && (
+                                  <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[180px]">Email</th>
+                                )}
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px] hidden md:table-cell">Phone</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Role</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden md:table-cell">Team</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px] hidden lg:table-cell">Department</th>
+                                {activeTab !== 'clients' && activeTab !== 'admin-hr' && activeTab !== 'project-managers' && activeTab !== 'accountant' && activeTab !== 'pem' && (
+                                  <>
+                                    <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden md:table-cell">Team</th>
+                                    <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px] hidden lg:table-cell">Department</th>
+                                  </>
+                                )}
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Status</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[110px] hidden lg:table-cell">Joining Date</th>
                                 <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
@@ -869,11 +937,13 @@ const Admin_user_management = () => {
                                         </div>
                                       </div>
                                     </td>
-                                    <td className="py-2 px-2">
-                                      <div className="text-xs text-gray-600 truncate max-w-[180px]">
-                                        {user.email}
-                                      </div>
-                                    </td>
+                                    {activeTab !== 'clients' && (
+                                      <td className="py-2 px-2">
+                                        <div className="text-xs text-gray-600 truncate max-w-[180px]">
+                                          {user.email}
+                                        </div>
+                                      </td>
+                                    )}
                                     <td className="py-2 px-2 hidden md:table-cell">
                                       <div className="flex items-center space-x-1 text-xs text-gray-600">
                                         <Phone className="h-3 w-3 flex-shrink-0 text-gray-400" />
@@ -884,31 +954,34 @@ const Admin_user_management = () => {
                                       <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getRoleColor(user.role)}`}>
                                         {user.role === 'admin' ? 'Admin' : 
                                          user.role === 'hr' ? 'HR' :
+                                         user.role === 'accountant' ? 'Accountant' :
+                                         user.role === 'pem' ? 'PEM' :
                                          user.role === 'project-manager' ? 'PM' : 
                                          user.role === 'employee' ? 'Emp' : 'Client'}
                                       </span>
                                     </td>
-                                    <td className="py-2 px-2 hidden md:table-cell">
-                                      {user.team ? (
-                                        <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full ${getTeamColor(user.team)}`}>
-                                          {user.team === 'developer' ? 'Dev' : 'Sales'}
-                                        </span>
-                                      ) : (
-                                        <span className="text-xs text-gray-400">N/A</span>
-                                      )}
-                                    </td>
-                                    <td className="py-2 px-2 hidden lg:table-cell">
-                                      {user.department && user.role === 'employee' ? (
-                                        <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-800">
-                                          {user.department === 'full-stack' ? 'Full Stack' : 
-                                           user.department === 'nodejs' ? 'Node.js' :
-                                           user.department === 'web' ? 'Web' :
-                                           user.department === 'app' ? 'App' : 'Sales'}
-                                        </span>
-                                      ) : (
-                                        <span className="text-xs text-gray-400">N/A</span>
-                                      )}
-                                    </td>
+                                    {activeTab !== 'clients' && activeTab !== 'admin-hr' && activeTab !== 'project-managers' && activeTab !== 'accountant' && activeTab !== 'pem' && (
+                                      <>
+                                        <td className="py-2 px-2 hidden md:table-cell">
+                                          {user.team ? (
+                                            <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full ${getTeamColor(user.team)}`}>
+                                              {user.team === 'developer' ? 'Dev' : 'Sales'}
+                                            </span>
+                                          ) : (
+                                            <span className="text-xs text-gray-400">N/A</span>
+                                          )}
+                                        </td>
+                                        <td className="py-2 px-2 hidden lg:table-cell">
+                                          {user.department && user.role === 'employee' ? (
+                                            <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-800">
+                                              {user.department}
+                                            </span>
+                                          ) : (
+                                            <span className="text-xs text-gray-400">N/A</span>
+                                          )}
+                                        </td>
+                                      </>
+                                    )}
                                     <td className="py-2 px-2">
                                       <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(user.status)}`}>
                                         {user.status === 'active' ? 'Active' : 'Inactive'}
@@ -1158,7 +1231,12 @@ const Admin_user_management = () => {
                 </div>
               </div>
 
-              <form onSubmit={(e) => { e.preventDefault(); handleSaveUser(); }} className="p-6 space-y-6 max-h-[calc(95vh-140px)] overflow-y-auto">
+              <form onSubmit={(e) => { 
+                e.preventDefault(); 
+                if (!isSubmitting) {
+                  handleSaveUser(); 
+                }
+              }} className="p-6 space-y-6 max-h-[calc(95vh-140px)] overflow-y-auto">
                 {/* Name Field */}
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
@@ -1210,10 +1288,12 @@ const Admin_user_management = () => {
                   <input
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    onChange={(e) => handlePhoneChange(e.target.value)}
                     className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                    placeholder="+91 98765 43210"
+                    placeholder="+91 9876543210 or 9876543210"
+                    maxLength={13}
                   />
+                  <p className="text-xs text-gray-500">Enter 10-digit mobile number (with or without +91)</p>
                 </motion.div>
 
                 {/* Role and Team Grid */}
@@ -1257,8 +1337,8 @@ const Admin_user_management = () => {
                   )}
                 </div>
 
-                {/* Department Field - Only for Developer Employees */}
-                {formData.role === 'employee' && formData.team === 'developer' && (
+                {/* Department Field - Only for Employees */}
+                {formData.role === 'employee' && formData.team && (
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1268,34 +1348,15 @@ const Admin_user_management = () => {
                     <label className="text-sm font-semibold text-gray-700 flex items-center">
                       Department <span className="text-red-500 ml-1">*</span>
                     </label>
-                    <Combobox
-                      options={departmentOptions}
+                    <input
+                      type="text"
                       value={formData.department}
-                      onChange={(value) => setFormData({...formData, department: value})}
-                      placeholder="Select department"
-                      className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                      onChange={(e) => setFormData({...formData, department: e.target.value})}
+                      className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                      placeholder="Enter department name (e.g., Full Stack, Node.js, Web, App, Sales)"
+                      maxLength={100}
                     />
-                  </motion.div>
-                )}
-
-                {/* Department Field - Only for Sales Employees */}
-                {formData.role === 'employee' && formData.team === 'sales' && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.6 }}
-                    className="space-y-2"
-                  >
-                    <label className="text-sm font-semibold text-gray-700 flex items-center">
-                      Department <span className="text-red-500 ml-1">*</span>
-                    </label>
-                    <Combobox
-                      options={salesDepartmentOptions}
-                      value={formData.department}
-                      onChange={(value) => setFormData({...formData, department: value})}
-                      placeholder="Select department"
-                      className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                    />
+                    <p className="text-xs text-gray-500">Enter any department name</p>
                   </motion.div>
                 )}
 
@@ -1447,15 +1508,24 @@ const Admin_user_management = () => {
                     type="button"
                     variant="outline"
                     onClick={closeModals}
-                    className="flex-1 h-12 rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                    disabled={isSubmitting}
+                    className="flex-1 h-12 rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </Button>
                   <Button
                     type="submit"
-                    className="flex-1 h-12 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg transition-all duration-200 transform hover:scale-[1.02]"
+                    disabled={isSubmitting}
+                    className="flex-1 h-12 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
-                    {showCreateModal ? 'Create User' : 'Update User'}
+                    {isSubmitting ? (
+                      <span className="flex items-center justify-center">
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        {showCreateModal ? 'Creating...' : 'Updating...'}
+                      </span>
+                    ) : (
+                      showCreateModal ? 'Create User' : 'Update User'
+                    )}
                   </Button>
                 </motion.div>
               </form>
@@ -1513,6 +1583,8 @@ const Admin_user_management = () => {
                       <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full border ${getRoleColor(selectedUser.role)}`}>
                         {selectedUser.role === 'admin' ? 'Admin' : 
                          selectedUser.role === 'hr' ? 'HR' :
+                         selectedUser.role === 'accountant' ? 'Accountant' :
+                         selectedUser.role === 'pem' ? 'Project Expense Manager (PEM)' :
                          selectedUser.role === 'project-manager' ? 'Project Manager' : 
                          selectedUser.role === 'employee' ? 'Employee' : 'Client'}
                       </span>
@@ -1523,10 +1595,7 @@ const Admin_user_management = () => {
                       )}
                       {selectedUser.department && selectedUser.role === 'employee' && (
                         <span className="inline-flex px-3 py-1 text-sm font-medium rounded-full bg-cyan-100 text-cyan-800">
-                          {selectedUser.department === 'full-stack' ? 'Full Stack' : 
-                           selectedUser.department === 'nodejs' ? 'Node.js' :
-                           selectedUser.department === 'web' ? 'Web' :
-                           selectedUser.department === 'app' ? 'App' : 'Sales'}
+                          {selectedUser.department}
                         </span>
                       )}
                       <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full border ${getStatusColor(selectedUser.status)}`}>

@@ -13,6 +13,8 @@ class AdminUserService {
       case 'client':
         return 'client';
       case 'hr':
+      case 'accountant':
+      case 'pem':
         return 'admin';
       case 'admin':
       default:
@@ -243,8 +245,12 @@ class AdminUserService {
     }
     if (!userData.phone?.trim()) {
       errors.push('Phone number is required');
-    } else if (!/^[6-9]\d{9}$/.test(userData.phone.trim())) {
-      errors.push('Please enter a valid 10-digit Indian mobile number');
+    } else {
+      // Remove +91 prefix if present and check for valid 10-digit number
+      let phoneNumber = userData.phone.trim().replace(/\+91/g, '').replace(/\D/g, '');
+      if (!/^[6-9]\d{9}$/.test(phoneNumber)) {
+        errors.push('Please enter a valid 10-digit Indian mobile number (starting with 6-9)');
+      }
     }
     if (!userData.dateOfBirth) {
       errors.push('Date of birth is required');

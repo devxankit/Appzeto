@@ -5029,7 +5029,9 @@ const getMyTeam = async (req, res) => {
             totalValue,
             convertedValue,
             targetAchievement: member.salesTarget > 0 ? 
-              ((member.currentSales / member.salesTarget) * 100).toFixed(2) : 0
+              ((member.currentSales / member.salesTarget) * 100).toFixed(2) : 0,
+            // Performance score is now based on revenue generated from converting clients
+            performanceScore: convertedValue || 0
           }
         };
       })

@@ -42,7 +42,16 @@ const protect = async (req, res, next) => {
       if (admin && admin.isActive) {
         req.admin = admin;
         req.user = admin;
-        req.userType = admin.role === 'hr' ? 'hr' : 'admin';
+        // Set userType based on admin role
+        if (admin.role === 'hr') {
+          req.userType = 'hr';
+        } else if (admin.role === 'accountant') {
+          req.userType = 'accountant';
+        } else if (admin.role === 'pem') {
+          req.userType = 'pem';
+        } else {
+          req.userType = 'admin';
+        }
         req.user.role = admin.role; // Use actual role from database
         return next();
       }

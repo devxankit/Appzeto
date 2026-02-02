@@ -57,9 +57,12 @@ const Admin_login = () => {
   useEffect(() => {
     if (isAdminAuthenticated()) {
       const adminData = JSON.parse(localStorage.getItem('adminUser') || '{}')
-      // Redirect HR users to HR management page, admin users to dashboard
-      if (adminData.role === 'hr') {
+      const role = adminData.role
+      // Redirect based on role
+      if (role === 'hr') {
         navigate('/admin-hr-management')
+      } else if (role === 'accountant') {
+        navigate('/admin-finance-management')
       } else {
         navigate('/admin-dashboard')
       }
@@ -94,9 +97,12 @@ const Admin_login = () => {
         
         // Small delay to show the toast before redirect
         setTimeout(() => {
-          // Redirect HR users to HR management page, admin users to dashboard
-          if (response.data.admin.role === 'hr') {
+          const role = response.data.admin.role
+          // Redirect based on role
+          if (role === 'hr') {
             navigate('/admin-hr-management')
+          } else if (role === 'accountant') {
+            navigate('/admin-finance-management')
           } else {
             navigate('/admin-dashboard')
           }

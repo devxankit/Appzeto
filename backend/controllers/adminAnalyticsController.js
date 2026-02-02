@@ -928,7 +928,7 @@ const getAdminLeaderboard = asyncHandler(async (req, res, next) => {
         name: member.name,
         email: member.email,
         avatar: member.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
-        score: conversionRate * 100 + convertedLeads, // Score for ranking (will be overridden by conversion rate sorting)
+        score: totalRevenue, // Score is now revenue generated from converting clients
         rank: 0, // Will be set after sorting
         completed: convertedLeads,
         overdue: 0,
@@ -944,8 +944,9 @@ const getAdminLeaderboard = asyncHandler(async (req, res, next) => {
         role: 'Sales Executive',
         module: 'sales',
         earnings: member.currentSales || 0,
-        achievements: conversionRate >= 60 ? ['Sales Champion', 'Client Magnet'] : 
-                      conversionRate >= 50 ? ['Sales Champion'] : [],
+        // Achievements based on revenue thresholds (can be adjusted)
+        achievements: totalRevenue >= 1000000 ? ['Sales Champion', 'Revenue Master'] : 
+                      totalRevenue >= 500000 ? ['Sales Champion'] : [],
         salesMetrics: {
           leads: totalLeads,
           conversions: convertedLeads,
@@ -957,12 +958,14 @@ const getAdminLeaderboard = asyncHandler(async (req, res, next) => {
     })
   );
   
-  // Sort sales by conversion rate (highest first), then by conversions
+  // Sort sales by revenue (highest first), then by conversions if revenue is equal
   salesLeaderboard.sort((a, b) => {
-    if (Math.abs(a.conversionRate - b.conversionRate) < 0.001) {
-      return b.salesMetrics.conversions - a.salesMetrics.conversions;
+    // Primary: Revenue generated from converting clients
+    if (b.salesMetrics.revenue !== a.salesMetrics.revenue) {
+      return b.salesMetrics.revenue - a.salesMetrics.revenue;
     }
-    return b.conversionRate - a.conversionRate;
+    // Secondary: Number of conversions if revenue is equal
+    return b.salesMetrics.conversions - a.salesMetrics.conversions;
   });
   
   // Assign ranks to sales team

@@ -40,9 +40,9 @@ const salesSchema = new mongoose.Schema({
   },
   department: {
     type: String,
-    enum: ['sales'],
     required: [true, 'Department is required'],
-    trim: true
+    trim: true,
+    maxlength: [100, 'Department name cannot exceed 100 characters']
   },
   dateOfBirth: {
     type: Date,

@@ -13,7 +13,8 @@ import {
   UserCheck,
   FileText,
   Handshake,
-  Activity
+  Activity,
+  Home
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { adminStorage } from '../admin-services/baseApiService'
@@ -96,6 +97,12 @@ const Admin_sidebar = ({ isOpen, onClose }) => {
       icon: TrendingUp
     },
     {
+      id: 'client-management',
+      label: 'Client Management',
+      path: '/admin-client-management',
+      icon: Home
+    },
+    {
       id: 'finance-management',
       label: 'Finance Management',
       path: '/admin-finance-management',
@@ -132,6 +139,24 @@ const Admin_sidebar = ({ isOpen, onClose }) => {
       icon: Activity
     }
   ]
+
+  // Filter menu items based on role
+  const getFilteredMenuItems = () => {
+    const role = adminData?.role
+    
+    // Accountant can only see Finance Management
+    if (role === 'accountant') {
+      return menuItems.filter(item => item.id === 'finance-management')
+    }
+    
+    // PEM - for now show all (will be configured later)
+    // if (role === 'pem') {
+    //   return menuItems.filter(item => ...)
+    // }
+    
+    // Admin and other roles see all items
+    return menuItems
+  }
 
   const isActive = (path) => {
     return location.pathname === path
@@ -173,7 +198,7 @@ const Admin_sidebar = ({ isOpen, onClose }) => {
           )}
 
           <nav className="space-y-2 flex-1">
-            {menuItems.map((item) => {
+            {getFilteredMenuItems().map((item) => {
               const Icon = item.icon
               const active = isActive(item.path)
               

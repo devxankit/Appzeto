@@ -590,7 +590,9 @@ const getAllSalesTeam = asyncHandler(async (req, res, next) => {
           totalValue,
           convertedValue,
           targetAchievement: member.salesTarget > 0 ? 
-            (member.currentSales / member.salesTarget) * 100 : 0
+            (member.currentSales / member.salesTarget) * 100 : 0,
+          // Performance score is now based on revenue generated from converting clients
+          performanceScore: calculatePerformanceScore(convertedValue)
         }
       };
     })
@@ -1521,18 +1523,14 @@ const getTeamPerformance = asyncHandler(async (req, res, next) => {
           convertedValue,
           targetAchievement: member.salesTarget > 0 ? 
             (member.currentSales / member.salesTarget) * 100 : 0,
-          performanceScore: calculatePerformanceScore(
-            totalLeads,
-            convertedLeads,
-            member.salesTarget,
-            member.currentSales
-          )
+          // Performance score is now based on revenue generated from converting clients
+          performanceScore: calculatePerformanceScore(convertedValue)
         }
       };
     })
   );
 
-  // Sort by performance score
+  // Sort by performance score (revenue) - highest revenue first
   teamPerformance.sort((a, b) => b.performance.performanceScore - a.performance.performanceScore);
 
   res.status(200).json({
@@ -1542,13 +1540,12 @@ const getTeamPerformance = asyncHandler(async (req, res, next) => {
   });
 });
 
-// Helper function to calculate performance score
-const calculatePerformanceScore = (totalLeads, convertedLeads, target, currentSales) => {
-  const conversionRate = totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0;
-  const targetAchievement = target > 0 ? (currentSales / target) * 100 : 0;
-  
-  // Weighted score: 40% conversion rate + 60% target achievement
-  return Math.round((conversionRate * 0.4) + (targetAchievement * 0.6));
+// Helper function to calculate performance score based on revenue
+// Performance is now based on revenue generated from converting clients
+const calculatePerformanceScore = (convertedValue) => {
+  // Performance score is the total revenue generated from converted clients
+  // Return revenue as the performance score (in rupees)
+  return convertedValue || 0;
 };
 
 // @desc    Delete sales team member

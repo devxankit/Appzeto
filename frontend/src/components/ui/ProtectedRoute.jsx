@@ -17,11 +17,23 @@ const ProtectedRoute = ({ children, requiredRole = 'admin' }) => {
   // Check user role
   const adminData = adminStorage.get()
   if (adminData) {
+    const role = adminData.role
+    const currentPath = location.pathname
+    
     // If HR user tries to access any admin-only route, redirect to HR management
     // HR users can ONLY access HR management page
-    if (adminData.role === 'hr' && requiredRole === 'admin') {
+    if (role === 'hr' && requiredRole === 'admin') {
       return <Navigate to="/admin-hr-management" replace />
     }
+    
+    // Accountant can only access Finance Management
+    if (role === 'accountant') {
+      if (currentPath !== '/admin-finance-management') {
+        return <Navigate to="/admin-finance-management" replace />
+      }
+    }
+    
+    // PEM - for now can access everything (will be configured later)
     // Admin users can access everything, so no restriction needed
   }
   

@@ -59,14 +59,24 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
   const limitNum = parseInt(limit);
   const skip = (pageNum - 1) * limitNum;
 
-  // Get users from all collections with enhanced data
+  // Get users from all collections with enhanced data, sorted by creation date (newest first)
   const [admins, pms, sales, employees, clients] = await Promise.all([
-    Admin.find(filter).select('-password -loginAttempts -lockUntil').skip(skip).limit(limitNum),
-    PM.find(filter).select('-password -loginAttempts -lockUntil').populate('projectsManaged', 'name status dueDate').skip(skip).limit(limitNum),
-    Sales.find(filter).select('-password -loginAttempts -lockUntil').skip(skip).limit(limitNum),
-    Employee.find(filter).select('-password -loginAttempts -lockUntil').populate('projectsAssigned', 'name status').populate('tasksAssigned', 'name status').skip(skip).limit(limitNum),
-    Client.find(filter).select('-otp -otpExpires -otpAttempts -otpLockUntil -loginAttempts -lockUntil').skip(skip).limit(limitNum)
+    Admin.find(filter).select('-password -loginAttempts -lockUntil').sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+    PM.find(filter).select('-password -loginAttempts -lockUntil').populate('projectsManaged', 'name status dueDate').sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+    Sales.find(filter).select('-password -loginAttempts -lockUntil').sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+    Employee.find(filter).select('-password -loginAttempts -lockUntil').populate('projectsAssigned', 'name status').populate('tasksAssigned', 'name status').sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+    Client.find(filter).select('-otp -otpExpires -otpAttempts -otpLockUntil -loginAttempts -lockUntil').populate('tag', 'name color').sort({ createdAt: -1 }).skip(skip).limit(limitNum)
   ]);
+
+  // Format admins with userType based on role
+  const formattedAdmins = admins.map(admin => {
+    const adminObj = admin.toObject();
+    let userType = 'admin';
+    if (adminObj.role === 'hr') userType = 'admin';
+    else if (adminObj.role === 'accountant') userType = 'accountant';
+    else if (adminObj.role === 'pem') userType = 'pem';
+    return { ...adminObj, userType };
+  });
 
   // Process clients with project data
   const clientsWithProjects = await Promise.all(clients.map(async user => {
@@ -85,13 +95,14 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
       userType: 'client',
       projects: totalProjects,
       totalSpent,
-      lastActivity: user.lastLogin || user.updatedAt
+      lastActivity: user.lastLogin || user.updatedAt,
+      createdAt: userObj.createdAt || user._id.getTimestamp()
     };
   }));
 
   // Combine all users with enhanced statistics
   let allUsers = [
-    ...admins.map(user => ({ ...user.toObject(), userType: 'admin' })),
+    ...formattedAdmins.map(admin => ({ ...admin, createdAt: admin.createdAt || admin._id.getTimestamp() })),
     ...pms.map(user => {
       const userObj = user.toObject();
       const now = new Date();
@@ -141,10 +152,11 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
         projects: activeProjects.length,
         completionRate,
         performance,
-        teamSize: user.projectsManaged.reduce((sum, p) => sum + (p.assignedTeam?.length || 0), 0)
+        teamSize: user.projectsManaged.reduce((sum, p) => sum + (p.assignedTeam?.length || 0), 0),
+        createdAt: userObj.createdAt || user._id.getTimestamp()
       };
     }),
-    ...sales.map(user => ({ ...user.toObject(), userType: 'sales' })),
+    ...sales.map(user => ({ ...user.toObject(), userType: 'sales', createdAt: user.createdAt || user._id.getTimestamp() })),
     ...(await Promise.all(employees.map(async (user) => {
       const userObj = user.toObject();
       
@@ -167,25 +179,37 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
         tasks: tasksCount || 0,
         performance: Math.min(100, Math.max(0, 
           (tasksCount > 0 ? 85 : 70) + (projectsCount > 0 ? 10 : 0)
-        ))
+        )),
+        createdAt: userObj.createdAt || user._id.getTimestamp()
       };
     }))),
     ...clientsWithProjects
   ];
 
+  // Sort all users by creation date (newest first)
+  allUsers.sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+    const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+    return dateB - dateA; // Descending order (newest first)
+  });
+
   // Get total counts for statistics
-  const [adminCount, hrCount, pmCount, salesCount, employeeCount, clientCount] = await Promise.all([
+  const [adminCount, hrCount, accountantCount, pemCount, pmCount, salesCount, employeeCount, clientCount] = await Promise.all([
     Admin.countDocuments({ role: 'admin' }),
     Admin.countDocuments({ role: 'hr' }),
+    Admin.countDocuments({ role: 'accountant' }),
+    Admin.countDocuments({ role: 'pem' }),
     PM.countDocuments(),
     Sales.countDocuments(),
     Employee.countDocuments(),
     Client.countDocuments()
   ]);
 
-  const [activeAdminCount, activeHrCount, activePmCount, activeSalesCount, activeEmployeeCount, activeClientCount] = await Promise.all([
+  const [activeAdminCount, activeHrCount, activeAccountantCount, activePemCount, activePmCount, activeSalesCount, activeEmployeeCount, activeClientCount] = await Promise.all([
     Admin.countDocuments({ role: 'admin', isActive: true }),
     Admin.countDocuments({ role: 'hr', isActive: true }),
+    Admin.countDocuments({ role: 'accountant', isActive: true }),
+    Admin.countDocuments({ role: 'pem', isActive: true }),
     PM.countDocuments({ isActive: true }),
     Sales.countDocuments({ isActive: true }),
     Employee.countDocuments({ isActive: true }),
@@ -194,16 +218,18 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
 
   // Calculate statistics
   const statistics = {
-    total: adminCount + hrCount + pmCount + salesCount + employeeCount + clientCount,
+    total: adminCount + hrCount + accountantCount + pemCount + pmCount + salesCount + employeeCount + clientCount,
     admins: adminCount,
     hr: hrCount,
+    accountant: accountantCount,
+    pem: pemCount,
     projectManagers: pmCount,
     employees: salesCount + employeeCount,
     clients: clientCount,
     developers: employeeCount,
     salesTeam: salesCount,
-    active: activeAdminCount + activeHrCount + activePmCount + activeSalesCount + activeEmployeeCount + activeClientCount,
-    inactive: (adminCount + hrCount + pmCount + salesCount + employeeCount + clientCount) - (activeAdminCount + activeHrCount + activePmCount + activeSalesCount + activeEmployeeCount + activeClientCount)
+    active: activeAdminCount + activeHrCount + activeAccountantCount + activePemCount + activePmCount + activeSalesCount + activeEmployeeCount + activeClientCount,
+    inactive: (adminCount + hrCount + accountantCount + pemCount + pmCount + salesCount + employeeCount + clientCount) - (activeAdminCount + activeHrCount + activeAccountantCount + activePemCount + activePmCount + activeSalesCount + activeEmployeeCount + activeClientCount)
   };
 
   res.status(200).json({
@@ -225,6 +251,8 @@ const getUser = asyncHandler(async (req, res, next) => {
   
   switch (userType) {
     case 'admin':
+    case 'accountant':
+    case 'pem':
       Model = Admin;
       break;
     case 'pm':
@@ -243,7 +271,18 @@ const getUser = asyncHandler(async (req, res, next) => {
       return next(new ErrorResponse('Invalid user type', 400));
   }
 
-  user = await Model.findById(id);
+  if (userType === 'client') {
+    user = await Model.findById(id).populate('tag', 'name color');
+  } else {
+    user = await Model.findById(id);
+  }
+  
+  // Set userType based on role for admin types
+  if (userType === 'admin' && user) {
+    if (user.role === 'accountant') userType = 'accountant';
+    else if (user.role === 'pem') userType = 'pem';
+    else if (user.role === 'hr') userType = 'admin';
+  }
   
   if (!user) {
     return next(new ErrorResponse('User not found', 404));
@@ -315,6 +354,8 @@ const createUser = asyncHandler(async (req, res, next) => {
   switch (role) {
     case 'admin':
     case 'hr':
+    case 'accountant':
+    case 'pem':
       userData.role = role;
       userData.password = password;
       user = await Admin.create(userData);
@@ -350,6 +391,23 @@ const createUser = asyncHandler(async (req, res, next) => {
       return next(new ErrorResponse('Invalid role', 400));
   }
 
+  // Send welcome email based on role
+  try {
+    const emailService = require('../services/emailService');
+    
+    if (role === 'client') {
+      // Send welcome-only email for clients (no credentials - OTP login)
+      await emailService.sendClientWelcomeEmail(email, name, phone);
+    } else {
+      // Send welcome email with credentials for all other roles
+      await emailService.sendWelcomeEmailWithCredentials(email, name, password, role);
+    }
+  } catch (emailError) {
+    // Log email error but don't fail user creation
+    console.error('Failed to send welcome email:', emailError);
+    // Continue with user creation even if email fails
+  }
+
   res.status(201).json({
     success: true,
     data: { ...user.toObject(), userType: role === 'employee' ? (team === 'sales' ? 'sales' : 'employee') : role === 'project-manager' ? 'project-manager' : role }
@@ -361,7 +419,7 @@ const createUser = asyncHandler(async (req, res, next) => {
 // @access  Private (Admin only)
 const updateUser = asyncHandler(async (req, res, next) => {
   const { userType, id } = req.params;
-  const { name, email, phone, dateOfBirth, joiningDate, status, password, confirmPassword, team, department } = req.body;
+  const { name, email, phone, dateOfBirth, joiningDate, status, password, confirmPassword, team, department, tag } = req.body;
 
   let user;
   let Model;
@@ -420,6 +478,21 @@ const updateUser = asyncHandler(async (req, res, next) => {
   if (status !== undefined) user.isActive = status === 'active';
   if (team) user.team = team;
   if (department) user.department = department;
+  
+  // Handle tag assignment for clients
+  if (userType === 'client' && tag !== undefined) {
+    if (tag === '' || tag === null) {
+      user.tag = null;
+    } else {
+      // Validate tag exists
+      const ClientTag = require('../models/ClientTag');
+      const tagExists = await ClientTag.findById(tag);
+      if (!tagExists) {
+        return next(new ErrorResponse('Tag not found', 404));
+      }
+      user.tag = tag;
+    }
+  }
 
   // Handle password update for non-client users
   // Only require password update if password is provided and not empty
@@ -516,18 +589,22 @@ const deleteUser = asyncHandler(async (req, res, next) => {
 // @route   GET /api/admin/users/statistics
 // @access  Private (Admin only)
 const getUserStatistics = asyncHandler(async (req, res, next) => {
-  const [adminCount, hrCount, pmCount, salesCount, employeeCount, clientCount] = await Promise.all([
+  const [adminCount, hrCount, accountantCount, pemCount, pmCount, salesCount, employeeCount, clientCount] = await Promise.all([
     Admin.countDocuments({ role: 'admin' }),
     Admin.countDocuments({ role: 'hr' }),
+    Admin.countDocuments({ role: 'accountant' }),
+    Admin.countDocuments({ role: 'pem' }),
     PM.countDocuments(),
     Sales.countDocuments(),
     Employee.countDocuments(),
     Client.countDocuments()
   ]);
 
-  const [activeAdminCount, activeHrCount, activePmCount, activeSalesCount, activeEmployeeCount, activeClientCount] = await Promise.all([
+  const [activeAdminCount, activeHrCount, activeAccountantCount, activePemCount, activePmCount, activeSalesCount, activeEmployeeCount, activeClientCount] = await Promise.all([
     Admin.countDocuments({ role: 'admin', isActive: true }),
     Admin.countDocuments({ role: 'hr', isActive: true }),
+    Admin.countDocuments({ role: 'accountant', isActive: true }),
+    Admin.countDocuments({ role: 'pem', isActive: true }),
     PM.countDocuments({ isActive: true }),
     Sales.countDocuments({ isActive: true }),
     Employee.countDocuments({ isActive: true }),
@@ -535,16 +612,18 @@ const getUserStatistics = asyncHandler(async (req, res, next) => {
   ]);
 
   const statistics = {
-    total: adminCount + hrCount + pmCount + salesCount + employeeCount + clientCount,
+    total: adminCount + hrCount + accountantCount + pemCount + pmCount + salesCount + employeeCount + clientCount,
     admins: adminCount,
     hr: hrCount,
+    accountant: accountantCount,
+    pem: pemCount,
     projectManagers: pmCount,
     employees: salesCount + employeeCount,
     clients: clientCount,
     developers: employeeCount,
     salesTeam: salesCount,
-    active: activeAdminCount + activeHrCount + activePmCount + activeSalesCount + activeEmployeeCount + activeClientCount,
-    inactive: (adminCount + hrCount + pmCount + salesCount + employeeCount + clientCount) - (activeAdminCount + activeHrCount + activePmCount + activeSalesCount + activeEmployeeCount + activeClientCount)
+    active: activeAdminCount + activeHrCount + activeAccountantCount + activePemCount + activePmCount + activeSalesCount + activeEmployeeCount + activeClientCount,
+    inactive: (adminCount + hrCount + accountantCount + pemCount + pmCount + salesCount + employeeCount + clientCount) - (activeAdminCount + activeHrCount + activeAccountantCount + activePemCount + activePmCount + activeSalesCount + activeEmployeeCount + activeClientCount)
   };
 
   res.status(200).json({

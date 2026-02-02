@@ -132,6 +132,12 @@ const clientSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  // Client tag (for categorization)
+  tag: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ClientTag',
+    default: null
+  },
   // Transfer history (tracking client transfers between sales employees)
   transferHistory: [{
     fromSales: {

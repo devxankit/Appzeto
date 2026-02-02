@@ -129,6 +129,7 @@ import Admin_sales_management from './modules/admin/admin-pages/Admin_sales_mana
 import Admin_user_management from './modules/admin/admin-pages/Admin_user_management'
 import Admin_hr_management from './modules/admin/admin-pages/Admin_hr_management'
 import Admin_channel_partner_management from './modules/admin/admin-pages/Admin_channel_partner_management'
+import Admin_client_management from './modules/admin/admin-pages/Admin_client_management'
 import Admin_notice_board from './modules/admin/admin-pages/Admin_notice_board'
 import Admin_recent_activities from './modules/admin/admin-pages/Admin_recent_activities'
 import ResetPassword from './components/auth/ResetPassword'
@@ -650,6 +651,11 @@ function App() {
             <Route path="/admin-channel-partner-management" element={
               <ProtectedRoute>
                 <Admin_channel_partner_management />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin-client-management" element={
+              <ProtectedRoute>
+                <Admin_client_management />
               </ProtectedRoute>
             } />
             <Route path="/admin-notice-board" element={

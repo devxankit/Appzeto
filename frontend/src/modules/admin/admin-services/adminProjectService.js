@@ -312,6 +312,8 @@ class AdminProjectService {
   formatClientForDisplay(client) {
     return {
       id: client._id,
+      _id: client._id,
+      userId: client._id,
       name: client.name,
       email: client.email,
       phone: client.phoneNumber,
@@ -327,9 +329,13 @@ class AdminProjectService {
       totalSpent: client.totalSpent || 0,
       projects: client.projects || 0, // Backend returns count as number, not array
       lastProject: client.lastProject,
+      // Tag field (populated from backend)
+      tag: client.tag || null,
       // Additional fields for comprehensive display
       userType: 'client',
-      role: 'Client'
+      role: 'Client',
+      // Include all original fields for compatibility
+      ...client
     };
   }
 

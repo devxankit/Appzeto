@@ -1016,17 +1016,6 @@ const Admin_project_management = () => {
           }
           break
 
-        case 'clients':
-          const clientsResponse = await adminProjectService.getClients({
-            status: selectedFilter !== 'all' ? selectedFilter : undefined,
-            search: searchTerm || undefined,
-            page: currentPage,
-            limit: itemsPerPage
-          })
-          if (clientsResponse.success) {
-            setClients(clientsResponse.data)
-          }
-          break
 
         case 'project-managers':
           const pmsResponse = await adminProjectService.getPMs({
@@ -1101,7 +1090,6 @@ const Admin_project_management = () => {
       case 'active-projects': return projects
       case 'completed-projects': return completedProjects
       case 'employees': return employees
-      case 'clients': return clients
       case 'project-managers': return projectManagers
       default: return []
     }
@@ -1243,9 +1231,6 @@ const Admin_project_management = () => {
       } else if (activeTab === 'employees') {
         // For employees: use createdAt, joinDate, or dateJoined
         dateToCheck = item.createdAt || item.joinDate || item.dateJoined || item.dateCreated
-      } else if (activeTab === 'clients') {
-        // For clients: use createdAt, joinDate, or dateCreated
-        dateToCheck = item.createdAt || item.joinDate || item.dateCreated || item.lastActivity
       } else if (activeTab === 'project-managers') {
         // For PMs: use createdAt, joinDate, or dateJoined
         dateToCheck = item.createdAt || item.joinDate || item.dateJoined || item.dateCreated
@@ -2414,7 +2399,7 @@ function getFinancialSummary(project) {
               </div>
             </motion.div>
 
-            {/* Employees Stats */}
+            {/* Developers Stats */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -2425,7 +2410,7 @@ function getFinancialSummary(project) {
                 <div className="p-1.5 bg-orange-100 rounded-lg">
                   <FiUsers className="h-3 w-3 text-orange-600" />
                 </div>
-                <span className="text-xs text-gray-500 font-medium">Employees</span>
+                <span className="text-xs text-gray-500 font-medium">Developers</span>
               </div>
               <div className="space-y-0.5">
                 <p className="text-lg font-bold text-gray-900">{statistics.employees.total}</p>
@@ -2510,8 +2495,7 @@ function getFinancialSummary(project) {
                   { key: 'pending-projects', label: 'Pending', icon: FiClock },
                   { key: 'active-projects', label: 'Active', icon: FiFolder },
                   { key: 'completed-projects', label: 'Completed', icon: FiCheckCircle },
-                  { key: 'employees', label: 'Employees', icon: FiUsers },
-                  { key: 'clients', label: 'Clients', icon: FiHome },
+                  { key: 'employees', label: 'Developers', icon: FiUsers },
                   { key: 'project-managers', label: 'PMs', icon: FiUser }
                 ].map((tab) => (
                   <button
@@ -3568,14 +3552,14 @@ function getFinancialSummary(project) {
                 </Card>
               )}
 
-              {/* Employees Tab */}
+              {/* Developers Tab */}
               {activeTab === 'employees' && (
                 <Card className="shadow-sm border border-gray-200">
                   <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                       <div>
                         <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
-                          Employees
+                          Developers
                         </CardTitle>
                         <p className="text-sm text-gray-600 mt-1">Manage your development team members</p>
                       </div>
@@ -3664,7 +3648,7 @@ function getFinancialSummary(project) {
                           <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                           <input
                             type="text"
-                            placeholder="Search employees..."
+                            placeholder="Search developers..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-64 text-sm"
@@ -3680,7 +3664,7 @@ function getFinancialSummary(project) {
                           <option value="on-leave">On Leave</option>
                         </select>
                         <div className="bg-orange-100 text-orange-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
-                          {filteredData.length} employees
+                          {filteredData.length} developers
                         </div>
                       </div>
                     </div>
@@ -3776,7 +3760,7 @@ function getFinancialSummary(project) {
                         {/* Pagination */}
                         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
                           <div className="text-sm text-gray-700">
-                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} employees
+                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} developers
                           </div>
                           <div className="flex items-center space-x-2">
                             <button
@@ -3815,276 +3799,9 @@ function getFinancialSummary(project) {
                           <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
                             <FiUsers className="text-primary text-3xl" />
                           </div>
-                          <h3 className="text-2xl font-semibold text-gray-900 mb-4">No employees found</h3>
+                          <h3 className="text-2xl font-semibold text-gray-900 mb-4">No developers found</h3>
                           <p className="text-gray-600 text-lg">
-                            There are no employees at the moment.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Clients Tab */}
-              {activeTab === 'clients' && (
-                <Card className="shadow-sm border border-gray-200">
-                  <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                      <div>
-                        <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
-                          Clients
-                        </CardTitle>
-                        <p className="text-sm text-gray-600 mt-1">Manage your client relationships</p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-                        {/* Date Range Filter */}
-                        <div className="relative filter-dropdown-container">
-                          <button
-                            onClick={() => setShowDateFilterDropdown(!showDateFilterDropdown)}
-                            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
-                          >
-                            <Filter className="h-4 w-4 text-blue-600" />
-                            <span className="font-medium text-gray-700">{getDateFilterLabel()}</span>
-                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
-                          </button>
-                          
-                          {showDateFilterDropdown && (
-                            <motion.div
-                              initial={{ opacity: 0, y: -8 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -8 }}
-                              transition={{ duration: 0.15 }}
-                              className="absolute right-0 mt-2 w-60 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-gray-200/80 z-50 overflow-hidden"
-                            >
-                              <div className="px-3 pt-3 pb-2">
-                                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                                  Date range
-                                </p>
-                                <div className="space-y-0.5">
-                                  {[
-                                    { type: 'all', label: 'All Time', Icon: Database },
-                                    { type: 'day', label: 'Today', Icon: Calendar },
-                                    { type: 'week', label: 'This Week', Icon: Calendar },
-                                    { type: 'month', label: 'This Month', Icon: BarChart3 },
-                                    { type: 'year', label: 'This Year', Icon: TrendingUp }
-                                  ].map(({ type, label, Icon }) => (
-                                    <button
-                                      key={type}
-                                      onClick={() => {
-                                        setStartDate('')
-                                        setEndDate('')
-                                        setDateFilterType(type)
-                                        setShowDateFilterDropdown(false)
-                                      }}
-                                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                                        dateFilterType === type
-                                          ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
-                                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                                      }`}
-                                    >
-                                      <div className={`p-1.5 rounded-lg ${dateFilterType === type ? 'bg-blue-100' : 'bg-gray-100'}`}>
-                                        <Icon className={`h-3.5 w-3.5 ${dateFilterType === type ? 'text-blue-600' : 'text-gray-500'}`} />
-                                      </div>
-                                      <span className="flex-1 text-left">{label}</span>
-                                      {dateFilterType === type && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
-                                <button
-                                  onClick={() => {
-                                    setTempStartDate(startDate)
-                                    setTempEndDate(endDate)
-                                    setDateFilterType('custom')
-                                    setShowDateRangePicker(true)
-                                    setShowDateFilterDropdown(false)
-                                  }}
-                                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                                    dateFilterType === 'custom'
-                                      ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
-                                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                                  }`}
-                                >
-                                  <div className={`p-1.5 rounded-lg ${dateFilterType === 'custom' ? 'bg-blue-100' : 'bg-gray-100'}`}>
-                                    <CalendarDays className={`h-3.5 w-3.5 ${dateFilterType === 'custom' ? 'text-blue-600' : 'text-gray-500'}`} />
-                                  </div>
-                                  <span className="flex-1 text-left">Custom range</span>
-                                  {dateFilterType === 'custom' && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
-                                </button>
-                              </div>
-                            </motion.div>
-                          )}
-                        </div>
-
-                        <div className="relative">
-                          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                          <input
-                            type="text"
-                            placeholder="Search clients..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-64 text-sm"
-                          />
-                        </div>
-                        <select
-                          value={selectedFilter}
-                          onChange={(e) => setSelectedFilter(e.target.value)}
-                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto"
-                        >
-                          <option value="all">All Status</option>
-                          <option value="active">Active</option>
-                          <option value="inactive">Inactive</option>
-                        </select>
-                        <div className="bg-teal-100 text-teal-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
-                          {filteredData.length} clients
-                        </div>
-                      </div>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="p-0">
-                    {paginatedData.length > 0 ? (
-                      <div className="p-2 lg:p-4">
-                        <div className="overflow-x-auto -mx-2 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
-                          <table className="w-full min-w-[800px] border-collapse text-xs">
-                            <thead>
-                              <tr className="border-b border-gray-200 bg-gray-50">
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[160px]">Name</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Contact</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[150px] hidden md:table-cell">Email</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Status</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Total Spent</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px] hidden md:table-cell">Projects</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden lg:table-cell">Joined</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden lg:table-cell">Last Activity</th>
-                                <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {paginatedData.map((client, index) => {
-                                const clientKey = client.id || client._id || client.userId || `client-${index}`
-                                return (
-                                  <tr key={clientKey} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                                    <td className="py-2 px-2">
-                                      <div className="flex items-center space-x-2">
-                                        <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-cyan-600 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
-                                          {client.name?.charAt(0)?.toUpperCase() || 'C'}
-                                        </div>
-                                        <div className="min-w-0">
-                                          <p className="text-xs font-semibold text-gray-900 truncate">{client.name}</p>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td className="py-2 px-2">
-                                      <div className="text-xs text-gray-600 truncate max-w-[120px]">{client.contact}</div>
-                                    </td>
-                                    <td className="py-2 px-2 hidden md:table-cell">
-                                      <div className="text-xs text-gray-600 truncate max-w-[150px]">{client.email}</div>
-                                    </td>
-                                    <td className="py-2 px-2">
-                                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(client.status)}`}>
-                                        {client.status}
-                                      </span>
-                                    </td>
-                                    <td className="py-2 px-2">
-                                      <div className="text-xs font-semibold text-green-700">
-                                        {formatCurrency(client.totalSpent)}
-                                      </div>
-                                    </td>
-                                    <td className="py-2 px-2 hidden md:table-cell">
-                                      <div className="text-xs font-semibold text-gray-700">{client.projects}</div>
-                                    </td>
-                                    <td className="py-2 px-2 hidden lg:table-cell">
-                                      <div className="flex items-center space-x-1 text-xs text-gray-600">
-                                        <FiCalendar className="h-3 w-3 flex-shrink-0" />
-                                        <span className="truncate">{formatDate(client.joinDate)}</span>
-                                      </div>
-                                    </td>
-                                    <td className="py-2 px-2 hidden lg:table-cell">
-                                      <div className="flex items-center space-x-1 text-xs text-gray-600">
-                                        <FiCalendar className="h-3 w-3 flex-shrink-0" />
-                                        <span className="truncate">{formatDate(client.lastActive)}</span>
-                                      </div>
-                                    </td>
-                                    <td className="py-2 px-2">
-                                      <div className="flex items-center justify-end space-x-1">
-                                        <button
-                                          onClick={() => handleView(client, 'client')}
-                                          className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all"
-                                          title="View"
-                                        >
-                                          <FiEye className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button
-                                          onClick={() => handleEdit(client, 'client')}
-                                          className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all"
-                                          title="Edit"
-                                        >
-                                          <FiEdit3 className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button
-                                          onClick={() => handleDelete(client, 'client')}
-                                          className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-all"
-                                          title="Delete"
-                                        >
-                                          <FiTrash2 className="h-3.5 w-3.5" />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-
-                        {/* Pagination */}
-                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-                          <div className="text-sm text-gray-700">
-                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} clients
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                              disabled={currentPage === 1}
-                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              Previous
-                            </button>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                              <button
-                                key={page}
-                                onClick={() => setCurrentPage(page)}
-                                className={`px-3 py-1 border rounded-md text-sm font-medium ${
-                                  currentPage === page
-                                    ? 'border-primary bg-primary text-white'
-                                    : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                                }`}
-                              >
-                                {page}
-                              </button>
-                            ))}
-                            <button
-                              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                              disabled={currentPage === totalPages}
-                              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              Next
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-16">
-                        <div className="max-w-md mx-auto">
-                          <div className="w-20 h-20 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <FiHome className="text-teal-500 text-3xl" />
-                          </div>
-                          <h3 className="text-2xl font-semibold text-gray-900 mb-4">No clients found</h3>
-                          <p className="text-gray-600 text-lg">
-                            There are no clients at the moment.
+                            There are no developers at the moment.
                           </p>
                         </div>
                       </div>
@@ -4223,7 +3940,6 @@ function getFinancialSummary(project) {
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Completion</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Performance</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Projects</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px] hidden md:table-cell">Team</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[150px] hidden md:table-cell">Email</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden lg:table-cell">Joined</th>
                                 <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
@@ -4256,9 +3972,6 @@ function getFinancialSummary(project) {
                                   </td>
                                   <td className="py-2 px-2">
                                     <div className="text-xs font-semibold text-gray-700">{pm.projects}</div>
-                                  </td>
-                                  <td className="py-2 px-2 hidden md:table-cell">
-                                    <div className="text-xs font-semibold text-gray-700">{pm.teamSize}</div>
                                   </td>
                                   <td className="py-2 px-2 hidden md:table-cell">
                                     <a href={`mailto:${pm.email}`} className="text-xs text-blue-600 hover:text-blue-800 truncate max-w-[150px] block">

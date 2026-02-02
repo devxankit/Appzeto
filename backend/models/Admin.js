@@ -30,7 +30,7 @@ const adminSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'hr'],
+    enum: ['admin', 'hr', 'accountant', 'pem'],
     default: 'admin'
   },
   dateOfBirth: {

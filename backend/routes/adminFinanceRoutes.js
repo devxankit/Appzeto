@@ -30,7 +30,7 @@ const { protect, authorize } = require('../middlewares/auth');
 
 // Apply authentication and admin authorization to all routes
 router.use(protect);
-router.use(authorize('admin'));
+router.use(authorize('admin', 'accountant', 'pem'));
 
 // Finance statistics route
 router.route('/statistics')
