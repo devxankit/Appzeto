@@ -4,6 +4,7 @@ const Sales = require('../models/Sales');
 const Employee = require('../models/Employee');
 const Client = require('../models/Client');
 const Project = require('../models/Project');
+const Task = require('../models/Task');
 const Payment = require('../models/Payment');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
@@ -144,25 +145,31 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
       };
     }),
     ...sales.map(user => ({ ...user.toObject(), userType: 'sales' })),
-    ...employees.map(user => {
+    ...(await Promise.all(employees.map(async (user) => {
       const userObj = user.toObject();
-      const activeProjects = user.projectsAssigned.filter(p => 
-        ['untouched', 'started', 'active'].includes(p.status)
-      ).length;
-      const activeTasks = user.tasksAssigned.filter(t => 
-        ['pending', 'in-progress'].includes(t.status)
-      ).length;
+      
+      // Calculate projects count: projects where employee is in assignedTeam (all non-cancelled projects)
+      const projectsCount = await Project.countDocuments({
+        assignedTeam: { $in: [user._id] },
+        status: { $ne: 'cancelled' } // Count all projects except cancelled
+      });
+      
+      // Calculate tasks count: tasks assigned to employee (all non-cancelled tasks)
+      const tasksCount = await Task.countDocuments({
+        assignedTo: { $in: [user._id] },
+        status: { $ne: 'cancelled' } // Count all tasks except cancelled
+      });
       
       return {
         ...userObj,
         userType: 'employee',
-        projects: activeProjects,
-        tasks: activeTasks,
+        projects: projectsCount || 0,
+        tasks: tasksCount || 0,
         performance: Math.min(100, Math.max(0, 
-          (activeTasks > 0 ? 85 : 70) + (activeProjects > 0 ? 10 : 0)
+          (tasksCount > 0 ? 85 : 70) + (projectsCount > 0 ? 10 : 0)
         ))
       };
-    }),
+    }))),
     ...clientsWithProjects
   ];
 

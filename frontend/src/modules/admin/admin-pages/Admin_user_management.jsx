@@ -181,7 +181,10 @@ const Admin_user_management = () => {
   }
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    if (!dateString) return 'N/A'
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'N/A'
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
@@ -835,88 +838,118 @@ const Admin_user_management = () => {
                       </div>
                     ) : (
                       <>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                          {getPaginatedUsers().map((user) => (
-                          <motion.div
-                            key={user.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-all duration-200 group"
-                          >
-                            {/* Header */}
-                            <div className="mb-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
-                                  {user.avatar}
-                                </div>
-                                <div className="flex items-center space-x-1">
-                                  <button
-                                    onClick={() => handleViewUser(user)}
-                                    className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-all duration-200"
-                                  >
-                                    <Eye className="h-3 w-3" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleEditUser(user)}
-                                    className="text-gray-400 hover:text-green-600 p-1 rounded hover:bg-green-50 transition-all duration-200"
-                                  >
-                                    <Edit3 className="h-3 w-3" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteUser(user)}
-                                    className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-all duration-200"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </button>
-                                </div>
-                              </div>
-                              <div>
-                                <h3 className="text-sm font-semibold text-gray-900 leading-tight mb-1">{user.name}</h3>
-                                <p className="text-xs text-gray-600 truncate">{user.email}</p>
-                              </div>
-                            </div>
-
-                            {/* Phone */}
-                            <div className="flex items-center space-x-1 mb-2">
-                              <Phone className="h-3 w-3 text-gray-400" />
-                              <span className="text-xs text-gray-600 truncate">{user.phone}</span>
-                            </div>
-
-                            {/* Role and Team Badges */}
-                            <div className="flex flex-wrap gap-1 mb-2">
-                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getRoleColor(user.role)}`}>
-                                {user.role === 'admin' ? 'Admin' : 
-                                 user.role === 'hr' ? 'HR' :
-                                 user.role === 'project-manager' ? 'PM' : 
-                                 user.role === 'employee' ? 'Emp' : 'Client'}
-                              </span>
-                              {user.team && (
-                                <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full ${getTeamColor(user.team)}`}>
-                                  {user.team === 'developer' ? 'Dev' : 'Sales'}
-                                </span>
-                              )}
-                              {user.department && user.role === 'employee' && (
-                                <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-800">
-                                  {user.department === 'full-stack' ? 'Full Stack' : 
-                                   user.department === 'nodejs' ? 'Node.js' :
-                                   user.department === 'web' ? 'Web' :
-                                   user.department === 'app' ? 'App' : 'Sales'}
-                                </span>
-                              )}
-                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(user.status)}`}>
-                                {user.status === 'active' ? 'Active' : 'Inactive'}
-                              </span>
-                            </div>
-
-                            {/* Bottom Info */}
-                            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                              <div className="flex items-center space-x-1">
-                                <Calendar className="h-3 w-3 text-gray-400" />
-                                <span className="text-xs text-gray-500">{formatDate(user.joiningDate)}</span>
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
+                        {/* Table Layout */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[1000px] border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-200 bg-gray-50">
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[180px]">Name</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[180px]">Email</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px] hidden md:table-cell">Phone</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Role</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden md:table-cell">Team</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px] hidden lg:table-cell">Department</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Status</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[110px] hidden lg:table-cell">Joining Date</th>
+                                <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {getPaginatedUsers().map((user, index) => {
+                                const userKey = user.id || user._id || `user-${index}`
+                                return (
+                                  <tr key={userKey} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
+                                          {user.avatar}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-semibold text-gray-900 truncate">{user.name}</p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="text-xs text-gray-600 truncate max-w-[180px]">
+                                        {user.email}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 hidden md:table-cell">
+                                      <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                        <Phone className="h-3 w-3 flex-shrink-0 text-gray-400" />
+                                        <span className="truncate max-w-[100px]">{user.phone || 'N/A'}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getRoleColor(user.role)}`}>
+                                        {user.role === 'admin' ? 'Admin' : 
+                                         user.role === 'hr' ? 'HR' :
+                                         user.role === 'project-manager' ? 'PM' : 
+                                         user.role === 'employee' ? 'Emp' : 'Client'}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-2 hidden md:table-cell">
+                                      {user.team ? (
+                                        <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full ${getTeamColor(user.team)}`}>
+                                          {user.team === 'developer' ? 'Dev' : 'Sales'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-gray-400">N/A</span>
+                                      )}
+                                    </td>
+                                    <td className="py-2 px-2 hidden lg:table-cell">
+                                      {user.department && user.role === 'employee' ? (
+                                        <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-800">
+                                          {user.department === 'full-stack' ? 'Full Stack' : 
+                                           user.department === 'nodejs' ? 'Node.js' :
+                                           user.department === 'web' ? 'Web' :
+                                           user.department === 'app' ? 'App' : 'Sales'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-gray-400">N/A</span>
+                                      )}
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(user.status)}`}>
+                                        {user.status === 'active' ? 'Active' : 'Inactive'}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-2 hidden lg:table-cell">
+                                      <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                        <Calendar className="h-3 w-3 flex-shrink-0 text-gray-400" />
+                                        <span className="truncate">{formatDate(user.joiningDate)}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center justify-end space-x-1">
+                                        <button
+                                          onClick={() => handleViewUser(user)}
+                                          className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-all duration-200"
+                                          title="View"
+                                        >
+                                          <Eye className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleEditUser(user)}
+                                          className="text-gray-400 hover:text-green-600 p-1 rounded hover:bg-green-50 transition-all duration-200"
+                                          title="Edit"
+                                        >
+                                          <Edit3 className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteUser(user)}
+                                          className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-all duration-200"
+                                          title="Delete"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
                         </div>
 
                         {/* Pagination */}

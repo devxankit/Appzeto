@@ -261,9 +261,9 @@ class AdminProjectService {
       salary: employee.salary,
       skills: employee.skills || [],
       experience: employee.experience,
-      // Statistics
-      projects: employee.projectsAssigned?.length || 0,
-      tasks: employee.tasksAssigned?.length || 0,
+      // Statistics - use direct counts from backend (projects and tasks are now numbers, not arrays)
+      projects: employee.projects !== undefined && employee.projects !== null ? employee.projects : 0,
+      tasks: employee.tasks !== undefined && employee.tasks !== null ? employee.tasks : 0,
       performance: employee.performance || 0
     };
   }

@@ -83,6 +83,8 @@ const Admin_project_management = () => {
   
   // Category filter state
   const [selectedCategory, setSelectedCategory] = useState('all')
+  // Project source filter state
+  const [selectedSource, setSelectedSource] = useState('all') // 'all', 'sales', 'channel-partner', 'pm', 'admin'
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -1105,8 +1107,56 @@ const Admin_project_management = () => {
     }
   }
 
+  // Helper function to determine project source
+  const getProjectSource = (project) => {
+    if (!project) return 'unknown'
+    
+    // Priority 1: Check if project has submittedBy (Sales Team)
+    // submittedBy references Sales model, so if it exists, it's from Sales Team
+    if (project.submittedBy) {
+      return 'sales'
+    }
+    
+    // Priority 2: Check if project has createdBy (Admin created)
+    // createdBy references Admin model
+    if (project.createdBy) {
+      return 'admin'
+    }
+    
+    // Priority 3: Check if project has projectManager but no submittedBy/createdBy (PM created directly)
+    // PMs can create projects directly, which will have projectManager but no submittedBy/createdBy
+    if (project.projectManager && !project.submittedBy && !project.createdBy) {
+      return 'pm'
+    }
+    
+    // Priority 4: Check for channel partner
+    // Channel partner projects typically come from CPLeads converted to projects
+    // They might have originLead but no submittedBy/createdBy
+    // Note: This detection might need refinement based on actual data structure
+    if (project.originLead && !project.submittedBy && !project.createdBy && !project.projectManager) {
+      // If it has originLead but no other indicators, might be channel partner
+      // However, this is a fallback - ideally backend should mark CP projects explicitly
+      return 'channel-partner'
+    }
+    
+    // Default fallback: if projectManager exists, assume PM created
+    if (project.projectManager) {
+      return 'pm'
+    }
+    
+    // If none of the above match, return unknown
+    return 'unknown'
+  }
+
   const filteredData = getCurrentData().filter(item => {
     if (!item) return false
+    
+    // Project source filter (only for project tabs)
+    let matchesSource = true
+    if ((activeTab === 'pending-projects' || activeTab === 'active-projects' || activeTab === 'completed-projects') && selectedSource !== 'all') {
+      const projectSource = getProjectSource(item)
+      matchesSource = projectSource === selectedSource
+    }
     
     // Search filter
     const searchLower = searchTerm.toLowerCase().trim()
@@ -1210,7 +1260,7 @@ const Admin_project_management = () => {
       }
     }
     
-    return matchesSearch && matchesFilter && matchesCategory && matchesDate
+    return matchesSearch && matchesFilter && matchesCategory && matchesDate && matchesSource
   })
 
   const paginatedData = filteredData.slice(
@@ -2471,6 +2521,7 @@ function getFinancialSummary(project) {
                       setActiveTab(tab.key)
                       setSelectedFilter('all')
                       setSelectedCategory('all')
+                      setSelectedSource('all')
                       setDateFilterType('all')
                       setStartDate('')
                       setEndDate('')
@@ -2495,23 +2546,29 @@ function getFinancialSummary(project) {
               {activeTab === 'pending-projects' && (
                 <Card className="shadow-sm border border-gray-200">
                   <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                      <div>
-                        <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
-                          Pending Projects
-                        </CardTitle>
-                        <p className="text-sm text-gray-600 mt-1">Projects from sales team waiting for PM assignment</p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                    {/* Title Section */}
+                    <div className="mb-4">
+                      <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900 mb-1">
+                        Pending Projects
+                      </CardTitle>
+                      <p className="text-sm text-gray-600">Projects from sales team waiting for PM assignment</p>
+                    </div>
+
+                    {/* Filters Section - Responsive Grid Layout */}
+                    <div className="space-y-3">
+                      {/* First Row: Date, Category, Source Filters */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
                         {/* Date Range Filter */}
                         <div className="relative filter-dropdown-container">
                           <button
                             onClick={() => setShowDateFilterDropdown(!showDateFilterDropdown)}
-                            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                            className="flex items-center justify-between gap-2 w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
                           >
-                            <Filter className="h-4 w-4 text-blue-600" />
-                            <span className="font-medium text-gray-700">{getDateFilterLabel()}</span>
-                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
+                            <div className="flex items-center gap-2">
+                              <Filter className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                              <span className="font-medium text-gray-700 truncate">{getDateFilterLabel()}</span>
+                            </div>
+                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform flex-shrink-0 ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
                           </button>
                           
                           {showDateFilterDropdown && (
@@ -2583,52 +2640,75 @@ function getFinancialSummary(project) {
                           )}
                         </div>
 
-                        {/* Category Filter - Only for project tabs */}
-                        {(activeTab === 'pending-projects' || activeTab === 'active-projects' || activeTab === 'completed-projects') && (
-                          <select
-                            value={selectedCategory}
-                            onChange={(e) => setSelectedCategory(e.target.value)}
-                            className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
-                            disabled={!categories || categories.length === 0}
-                          >
-                            <option value="all">All Categories</option>
-                            {categories && categories.length > 0 ? (
-                              categories.map((cat) => (
-                                <option key={cat._id || cat.id} value={cat._id || cat.id}>
-                                  {cat.name || cat.categoryName || 'Unnamed Category'}
-                                </option>
-                              ))
-                            ) : (
-                              <option value="" disabled>Loading categories...</option>
-                            )}
-                          </select>
-                        )}
+                          {/* Category Filter */}
+                          {(activeTab === 'pending-projects' || activeTab === 'active-projects' || activeTab === 'completed-projects') && (
+                            <select
+                              value={selectedCategory}
+                              onChange={(e) => setSelectedCategory(e.target.value)}
+                              className="w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
+                              disabled={!categories || categories.length === 0}
+                            >
+                              <option value="all">All Categories</option>
+                              {categories && categories.length > 0 ? (
+                                categories.map((cat) => (
+                                  <option key={cat._id || cat.id} value={cat._id || cat.id}>
+                                    {cat.name || cat.categoryName || 'Unnamed Category'}
+                                  </option>
+                                ))
+                              ) : (
+                                <option value="" disabled>Loading categories...</option>
+                              )}
+                            </select>
+                          )}
 
-                        <div className="relative">
-                          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                          <input
-                            type="text"
-                            placeholder="Search pending projects..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-64 text-sm"
-                          />
+                          {/* Project Source Filter */}
+                          {(activeTab === 'pending-projects' || activeTab === 'active-projects' || activeTab === 'completed-projects') && (
+                            <select
+                              value={selectedSource}
+                              onChange={(e) => setSelectedSource(e.target.value)}
+                              className="w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
+                            >
+                              <option value="all">All Sources</option>
+                              <option value="sales">Sales Team</option>
+                              <option value="channel-partner">Channel Partner</option>
+                              <option value="pm">PM Created</option>
+                              <option value="admin">Admin Created</option>
+                            </select>
+                          )}
                         </div>
-                        <select
-                          value={selectedFilter}
-                          onChange={(e) => setSelectedFilter(e.target.value)}
-                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto"
-                        >
-                          <option value="all">All Priority</option>
-                          <option value="urgent">Urgent</option>
-                          <option value="high">High</option>
-                          <option value="normal">Normal</option>
-                          <option value="low">Low</option>
-                        </select>
-                        <div className="bg-orange-100 text-orange-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
-                          {filteredData.length} pending
+
+                        {/* Second Row: Search, Priority/Status, Count Badge */}
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 sm:gap-3 items-center">
+                          {/* Search Input */}
+                          <div className="relative">
+                            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                            <input
+                              type="text"
+                              placeholder="Search pending projects..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition-colors"
+                            />
+                          </div>
+
+                          {/* Priority/Status Filter */}
+                          <select
+                            value={selectedFilter}
+                            onChange={(e) => setSelectedFilter(e.target.value)}
+                            className="px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors whitespace-nowrap"
+                          >
+                            <option value="all">All Priority</option>
+                            <option value="urgent">Urgent</option>
+                            <option value="high">High</option>
+                            <option value="normal">Normal</option>
+                            <option value="low">Low</option>
+                          </select>
+
+                          {/* Count Badge */}
+                          <div className="bg-orange-100 text-orange-800 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap text-center">
+                            {filteredData.length} pending
+                          </div>
                         </div>
-                      </div>
                     </div>
                   </CardHeader>
 
@@ -2810,23 +2890,29 @@ function getFinancialSummary(project) {
               {activeTab === 'active-projects' && (
                 <Card className="shadow-sm border border-gray-200">
                   <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                      <div>
-                        <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
-                          Active Projects
-                        </CardTitle>
-                        <p className="text-sm text-gray-600 mt-1">Projects currently in progress with assigned PMs</p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                    {/* Title Section */}
+                    <div className="mb-4">
+                      <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900 mb-1">
+                        Active Projects
+                      </CardTitle>
+                      <p className="text-sm text-gray-600">Projects currently in progress with assigned PMs</p>
+                    </div>
+
+                    {/* Filters Section - Responsive Grid Layout */}
+                    <div className="space-y-3">
+                      {/* First Row: Date, Category, Source Filters */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
                         {/* Date Range Filter */}
                         <div className="relative filter-dropdown-container">
                           <button
                             onClick={() => setShowDateFilterDropdown(!showDateFilterDropdown)}
-                            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                            className="flex items-center justify-between gap-2 w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
                           >
-                            <Filter className="h-4 w-4 text-blue-600" />
-                            <span className="font-medium text-gray-700">{getDateFilterLabel()}</span>
-                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
+                            <div className="flex items-center gap-2">
+                              <Filter className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                              <span className="font-medium text-gray-700 truncate">{getDateFilterLabel()}</span>
+                            </div>
+                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform flex-shrink-0 ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
                           </button>
                           
                           {showDateFilterDropdown && (
@@ -2898,52 +2984,73 @@ function getFinancialSummary(project) {
                           )}
                         </div>
 
-                        {/* Category Filter */}
-                        <select
-                          value={selectedCategory}
-                          onChange={(e) => setSelectedCategory(e.target.value)}
-                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
-                          disabled={!categories || categories.length === 0}
-                        >
-                          <option value="all">All Categories</option>
-                          {categories && categories.length > 0 ? (
-                            categories.map((cat) => (
-                              <option key={cat._id || cat.id} value={cat._id || cat.id}>
-                                {cat.name || cat.categoryName || 'Unnamed Category'}
-                              </option>
-                            ))
-                          ) : (
-                            <option value="" disabled>Loading categories...</option>
-                          )}
-                        </select>
+                          {/* Category Filter */}
+                          <select
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                            className="w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
+                            disabled={!categories || categories.length === 0}
+                          >
+                            <option value="all">All Categories</option>
+                            {categories && categories.length > 0 ? (
+                              categories.map((cat) => (
+                                <option key={cat._id || cat.id} value={cat._id || cat.id}>
+                                  {cat.name || cat.categoryName || 'Unnamed Category'}
+                                </option>
+                              ))
+                            ) : (
+                              <option value="" disabled>Loading categories...</option>
+                            )}
+                          </select>
 
-                        <div className="relative">
-                          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                          <input
-                            type="text"
-                            placeholder="Search active projects..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-64 text-sm"
-                          />
+                          {/* Project Source Filter */}
+                          <select
+                            value={selectedSource}
+                            onChange={(e) => setSelectedSource(e.target.value)}
+                            className="w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
+                          >
+                            <option value="all">All Sources</option>
+                            <option value="sales">Sales Team</option>
+                            <option value="channel-partner">Channel Partner</option>
+                            <option value="pm">PM Created</option>
+                            <option value="admin">Admin Created</option>
+                          </select>
                         </div>
-                        <select
-                          value={selectedFilter}
-                          onChange={(e) => setSelectedFilter(e.target.value)}
-                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto"
-                        >
-                          <option value="all">All Status</option>
-                          <option value="active">Active</option>
-                          <option value="untouched">Untouched</option>
-                          <option value="in-progress">In Progress</option>
-                          <option value="completed">Completed</option>
-                          <option value="on-hold">On Hold</option>
-                          <option value="overdue">Overdue</option>
-                        </select>
-                        <div className="bg-green-100 text-green-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
-                          {filteredData.length} active
+
+                        {/* Second Row: Search, Status, Count Badge */}
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 sm:gap-3 items-center">
+                          {/* Search Input */}
+                          <div className="relative">
+                            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                            <input
+                              type="text"
+                              placeholder="Search active projects..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition-colors"
+                            />
+                          </div>
+
+                          {/* Status Filter */}
+                          <select
+                            value={selectedFilter}
+                            onChange={(e) => setSelectedFilter(e.target.value)}
+                            className="px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors whitespace-nowrap"
+                          >
+                            <option value="all">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="untouched">Untouched</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="on-hold">On Hold</option>
+                            <option value="overdue">Overdue</option>
+                          </select>
+
+                          {/* Count Badge */}
+                          <div className="bg-green-100 text-green-800 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap text-center">
+                            {filteredData.length} active
+                          </div>
                         </div>
-                      </div>
                     </div>
                   </CardHeader>
 
@@ -3127,23 +3234,29 @@ function getFinancialSummary(project) {
               {activeTab === 'completed-projects' && (
                 <Card className="shadow-sm border border-gray-200">
                   <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                      <div>
-                        <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
-                          Completed Projects
-                        </CardTitle>
-                        <p className="text-sm text-gray-600 mt-1">Successfully completed projects with full details</p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                    {/* Title Section */}
+                    <div className="mb-4">
+                      <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900 mb-1">
+                        Completed Projects
+                      </CardTitle>
+                      <p className="text-sm text-gray-600">Successfully completed projects with full details</p>
+                    </div>
+
+                    {/* Filters Section - Responsive Grid Layout */}
+                    <div className="space-y-3">
+                      {/* First Row: Date, Category, Source Filters */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
                         {/* Date Range Filter */}
                         <div className="relative filter-dropdown-container">
                           <button
                             onClick={() => setShowDateFilterDropdown(!showDateFilterDropdown)}
-                            className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
+                            className="flex items-center justify-between gap-2 w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
                           >
-                            <Filter className="h-4 w-4 text-blue-600" />
-                            <span className="font-medium text-gray-700">{getDateFilterLabel()}</span>
-                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
+                            <div className="flex items-center gap-2">
+                              <Filter className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                              <span className="font-medium text-gray-700 truncate">{getDateFilterLabel()}</span>
+                            </div>
+                            <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform flex-shrink-0 ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
                           </button>
                           
                           {showDateFilterDropdown && (
@@ -3215,50 +3328,71 @@ function getFinancialSummary(project) {
                           )}
                         </div>
 
-                        {/* Category Filter */}
-                        <select
-                          value={selectedCategory}
-                          onChange={(e) => setSelectedCategory(e.target.value)}
-                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto bg-white"
-                          disabled={!categories || categories.length === 0}
-                        >
-                          <option value="all">All Categories</option>
-                          {categories && categories.length > 0 ? (
-                            categories.map((cat) => (
-                              <option key={cat._id || cat.id} value={cat._id || cat.id}>
-                                {cat.name || cat.categoryName || 'Unnamed Category'}
-                              </option>
-                            ))
-                          ) : (
-                            <option value="" disabled>Loading categories...</option>
-                          )}
-                        </select>
+                          {/* Category Filter */}
+                          <select
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                            className="w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
+                            disabled={!categories || categories.length === 0}
+                          >
+                            <option value="all">All Categories</option>
+                            {categories && categories.length > 0 ? (
+                              categories.map((cat) => (
+                                <option key={cat._id || cat.id} value={cat._id || cat.id}>
+                                  {cat.name || cat.categoryName || 'Unnamed Category'}
+                                </option>
+                              ))
+                            ) : (
+                              <option value="" disabled>Loading categories...</option>
+                            )}
+                          </select>
 
-                        <div className="relative">
-                          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                          <input
-                            type="text"
-                            placeholder="Search completed projects..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-64 text-sm"
-                          />
+                          {/* Project Source Filter */}
+                          <select
+                            value={selectedSource}
+                            onChange={(e) => setSelectedSource(e.target.value)}
+                            className="w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
+                          >
+                            <option value="all">All Sources</option>
+                            <option value="sales">Sales Team</option>
+                            <option value="channel-partner">Channel Partner</option>
+                            <option value="pm">PM Created</option>
+                            <option value="admin">Admin Created</option>
+                          </select>
                         </div>
-                        <select
-                          value={selectedFilter}
-                          onChange={(e) => setSelectedFilter(e.target.value)}
-                          className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm w-full sm:w-auto"
-                        >
-                          <option value="all">All Priority</option>
-                          <option value="urgent">Urgent</option>
-                          <option value="high">High</option>
-                          <option value="normal">Normal</option>
-                          <option value="low">Low</option>
-                        </select>
-                        <div className="bg-blue-100 text-blue-800 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap">
-                          {filteredData.length} completed
+
+                        {/* Second Row: Search, Priority, Count Badge */}
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 sm:gap-3 items-center">
+                          {/* Search Input */}
+                          <div className="relative">
+                            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                            <input
+                              type="text"
+                              placeholder="Search completed projects..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition-colors"
+                            />
+                          </div>
+
+                          {/* Priority Filter */}
+                          <select
+                            value={selectedFilter}
+                            onChange={(e) => setSelectedFilter(e.target.value)}
+                            className="px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors whitespace-nowrap"
+                          >
+                            <option value="all">All Priority</option>
+                            <option value="urgent">Urgent</option>
+                            <option value="high">High</option>
+                            <option value="normal">Normal</option>
+                            <option value="low">Low</option>
+                          </select>
+
+                          {/* Count Badge */}
+                          <div className="bg-blue-100 text-blue-800 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap text-center">
+                            {filteredData.length} completed
+                          </div>
                         </div>
-                      </div>
                     </div>
                   </CardHeader>
 
@@ -3565,7 +3699,6 @@ function getFinancialSummary(project) {
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Status</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Projects</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px] hidden md:table-cell">Tasks</th>
-                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[150px] hidden md:table-cell">Email</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden lg:table-cell">Joined</th>
                                 <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
                               </tr>
@@ -3597,15 +3730,10 @@ function getFinancialSummary(project) {
                                       </span>
                                     </td>
                                     <td className="py-2 px-2">
-                                      <div className="text-xs font-semibold text-gray-700">{employee.projects}</div>
+                                      <div className="text-xs font-semibold text-gray-700">{employee.projects || 0}</div>
                                     </td>
                                     <td className="py-2 px-2 hidden md:table-cell">
-                                      <div className="text-xs font-semibold text-gray-700">{employee.tasks}</div>
-                                    </td>
-                                    <td className="py-2 px-2 hidden md:table-cell">
-                                      <a href={`mailto:${employee.email}`} className="text-xs text-blue-600 hover:text-blue-800 truncate max-w-[150px] block">
-                                        {employee.email}
-                                      </a>
+                                      <div className="text-xs font-semibold text-gray-700">{employee.tasks || 0}</div>
                                     </td>
                                     <td className="py-2 px-2 hidden lg:table-cell">
                                       <div className="flex items-center space-x-1 text-xs text-gray-600">
