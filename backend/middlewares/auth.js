@@ -12,7 +12,7 @@ const protect = async (req, res, next) => {
   try {
     let token;
 
-    // Check for token in headers
+    // Check for token in headers (Bearer)
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
     }
@@ -23,6 +23,10 @@ const protect = async (req, res, next) => {
     // Check for sales token in cookies
     else if (req.cookies.salesToken) {
       token = req.cookies.salesToken;
+    }
+    // Check for channel partner token in cookies (CP portal sends credentials; cookie set on login)
+    else if (req.cookies.cpToken) {
+      token = req.cookies.cpToken;
     }
 
     // Make sure token exists

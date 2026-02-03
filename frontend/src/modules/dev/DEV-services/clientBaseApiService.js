@@ -101,7 +101,8 @@ export const apiRequest = async (url, options = {}) => {
     const data = await parseResponseBody(response);
 
     if (!response.ok) {
-      if (response.status === 401) {
+      // Only clear session when account is deactivated (403), not on every 401 (avoids logout on refresh).
+      if (response.status === 403 && data && data.code === 'ACCOUNT_INACTIVE') {
         handleUnauthorized();
       }
 

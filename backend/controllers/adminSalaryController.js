@@ -2,11 +2,12 @@ const Salary = require('../models/Salary');
 const Employee = require('../models/Employee');
 const Sales = require('../models/Sales');
 const PM = require('../models/PM');
+const Admin = require('../models/Admin');
 const Incentive = require('../models/Incentive');
 const mongoose = require('mongoose');
 const asyncHandler = require('../middlewares/asyncHandler');
 
-// Helper: Get employee by ID and model type
+// Helper: Get employee by ID and model type (includes Admin for HR salary)
 const getEmployee = async (employeeId, employeeModel) => {
   let Model;
   switch (employeeModel) {
@@ -18,6 +19,9 @@ const getEmployee = async (employeeId, employeeModel) => {
       break;
     case 'PM':
       Model = PM;
+      break;
+    case 'Admin':
+      Model = Admin;
       break;
     default:
       return null;
@@ -34,7 +38,7 @@ const calculatePaymentDate = (joiningDate, month) => {
   return new Date(parseInt(year), parseInt(monthNum) - 1, paymentDay);
 };
 
-// Helper: Get employee model type from user type
+// Helper: Get employee model type from user type (admin/hr for HR salary)
 const getEmployeeModelType = (userType) => {
   switch (userType) {
     case 'employee':
@@ -44,6 +48,9 @@ const getEmployeeModelType = (userType) => {
     case 'project-manager':
     case 'pm':
       return 'PM';
+    case 'admin':
+    case 'hr':
+      return 'Admin';
     default:
       return null;
   }
@@ -111,6 +118,9 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
       }
     }
 
+    const department = employeeModel === 'Admin' ? (employee.role || 'HR') : (employee.department || 'unknown');
+    const role = employeeModel === 'Admin' ? (employee.role || 'hr') : (employee.role || userType);
+
     await Salary.findOneAndUpdate(
       {
         employeeId: employee._id,
@@ -121,8 +131,8 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
         employeeId: employee._id,
         employeeModel,
         employeeName: employee.name,
-        department: employee.department || 'unknown',
-        role: employee.role || userType,
+        department,
+        role,
         month,
         fixedSalary,
         paymentDate,
@@ -591,15 +601,17 @@ exports.generateMonthlySalaries = asyncHandler(async (req, res) => {
     });
   }
 
-  // Get all employees with fixedSalary > 0
+  // Get all employees with fixedSalary > 0 (including Admin/HR)
   const employees = await Employee.find({ fixedSalary: { $gt: 0 }, isActive: true });
   const sales = await Sales.find({ fixedSalary: { $gt: 0 }, isActive: true });
   const pms = await PM.find({ fixedSalary: { $gt: 0 }, isActive: true });
+  const adminsWithSalary = await Admin.find({ fixedSalary: { $gt: 0 }, isActive: true });
 
   const allEmployees = [
     ...employees.map(e => ({ ...e.toObject(), modelType: 'Employee', model: Employee })),
     ...sales.map(s => ({ ...s.toObject(), modelType: 'Sales', model: Sales })),
-    ...pms.map(p => ({ ...p.toObject(), modelType: 'PM', model: PM }))
+    ...pms.map(p => ({ ...p.toObject(), modelType: 'PM', model: PM })),
+    ...adminsWithSalary.map(a => ({ ...a.toObject(), modelType: 'Admin', model: Admin }))
   ];
 
   let generated = 0;

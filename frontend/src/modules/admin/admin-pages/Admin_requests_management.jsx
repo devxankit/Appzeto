@@ -124,7 +124,8 @@ const Admin_requests_management = () => {
       const params = {
         direction: requestDirection,
         page: currentPage,
-        limit: itemsPerPage
+        limit: itemsPerPage,
+        excludePaymentApproval: true // Payment-approval requests are shown on Finance Management page only
       }
       
       if (activeTab !== 'all') params.module = activeTab
@@ -750,91 +751,109 @@ const Admin_requests_management = () => {
             </div>
           </div>
 
-          {/* Content Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4">
-            {paginatedData.map((request, index) => {
-              const TypeIcon = getTypeIcon(request.type)
-              const ModuleIcon = getModuleIcon(request.module)
-              
-              return (
-                <motion.div
-                  key={request.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="bg-white rounded-lg p-3 lg:p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
-                >
-                  <div className="space-y-3">
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className={`p-2 rounded-lg ${getModuleColor(request.module)}`}>
-                          <ModuleIcon className="text-sm" />
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getModuleColor(request.module)}`}>
-                          {request.module.toUpperCase()}
-                        </span>
-                      </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
-                        {request.status}
-                      </span>
-                    </div>
-
-                    {/* Type and Priority */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <TypeIcon className="text-gray-400 text-sm" />
-                        <span className="text-xs text-gray-500 capitalize">{request.type.replace('-', ' ')}</span>
-                      </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(request.priority)}`}>
-                        {request.priority}
-                      </span>
-                    </div>
-
-                    {/* Title and Description */}
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-sm mb-1 line-clamp-2">{request.title}</h3>
-                      <p className="text-xs text-gray-600 line-clamp-2">{request.description}</p>
-                    </div>
-
-                    {/* Project and Submitted By */}
-                    <div className="text-xs text-gray-500">
-                      <p className="font-medium">{request.projectName}</p>
-                      <p>By: {request.submittedBy}</p>
-                      <p>{formatDate(request.submittedDate)}</p>
-                    </div>
-
-                    {/* Amount (if applicable) */}
-                    {request.amount && (
-                      <div className="text-sm font-semibold text-teal-600">
-                        {formatCurrency(request.amount)}
-                      </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center space-x-2 pt-2 border-t border-gray-100">
-                      <button
-                        onClick={() => handleView(request)}
-                        className="flex-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
-                      >
-                        <FiEye className="inline mr-1" />
-                        View
-                      </button>
-                      {request.status === 'pending' && (
-                        <button
-                          onClick={() => handleRespond(request)}
-                          className="flex-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 transition-colors"
+          {/* Requests Table */}
+          {paginatedData.length === 0 ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+              <FiFileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-600">No requests found</p>
+              <p className="text-sm text-gray-500 mt-1">Try adjusting your filters or create a new request</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Module</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Type</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Title</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Submitted By</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Project</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Priority</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Date</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Amount</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedData.map((request, index) => {
+                      const ModuleIcon = getModuleIcon(request.module)
+                      return (
+                        <motion.tr
+                          key={request.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.2, delay: index * 0.02 }}
+                          className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                         >
-                          <FiSend className="inline mr-1" />
-                          Respond
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              )
-            })}
-          </div>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <div className={`p-1.5 rounded ${getModuleColor(request.module)}`}>
+                                <ModuleIcon className="text-sm" />
+                              </div>
+                              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium capitalize ${getModuleColor(request.module)}`}>
+                                {request.module}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-600 capitalize">{request.type ? request.type.replace(/-/g, ' ') : '—'}</td>
+                          <td className="py-3 px-4">
+                            <div className="max-w-[200px]">
+                              <span className="font-medium text-gray-900 text-sm block truncate" title={request.title}>{request.title}</span>
+                              {request.description && (
+                                <span className="text-xs text-gray-500 truncate block max-w-[200px]" title={request.description}>{request.description}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-600">{request.submittedBy || '—'}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600 max-w-[120px] truncate" title={request.projectName}>{request.projectName || '—'}</td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium capitalize ${getPriorityColor(request.priority)}`}>
+                              {request.priority}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(request.status)}`}>
+                              {request.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-600">{request.submittedDate ? formatDate(request.submittedDate) : '—'}</td>
+                          <td className="py-3 px-4 text-right">
+                            {request.amount != null && request.amount !== '' ? (
+                              <span className="text-sm font-semibold text-teal-600">{formatCurrency(request.amount)}</span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => handleView(request)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="View"
+                              >
+                                <FiEye className="h-4 w-4" />
+                              </button>
+                              {request.status === 'pending' && (
+                                <button
+                                  onClick={() => handleRespond(request)}
+                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  title="Respond"
+                                >
+                                  <FiSend className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </motion.tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Pagination */}
           {totalPages > 1 && (

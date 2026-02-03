@@ -1,5 +1,6 @@
 import { apiRequest, tokenUtils, salesStorage } from './baseApiService';
 import { registerFCMToken } from '../../../services/pushNotificationService';
+import { clearOtherRoleSessions } from '../../../utils/clearOtherRoleSessions';
 
 // Sales Authentication Service - Only for login/logout functionality
 export const salesAuthService = {
@@ -13,6 +14,7 @@ export const salesAuthService = {
 
       // Store token in localStorage
       if (response.data && response.data.token) {
+        clearOtherRoleSessions('sales'); // so refresh doesn't show admin/other role
         tokenUtils.set(response.data.token);
       }
 
@@ -26,7 +28,7 @@ export const salesAuthService = {
             console.error('Failed to register FCM token:', error);
             // Don't fail login if FCM registration fails
           }
-        }, 500); // Wait 500ms to ensure token is saved
+        }, 5000); // Defer so dashboard loads first; no reload from push notification flow
       }
 
       return response;

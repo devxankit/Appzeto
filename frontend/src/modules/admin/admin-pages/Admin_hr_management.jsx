@@ -260,6 +260,9 @@ const Admin_hr_management = () => {
     confirmPassword: ''
   })
 
+  // Birthday filter: 'today' | 'week' | 'month'
+  const [birthdayFilter, setBirthdayFilter] = useState('today')
+
   // Birthday Statistics
   const [statistics, setStatistics] = useState({
     totalBirthdays: 8,
@@ -298,52 +301,54 @@ const Admin_hr_management = () => {
 
       const formatted = usersResponse.data.map(u => adminUserService.formatUserForDisplay(u))
 
-      // Split into employees and PMs for existing UI
-      const emps = formatted.filter(u => u.userType === 'employee' || u.userType === 'sales').map(u => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        phone: u.phone,
-        role: u.roleLabel || 'Employee',
-        department: u.department || u.team || 'General',
-        status: u.status,
-        joinDate: u.joiningDate,
-        joiningDate: u.joiningDate,
-        birthday: u.dateOfBirth,
-        dateOfBirth: u.dateOfBirth,
-        document: u.document,
-        avatar: u.avatar || (u.name ? u.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'U'),
-        team: u.team
-      }))
+      // Build unified list for team + birthdays: all roles (employee, sales, project-manager, accountant, pem, hr)
+      const avatarFromName = (name) => (name ? name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U')
+      const allUsersList = []
+      formatted.forEach(u => {
+        const base = {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          phone: u.phone,
+          status: u.status,
+          joinDate: u.joiningDate,
+          joiningDate: u.joiningDate,
+          birthday: u.dateOfBirth,
+          dateOfBirth: u.dateOfBirth,
+          document: u.document,
+          avatar: u.avatar || avatarFromName(u.name),
+          department: u.department || u.team || 'General',
+          team: u.team
+        }
+        if (u.userType === 'employee' || u.userType === 'sales') {
+          allUsersList.push({ ...base, role: u.userType === 'sales' ? 'sales' : 'employee', department: u.department || u.team || 'General' })
+        } else if (u.userType === 'project-manager') {
+          allUsersList.push({ ...base, role: 'project-manager', department: 'Management' })
+        } else if (u.userType === 'accountant') {
+          allUsersList.push({ ...base, role: 'accountant', department: u.department || 'Finance' })
+        } else if (u.userType === 'pem') {
+          allUsersList.push({ ...base, role: 'pem', department: u.department || 'Management' })
+        } else if (u.userType === 'admin' && u.role === 'hr') {
+          // HR only: show HR users from Admin collection; do not show super admins (role === 'admin')
+          allUsersList.push({ ...base, role: 'hr', department: u.department || 'HR' })
+        }
+      })
 
-      const pms = formatted.filter(u => u.userType === 'project-manager').map(u => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        phone: u.phone,
-        role: 'Project Manager',
-        department: 'Management',
-        status: u.status,
-        joinDate: u.joiningDate,
-        joiningDate: u.joiningDate,
-        birthday: u.dateOfBirth,
-        dateOfBirth: u.dateOfBirth,
-        document: u.document,
-        avatar: u.avatar || (u.name ? u.name.split(' ').map(n=>n[0]).join('').toUpperCase() : 'P')
-      }))
+      // Keep employees and PMs for salary/allowance dropdowns and existing logic
+      const emps = allUsersList.filter(u => u.role === 'employee' || u.role === 'sales')
+      const pms = allUsersList.filter(u => u.role === 'project-manager')
 
       setEmployees(emps)
       setProjectManagers(pms)
 
-      // Birthdays list derived from both
-      const mockBirthdays = [...emps, ...pms]
+      const mockBirthdays = allUsersList
         .filter(p => !!p.birthday)
-        .slice(0, 10)
+        .slice(0, 50)
         .map((p, idx) => ({
-          id: idx + 1,
+          id: p.id || idx + 1,
           personId: p.id,
           personName: p.name,
-          personType: p.role === 'Project Manager' ? 'pm' : 'employee',
+          personType: p.role === 'project-manager' ? 'pm' : p.role,
           birthday: p.birthday,
           age: new Date().getFullYear() - new Date(p.birthday).getFullYear(),
           department: p.department,
@@ -351,7 +356,7 @@ const Admin_hr_management = () => {
         }))
       setBirthdays(mockBirthdays)
 
-      setAllUsers([...emps.map(emp => ({ ...emp, role: 'employee' })), ...pms.map(pm => ({ ...pm, role: 'project-manager' }))])
+      setAllUsers(allUsersList)
       setCurrentPage(1) // Reset to first page when data loads
     } catch (error) {
       console.error('Error loading data:', error)
@@ -360,12 +365,11 @@ const Admin_hr_management = () => {
     }
   }
 
-  // Get today's birthdays
+  // Get today's birthdays (all users: employees, PMs, PEM, accountant, HR, etc.)
   const getTodaysBirthdays = () => {
     const today = new Date()
     const todayStr = `${today.getMonth() + 1}-${today.getDate()}`
-    
-    return [...employees, ...projectManagers].filter(person => {
+    return allUsers.filter(person => {
       if (!person.birthday) return false
       const birthday = new Date(person.birthday)
       const birthdayStr = `${birthday.getMonth() + 1}-${birthday.getDate()}`
@@ -380,14 +384,36 @@ const Admin_hr_management = () => {
     weekStart.setDate(today.getDate() - today.getDay())
     const weekEnd = new Date(weekStart)
     weekEnd.setDate(weekStart.getDate() + 6)
-    
-    return [...employees, ...projectManagers].filter(person => {
+    return allUsers.filter(person => {
       if (!person.birthday) return false
       const birthday = new Date(person.birthday)
       const currentYear = today.getFullYear()
       birthday.setFullYear(currentYear)
       return birthday >= weekStart && birthday <= weekEnd
     })
+  }
+
+  // Get this month's birthdays
+  const getThisMonthBirthdays = () => {
+    const today = new Date()
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    return allUsers.filter(person => {
+      if (!person.birthday) return false
+      const birthday = new Date(person.birthday)
+      const currentYear = today.getFullYear()
+      birthday.setFullYear(currentYear)
+      return birthday >= monthStart && birthday <= monthEnd
+    })
+  }
+
+  // Get birthdays based on selected filter
+  const getFilteredBirthdays = () => {
+    switch (birthdayFilter) {
+      case 'week': return getThisWeekBirthdays()
+      case 'month': return getThisMonthBirthdays()
+      default: return getTodaysBirthdays()
+    }
   }
 
   // Format date
@@ -1178,7 +1204,16 @@ const Admin_hr_management = () => {
       filtered = filtered.filter(expense => expense.frequency === 'yearly')
     }
 
-    return filtered
+    // Sort: unpaid first (due to pay on top), then by next due date ascending (nearest first); paid at bottom
+    return filtered.sort((a, b) => {
+      const paidA = a.paymentStatus === 'paid'
+      const paidB = b.paymentStatus === 'paid'
+      if (paidA && !paidB) return 1
+      if (!paidA && paidB) return -1
+      const dateA = a.nextDueDate ? new Date(a.nextDueDate).getTime() : Number.MAX_SAFE_INTEGER
+      const dateB = b.nextDueDate ? new Date(b.nextDueDate).getTime() : Number.MAX_SAFE_INTEGER
+      return dateA - dateB
+    })
   }
 
   const getFilteredExpenseStats = () => {
@@ -1365,7 +1400,25 @@ const Admin_hr_management = () => {
     switch (role) {
       case 'project-manager': return 'bg-purple-100 text-purple-800 border-purple-200'
       case 'employee': return 'bg-blue-100 text-blue-800 border-blue-200'
+      case 'sales': return 'bg-orange-100 text-orange-800 border-orange-200'
+      case 'accountant': return 'bg-emerald-100 text-emerald-800 border-emerald-200'
+      case 'pem': return 'bg-teal-100 text-teal-800 border-teal-200'
+      case 'hr': return 'bg-amber-100 text-amber-800 border-amber-200'
+      case 'admin': return 'bg-red-100 text-red-800 border-red-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
+    }
+  }
+
+  const getRoleLabel = (role) => {
+    switch (role) {
+      case 'project-manager': return 'PM'
+      case 'employee': return 'Emp'
+      case 'sales': return 'Sales'
+      case 'accountant': return 'Acct'
+      case 'pem': return 'PEM'
+      case 'hr': return 'HR'
+      case 'admin': return 'Admin'
+      default: return role ? String(role).slice(0, 4) : '—'
     }
   }
 
@@ -1534,9 +1587,9 @@ const Admin_hr_management = () => {
       return
     }
 
-    // Only allow creation of Project Manager and Employee
-    if (!['employee', 'project-manager'].includes(formData.role)) {
-      addToast({ type: 'error', message: 'Only Employee or Project Manager can be created here' })
+    // Allow creation of Employee, Project Manager, PEM, Accountant, HR
+    if (!['employee', 'project-manager', 'pem', 'accountant', 'hr'].includes(formData.role)) {
+      addToast({ type: 'error', message: 'Please select a valid role' })
       return
     }
 
@@ -1572,8 +1625,13 @@ const Admin_hr_management = () => {
         })
         addToast({ type: 'success', message: 'User created successfully' })
       } else if (showEditModal && selectedUser) {
-        // Update existing user
-        const userType = selectedUser.role === 'project-manager' ? 'project-manager' : 'employee'
+        // Update existing user - map role to API userType (pm, employee, sales, admin, accountant, pem)
+        const getApiUserType = (role) => {
+          if (role === 'project-manager') return 'pm'
+          if (role === 'hr') return 'admin'
+          return role // employee, sales, accountant, pem
+        }
+        const userType = getApiUserType(selectedUser.role)
         
         // Build update payload - only include password fields if password is being changed
         const updatePayload = {
@@ -1631,17 +1689,13 @@ const Admin_hr_management = () => {
     if (!selectedUser) return
     
     try {
-      // Determine user type based on role
-      // Check if it's a Project Manager (can be 'Project Manager' or 'project-manager')
-      let userType = 'employee' // default
-      
-      if (selectedUser.role === 'Project Manager' || 
-          selectedUser.role === 'project-manager' ||
-          selectedUser.role?.toLowerCase().includes('project manager')) {
-        userType = 'project-manager'
-      } else {
-        userType = 'employee'
+      // Map role to API userType for delete
+      const getApiUserType = (role) => {
+        if (role === 'Project Manager' || role === 'project-manager' || role?.toLowerCase?.().includes('project manager')) return 'pm'
+        if (role === 'hr') return 'admin'
+        return role || 'employee' // employee, sales, accountant, pem
       }
+      const userType = getApiUserType(selectedUser.role)
       
       await adminUserService.deleteUser(userType, selectedUser.id)
       addToast({ type: 'success', message: 'User deleted successfully' })
@@ -1989,20 +2043,20 @@ const Admin_hr_management = () => {
       })
     }
     
-    // Sort by payment priority (upcoming payments first)
+    // Sort: unpaid first (so HR sees due items on top), then by due date ascending (nearest to pay first); paid at bottom
     return filtered.sort((a, b) => {
-      const dateA = new Date(a.paymentDate)
-      const dateB = new Date(b.paymentDate)
-      const currentDate = new Date()
-      const daysA = Math.ceil((dateA - currentDate) / (1000 * 60 * 60 * 24))
-      const daysB = Math.ceil((dateB - currentDate) / (1000 * 60 * 60 * 24))
-      
-      // Overdue first
-      if (daysA < 0 && daysB >= 0) return -1
-      if (daysB < 0 && daysA >= 0) return 1
-      
-      // Then by date
-      return dateA - dateB
+      const paidA = a.status === 'paid'
+      const paidB = b.status === 'paid'
+      if (paidA && !paidB) return 1   // paid after unpaid
+      if (!paidA && paidB) return -1  // unpaid first
+      if (paidA && paidB) {
+        const dateA = new Date(a.paymentDate || a.createdAt)
+        const dateB = new Date(b.paymentDate || b.createdAt)
+        return dateB - dateA // paid: recent first
+      }
+      const dateA = new Date(a.paymentDate || a.createdAt)
+      const dateB = new Date(b.paymentDate || b.createdAt)
+      return dateA - dateB // unpaid: nearest due date first
     })
   }
 
@@ -2142,7 +2196,8 @@ const Admin_hr_management = () => {
       // Reload history if history modal is open
       if (showSalaryHistoryModal && selectedHistoryEmployee) {
         const userType = selectedHistoryEmployee.role === 'project-manager' ? 'pm' : 
-                        selectedHistoryEmployee.department === 'sales' ? 'sales' : 'employee'
+                        selectedHistoryEmployee.role === 'sales' ? 'sales' : 
+                        selectedHistoryEmployee.role === 'hr' ? 'admin' : 'employee'
         const history = await adminSalaryService.getEmployeeSalaryHistory(userType, selectedHistoryEmployee.employeeId)
         
         // Get current month for filtering
@@ -2331,14 +2386,21 @@ const Admin_hr_management = () => {
       return
     }
 
-    // Find selected employee
+    // Find selected user (must be salary-eligible: employee, sales, or project-manager)
     const selectedEmployee = allUsers.find(user => {
-      const userIdStr = user._id || user.id || user.employeeId
-      return userIdStr.toString() === newEmployeeSalaryData.employeeId.toString()
+      const userIdStr = (user._id || user.id || user.employeeId)?.toString()
+      return userIdStr && userIdStr === newEmployeeSalaryData.employeeId.toString()
     })
     
     if (!selectedEmployee) {
       addToast({ type: 'error', message: 'Selected employee not found' })
+      return
+    }
+
+    // Backend only supports Employee, Sales, PM — not HR/accountant/PEM
+    const salaryEligibleRoles = ['employee', 'sales', 'project-manager', 'hr']
+    if (!salaryEligibleRoles.includes(selectedEmployee.role)) {
+      addToast({ type: 'error', message: 'Salary can only be set for employees, sales team, project managers, and HR.' })
       return
     }
 
@@ -2349,10 +2411,15 @@ const Admin_hr_management = () => {
     }
 
     try {
-      // Determine user type and employee ID
+      // Map role to API userType (backend expects: employee, sales, pm, admin for HR)
       const userType = selectedEmployee.role === 'project-manager' ? 'pm' : 
-                      selectedEmployee.team === 'sales' ? 'sales' : 'employee'
-      const employeeId = selectedEmployee._id || selectedEmployee.id || selectedEmployee.employeeId
+                      selectedEmployee.role === 'sales' ? 'sales' : 
+                      selectedEmployee.role === 'hr' ? 'admin' : 'employee'
+      const employeeId = (selectedEmployee._id || selectedEmployee.id || selectedEmployee.employeeId)?.toString()
+      if (!employeeId) {
+        addToast({ type: 'error', message: 'Invalid employee ID' })
+        return
+      }
 
       // Set employee fixed salary (this will auto-generate salary records)
       await adminSalaryService.setEmployeeSalary(userType, employeeId, fixedSalary)
@@ -2410,9 +2477,10 @@ const Admin_hr_management = () => {
     try {
       setLoadingHistory(true)
       
-      // Determine user type from record
+      // Determine user type from record (backend: employee, sales, pm, admin for HR)
       const userType = record.role === 'project-manager' ? 'pm' : 
-                      record.department === 'sales' ? 'sales' : 'employee'
+                      record.role === 'sales' ? 'sales' : 
+                      record.role === 'hr' ? 'admin' : 'employee'
       
       // Fetch employee details to get joining date
       let joiningDate = null
@@ -2537,10 +2605,13 @@ const Admin_hr_management = () => {
     { key: 'expenses', label: 'Recurring Expenses', icon: Receipt }
   ]
 
-  // Combobox options for HR (only employees and PMs)
+  // Combobox options for HR: employees, PMs, PEM, accountant, HR
   const roleOptions = [
     { value: 'project-manager', label: 'Project Manager', icon: Shield },
-    { value: 'employee', label: 'Employee', icon: Code }
+    { value: 'employee', label: 'Employee', icon: Code },
+    { value: 'pem', label: 'PEM', icon: ClipboardList },
+    { value: 'accountant', label: 'Accountant', icon: Calculator },
+    { value: 'hr', label: 'HR', icon: UserCheck }
   ]
 
   const teamOptions = [
@@ -2743,77 +2814,98 @@ const Admin_hr_management = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {getPaginatedUsers().map((user) => (
-                    <motion.div
-                      key={user.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all duration-200 group"
-                    >
-                      {/* Header */}
-                      <div className="mb-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
-                            {user.avatar}
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <button
-                              onClick={() => handleViewUser(user)}
-                              className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-all duration-200"
-                            >
-                              <Eye className="h-3 w-3" />
-                            </button>
-                            <button
-                              onClick={() => handleEditUser(user)}
-                              className="text-gray-400 hover:text-green-600 p-1 rounded hover:bg-green-50 transition-all duration-200"
-                            >
-                              <Edit3 className="h-3 w-3" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUser(user)}
-                              className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-all duration-200"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-semibold text-gray-900 leading-tight mb-1">{user.name}</h3>
-                          <p className="text-xs text-gray-600 truncate">{user.email}</p>
-                        </div>
-                      </div>
-
-                      {/* Phone */}
-                      <div className="flex items-center space-x-1 mb-2">
-                        <Phone className="h-3 w-3 text-gray-400" />
-                        <span className="text-xs text-gray-600 truncate">{user.phone}</span>
-                      </div>
-
-                      {/* Role and Team Badges */}
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getRoleColor(user.role)}`}>
-                          {user.role === 'project-manager' ? 'PM' : 'Emp'}
-                        </span>
-                        {user.team && (
-                          <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full ${getTeamColor(user.team)}`}>
-                            {user.team === 'developer' ? 'Dev' : 'Sales'}
-                          </span>
-                        )}
-                        <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(user.status)}`}>
-                          {user.status === 'active' ? 'Active' : user.status === 'inactive' ? 'Inactive' : 'On Leave'}
-                        </span>
-                      </div>
-
-                      {/* Bottom Info */}
-                      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="h-3 w-3 text-gray-400" />
-                          <span className="text-xs text-gray-500">{formatDate(user.joinDate)}</span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                  <table className="w-full min-w-[900px] border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[140px]">Name</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[160px] hidden md:table-cell">Email</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden md:table-cell">Phone</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Role</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px] hidden md:table-cell">Team</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden lg:table-cell">Department</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Status</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[95px] hidden lg:table-cell">Joining</th>
+                        <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {getPaginatedUsers().map((user) => (
+                        <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                          <td className="py-2 px-2">
+                            <div className="flex items-center space-x-2">
+                              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
+                                {user.avatar}
+                              </div>
+                              <p className="text-xs font-semibold text-gray-900 truncate">{user.name}</p>
+                            </div>
+                          </td>
+                          <td className="py-2 px-2 hidden md:table-cell">
+                            <span className="text-xs text-gray-600 truncate max-w-[160px] block">{user.email}</span>
+                          </td>
+                          <td className="py-2 px-2 hidden md:table-cell">
+                            <div className="flex items-center space-x-1 text-xs text-gray-600">
+                              <Phone className="h-3 w-3 flex-shrink-0 text-gray-400" />
+                              <span className="truncate max-w-[90px]">{user.phone || 'N/A'}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-2">
+                            <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getRoleColor(user.role)}`}>
+                              {getRoleLabel(user.role)}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2 hidden md:table-cell">
+                            {user.team ? (
+                              <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full ${getTeamColor(user.team)}`}>
+                                {user.team === 'developer' ? 'Dev' : 'Sales'}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-2 hidden lg:table-cell">
+                            <span className="text-xs text-gray-600 truncate max-w-[100px] block">{user.department || '—'}</span>
+                          </td>
+                          <td className="py-2 px-2">
+                            <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(user.status)}`}>
+                              {user.status === 'active' ? 'Active' : user.status === 'inactive' ? 'Inactive' : 'On Leave'}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2 hidden lg:table-cell">
+                            <div className="flex items-center space-x-1 text-xs text-gray-600">
+                              <Calendar className="h-3 w-3 flex-shrink-0 text-gray-400" />
+                              <span className="truncate">{formatDate(user.joinDate)}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-2">
+                            <div className="flex items-center justify-end space-x-1">
+                              <button
+                                onClick={() => handleViewUser(user)}
+                                className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-all duration-200"
+                                title="View"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleEditUser(user)}
+                                className="text-gray-400 hover:text-green-600 p-1 rounded hover:bg-green-50 transition-all duration-200"
+                                title="Edit"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(user)}
+                                className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-all duration-200"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
 
                 {getCurrentUsers().length === 0 && (
@@ -2824,8 +2916,8 @@ const Admin_hr_management = () => {
                   </div>
                 )}
 
-                {/* Pagination */}
-                {totalPages > 1 && getCurrentUsers().length > 0 && (
+                {/* Pagination - show results info and per-page when there are users */}
+                {getCurrentUsers().length > 0 && (
                   <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-200">
                     {/* Results Info */}
                     <div className="text-sm text-gray-600">
@@ -2851,7 +2943,8 @@ const Admin_hr_management = () => {
                       <span className="text-sm text-gray-500">per page</span>
                     </div>
 
-                    {/* Pagination Controls */}
+                    {/* Pagination Controls - only when more than one page */}
+                    {totalPages > 1 && (
                     <div className="flex items-center space-x-2">
                       {/* First Page */}
                       <button
@@ -2956,6 +3049,7 @@ const Admin_hr_management = () => {
                         <span className="text-sm font-medium">»»</span>
                       </button>
                     </div>
+                    )}
 
                     {/* Jump to Page */}
                     {totalPages > 10 && (
@@ -2989,32 +3083,89 @@ const Admin_hr_management = () => {
                   transition={{ delay: 0.3 }}
                   className="space-y-4"
                 >
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                    <span className="flex items-center gap-2 text-sm text-gray-600">
                       <Users className="h-4 w-4 text-teal-600" />
-                      <span className="text-sm text-gray-700">Total Employees</span>
+                      Total members: <span className="font-semibold text-gray-900">{allUsers.length}</span>
+                    </span>
+                    {/* Birthday filters: Today | This Week | This Month */}
+                    <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setBirthdayFilter('today')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                          birthdayFilter === 'today'
+                            ? 'bg-teal-600 text-white shadow-sm'
+                            : 'text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        Today
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBirthdayFilter('week')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                          birthdayFilter === 'week'
+                            ? 'bg-teal-600 text-white shadow-sm'
+                            : 'text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        This Week
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBirthdayFilter('month')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                          birthdayFilter === 'month'
+                            ? 'bg-teal-600 text-white shadow-sm'
+                            : 'text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        This Month
+                      </button>
                     </div>
-                    <span className="text-lg font-bold text-gray-900">{employees.length}</span>
                   </div>
 
-                  {getTodaysBirthdays().length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {getTodaysBirthdays().map((person) => (
-                        <div key={person.id} className="bg-white rounded-lg border border-pink-200 p-4 flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
-                            {person.avatar}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-semibold text-gray-900 text-sm">{person.name}</p>
-                            <p className="text-xs text-gray-600">Happy Birthday! 🎉</p>
-                          </div>
-                          <Cake className="h-4 w-4 text-pink-600" />
-                        </div>
-                      ))}
+                  {getFilteredBirthdays().length > 0 ? (
+                    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                      <table className="w-full min-w-[400px] border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-gray-200 bg-gray-50">
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700">Name</th>
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 hidden md:table-cell">Department</th>
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700">Role</th>
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700">Birthday</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {getFilteredBirthdays().map((person) => (
+                            <tr key={person.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                              <td className="py-2 px-2">
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-8 h-8 bg-gradient-to-br from-pink-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                    {person.avatar}
+                                  </div>
+                                  <span className="font-semibold text-gray-900">{person.name}</span>
+                                  <Cake className="h-3.5 w-3.5 text-pink-600 flex-shrink-0" />
+                                </div>
+                              </td>
+                              <td className="py-2 px-2 hidden md:table-cell text-gray-600">{person.department || '—'}</td>
+                              <td className="py-2 px-2">
+                                <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getRoleColor(person.role)}`}>
+                                  {getRoleLabel(person.role)}
+                                </span>
+                              </td>
+                              <td className="py-2 px-2 text-gray-600">{formatDate(person.birthday)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   ) : (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center text-gray-600 text-sm">
-                      No birthdays today.
+                    <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-600 text-sm">
+                      {birthdayFilter === 'today' && 'No birthdays today.'}
+                      {birthdayFilter === 'week' && 'No birthdays this week.'}
+                      {birthdayFilter === 'month' && 'No birthdays this month.'}
                     </div>
                   )}
                 </motion.div>
@@ -3099,56 +3250,51 @@ const Admin_hr_management = () => {
                 </Card>
               )}
 
-              {/* Attendance Statistics */}
+              {/* Attendance Statistics - compact row */}
               {attendanceData.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-blue-600 text-sm font-medium">Total Employee Count</p>
-                          <p className="text-2xl font-bold text-blue-900">{attendanceStats.totalDays}</p>
-                        </div>
-                        <Users className="h-8 w-8 text-blue-600" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-green-600 text-sm font-medium">Total Attendance</p>
-                          <p className="text-2xl font-bold text-green-900">{attendanceStats.presentDays}</p>
-                        </div>
-                        <CheckCircle2 className="h-8 w-8 text-green-600" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-red-600 text-sm font-medium">Total Absents</p>
-                          <p className="text-2xl font-bold text-red-900">{attendanceStats.absentDays}</p>
-                        </div>
-                        <XCircle className="h-8 w-8 text-red-600" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-purple-600 text-sm font-medium">Attendance Rate</p>
-                          <p className="text-2xl font-bold text-purple-900">{attendanceStats.attendanceRate}%</p>
-                        </div>
-                        <TrendingUpIcon className="h-8 w-8 text-purple-600" />
-                      </div>
-                    </CardContent>
-                  </Card>
+                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                  <table className="w-full border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700">Total Count</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700">Present</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700">Absent</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700">Late</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700">Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-2 px-2">
+                          <span className="flex items-center gap-1.5">
+                            <Users className="h-3.5 w-3.5 text-blue-600" />
+                            <span className="font-semibold text-blue-900">{attendanceStats.totalDays}</span>
+                          </span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="flex items-center gap-1.5">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                            <span className="font-semibold text-green-900">{attendanceStats.presentDays}</span>
+                          </span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="flex items-center gap-1.5">
+                            <XCircle className="h-3.5 w-3.5 text-red-600" />
+                            <span className="font-semibold text-red-900">{attendanceStats.absentDays}</span>
+                          </span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="font-semibold text-orange-900">{attendanceStats.lateDays}</span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="flex items-center gap-1.5">
+                            <TrendingUpIcon className="h-3.5 w-3.5 text-purple-600" />
+                            <span className="font-semibold text-purple-900">{attendanceStats.attendanceRate}%</span>
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               )}
 
@@ -3163,34 +3309,34 @@ const Admin_hr_management = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="overflow-x-auto">
-                      <table className="w-full">
+                      <table className="w-full min-w-[400px] border-collapse text-xs">
                         <thead>
                           <tr className="border-b border-gray-200 bg-gray-50">
-                            <th className="text-left py-3 px-4 font-semibold text-gray-700">Name</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Present Days</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Absent Days</th>
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700">Name</th>
+                            <th className="text-center py-1.5 px-2 text-xs font-semibold text-gray-700">Present</th>
+                            <th className="text-center py-1.5 px-2 text-xs font-semibold text-gray-700">Absent</th>
                           </tr>
                         </thead>
                         <tbody>
                           {getEmployeeAttendanceSummary().map((employee, index) => (
                             <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                              <td className="py-3 px-4">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                              <td className="py-2 px-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
                                     {employee.employeeName.charAt(0).toUpperCase()}
                                   </div>
-                                  <span className="font-medium text-gray-900">{employee.employeeName}</span>
+                                  <span className="font-medium text-gray-900 truncate">{employee.employeeName}</span>
                                 </div>
                               </td>
-                              <td className="text-center py-3 px-4">
-                                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800">
-                                  <CheckCircle2 className="h-4 w-4" />
+                              <td className="text-center py-2 px-2">
+                                <span className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  <CheckCircle2 className="h-3 w-3" />
                                   {employee.presentDays}
                                 </span>
                               </td>
-                              <td className="text-center py-3 px-4">
-                                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-800">
-                                  <XCircle className="h-4 w-4" />
+                              <td className="text-center py-2 px-2">
+                                <span className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  <XCircle className="h-3 w-3" />
                                   {employee.absentDays}
                                 </span>
                               </td>
@@ -3290,180 +3436,90 @@ const Admin_hr_management = () => {
                 </div>
               </div>
 
-              {/* Compact Statistics Cards - Essential Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-                {/* Total Employees */}
-                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
+              {/* Salary Statistics Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-l-blue-500 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-blue-600 text-xs font-semibold uppercase tracking-wide mb-1">Total Employees</p>
-                        <p className="text-2xl font-bold text-blue-900">{salaryStats.totalEmployees}</p>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-xs text-green-600 font-medium">{salaryStats.paidEmployees} paid</span>
-                          <span className="text-xs text-gray-400">•</span>
-                          <span className="text-xs text-orange-600 font-medium">{salaryStats.pendingEmployees} pending</span>
-                        </div>
+                      <div>
+                        <p className="text-blue-600 text-xs font-semibold uppercase tracking-wide">Total Employees</p>
+                        <p className="text-xl font-bold text-blue-900 mt-0.5">{salaryStats.totalEmployees}</p>
+                        <p className="text-xs text-gray-600 mt-1">{salaryStats.paidEmployees} paid · {salaryStats.pendingEmployees} pending</p>
                       </div>
-                      <div className="p-2.5 bg-blue-500/10 rounded-lg">
+                      <div className="p-2 bg-blue-500/10 rounded-lg">
                         <Users className="h-5 w-5 text-blue-600" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Total Payable Amount */}
-                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-l-purple-500 shadow-sm hover:shadow-md transition-shadow">
+                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-l-purple-500 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-purple-600 text-xs font-semibold uppercase tracking-wide mb-1">Total Payable</p>
-                        <p className="text-2xl font-bold text-purple-900">
-                          {formatCurrency(
-                            salaryStats.totalAmount + 
-                            salaryStats.totalIncentiveAmount + 
-                            salaryStats.totalRewardAmount
-                          )}
+                      <div>
+                        <p className="text-purple-600 text-xs font-semibold uppercase tracking-wide">Total Payable</p>
+                        <p className="text-lg font-bold text-purple-900 mt-0.5">
+                          {formatCurrency(salaryStats.totalAmount + salaryStats.totalIncentiveAmount + salaryStats.totalRewardAmount)}
                         </p>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-xs text-gray-600">
-                            Salary: {formatCurrency(salaryStats.totalAmount)}
-                          </span>
-                          {(salaryStats.totalIncentiveAmount > 0 || salaryStats.totalRewardAmount > 0) && (
-                            <>
-                              <span className="text-xs text-gray-400">•</span>
-                              <span className="text-xs text-gray-600">
-                                +{formatCurrency(salaryStats.totalIncentiveAmount + salaryStats.totalRewardAmount)}
-                              </span>
-                            </>
-                          )}
-                        </div>
                       </div>
-                      <div className="p-2.5 bg-purple-500/10 rounded-lg">
+                      <div className="p-2 bg-purple-500/10 rounded-lg">
                         <Calculator className="h-5 w-5 text-purple-600" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Paid Amount */}
-                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
+                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-l-green-500 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-green-600 text-xs font-semibold uppercase tracking-wide mb-1">Paid Amount</p>
-                        <p className="text-2xl font-bold text-green-900">
-                          {formatCurrency(
-                            salaryStats.paidAmount + 
-                            salaryStats.paidIncentiveAmount + 
-                            salaryStats.paidRewardAmount
-                          )}
+                      <div>
+                        <p className="text-green-600 text-xs font-semibold uppercase tracking-wide">Paid</p>
+                        <p className="text-lg font-bold text-green-900 mt-0.5">
+                          {formatCurrency(salaryStats.paidAmount + salaryStats.paidIncentiveAmount + salaryStats.paidRewardAmount)}
                         </p>
-                        {salaryStats.totalAmount + salaryStats.totalIncentiveAmount + salaryStats.totalRewardAmount > 0 && (
-                          <div className="mt-1.5">
-                            <div className="flex items-center gap-2 mb-1">
-                              <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-green-500 rounded-full transition-all"
-                                  style={{
-                                    width: `${Math.min(100, ((salaryStats.paidAmount + salaryStats.paidIncentiveAmount + salaryStats.paidRewardAmount) / (salaryStats.totalAmount + salaryStats.totalIncentiveAmount + salaryStats.totalRewardAmount)) * 100)}%`
-                                  }}
-                                />
-                              </div>
-                              <span className="text-xs font-semibold text-green-700">
-                                {Math.round(((salaryStats.paidAmount + salaryStats.paidIncentiveAmount + salaryStats.paidRewardAmount) / (salaryStats.totalAmount + salaryStats.totalIncentiveAmount + salaryStats.totalRewardAmount)) * 100)}%
-                              </span>
-                            </div>
-                          </div>
-                        )}
                       </div>
-                      <div className="p-2.5 bg-green-500/10 rounded-lg">
+                      <div className="p-2 bg-green-500/10 rounded-lg">
                         <CheckCircle2 className="h-5 w-5 text-green-600" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Pending Amount */}
-                <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-shadow">
+                <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-l-4 border-l-orange-500 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-orange-600 text-xs font-semibold uppercase tracking-wide mb-1">Pending Amount</p>
-                        <p className="text-2xl font-bold text-orange-900">
-                          {formatCurrency(
-                            salaryStats.pendingAmount + 
-                            salaryStats.pendingIncentiveAmount + 
-                            salaryStats.pendingRewardAmount
-                          )}
+                      <div>
+                        <p className="text-orange-600 text-xs font-semibold uppercase tracking-wide">Pending</p>
+                        <p className="text-lg font-bold text-orange-900 mt-0.5">
+                          {formatCurrency(salaryStats.pendingAmount + salaryStats.pendingIncentiveAmount + salaryStats.pendingRewardAmount)}
                         </p>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-xs text-orange-600 font-medium">
-                            {salaryStats.pendingEmployees} employees
-                          </span>
-                          {(salaryStats.pendingIncentiveAmount > 0 || salaryStats.pendingRewardAmount > 0) && (
-                            <>
-                              <span className="text-xs text-gray-400">•</span>
-                              <span className="text-xs text-orange-600">
-                                +{formatCurrency(salaryStats.pendingIncentiveAmount + salaryStats.pendingRewardAmount)} bonus
-                              </span>
-                            </>
-                          )}
-                        </div>
                       </div>
-                      <div className="p-2.5 bg-orange-500/10 rounded-lg">
+                      <div className="p-2 bg-orange-500/10 rounded-lg">
                         <Clock className="h-5 w-5 text-orange-600" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Incentive Amount */}
-                <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 border-l-4 border-l-cyan-500 shadow-sm hover:shadow-md transition-shadow">
+                <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 border-l-4 border-l-cyan-500 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-cyan-600 text-xs font-semibold uppercase tracking-wide mb-1">Incentive Amount</p>
-                        <p className="text-2xl font-bold text-cyan-900">
-                          {formatCurrency(salaryStats.totalIncentiveAmount)}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-xs text-green-600 font-medium">
-                            Paid: {formatCurrency(salaryStats.paidIncentiveAmount)}
-                          </span>
-                          <span className="text-xs text-gray-400">•</span>
-                          <span className="text-xs text-orange-600 font-medium">
-                            Pending: {formatCurrency(salaryStats.pendingIncentiveAmount)}
-                          </span>
-                        </div>
+                      <div>
+                        <p className="text-cyan-600 text-xs font-semibold uppercase tracking-wide">Incentive</p>
+                        <p className="text-lg font-bold text-cyan-900 mt-0.5">{formatCurrency(salaryStats.totalIncentiveAmount)}</p>
+                        <p className="text-xs text-gray-600 mt-1">Paid: {formatCurrency(salaryStats.paidIncentiveAmount)}</p>
                       </div>
-                      <div className="p-2.5 bg-cyan-500/10 rounded-lg">
+                      <div className="p-2 bg-cyan-500/10 rounded-lg">
                         <TrendingUp className="h-5 w-5 text-cyan-600" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Reward Amount */}
-                <Card className="bg-gradient-to-br from-pink-50 to-pink-100 border-l-4 border-l-pink-500 shadow-sm hover:shadow-md transition-shadow">
+                <Card className="bg-gradient-to-br from-pink-50 to-pink-100 border-l-4 border-l-pink-500 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-pink-600 text-xs font-semibold uppercase tracking-wide mb-1">Reward Amount</p>
-                        <p className="text-2xl font-bold text-pink-900">
-                          {formatCurrency(salaryStats.totalRewardAmount)}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-xs text-green-600 font-medium">
-                            Paid: {formatCurrency(salaryStats.paidRewardAmount)}
-                          </span>
-                          <span className="text-xs text-gray-400">•</span>
-                          <span className="text-xs text-orange-600 font-medium">
-                            Pending: {formatCurrency(salaryStats.pendingRewardAmount)}
-                          </span>
-                        </div>
+                      <div>
+                        <p className="text-pink-600 text-xs font-semibold uppercase tracking-wide">Reward</p>
+                        <p className="text-lg font-bold text-pink-900 mt-0.5">{formatCurrency(salaryStats.totalRewardAmount)}</p>
+                        <p className="text-xs text-gray-600 mt-1">Paid: {formatCurrency(salaryStats.paidRewardAmount)}</p>
                       </div>
-                      <div className="p-2.5 bg-pink-500/10 rounded-lg">
+                      <div className="p-2 bg-pink-500/10 rounded-lg">
                         <Award className="h-5 w-5 text-pink-600" />
                       </div>
                     </div>
@@ -3471,241 +3527,115 @@ const Admin_hr_management = () => {
                 </Card>
               </div>
 
-              {/* Salary Records Cards */}
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                    <Banknote className="h-5 w-5" />
-                    Salary Records - {selectedSalaryMonth}
-                  </h3>
-                  <div className="text-sm text-gray-500">
-                    {getFilteredSalaryData().length} employee{getFilteredSalaryData().length !== 1 ? 's' : ''}
+              {/* Salary Records Table */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Banknote className="h-5 w-5 text-gray-700" />
+                      Salary Records — {selectedSalaryMonth}
+                    </CardTitle>
+                    <span className="text-sm text-gray-500">
+                      {getFilteredSalaryData().length} employee{getFilteredSalaryData().length !== 1 ? 's' : ''}
+                    </span>
                   </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {getFilteredSalaryData().map((record, index) => {
-                    const paymentDate = new Date(record.paymentDate || record.createdAt)
-                    const currentDate = new Date()
-                    const daysUntilPayment = Math.ceil((paymentDate - currentDate) / (1000 * 60 * 60 * 24))
-                    const isOverdue = daysUntilPayment < 0 && record.status !== 'paid'
-                    const isDueSoon = daysUntilPayment <= 3 && daysUntilPayment >= 0 && record.status !== 'paid'
-                    
-                    // Check if record is for future month (next month or later)
-                    let recordMonth = record.month || ''
-                    if (!recordMonth && record.paymentDate) {
-                      const paymentDate = new Date(record.paymentDate)
-                      recordMonth = paymentDate.toISOString().slice(0, 7)
-                    }
-                    // If still no month, use selectedSalaryMonth (for next month records)
-                    if (!recordMonth) {
-                      recordMonth = selectedSalaryMonth
-                    }
-                    
-                    const today = new Date()
-                    const currentMonthStr = today.toISOString().slice(0, 7)
-                    // Check if record month OR selected month is in the future
-                    const isFutureMonth = recordMonth > currentMonthStr || selectedSalaryMonth > currentMonthStr
-                    // Allow editing if: pending OR future month (next month) - always allow future months
-                    const canEdit = record.status !== 'paid' || isFutureMonth
-                    
-                    const totalAmount = (record.fixedSalary || 0) + (record.incentiveAmount || 0) + (record.rewardAmount || 0)
-                    
-                    return (
-                      <Card key={index} className={`hover:shadow-md transition-all duration-200 border-l-4 ${
-                        isOverdue ? 'border-l-red-500 bg-red-50/30' : 
-                        isDueSoon ? 'border-l-yellow-500 bg-yellow-50/30' : 
-                        record.status === 'paid' ? 'border-l-green-500 bg-green-50/30' : 
-                        'border-l-gray-300 bg-white'
-                      }`}>
-                        <CardContent className="p-4">
-                          {/* Employee Header */}
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                              <div className="w-11 h-11 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                                {record.employeeName.charAt(0).toUpperCase()}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h4 className="font-bold text-gray-900 text-sm leading-tight truncate">{record.employeeName}</h4>
-                                <p className="text-xs text-gray-500 mt-0.5">{record.department || 'unknown'}</p>
-                              </div>
-                            </div>
-                            <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
-                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSalaryStatusColor(record.status)}`}>
-                                {getSalaryStatusIcon(record.status)}
-                                {record.status === 'paid' ? 'Paid' : 'Pending'}
-                              </span>
-                              {record.status !== 'paid' && (
-                                <span className={`text-xs font-semibold ${
-                                  isOverdue ? 'text-red-600' : 
-                                  isDueSoon ? 'text-yellow-600' : 
-                                  'text-gray-500'
-                                }`}>
-                                  {isOverdue ? `${Math.abs(daysUntilPayment)}d overdue` : 
-                                   `${daysUntilPayment}d left`}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Payment Date */}
-                          <div className="mb-3 px-2 py-1.5 bg-gray-50 rounded-md">
-                            <span className="text-xs text-gray-600">Due: </span>
-                            <span className="text-xs font-semibold text-gray-900">{paymentDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
-                          </div>
-
-                          {/* Amounts Summary */}
-                          <div className="space-y-2 mb-3">
-                            {/* Salary */}
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-gray-600">Salary:</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-semibold text-gray-900">{formatCurrency(record.fixedSalary || 0)}</span>
-                                {record.status !== 'paid' ? (
-                                  <Button
-                                    onClick={() => handleMarkSalaryPaid(record)}
-                                    size="sm"
-                                    className={`h-6 px-3 text-xs font-medium ${
-                                      isOverdue ? 'bg-red-500 hover:bg-red-600' : 
-                                      'bg-green-500 hover:bg-green-600'
-                                    } text-white`}
-                                  >
-                                    Pay
-                                  </Button>
-                                ) : (
-                                  <span className="h-6 px-3 text-xs font-medium bg-gray-200 text-gray-500 rounded flex items-center cursor-not-allowed">
-                                    Pay
+                </CardHeader>
+                <CardContent className="p-0">
+                {getFilteredSalaryData().length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[960px] border-collapse text-xs">
+                      <thead>
+                        <tr className="border-y border-gray-200 bg-gray-50/80">
+                          <th className="text-left py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[140px]">Employee</th>
+                          <th className="text-left py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[90px]">Department</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[90px]">Salary</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[90px]">Incentive</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[85px]">Reward</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[95px]">Total</th>
+                          <th className="text-center py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[95px]">Status</th>
+                          <th className="text-center py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[80px]">Due Date</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[200px]">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {getFilteredSalaryData().map((record, index) => {
+                          const paymentDate = new Date(record.paymentDate || record.createdAt)
+                          const currentDate = new Date()
+                          const daysUntilPayment = Math.ceil((paymentDate - currentDate) / (1000 * 60 * 60 * 24))
+                          const isOverdue = daysUntilPayment < 0 && record.status !== 'paid'
+                          const isDueSoon = daysUntilPayment <= 3 && daysUntilPayment >= 0 && record.status !== 'paid'
+                          let recordMonth = record.month || ''
+                          if (!recordMonth && record.paymentDate) recordMonth = new Date(record.paymentDate).toISOString().slice(0, 7)
+                          if (!recordMonth) recordMonth = selectedSalaryMonth
+                          const currentMonthStr = new Date().toISOString().slice(0, 7)
+                          const canEdit = record.status !== 'paid' || recordMonth > currentMonthStr || selectedSalaryMonth > currentMonthStr
+                          const totalAmount = (record.fixedSalary || 0) + (record.incentiveAmount || 0) + (record.rewardAmount || 0)
+                          const isPaid = record.status === 'paid'
+                          return (
+                            <tr key={index} className={`transition-colors ${
+                              isPaid ? 'bg-gray-100 hover:bg-gray-200/80' : isOverdue ? 'bg-red-50/40 hover:bg-red-50/60' : isDueSoon ? 'bg-amber-50/40 hover:bg-amber-50/60' : 'bg-white hover:bg-gray-50/50'
+                            }`}>
+                              <td className="py-3 px-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                    {record.employeeName.charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="font-medium text-gray-900 truncate max-w-[110px]">{record.employeeName}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 text-gray-600">{record.department || '—'}</td>
+                              <td className="py-3 px-3 text-right font-medium tabular-nums">{formatCurrency(record.fixedSalary || 0)}</td>
+                              <td className="py-3 px-3 text-right text-blue-700 font-medium tabular-nums">{formatCurrency(record.incentiveAmount || 0)}</td>
+                              <td className="py-3 px-3 text-right text-purple-700 font-medium tabular-nums">{formatCurrency(record.rewardAmount || 0)}</td>
+                              <td className="py-3 px-3 text-right font-semibold text-green-700 tabular-nums">{formatCurrency(totalAmount)}</td>
+                              <td className="py-3 px-3">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${getSalaryStatusColor(record.status)}`}>
+                                    {getSalaryStatusIcon(record.status)}
+                                    {record.status === 'paid' ? 'Paid' : 'Pending'}
                                   </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Incentive - Sales Only */}
-                            {record.employeeModel === 'Sales' && record.department === 'sales' && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-gray-600">Incentive:</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-semibold text-blue-700">{formatCurrency(record.incentiveAmount || 0)}</span>
-                                  {record.incentiveStatus !== 'paid' && record.incentiveAmount > 0 ? (
-                                    <Button
-                                      onClick={() => handleMarkIncentivePaid(record)}
-                                      size="sm"
-                                      className="h-6 px-3 text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white"
-                                    >
-                                      Pay
-                                    </Button>
-                                  ) : (
-                                    <span className="h-6 px-3 text-xs font-medium bg-gray-200 text-gray-500 rounded flex items-center cursor-not-allowed">
-                                      Pay
+                                  {record.status !== 'paid' && (
+                                    <span className={`text-[10px] font-medium ${isOverdue ? 'text-red-600' : isDueSoon ? 'text-amber-600' : 'text-gray-500'}`}>
+                                      {isOverdue ? `${Math.abs(daysUntilPayment)}d overdue` : `${daysUntilPayment}d left`}
                                     </span>
                                   )}
                                 </div>
-                              </div>
-                            )}
-
-                            {/* Reward - Sales & Dev */}
-                            {(record.department === 'sales' || ['nodejs', 'flutter', 'web', 'full-stack', 'app'].includes(record.department)) && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-gray-600">Reward:</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-semibold text-purple-700">{formatCurrency(record.rewardAmount || 0)}</span>
-                                  {record.rewardStatus !== 'paid' && record.rewardAmount > 0 ? (
-                                    <Button
-                                      onClick={() => handleMarkRewardPaid(record)}
-                                      size="sm"
-                                      className="h-6 px-3 text-xs font-medium bg-purple-500 hover:bg-purple-600 text-white"
-                                    >
-                                      Pay
-                                    </Button>
-                                  ) : (
-                                    <span className="h-6 px-3 text-xs font-medium bg-gray-200 text-gray-500 rounded flex items-center cursor-not-allowed">
-                                      Pay
-                                    </span>
+                              </td>
+                              <td className="py-3 px-3 text-center text-gray-600 tabular-nums">{paymentDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</td>
+                              <td className="py-3 px-3">
+                                <div className="flex items-center justify-end gap-1 flex-wrap">
+                                  <button onClick={() => { setSelectedSalaryDetails(record); setShowSalaryDetailsModal(true) }} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 hover:text-blue-600 transition-colors" title="View details"><Eye className="h-4 w-4" /></button>
+                                  <button onClick={() => viewSalaryHistory(record)} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors" title="History"><Clock className="h-4 w-4" /></button>
+                                  <button onClick={() => handleEditSalary(record)} disabled={!canEdit} className={`p-1.5 rounded-md transition-colors ${!canEdit ? 'opacity-40 cursor-not-allowed' : 'hover:bg-blue-50 text-blue-600'}`} title={!canEdit ? 'Cannot edit' : 'Edit'}><Edit3 className="h-4 w-4" /></button>
+                                  <button onClick={() => handleDeleteSalary(record)} className="p-1.5 rounded-md hover:bg-red-50 text-red-600 transition-colors" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                                  {record.status !== 'paid' && (
+                                    <Button onClick={() => handleMarkSalaryPaid(record)} size="sm" className={`h-7 px-2.5 text-xs font-medium ${isOverdue ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white`}>Pay</Button>
+                                  )}
+                                  {record.employeeModel === 'Sales' && record.department === 'sales' && record.incentiveStatus !== 'paid' && record.incentiveAmount > 0 && (
+                                    <Button onClick={() => handleMarkIncentivePaid(record)} size="sm" className="h-7 px-2.5 text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white">Incentive</Button>
+                                  )}
+                                  {(record.department === 'sales' || ['nodejs', 'flutter', 'web', 'full-stack', 'app'].includes(record.department)) && record.rewardStatus !== 'paid' && record.rewardAmount > 0 && (
+                                    <Button onClick={() => handleMarkRewardPaid(record)} size="sm" className="h-7 px-2.5 text-xs font-medium bg-purple-500 hover:bg-purple-600 text-white">Reward</Button>
                                   )}
                                 </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Total */}
-                          <div className="mb-3 px-3 py-2 bg-gradient-to-r from-green-50 to-emerald-50 rounded-md border border-green-200">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-bold text-gray-900">Total:</span>
-                              <span className="text-lg font-bold text-green-700">{formatCurrency(totalAmount)}</span>
-                            </div>
-                          </div>
-
-                          {/* Action Buttons */}
-                          <div className="flex gap-2 pt-2 border-t border-gray-200">
-                            <Button
-                              onClick={() => {
-                                setSelectedSalaryDetails(record)
-                                setShowSalaryDetailsModal(true)
-                              }}
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 text-xs h-8 text-gray-600 border-gray-300 hover:bg-gray-50"
-                              title="View details"
-                            >
-                              <Eye className="h-3.5 w-3.5 mr-1" />
-                              View
-                            </Button>
-                            <Button
-                              onClick={() => viewSalaryHistory(record)}
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 text-xs h-8 text-gray-600 border-gray-300 hover:bg-gray-50"
-                              title="History"
-                            >
-                              <Clock className="h-3.5 w-3.5 mr-1" />
-                              History
-                            </Button>
-                            <Button
-                              onClick={() => handleEditSalary(record)}
-                              size="sm"
-                              variant="outline"
-                              disabled={!canEdit}
-                              className={`px-2.5 text-xs h-8 ${
-                                !canEdit
-                                  ? 'text-gray-400 border-gray-200 cursor-not-allowed bg-gray-50' 
-                                  : 'text-blue-600 border-blue-300 hover:bg-blue-50'
-                              }`}
-                              title={!canEdit ? 'Cannot edit paid salary for current month' : 'Edit'}
-                            >
-                              <Edit3 className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              onClick={() => handleDeleteSalary(record)}
-                              size="sm"
-                              variant="outline"
-                              className="px-2.5 text-xs h-8 text-red-600 border-red-300 hover:bg-red-50"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
-
-                {/* Empty State */}
-                {getFilteredSalaryData().length === 0 && (
-                  <Card className="border-2 border-dashed border-gray-300">
-                    <CardContent className="p-12 text-center">
-                      <Banknote className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-xl font-semibold text-gray-700 mb-2">No Salary Records Found</h3>
-                      <p className="text-gray-500">
-                        {selectedSalaryDepartment !== 'all' 
-                          ? `No salary records found for ${selectedSalaryDepartment} department in ${selectedSalaryMonth}`
-                          : `No salary records found for ${selectedSalaryMonth}`
-                        }
-                      </p>
-                    </CardContent>
-                  </Card>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="py-12 px-4 text-center border-t border-gray-100">
+                    <Banknote className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-gray-700">No salary records found</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {selectedSalaryDepartment !== 'all' ? `No records for ${selectedSalaryDepartment} in ${selectedSalaryMonth}` : `No records for ${selectedSalaryMonth}`}
+                    </p>
+                  </div>
                 )}
-              </div>
+                </CardContent>
+              </Card>
                 </motion.div>
               )}
 
@@ -3743,108 +3673,117 @@ const Admin_hr_management = () => {
                 </div>
               </div>
 
-              {/* Request Statistics */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                  <CardContent className="p-6">
+              {/* Request Statistics Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-l-blue-500 shadow-sm">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-blue-600 text-sm font-medium">Total Requests</p>
-                        <p className="text-2xl font-bold text-blue-900">{requests.length}</p>
+                        <p className="text-blue-600 text-xs font-semibold uppercase tracking-wide">Total Requests</p>
+                        <p className="text-xl font-bold text-blue-900 mt-0.5">{requests.length}</p>
                       </div>
-                      <MessageSquare className="h-8 w-8 text-blue-600" />
+                      <div className="p-2 bg-blue-500/10 rounded-lg">
+                        <MessageSquare className="h-5 w-5 text-blue-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
-
-                <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
-                  <CardContent className="p-6">
+                <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-l-4 border-l-yellow-500 shadow-sm">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-yellow-600 text-sm font-medium">Pending</p>
-                        <p className="text-2xl font-bold text-yellow-900">{requests.filter(r => r.status === 'pending').length}</p>
+                        <p className="text-yellow-600 text-xs font-semibold uppercase tracking-wide">Pending</p>
+                        <p className="text-xl font-bold text-yellow-900 mt-0.5">{requests.filter(r => r.status === 'pending').length}</p>
                       </div>
-                      <Clock className="h-8 w-8 text-yellow-600" />
+                      <div className="p-2 bg-yellow-500/10 rounded-lg">
+                        <Clock className="h-5 w-5 text-yellow-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
-
-                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                  <CardContent className="p-6">
+                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-l-green-500 shadow-sm">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-green-600 text-sm font-medium">Approved</p>
-                        <p className="text-2xl font-bold text-green-900">{requests.filter(r => r.status === 'approved').length}</p>
+                        <p className="text-green-600 text-xs font-semibold uppercase tracking-wide">Approved</p>
+                        <p className="text-xl font-bold text-green-900 mt-0.5">{requests.filter(r => r.status === 'approved').length}</p>
                       </div>
-                      <CheckCircle2 className="h-8 w-8 text-green-600" />
+                      <div className="p-2 bg-green-500/10 rounded-lg">
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-red-50 to-red-100 border-l-4 border-l-red-500 shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-red-600 text-xs font-semibold uppercase tracking-wide">Rejected</p>
+                        <p className="text-xl font-bold text-red-900 mt-0.5">{requests.filter(r => r.status === 'rejected').length}</p>
+                      </div>
+                      <div className="p-2 bg-red-500/10 rounded-lg">
+                        <XCircle className="h-5 w-5 text-red-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Loading State */}
               {requestsLoading && (
-                <div className="flex items-center justify-center py-12">
+                <div className="flex items-center justify-center py-8">
                   <Loading />
                 </div>
               )}
 
-              {/* Requests List */}
-              {!requestsLoading && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {requests.map((request, index) => (
-                  <Card key={index} className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <h4 className="font-bold text-gray-900 text-sm mb-1 line-clamp-2">{request.title}</h4>
-                          <p className="text-xs text-gray-500 mb-2 line-clamp-2">{request.description}</p>
-                        </div>
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRequestStatusColor(request.status)}`}>
-                          {request.status ? request.status.charAt(0).toUpperCase() + request.status.slice(1) : 'Pending'}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1 mb-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-500">Category</span>
-                          <span className="text-xs font-medium text-gray-900">{request.category}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-500">Priority</span>
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(request.priority)}`}>
-                            {request.priority ? request.priority.charAt(0).toUpperCase() + request.priority.slice(1) : 'Normal'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-500">Department</span>
-                          <span className="text-xs font-medium text-gray-900">{request.department}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-500">Date</span>
-                          <span className="text-xs font-medium text-gray-900">{new Date(request.requestDate).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-
-                      {request.adminResponse && (
-                        <div className="bg-gray-50 rounded-lg p-2">
-                          <p className="text-xs font-medium text-gray-700 mb-1">Admin Response:</p>
-                          <p className="text-xs text-gray-600 line-clamp-2">{request.adminResponse}</p>
-                          {request.responseDate && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              {new Date(request.responseDate).toLocaleDateString()}
-                            </p>
-                          )}
-                          {request.respondedBy && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              By: {request.respondedBy}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                  ))}
+              {/* Requests List - compact table */}
+              {!requestsLoading && requests.length > 0 && (
+                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                  <table className="w-full min-w-[700px] border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[140px]">Title</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Category</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[70px]">Priority</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px] hidden md:table-cell">Department</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Date</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Status</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Response</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {requests.map((request, index) => (
+                        <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                          <td className="py-2 px-2">
+                            <p className="font-semibold text-gray-900 truncate max-w-[180px]">{request.title}</p>
+                            {request.description && <p className="text-[10px] text-gray-500 truncate max-w-[180px] mt-0.5">{request.description}</p>}
+                          </td>
+                          <td className="py-2 px-2 text-gray-600">{request.category}</td>
+                          <td className="py-2 px-2">
+                            <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${getPriorityColor(request.priority)}`}>
+                              {request.priority ? request.priority.charAt(0).toUpperCase() + request.priority.slice(1) : 'Normal'}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2 text-gray-600 hidden md:table-cell">{request.department}</td>
+                          <td className="py-2 px-2 text-gray-600">{new Date(request.requestDate).toLocaleDateString()}</td>
+                          <td className="py-2 px-2">
+                            <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${getRequestStatusColor(request.status)}`}>
+                              {request.status ? request.status.charAt(0).toUpperCase() + request.status.slice(1) : 'Pending'}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2">
+                            {request.adminResponse ? (
+                              <span className="text-gray-600 truncate max-w-[140px] block" title={request.adminResponse}>
+                                {request.adminResponse}
+                                {request.responseDate && <span className="text-[10px] text-gray-400 block">{(new Date(request.responseDate).toLocaleDateString())}</span>}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
 
@@ -3890,132 +3829,113 @@ const Admin_hr_management = () => {
                 </Button>
               </div>
 
-              {/* Allowance Statistics */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                  <CardContent className="p-6">
+              {/* Allowance Statistics Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-l-blue-500 shadow-sm">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-blue-600 text-sm font-medium">Total Items</p>
-                        <p className="text-2xl font-bold text-blue-900">{allowances.length}</p>
+                        <p className="text-blue-600 text-xs font-semibold uppercase tracking-wide">Total Items</p>
+                        <p className="text-xl font-bold text-blue-900 mt-0.5">{allowances.length}</p>
                       </div>
-                      <Package className="h-8 w-8 text-blue-600" />
+                      <div className="p-2 bg-blue-500/10 rounded-lg">
+                        <Package className="h-5 w-5 text-blue-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
-
-                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                  <CardContent className="p-6">
+                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-l-green-500 shadow-sm">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-green-600 text-sm font-medium">Active</p>
-                        <p className="text-2xl font-bold text-green-900">{allowances.filter(a => a.status === 'active').length}</p>
+                        <p className="text-green-600 text-xs font-semibold uppercase tracking-wide">Active</p>
+                        <p className="text-xl font-bold text-green-900 mt-0.5">{allowances.filter(a => a.status === 'active').length}</p>
                       </div>
-                      <CheckCircle2 className="h-8 w-8 text-green-600" />
+                      <div className="p-2 bg-green-500/10 rounded-lg">
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
-
-                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                  <CardContent className="p-6">
+                <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 border-l-4 border-l-cyan-500 shadow-sm">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-blue-600 text-sm font-medium">Returned</p>
-                        <p className="text-2xl font-bold text-blue-900">{allowances.filter(a => a.status === 'returned').length}</p>
+                        <p className="text-cyan-600 text-xs font-semibold uppercase tracking-wide">Returned</p>
+                        <p className="text-xl font-bold text-cyan-900 mt-0.5">{allowances.filter(a => a.status === 'returned').length}</p>
                       </div>
-                      <RefreshCw className="h-8 w-8 text-blue-600" />
+                      <div className="p-2 bg-cyan-500/10 rounded-lg">
+                        <RefreshCw className="h-5 w-5 text-cyan-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
-
-                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                  <CardContent className="p-6">
+                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-l-purple-500 shadow-sm">
+                  <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-purple-600 text-sm font-medium">Total Value</p>
-                        <p className="text-xl font-bold text-purple-900">
-                          {formatCurrency(allowances.reduce((sum, a) => sum + a.value, 0))}
+                        <p className="text-purple-600 text-xs font-semibold uppercase tracking-wide">Total Value</p>
+                        <p className="text-xl font-bold text-purple-900 mt-0.5">
+                          {formatCurrency(allowances.reduce((sum, a) => sum + (a.value || 0), 0))}
                         </p>
                       </div>
-                      <Calculator className="h-8 w-8 text-purple-600" />
+                      <div className="p-2 bg-purple-500/10 rounded-lg">
+                        <Calculator className="h-5 w-5 text-purple-600" />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Allowances List */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {allowances.map((allowance, index) => (
-                  <Card key={index} className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-green-500">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-blue-600 rounded-full flex items-center justify-center text-white">
-                            {getItemIcon(allowance.itemType)}
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-gray-900 text-sm line-clamp-1">{allowance.itemName}</h4>
-                            <p className="text-xs text-gray-500">{allowance.employeeName}</p>
-                          </div>
-                        </div>
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getAllowanceStatusColor(allowance.status)}`}>
-                          {allowance.status.charAt(0).toUpperCase() + allowance.status.slice(1)}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1 mb-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-500">Serial</span>
-                          <span className="text-xs font-medium text-gray-900">{allowance.serialNumber}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-500">Value</span>
-                          <span className="text-xs font-bold text-green-600">{formatCurrency(allowance.value)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-500">Issue Date</span>
-                          <span className="text-xs font-medium text-gray-900">{new Date(allowance.issueDate).toLocaleDateString()}</span>
-                        </div>
-                        {allowance.returnDate && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-500">Return Date</span>
-                            <span className="text-xs font-medium text-gray-900">{new Date(allowance.returnDate).toLocaleDateString()}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {allowance.remarks && (
-                        <div className="bg-gray-50 rounded-lg p-2">
-                          <p className="text-xs font-medium text-gray-700 mb-1">Remarks:</p>
-                          <p className="text-xs text-gray-600 line-clamp-2">{allowance.remarks}</p>
-                        </div>
-                      )}
-
-                      {/* Action Buttons */}
-                      <div className="flex gap-2 mt-3">
-                        <Button
-                          onClick={() => handleEditAllowance(allowance)}
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 text-xs py-1 h-8"
-                        >
-                          <Edit3 className="h-3 w-3 mr-1" />
-                          Edit
-                        </Button>
-                        <Button
-                          onClick={() => handleDeleteAllowance(allowance)}
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 text-xs py-1 h-8 text-red-600 border-red-200 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-3 w-3 mr-1" />
-                          Delete
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              {/* Allowances List - compact table */}
+              {allowances.length > 0 ? (
+                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                  <table className="w-full min-w-[750px] border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Item</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[110px]">Employee</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Serial</th>
+                        <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[75px]">Value</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[75px]">Issue</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[75px] hidden md:table-cell">Return</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[70px]">Status</th>
+                        <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Remarks</th>
+                        <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allowances.map((allowance, index) => (
+                        <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">{getItemIcon(allowance.itemType)}</span>
+                              <span className="font-semibold text-gray-900 truncate max-w-[90px]">{allowance.itemName}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-2 text-gray-600 truncate max-w-[100px]">{allowance.employeeName}</td>
+                          <td className="py-2 px-2 text-gray-600">{allowance.serialNumber || '—'}</td>
+                          <td className="py-2 px-2 text-right font-medium text-green-700">{formatCurrency(allowance.value || 0)}</td>
+                          <td className="py-2 px-2 text-gray-600">{allowance.issueDate ? new Date(allowance.issueDate).toLocaleDateString() : '—'}</td>
+                          <td className="py-2 px-2 text-gray-600 hidden md:table-cell">{allowance.returnDate ? new Date(allowance.returnDate).toLocaleDateString() : '—'}</td>
+                          <td className="py-2 px-2">
+                            <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${getAllowanceStatusColor(allowance.status)}`}>
+                              {allowance.status.charAt(0).toUpperCase() + allowance.status.slice(1)}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2 text-gray-500 truncate max-w-[100px]" title={allowance.remarks}>{allowance.remarks || '—'}</td>
+                          <td className="py-2 px-2">
+                            <div className="flex items-center justify-end gap-0.5">
+                              <button onClick={() => handleEditAllowance(allowance)} className="p-1 rounded hover:bg-green-50 text-gray-500 hover:text-green-600" title="Edit"><Edit3 className="h-3.5 w-3.5" /></button>
+                              <button onClick={() => handleDeleteAllowance(allowance)} className="p-1 rounded hover:bg-red-50 text-red-600" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
 
               {/* Empty State */}
               {allowances.length === 0 && (
@@ -4104,160 +4024,124 @@ const Admin_hr_management = () => {
                     </div>
                   </div>
 
-                  {/* Expense Statistics */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                      <CardContent className="p-6">
+                  {/* Expense Statistics Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-l-blue-500 shadow-sm">
+                      <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-blue-600 text-sm font-medium">Total Expenses</p>
-                            <p className="text-2xl font-bold text-blue-900">{getFilteredExpenseStats().totalExpenses}</p>
+                            <p className="text-blue-600 text-xs font-semibold uppercase tracking-wide">Total Expenses</p>
+                            <p className="text-xl font-bold text-blue-900 mt-0.5">{getFilteredExpenseStats().totalExpenses}</p>
                           </div>
-                          <Receipt className="h-8 w-8 text-blue-600" />
+                          <div className="p-2 bg-blue-500/10 rounded-lg">
+                            <Receipt className="h-5 w-5 text-blue-600" />
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
-
-                    <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                      <CardContent className="p-6">
+                    <Card className="bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-l-green-500 shadow-sm">
+                      <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-green-600 text-sm font-medium">Active Expenses</p>
-                            <p className="text-2xl font-bold text-green-900">{getFilteredExpenseStats().activeExpenses}</p>
+                            <p className="text-green-600 text-xs font-semibold uppercase tracking-wide">Active</p>
+                            <p className="text-xl font-bold text-green-900 mt-0.5">{getFilteredExpenseStats().activeExpenses}</p>
                           </div>
-                          <CheckCircle2 className="h-8 w-8 text-green-600" />
+                          <div className="p-2 bg-green-500/10 rounded-lg">
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
-
-                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                      <CardContent className="p-6">
+                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-l-purple-500 shadow-sm">
+                      <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-purple-600 text-sm font-medium">Monthly Total</p>
-                            <p className="text-xl font-bold text-purple-900">{formatCurrency(getFilteredExpenseStats().monthlyTotal)}</p>
+                            <p className="text-purple-600 text-xs font-semibold uppercase tracking-wide">Monthly Total</p>
+                            <p className="text-lg font-bold text-purple-900 mt-0.5">{formatCurrency(getFilteredExpenseStats().monthlyTotal)}</p>
                           </div>
-                          <Calendar className="h-8 w-8 text-purple-600" />
+                          <div className="p-2 bg-purple-500/10 rounded-lg">
+                            <Calendar className="h-5 w-5 text-purple-600" />
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
-
-                    <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-                      <CardContent className="p-6">
+                    <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-l-4 border-l-orange-500 shadow-sm">
+                      <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-orange-600 text-sm font-medium">Yearly Total</p>
-                            <p className="text-xl font-bold text-orange-900">{formatCurrency(getFilteredExpenseStats().yearlyTotal)}</p>
+                            <p className="text-orange-600 text-xs font-semibold uppercase tracking-wide">Yearly Total</p>
+                            <p className="text-lg font-bold text-orange-900 mt-0.5">{formatCurrency(getFilteredExpenseStats().yearlyTotal)}</p>
                           </div>
-                          <TrendingUp className="h-8 w-8 text-orange-600" />
+                          <div className="p-2 bg-orange-500/10 rounded-lg">
+                            <TrendingUp className="h-5 w-5 text-orange-600" />
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
                   </div>
 
-                  {/* Expenses List */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {getFilteredExpenses().map((expense, index) => (
-                      <Card key={index} className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500">
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white">
-                                {getExpenseCategoryIcon(expense.category)}
-                              </div>
-                              <div>
-                                <h4 className="font-bold text-gray-900 text-sm line-clamp-1">{expense.name}</h4>
-                                <p className="text-xs text-gray-500">{expense.vendor}</p>
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-1 items-end">
-                              <div className="flex items-center gap-1">
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getExpenseStatusColor(expense.status)}`}>
-                                {expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}
-                              </span>
-                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                  expense.paymentStatus === 'paid' 
-                                    ? 'bg-green-100 text-green-700' 
-                                    : 'bg-orange-100 text-orange-700'
-                                }`}>
+                  {/* Expenses List - compact table */}
+                  {getFilteredExpenses().length > 0 ? (
+                    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                      <table className="w-full min-w-[850px] border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-gray-200 bg-gray-50">
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Name</th>
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[85px]">Vendor</th>
+                            <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[70px]">Amount</th>
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[75px]">Freq</th>
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[75px]">Next Due</th>
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[65px]">Status</th>
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[65px]">Payment</th>
+                            <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px] hidden md:table-cell">Description</th>
+                            <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[140px]">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {getFilteredExpenses().map((expense, index) => {
+                            const isPaid = expense.paymentStatus === 'paid'
+                            return (
+                            <tr key={index} className={`border-b border-gray-100 transition-colors ${
+                              isPaid ? 'bg-gray-100 hover:bg-gray-200/80 text-gray-500' : 'hover:bg-gray-50'
+                            }`}>
+                              <td className="py-2 px-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-base">{getExpenseCategoryIcon(expense.category)}</span>
+                                  <span className="font-semibold text-gray-900 truncate max-w-[100px]">{expense.name}</span>
+                                </div>
+                              </td>
+                              <td className="py-2 px-2 text-gray-600 truncate max-w-[80px]">{expense.vendor || '—'}</td>
+                              <td className="py-2 px-2 text-right font-semibold text-green-700">{formatCurrency(expense.amount || 0)}</td>
+                              <td className="py-2 px-2">
+                                <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${getExpenseCategoryColor(expense.category)}`}>
+                                  {expense.frequency ? expense.frequency.charAt(0).toUpperCase() + expense.frequency.slice(1) : '—'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-2 text-gray-600">{expense.nextDueDate ? formatDate(expense.nextDueDate) : 'N/A'}</td>
+                              <td className="py-2 px-2">
+                                <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${getExpenseStatusColor(expense.status)}`}>
+                                  {expense.status ? expense.status.charAt(0).toUpperCase() + expense.status.slice(1) : '—'}
+                                </span>
+                                <span className={`block mt-0.5 px-1.5 py-0.5 rounded text-[10px] ${expense.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                                   {expense.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
                                 </span>
-                              </div>
-                              {expense.autoPay && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                                  <RefreshCw className="h-3 w-3 mr-1" />
-                                  Auto Pay
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="space-y-2 mb-3">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-gray-500">Amount</span>
-                              <span className="text-sm font-bold text-green-600">{formatCurrency(expense.amount)}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-gray-500">Frequency</span>
-                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${getExpenseCategoryColor(expense.category)}`}>
-                                {expense.frequency.charAt(0).toUpperCase() + expense.frequency.slice(1)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-gray-500">Next Due</span>
-                              <span className="text-xs font-medium text-gray-900">{expense.nextDueDate ? formatDate(expense.nextDueDate) : 'N/A'}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-gray-500">Payment</span>
-                              <span className="text-xs font-medium text-gray-900 capitalize">
-                                {expense.paymentMethod.replace('_', ' ')}
-                              </span>
-                            </div>
-                          </div>
-
-                          {expense.description && (
-                            <div className="bg-gray-50 rounded-lg p-2 mb-3">
-                              <p className="text-xs font-medium text-gray-700 mb-1">Description:</p>
-                              <p className="text-xs text-gray-600 line-clamp-2">{expense.description}</p>
-                            </div>
-                          )}
-
-                          {/* Action Buttons */}
-                          <div className="flex flex-col gap-2">
-                            <Button
-                              onClick={() => handleViewExpenseEntries(expense)}
-                              size="sm"
-                              variant="outline"
-                              className="w-full text-xs py-1 h-8 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                            >
-                              <Eye className="h-3 w-3 mr-1" />
-                              Manage Entries
-                            </Button>
-                            <div className="flex gap-2">
-                              <Button
-                                onClick={() => handleEditExpense(expense)}
-                                size="sm"
-                                variant="outline"
-                                className="flex-1 text-xs py-1 h-8"
-                              >
-                                <Edit3 className="h-3 w-3 mr-1" />
-                                Edit
-                              </Button>
-                              <Button
-                                onClick={() => handleDeleteExpense(expense)}
-                                size="sm"
-                                variant="outline"
-                                className="flex-1 text-xs py-1 h-8 text-red-600 border-red-200 hover:bg-red-50"
-                              >
-                                <Trash2 className="h-3 w-3 mr-1" />
-                                Delete
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                                {expense.autoPay && <span className="inline-flex items-center gap-0.5 mt-0.5 text-[10px] text-purple-600"><RefreshCw className="h-3 w-3" /> Auto</span>}
+                              </td>
+                              <td className="py-2 px-2 text-gray-600 capitalize">{expense.paymentMethod ? expense.paymentMethod.replace('_', ' ') : '—'}</td>
+                              <td className="py-2 px-2 text-gray-500 truncate max-w-[100px] hidden md:table-cell" title={expense.description}>{expense.description || '—'}</td>
+                              <td className="py-2 px-2">
+                                <div className="flex items-center justify-end gap-0.5 flex-wrap">
+                                  <Button onClick={() => handleViewExpenseEntries(expense)} size="sm" variant="outline" className="h-6 px-2 text-[10px] bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100">Entries</Button>
+                                  <button onClick={() => handleEditExpense(expense)} className="p-1 rounded hover:bg-gray-200 text-gray-500 hover:text-blue-600" title="Edit"><Edit3 className="h-3.5 w-3.5" /></button>
+                                  <button onClick={() => handleDeleteExpense(expense)} className="p-1 rounded hover:bg-red-50 text-red-600" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          )})}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
 
                   {/* Empty State */}
                   {getFilteredExpenses().length === 0 && (
@@ -6419,8 +6303,10 @@ const Admin_hr_management = () => {
                             }).filter(Boolean)
                           )
                           
-                          // Filter out users who already have salary set
+                          // Employees, sales, PMs, and HR can have salary set
+                          const salaryEligibleRoles = ['employee', 'sales', 'project-manager', 'hr']
                           return allUsers
+                            .filter(user => salaryEligibleRoles.includes(user.role))
                             .filter(user => {
                               const userIdStr = (user._id || user.id || user.employeeId)?.toString()
                               return userIdStr && !employeesWithSalary.has(userIdStr)
@@ -6428,7 +6314,7 @@ const Admin_hr_management = () => {
                             .map(user => ({
                               value: (user._id || user.id || user.employeeId).toString(),
                               label: `${user.name} - ${user.department || 'General'} (${user.role})`,
-                              icon: user.role === 'project-manager' ? Shield : Code
+                              icon: user.role === 'hr' ? UserCheck : user.role === 'project-manager' ? Shield : Code
                             }))
                         })()}
                         value={newEmployeeSalaryData.employeeId}

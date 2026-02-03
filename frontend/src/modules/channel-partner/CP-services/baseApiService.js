@@ -103,16 +103,13 @@ export const apiRequest = async (url, options = {}) => {
     const data = await parseResponseBody(response);
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        // Check if it's an inactive account error
-        if (data && data.code === 'ACCOUNT_INACTIVE') {
-          handleUnauthorized();
-          // Throw error with specific code for handling
-          const inactiveError = buildApiError(response, data);
-          inactiveError.isInactive = true;
-          throw inactiveError;
-        }
+      // Only clear session when account is deactivated (403), not on every 401.
+      // This prevents refresh from logging out the user when one request fails (e.g. wrong endpoint).
+      if (response.status === 403 && data && data.code === 'ACCOUNT_INACTIVE') {
         handleUnauthorized();
+        const inactiveError = buildApiError(response, data);
+        inactiveError.isInactive = true;
+        throw inactiveError;
       }
 
       throw buildApiError(response, data);

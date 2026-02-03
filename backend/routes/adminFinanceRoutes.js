@@ -25,6 +25,7 @@ const {
   deleteBudget,
   getFinanceStatistics,
   getSalesIncentiveMonthlySummary,
+  getPendingRecovery,
 } = require('../controllers/adminFinanceController');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -35,6 +36,10 @@ router.use(authorize('admin', 'accountant', 'pem'));
 // Finance statistics route
 router.route('/statistics')
   .get(getFinanceStatistics);
+
+// Pending recovery (projects with outstanding amount)
+router.route('/pending-recovery')
+  .get(getPendingRecovery);
 
 // Transaction routes
 router.route('/transactions')

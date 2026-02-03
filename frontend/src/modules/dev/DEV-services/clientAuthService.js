@@ -24,6 +24,7 @@ export const clientAuthService = {
       });
 
       if (response.data && response.token) {
+        clearOtherRoleSessions('client'); // so refresh doesn't show admin/other role
         tokenUtils.set(response.token);
         clientStorage.set(response.data);
       }
@@ -38,7 +39,7 @@ export const clientAuthService = {
             console.error('Failed to register FCM token:', error);
             // Don't fail login if FCM registration fails
           }
-        }, 500); // Wait 500ms to ensure token is saved
+        }, 5000); // Defer so dashboard loads first; no reload from push notification flow
       }
 
       return response;

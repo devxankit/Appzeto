@@ -10,7 +10,7 @@ const salarySchema = new mongoose.Schema({
   employeeModel: {
     type: String,
     required: true,
-    enum: ['Employee', 'Sales', 'PM']
+    enum: ['Employee', 'Sales', 'PM', 'Admin']
   },
   employeeName: {
     type: String,
@@ -23,7 +23,7 @@ const salarySchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['employee', 'project-manager'],
+    enum: ['employee', 'project-manager', 'hr', 'accountant', 'pem'],
     required: true
   },
   

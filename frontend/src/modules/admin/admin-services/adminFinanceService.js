@@ -449,6 +449,16 @@ export const adminFinanceService = {
     }
   },
 
+  // Get all projects with pending recovery (outstanding amount to collect)
+  getPendingRecovery: async () => {
+    try {
+      const response = await apiRequest('/admin/finance/pending-recovery', { method: 'GET' });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
 };
 
 export default adminFinanceService;

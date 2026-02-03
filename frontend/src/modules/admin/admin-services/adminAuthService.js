@@ -1,5 +1,6 @@
 import { apiRequest, tokenUtils, adminStorage } from './baseApiService';
 import { registerFCMToken } from '../../../services/pushNotificationService';
+import { clearOtherRoleSessions } from '../../../utils/clearOtherRoleSessions';
 
 // Admin Authentication Service - Only for login/logout functionality
 export const adminAuthService = {
@@ -22,6 +23,7 @@ export const adminAuthService = {
       // Check multiple possible response structures
       const token = (response.data && response.data.token) || response.token || (response.data && response.data.admin && response.data.admin.token);
       if (token) {
+        clearOtherRoleSessions('admin'); // so refresh doesn't show another role's session
         tokenUtils.set(token);
         console.log('✅ Auth token stored in localStorage as adminToken');
         console.log('✅ Token preview:', token.substring(0, 30) + '...');
@@ -54,7 +56,7 @@ export const adminAuthService = {
             console.error('Failed to register FCM token:', error);
             // Don't fail login if FCM registration fails
           }
-        }, 1000); // Wait 1 second to ensure token is saved and session is established
+        }, 5000); // Defer so dashboard loads first; no reload from push notification flow
       }
 
       return response;

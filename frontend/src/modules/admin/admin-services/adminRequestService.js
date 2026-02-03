@@ -30,6 +30,8 @@ class AdminRequestService {
       if (params.search) queryParams.append('search', params.search);
       if (params.page) queryParams.append('page', params.page);
       if (params.limit) queryParams.append('limit', params.limit);
+      if (params.paymentApprovalOnly === true || params.paymentApprovalOnly === 'true') queryParams.append('paymentApprovalOnly', 'true');
+      if (params.excludePaymentApproval === true || params.excludePaymentApproval === 'true') queryParams.append('excludePaymentApproval', 'true');
 
       const url = `${API_BASE_URL}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const response = await apiRequest(url);

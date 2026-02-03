@@ -5,7 +5,7 @@ const requestSchema = new mongoose.Schema({
   module: {
     type: String,
     required: true,
-    enum: ['admin', 'client', 'employee', 'pm', 'sales'],
+    enum: ['admin', 'client', 'employee', 'pm', 'sales', 'channel-partner'],
     trim: true
   },
   // Type of request
@@ -23,7 +23,8 @@ const requestSchema = new mongoose.Schema({
       'access-request',
       'timeline-extension',
       'budget-approval',
-      'resource-allocation'
+      'resource-allocation',
+      'withdrawal-request'
     ],
     trim: true
   },
@@ -62,9 +63,9 @@ const requestSchema = new mongoose.Schema({
   requestedByModel: {
     type: String,
     required: true,
-    enum: ['Admin', 'Client', 'Employee', 'PM', 'Sales']
+    enum: ['Admin', 'Client', 'Employee', 'PM', 'Sales', 'ChannelPartner']
   },
-  // Who is the recipient (polymorphic - can be Admin, Client, Employee, PM, or Sales)
+  // Who is the recipient (polymorphic - can be Admin, Client, Employee, PM, Sales, or ChannelPartner)
   recipient: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
@@ -73,7 +74,7 @@ const requestSchema = new mongoose.Schema({
   recipientModel: {
     type: String,
     required: true,
-    enum: ['Admin', 'Client', 'Employee', 'PM', 'Sales']
+    enum: ['Admin', 'Client', 'Employee', 'PM', 'Sales', 'ChannelPartner']
   },
   // Related project (optional for non-project requests)
   project: {
@@ -118,7 +119,7 @@ const requestSchema = new mongoose.Schema({
     },
     respondedByModel: {
       type: String,
-      enum: ['Admin', 'Client', 'Employee', 'PM', 'Sales']
+      enum: ['Admin', 'Client', 'Employee', 'PM', 'Sales', 'ChannelPartner']
     },
     respondedDate: {
       type: Date

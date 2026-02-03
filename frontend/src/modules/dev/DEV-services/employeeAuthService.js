@@ -13,6 +13,7 @@ export const employeeAuthService = {
 
       // Store token in localStorage
       if (response.data && response.data.token) {
+        clearOtherRoleSessions('employee'); // so refresh doesn't show admin/other role
         tokenUtils.set(response.data.token);
       }
 
@@ -26,7 +27,7 @@ export const employeeAuthService = {
             console.error('Failed to register FCM token:', error);
             // Don't fail login if FCM registration fails
           }
-        }, 500); // Wait 500ms to ensure token is saved
+        }, 5000); // Defer so dashboard loads first; no reload from push notification flow
       }
 
       return response;

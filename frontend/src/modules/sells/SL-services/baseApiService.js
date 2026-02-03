@@ -68,10 +68,10 @@ export const apiRequest = async (url, options = {}) => {
     }
 
     if (!response.ok) {
-      // Handle 401 specifically - clear token and provide helpful message
-      if (response.status === 401) {
+      // Only clear session when account is deactivated (403), not on every 401 (avoids logout on refresh).
+      if (response.status === 403 && data && data.code === 'ACCOUNT_INACTIVE') {
         removeAuthToken();
-        throw new Error(data.message || 'Authentication required. Please log in again.');
+        localStorage.removeItem('salesUser');
       }
       throw new Error(data.message || data.error || 'Something went wrong');
     }
@@ -104,18 +104,14 @@ export const apiRequest = async (url, options = {}) => {
         try {
           data = JSON.parse(text);
         } catch {
-          if (response.status === 401) {
-            removeAuthToken();
-            throw new Error('Authentication required. Please log in again.');
-          }
           throw new Error(`Server error: ${response.status} ${response.statusText}`);
         }
       }
       
       if (!response.ok) {
-        if (response.status === 401) {
+        if (response.status === 403 && data && data.code === 'ACCOUNT_INACTIVE') {
           removeAuthToken();
-          throw new Error(data.message || 'Authentication required. Please log in again.');
+          localStorage.removeItem('salesUser');
         }
         throw new Error(data.message || data.error || 'Something went wrong');
       }

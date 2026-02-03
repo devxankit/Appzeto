@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     FiDollarSign, FiClock, FiCreditCard, FiArrowUpRight,
-    FiArrowDownLeft, FiFilter, FiDownload, FiAlertCircle
+    FiArrowDownLeft, FiFilter, FiDownload, FiAlertCircle,
+    FiSend, FiX
 } from 'react-icons/fi';
 import CP_navbar from '../CP-components/CP_navbar';
 import { cpWalletService } from '../CP-services/cpWalletService';
+import { cpRequestService } from '../CP-services/cpRequestService';
 import { useToast } from '../../../contexts/ToastContext';
 
 // --- Components ---
@@ -65,43 +67,92 @@ const CP_wallet = () => {
     const [transactions, setTransactions] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+    const [withdrawAmount, setWithdrawAmount] = useState('');
+    const [withdrawDescription, setWithdrawDescription] = useState('');
+    const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
+    const [withdrawalRequests, setWithdrawalRequests] = useState([]);
 
-    useEffect(() => {
-        const fetchWalletData = async () => {
+    const fetchWalletData = async () => {
+        try {
+            setLoading(true);
+            const summaryResponse = await cpWalletService.getWalletSummary();
+            if (summaryResponse.success && summaryResponse.data) {
+                const wallet = summaryResponse.data.wallet || {};
+                setWalletData({
+                    balance: wallet.balance || 0,
+                    totalEarned: wallet.totalEarned || 0,
+                    totalWithdrawn: wallet.totalWithdrawn || 0,
+                    pendingWithdrawals: summaryResponse.data.pendingWithdrawals || 0
+                });
+            }
+            const transactionsResponse = await cpWalletService.getTransactions({
+                page: currentPage,
+                limit: 20
+            });
+            if (transactionsResponse.success && transactionsResponse.data) {
+                setTransactions(transactionsResponse.data || []);
+                setTotalPages(transactionsResponse.pages || 1);
+            }
             try {
-                setLoading(true);
-                
-                // Fetch wallet summary
-                const summaryResponse = await cpWalletService.getWalletSummary();
-                if (summaryResponse.success && summaryResponse.data) {
-                    const wallet = summaryResponse.data.wallet || {};
-                    setWalletData({
-                        balance: wallet.balance || 0,
-                        totalEarned: wallet.totalEarned || 0,
-                        totalWithdrawn: wallet.totalWithdrawn || 0,
-                        pendingWithdrawals: summaryResponse.data.pendingWithdrawals || 0
-                    });
-                }
-
-                // Fetch transactions
-                const transactionsResponse = await cpWalletService.getTransactions({
-                    page: currentPage,
+                const requestsResponse = await cpRequestService.getMyRequests({
+                    direction: 'outgoing',
+                    type: 'withdrawal-request',
                     limit: 20
                 });
-                if (transactionsResponse.success && transactionsResponse.data) {
-                    setTransactions(transactionsResponse.data || []);
-                    setTotalPages(transactionsResponse.pages || 1);
+                if (requestsResponse.success && requestsResponse.data) {
+                    setWithdrawalRequests(requestsResponse.data || []);
                 }
-            } catch (error) {
-                console.error('Error fetching wallet data:', error);
-                addToast('Failed to load wallet data', 'error');
-            } finally {
-                setLoading(false);
+            } catch (reqErr) {
+                console.warn('Could not load withdrawal requests:', reqErr);
+                setWithdrawalRequests([]);
             }
-        };
+        } catch (error) {
+            console.error('Error fetching wallet data:', error);
+            addToast({ message: 'Failed to load wallet data', type: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    };
 
+    useEffect(() => {
         fetchWalletData();
     }, [currentPage, addToast]);
+
+    const handleWithdrawSubmit = async (e) => {
+        e.preventDefault();
+        const amount = parseFloat(withdrawAmount);
+        if (!amount || amount <= 0) {
+            addToast('Please enter a valid amount', 'error');
+            return;
+        }
+        if (amount > walletData.balance) {
+            addToast('Amount exceeds available balance', 'error');
+            return;
+        }
+        setWithdrawSubmitting(true);
+        try {
+            const res = await cpRequestService.createWithdrawalRequest({
+                amount,
+                description: withdrawDescription.trim() || undefined
+            });
+            if (res.success && res.data) {
+                addToast({ message: 'Withdrawal request submitted. Admin will review it shortly.', type: 'success' });
+                setShowWithdrawModal(false);
+                setWithdrawAmount('');
+                setWithdrawDescription('');
+                await fetchWalletData();
+            } else {
+                addToast({ message: res.message || 'Failed to submit withdrawal request', type: 'error' });
+            }
+        } catch (err) {
+            addToast({ message: err.message || 'Failed to submit withdrawal request', type: 'error' });
+        } finally {
+            setWithdrawSubmitting(false);
+        }
+    };
+
+    const pendingWithdrawalCount = withdrawalRequests.filter((r) => r.status === 'pending').length;
 
     const formatCurrency = (amount) => {
         return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -151,9 +202,9 @@ const CP_wallet = () => {
                             <div className="bg-white/10 backdrop-blur-sm p-3 rounded-2xl border border-white/10">
                                 <div className="flex items-center gap-2 mb-1 text-orange-300">
                                     <FiClock className="w-4 h-4" />
-                                    <span className="text-xs font-bold uppercase tracking-wide">Pending</span>
+                                    <span className="text-xs font-bold uppercase tracking-wide">Pending requests</span>
                                 </div>
-                                <p className="font-bold text-lg">{formatCurrency(walletData.pendingWithdrawals * 0)}</p>
+                                <p className="font-bold text-lg">{pendingWithdrawalCount}</p>
                             </div>
                             <div className="bg-white/10 backdrop-blur-sm p-3 rounded-2xl border border-white/10">
                                 <div className="flex items-center gap-2 mb-1 text-green-300">
@@ -166,8 +217,36 @@ const CP_wallet = () => {
                     </div>
                 </div>
 
-                {/* Note: In a real app, logic for withdrawal/bank linking would go here */}
+                {/* Request Withdrawal */}
+                <div className="flex justify-end mb-4">
+                    <button
+                        type="button"
+                        onClick={() => setShowWithdrawModal(true)}
+                        disabled={walletData.balance <= 0}
+                        className="p-3 bg-indigo-600 text-white rounded-xl font-medium text-sm flex items-center gap-2 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <FiSend /> Request Withdrawal
+                    </button>
+                </div>
 
+                {withdrawalRequests.length > 0 && (
+                    <div className="mb-6 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                        <h3 className="font-bold text-gray-700 mb-3">My Withdrawal Requests</h3>
+                        <div className="space-y-2">
+                            {withdrawalRequests.slice(0, 5).map((req) => (
+                                <div key={req._id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                                    <span className="text-sm text-gray-700">₹{(req.amount || 0).toLocaleString('en-IN')}</span>
+                                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                        req.status === 'pending' ? 'bg-amber-100 text-amber-800' :
+                                        req.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                    }`}>
+                                        {req.status}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Tabs */}
                 <div className="flex gap-4 mb-6 border-b border-gray-200">
@@ -252,6 +331,85 @@ const CP_wallet = () => {
                     )}
                 </AnimatePresence>
             </main>
+
+            {/* Withdrawal Request Modal */}
+            <AnimatePresence>
+                {showWithdrawModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+                        onClick={() => !withdrawSubmitting && setShowWithdrawModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
+                        >
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-bold text-gray-900">Request Withdrawal</h3>
+                                <button
+                                    type="button"
+                                    onClick={() => !withdrawSubmitting && setShowWithdrawModal(false)}
+                                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"
+                                >
+                                    <FiX className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <p className="text-sm text-gray-500 mb-4">
+                                Your request will be sent to admin. Wallet balance will be deducted only after approval.
+                            </p>
+                            <form onSubmit={handleWithdrawSubmit}>
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        step="0.01"
+                                        max={walletData.balance}
+                                        value={withdrawAmount}
+                                        onChange={(e) => setWithdrawAmount(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter amount"
+                                        required
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Available: {formatCurrency(walletData.balance)}</p>
+                                </div>
+                                <div className="mb-6">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+                                    <textarea
+                                        value={withdrawDescription}
+                                        onChange={(e) => setWithdrawDescription(e.target.value)}
+                                        rows={2}
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                                        placeholder="e.g. Bank transfer"
+                                    />
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowWithdrawModal(false)}
+                                        disabled={withdrawSubmitting}
+                                        className="flex-1 py-2.5 px-4 border border-gray-200 rounded-xl font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={withdrawSubmitting}
+                                        className="flex-1 py-2.5 px-4 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {withdrawSubmitting ? 'Submitting…' : 'Submit Request'}
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

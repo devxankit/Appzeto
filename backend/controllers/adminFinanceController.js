@@ -2180,6 +2180,46 @@ const getSalesIncentiveMonthlySummary = asyncHandler(async (req, res, next) => {
   }
 });
 
+// @desc    Get all projects with pending recovery (remaining amount to be collected)
+// @route   GET /api/admin/finance/pending-recovery
+// @access  Private (Admin/Finance)
+const getPendingRecovery = asyncHandler(async (req, res, next) => {
+  const projects = await Project.find({
+    'financialDetails.remainingAmount': { $gt: 0 },
+    'financialDetails.totalCost': { $gt: 0 },
+    status: { $nin: ['cancelled'] }
+  })
+    .populate('client', 'name companyName convertedBy')
+    .populate('submittedBy', 'name')
+    .select('name status progress financialDetails submittedBy client')
+    .sort({ 'financialDetails.remainingAmount': -1 })
+    .lean();
+
+  const data = projects.map((p) => {
+    const totalCost = Number(p.financialDetails?.totalCost || p.budget || 0);
+    const advanceReceived = Number(p.financialDetails?.advanceReceived || 0);
+    const remainingAmount = Number(p.financialDetails?.remainingAmount || 0);
+    const progress = Number(p.progress) || 0;
+    const salesName = p.submittedBy?.name || null;
+    const clientName = p.client?.companyName || p.client?.name || 'N/A';
+    return {
+      projectId: p._id,
+      projectName: p.name,
+      clientName,
+      pendingRecovery: remainingAmount,
+      recoveredAmount: advanceReceived,
+      totalCost,
+      relatedSalesOrCp: salesName || '—',
+      progress: Math.min(100, Math.max(0, progress))
+    };
+  });
+
+  res.status(200).json({
+    success: true,
+    data
+  });
+});
+
 module.exports = {
   createTransaction,
   getTransactions,
@@ -2206,4 +2246,5 @@ module.exports = {
   getFinanceStatistics,
   recordSalesIncentivePayment,
   getSalesIncentiveMonthlySummary,
+  getPendingRecovery,
 };

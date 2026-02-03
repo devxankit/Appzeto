@@ -53,6 +53,11 @@ const adminSchema = new mongoose.Schema({
     height: Number,
     resource_type: String
   },
+  fixedSalary: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   isActive: {
     type: Boolean,
     default: true

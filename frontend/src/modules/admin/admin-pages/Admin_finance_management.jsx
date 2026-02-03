@@ -4,6 +4,7 @@ import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
 import { adminFinanceService } from '../admin-services/adminFinanceService'
+import adminRequestService from '../admin-services/adminRequestService'
 import { useToast } from '../../../contexts/ToastContext'
 import { 
   FiDollarSign,
@@ -31,7 +32,9 @@ import {
   FiChevronDown,
   FiChevronLeft,
   FiChevronRight,
-  FiDownload
+  FiDownload,
+  FiCheckSquare,
+  FiSend
 } from 'react-icons/fi'
 
 const Admin_finance_management = () => {
@@ -279,6 +282,22 @@ const Admin_finance_management = () => {
   const [projectExpenseToDelete, setProjectExpenseToDelete] = useState(null)
   const [projectsList, setProjectsList] = useState([])
 
+  // Payment approval requests (from sales / channel partners) - shown only on Finance page
+  const [paymentApprovalRequests, setPaymentApprovalRequests] = useState([])
+  const [paymentApprovalLoading, setPaymentApprovalLoading] = useState(false)
+  const [paymentApprovalTotal, setPaymentApprovalTotal] = useState(0)
+  const [paymentApprovalPages, setPaymentApprovalPages] = useState(1)
+  const [showPaymentApprovalViewModal, setShowPaymentApprovalViewModal] = useState(false)
+  const [showPaymentApprovalRespondModal, setShowPaymentApprovalRespondModal] = useState(false)
+  const [selectedPaymentRequest, setSelectedPaymentRequest] = useState(null)
+  const [paymentResponseText, setPaymentResponseText] = useState('')
+  const [paymentResponseType, setPaymentResponseType] = useState('approve')
+  const [isSubmittingPaymentResponse, setIsSubmittingPaymentResponse] = useState(false)
+
+  // Pending recovery (projects with outstanding amount)
+  const [pendingRecoveryList, setPendingRecoveryList] = useState([])
+  const [pendingRecoveryLoading, setPendingRecoveryLoading] = useState(false)
+
   // Fetch accounts from API
   const fetchAccounts = async () => {
     try {
@@ -370,6 +389,72 @@ const Admin_finance_management = () => {
     } finally {
       setProjectExpensesLoading(false)
       setLoading(false)
+    }
+  }
+
+  // Fetch payment approval requests (from sales / channel partners only)
+  const fetchPaymentApprovalRequests = async () => {
+    try {
+      setPaymentApprovalLoading(true)
+      const params = {
+        direction: 'all',
+        paymentApprovalOnly: true,
+        page: currentPage,
+        limit: itemsPerPage
+      }
+      if (selectedFilter !== 'all') params.status = selectedFilter
+      if (searchTerm) params.search = searchTerm
+      const response = await adminRequestService.getRequests(params)
+      if (response.success && response.data) {
+        const transformed = response.data.map(req => ({
+          id: req._id || req.id,
+          module: req.module,
+          type: req.type,
+          title: req.title,
+          description: req.description,
+          status: req.status,
+          priority: req.priority,
+          submittedDate: req.createdAt,
+          submittedBy: req.requestedBy?.name || 'Unknown',
+          projectName: req.project?.name || 'N/A',
+          category: req.category || '',
+          amount: req.amount,
+          response: req.response ? { type: req.response.type, message: req.response.message, respondedDate: req.response.respondedDate, respondedBy: req.response.respondedBy?.name } : null,
+          _full: req
+        }))
+        setPaymentApprovalRequests(transformed)
+        setPaymentApprovalTotal(response.pagination?.total || 0)
+        setPaymentApprovalPages(response.pagination?.pages || 1)
+      } else {
+        setPaymentApprovalRequests([])
+        setPaymentApprovalTotal(0)
+        setPaymentApprovalPages(1)
+      }
+    } catch (err) {
+      console.error('Error fetching payment approval requests:', err)
+      toast.error('Failed to load payment approval requests')
+      setPaymentApprovalRequests([])
+    } finally {
+      setPaymentApprovalLoading(false)
+    }
+  }
+
+  // Fetch pending recovery (projects with outstanding amount)
+  const fetchPendingRecovery = async () => {
+    try {
+      setPendingRecoveryLoading(true)
+      const response = await adminFinanceService.getPendingRecovery()
+      if (response.success && response.data) {
+        setPendingRecoveryList(response.data)
+      } else {
+        setPendingRecoveryList([])
+      }
+    } catch (err) {
+      console.error('Error fetching pending recovery:', err)
+      toast.error('Failed to load pending recovery')
+      setPendingRecoveryList([])
+    } finally {
+      setPendingRecoveryLoading(false)
     }
   }
 
@@ -538,7 +623,7 @@ const Admin_finance_management = () => {
 
   // Reset to page 1 when filters change
   useEffect(() => {
-    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses') {
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses' || activeTab === 'payment-approvals') {
       setCurrentPage(1)
     }
   }, [transactionTypeFilter, selectedFilter, searchTerm, activeTab, itemsPerPage])
@@ -555,6 +640,10 @@ const Admin_finance_management = () => {
     } else if (activeTab === 'project-expenses') {
       fetchProjectExpenses()
       fetchProjectsList() // Fetch projects list for dropdown
+    } else if (activeTab === 'payment-approvals') {
+      fetchPaymentApprovalRequests()
+    } else if (activeTab === 'pending-recovery') {
+      fetchPendingRecovery()
     } else {
       setLoading(false)
     }
@@ -604,6 +693,53 @@ const Admin_finance_management = () => {
       month: 'short',
       day: 'numeric'
     })
+  }
+
+  // Payment approval request helpers
+  const getRequestStatusColor = (status) => {
+    switch (status) {
+      case 'approved': return 'bg-green-100 text-green-800'
+      case 'pending': return 'bg-yellow-100 text-yellow-800'
+      case 'rejected': return 'bg-red-100 text-red-800'
+      case 'responded': return 'bg-blue-100 text-blue-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+  const handlePaymentApprovalView = (request) => {
+    setSelectedPaymentRequest(request)
+    setShowPaymentApprovalViewModal(true)
+  }
+  const handlePaymentApprovalRespond = (request) => {
+    setSelectedPaymentRequest(request)
+    setPaymentResponseText('')
+    setPaymentResponseType('approve')
+    setShowPaymentApprovalRespondModal(true)
+  }
+  const handleSubmitPaymentResponse = async () => {
+    if (paymentResponseType !== 'approve' && !paymentResponseText.trim()) {
+      toast.error('Please enter a message when rejecting or requesting changes')
+      return
+    }
+    setIsSubmittingPaymentResponse(true)
+    try {
+      const requestId = selectedPaymentRequest._full?._id || selectedPaymentRequest.id
+      const response = await adminRequestService.respondToRequest(requestId, paymentResponseType, paymentResponseText)
+      if (response.success) {
+        await fetchPaymentApprovalRequests()
+        setShowPaymentApprovalRespondModal(false)
+        setSelectedPaymentRequest(null)
+        setPaymentResponseText('')
+        setPaymentResponseType('approve')
+        toast.success('Response submitted successfully')
+      } else {
+        toast.error(response.message || 'Failed to submit response')
+      }
+    } catch (err) {
+      console.error('Error submitting payment response:', err)
+      toast.error(err?.message || 'Failed to submit response')
+    } finally {
+      setIsSubmittingPaymentResponse(false)
+    }
   }
 
   // Project Expense CRUD Handlers
@@ -760,6 +896,10 @@ const Admin_finance_management = () => {
           ...a,
           id: a._id || a.id
         }))
+      case 'payment-approvals':
+        return paymentApprovalRequests
+      case 'pending-recovery':
+        return pendingRecoveryList
       default:
         return transactions
     }
@@ -770,8 +910,8 @@ const Admin_finance_management = () => {
   const filteredData = useMemo(() => {
     const data = getCurrentData()
     
-    // For transactions, expenses, budgets, and project-expenses, backend handles filtering, so return data as-is
-    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses') {
+    // For transactions, expenses, budgets, project-expenses, and payment-approvals, backend handles filtering
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses' || activeTab === 'payment-approvals' || activeTab === 'pending-recovery') {
       return data
     }
     
@@ -794,8 +934,8 @@ const Admin_finance_management = () => {
 
   // Pagination
   const paginatedData = useMemo(() => {
-    // For transactions, expenses, budgets, and project-expenses, backend handles pagination, so return data as-is
-    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses') {
+    // For transactions, expenses, budgets, project-expenses, and payment-approvals, backend handles pagination
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses' || activeTab === 'payment-approvals' || activeTab === 'pending-recovery') {
       return filteredData
     }
     // For other tabs, apply client-side pagination
@@ -811,6 +951,10 @@ const Admin_finance_management = () => {
     ? budgetsPages
     : activeTab === 'project-expenses'
     ? projectExpensesPages
+    : activeTab === 'payment-approvals'
+    ? paymentApprovalPages
+    : activeTab === 'pending-recovery'
+    ? 1
     : Math.ceil(filteredData.length / itemsPerPage)
 
   // Management functions
@@ -1477,12 +1621,16 @@ const Admin_finance_management = () => {
                       fetchExpenses()
                     } else if (activeTab === 'budgets') {
                       fetchBudgets()
+                    } else if (activeTab === 'payment-approvals') {
+                      fetchPaymentApprovalRequests()
+                    } else if (activeTab === 'pending-recovery') {
+                      fetchPendingRecovery()
                     }
                   }}
-                  disabled={loading || statisticsLoading || (activeTab === 'transactions' && transactionsLoading) || (activeTab === 'expenses' && expensesLoading) || (activeTab === 'budgets' && budgetsLoading)}
+                  disabled={loading || statisticsLoading || (activeTab === 'transactions' && transactionsLoading) || (activeTab === 'expenses' && expensesLoading) || (activeTab === 'budgets' && budgetsLoading) || (activeTab === 'payment-approvals' && paymentApprovalLoading) || (activeTab === 'pending-recovery' && pendingRecoveryLoading)}
                   className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <FiRefreshCw className={`text-sm ${(loading || statisticsLoading || transactionsLoading || expensesLoading || budgetsLoading) ? 'animate-spin' : ''}`} />
+                  <FiRefreshCw className={`text-sm ${(loading || statisticsLoading || transactionsLoading || expensesLoading || budgetsLoading || paymentApprovalLoading || pendingRecoveryLoading) ? 'animate-spin' : ''}`} />
                   <span>Refresh</span>
                 </button>
               </div>
@@ -1929,20 +2077,37 @@ const Admin_finance_management = () => {
                   { id: 'budgets', label: 'Budgets', icon: FiTarget },
                   { id: 'expenses', label: 'Expenses', icon: FiTrendingDown },
                   { id: 'project-expenses', label: 'Project Expenses', icon: FiFileText },
+                  { id: 'payment-approvals', label: 'Payment Approvals', icon: FiCheckSquare },
+                  { id: 'pending-recovery', label: 'Pending Recovery', icon: FiDollarSign },
                   { id: 'accounts', label: 'Accounts', icon: FiCreditCard }
                 ].map((tab) => {
                   const Icon = tab.icon
+                  const isPaymentApprovals = tab.id === 'payment-approvals'
+                  const isPendingRecovery = tab.id === 'pending-recovery'
+                  const isActive = activeTab === tab.id
                   return (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === tab.id
-                          ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
+                      className={
+                        isPaymentApprovals
+                          ? `flex items-center space-x-2 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all duration-200 shadow-sm ${
+                              isActive
+                                ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white border-2 border-emerald-500 shadow-md ring-2 ring-emerald-200 ring-offset-2'
+                                : 'bg-emerald-50 text-emerald-700 border-2 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400 hover:shadow'
+                            }`
+                          : `flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${
+                              isActive
+                                ? 'border-blue-500 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`
+                      }
                     >
-                      <Icon className="text-sm" />
+                      {isPendingRecovery ? (
+                        <span className={isActive ? 'text-blue-600 font-semibold text-base' : 'text-gray-500 text-sm'} aria-hidden>₹</span>
+                      ) : (
+                        <Icon className={isPaymentApprovals ? 'h-4 w-4' : 'text-sm'} />
+                      )}
                       <span>{tab.label}</span>
                     </button>
                   )
@@ -2088,12 +2253,21 @@ const Admin_finance_management = () => {
                     <option value="other">Other</option>
                   </>
                 )}
+                {activeTab === 'payment-approvals' && (
+                  <>
+                    <option value="all">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="responded">Responded</option>
+                  </>
+                )}
               </select>
             </div>
           </div>
 
           {/* Content Grid */}
-          {(transactionsLoading && activeTab === 'transactions') || (expensesLoading && activeTab === 'expenses') || (budgetsLoading && activeTab === 'budgets') || (projectExpensesLoading && activeTab === 'project-expenses') ? (
+          {(transactionsLoading && activeTab === 'transactions') || (expensesLoading && activeTab === 'expenses') || (budgetsLoading && activeTab === 'budgets') || (projectExpensesLoading && activeTab === 'project-expenses') || (paymentApprovalLoading && activeTab === 'payment-approvals') || (pendingRecoveryLoading && activeTab === 'pending-recovery') ? (
             <div className="flex justify-center items-center py-12">
               <Loading size="medium" />
             </div>
@@ -2111,6 +2285,18 @@ const Admin_finance_management = () => {
               >
                 Retry
               </button>
+            </div>
+          ) : paginatedData.length === 0 && activeTab === 'payment-approvals' ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+              <FiCheckSquare className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-600">No payment approval requests found</p>
+              <p className="text-sm text-gray-500 mt-1">Requests from sales and channel partners for payment approval will appear here</p>
+            </div>
+          ) : paginatedData.length === 0 && activeTab === 'pending-recovery' ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+              <span className="text-4xl text-gray-300 font-medium mx-auto mb-3 block" aria-hidden>₹</span>
+              <p className="text-gray-600">No pending recovery</p>
+              <p className="text-sm text-gray-500 mt-1">Projects with outstanding amount to collect will appear here</p>
             </div>
           ) : paginatedData.length === 0 && activeTab === 'transactions' ? (
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
@@ -2146,8 +2332,168 @@ const Admin_finance_management = () => {
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
               <p className="text-gray-600">No project expenses found</p>
             </div>
+          ) : paginatedData.length === 0 && activeTab === 'accounts' ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+              <p className="text-gray-600">No accounts found</p>
+              <button
+                onClick={() => setShowAccountModal(true)}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Add First Account
+              </button>
+            </div>
+          ) : activeTab === 'transactions' ? (
+            /* Transactions Table */
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse min-w-[800px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Type</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Amount</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Category</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Account</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Date</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 max-w-[200px]">Description</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedData.map((item, index) => (
+                      <motion.tr
+                        key={item._id || item.id || `tx-${index}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2, delay: index * 0.02 }}
+                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="py-3 px-4">
+                          <span className={`text-sm font-medium capitalize ${getTypeColor(item.transactionType || item.type)}`}>
+                            {(item.transactionType || item.type) === 'incoming' ? 'Incoming' : 'Outgoing'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`text-sm font-semibold ${getTypeColor(item.transactionType || item.type)}`}>
+                            {(item.transactionType || item.type) === 'incoming' ? '+' : '-'}{formatCurrency(item.amount)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">{item.category || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{item.account?.accountName || item.vendor || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{formatDate(item.transactionDate || item.date || item.createdAt)}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 max-w-[200px] truncate" title={item.description || ''}>{item.description || '—'}</td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => handleView(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View"><FiEye className="h-4 w-4" /></button>
+                            <button onClick={() => handleEdit(item)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Edit"><FiEdit className="h-4 w-4" /></button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : activeTab === 'budgets' ? (
+            /* Budgets Table */
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse min-w-[800px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Name</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Category</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Allocated</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Spent</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Remaining</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Period</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedData.map((item, index) => (
+                      <motion.tr
+                        key={item._id || item.id || `budget-${index}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2, delay: index * 0.02 }}
+                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900">{item.name || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600 capitalize">{item.category || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-right font-medium text-gray-900">{formatCurrency(item.allocated)}</td>
+                        <td className="py-3 px-4 text-sm text-right text-amber-600 font-medium">{formatCurrency(item.spent || 0)}</td>
+                        <td className="py-3 px-4 text-sm text-right font-medium text-green-700">{formatCurrency(item.remaining)}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{formatDate(item.startDate)} – {formatDate(item.endDate)}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>{item.status}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => handleView(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View"><FiEye className="h-4 w-4" /></button>
+                            <button onClick={() => handleEdit(item)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Edit"><FiEdit className="h-4 w-4" /></button>
+                            <button onClick={() => handleSpendBudget(item)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Spend"><span className="text-xs font-medium">₹ Spend</span></button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : activeTab === 'expenses' ? (
+            /* Expenses Table */
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse min-w-[800px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Category</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Amount</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Vendor / Payee</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Date</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 max-w-[200px]">Description</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedData.map((item, index) => (
+                      <motion.tr
+                        key={item._id || item.id || `exp-${index}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2, delay: index * 0.02 }}
+                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900 capitalize">{item.category || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-right font-semibold text-red-600">{formatCurrency(item.amount)}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{item.vendor || item.employee?.name || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{formatDate(item.transactionDate || item.date || item.createdAt)}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>{item.status}</span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 max-w-[200px] truncate" title={item.description || ''}>{item.description || '—'}</td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => handleView(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View"><FiEye className="h-4 w-4" /></button>
+                            <button onClick={() => handleEdit(item)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Edit"><FiEdit className="h-4 w-4" /></button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           ) : activeTab === 'project-expenses' ? (
-            // Project Expenses Table (View Only)
+            /* Project Expenses Table */
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
@@ -2156,7 +2502,7 @@ const Admin_finance_management = () => {
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[150px]">Project</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Category</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Amount</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Client</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Vendor</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[130px]">Payment Method</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Date</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[200px]">Description</th>
@@ -2224,232 +2570,158 @@ const Admin_finance_management = () => {
                 </table>
               </div>
             </div>
-          ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {paginatedData.map((item, index) => (
-              <motion.div
-                key={item._id || item.id || `item-${index}`}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-                className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
-              >
-                {/* Transaction Card */}
-                {activeTab === 'transactions' && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className={`text-sm font-medium ${getTypeColor(item.transactionType || item.type)}`}>
-                        {(item.transactionType || item.type) === 'incoming' ? '+' : '-'}{formatCurrency(item.amount)}
-                      </span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
-                        {item.status}
-                      </span>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-sm">{item.category}</h3>
-                      <p className="text-xs text-gray-600 mt-1">{item.description || 'No description'}</p>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>
-                        {item.account?.accountName || item.vendor || 'N/A'}
-                      </span>
-                      <span>{formatDate(item.transactionDate || item.date || item.createdAt)}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleView(item)}
-                        className="flex-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
+          ) : activeTab === 'payment-approvals' ? (
+            /* Payment Approvals Table */
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Type</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Title</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">From</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Project</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Amount</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Date</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedData.map((item, index) => (
+                      <motion.tr
+                        key={item.id || `pay-${index}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2, delay: index * 0.02 }}
+                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                       >
-                        <FiEye className="inline mr-1" />
-                        View
-                      </button>
-                      <button
-                        onClick={() => handleEdit(item)}
-                        className="flex-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 transition-colors"
-                      >
-                        <FiEdit className="inline mr-1" />
-                        Edit
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Budget Card */}
-                {activeTab === 'budgets' && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-gray-900 text-sm">{item.name}</h3>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
-                        {item.status}
-                      </span>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs text-gray-600 mb-1">
-                        <span>Spent</span>
-                        <span>{formatCurrency(item.spent || 0)} / {formatCurrency(item.allocated)}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-blue-600 h-2 rounded-full"
-                          style={{ width: `${Math.min(100, ((item.spent || 0) / item.allocated) * 100)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      <p>Remaining: {formatCurrency(item.remaining)}</p>
-                      <p>{formatDate(item.startDate)} - {formatDate(item.endDate)}</p>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <button
-                        onClick={() => handleView(item)}
-                        className="flex-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
-                      >
-                        <FiEye className="inline mr-1" />
-                        View
-                      </button>
-                      <button
-                        onClick={() => handleEdit(item)}
-                        className="flex-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 transition-colors"
-                      >
-                        <FiEdit className="inline mr-1" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleSpendBudget(item)}
-                        className="flex-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs hover:bg-red-200 transition-colors"
-                        title="Record expense from this budget"
-                      >
-                        <span className="inline mr-1">₹</span>
-                        Spend
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Expense Card */}
-                {activeTab === 'expenses' && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-red-600 text-sm">{formatCurrency(item.amount)}</span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
-                        {item.status}
-                      </span>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-sm">{item.category}</h3>
-                      <p className="text-xs text-gray-600 mt-1">{item.description || 'No description'}</p>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>{item.vendor || item.employee?.name || 'N/A'}</span>
-                      <span>{formatDate(item.transactionDate || item.date || item.createdAt)}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleView(item)}
-                        className="flex-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
-                      >
-                        <FiEye className="inline mr-1" />
-                        View
-                      </button>
-                      <button
-                        onClick={() => handleEdit(item)}
-                        className="flex-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 transition-colors"
-                      >
-                        <FiEdit className="inline mr-1" />
-                        Edit
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Account Card - Light Color Credit Card Style */}
-                {activeTab === 'accounts' && (
-                  <div className={`relative rounded-lg shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 overflow-hidden -m-4 ${
-                    item.accountType === 'current' 
-                      ? 'bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200'
-                      : item.accountType === 'savings'
-                      ? 'bg-gradient-to-br from-green-50 to-green-100 border border-green-200'
-                      : item.accountType === 'business'
-                      ? 'bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200'
-                      : 'bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200'
-                  }`}>
-                    {/* Card Content */}
-                    <div className="p-3">
-                      {/* Header */}
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center space-x-2">
-                          <div className={`w-6 h-6 rounded flex items-center justify-center ${
-                            item.accountType === 'current' 
-                              ? 'bg-blue-200 text-blue-700'
-                              : item.accountType === 'savings'
-                              ? 'bg-green-200 text-green-700'
-                              : item.accountType === 'business'
-                              ? 'bg-purple-200 text-purple-700'
-                              : 'bg-orange-200 text-orange-700'
-                          }`}>
-                            <FiCreditCard className="w-3 h-3" />
+                        <td className="py-3 px-4 text-sm text-gray-600 capitalize">{item.type ? item.type.replace(/-/g, ' ') : '—'}</td>
+                        <td className="py-3 px-4">
+                          <span className="font-medium text-gray-900 text-sm block truncate max-w-[180px]" title={item.title}>{item.title}</span>
+                          {item.description && <span className="text-xs text-gray-500 truncate block max-w-[180px]" title={item.description}>{item.description}</span>}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{item.submittedBy || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600 max-w-[120px] truncate" title={item.projectName}>{item.projectName || '—'}</td>
+                        <td className="py-3 px-4 text-right">
+                          {item.amount != null && item.amount !== '' ? <span className="text-sm font-semibold text-teal-600">{formatCurrency(item.amount)}</span> : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{item.submittedDate ? formatDate(item.submittedDate) : '—'}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium capitalize ${getRequestStatusColor(item.status)}`}>{item.status}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => handlePaymentApprovalView(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View"><FiEye className="h-4 w-4" /></button>
+                            {item.status === 'pending' && (
+                              <button onClick={() => handlePaymentApprovalRespond(item)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Respond"><FiSend className="h-4 w-4" /></button>
+                            )}
                           </div>
-                          <p className="text-xs font-medium text-gray-700 truncate">{item.bankName}</p>
-                        </div>
-                        <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                          item.isActive 
-                            ? 'bg-green-200 text-green-800' 
-                            : 'bg-red-200 text-red-800'
-                        }`}>
-                          {item.isActive ? 'A' : 'I'}
-                        </span>
-                      </div>
-
-                      {/* Account Name & Type */}
-                      <div className="mb-3">
-                        <h3 className="text-sm font-bold mb-1 truncate text-gray-800">{item.accountName}</h3>
-                        <p className="text-xs text-gray-600 capitalize">{item.accountType}</p>
-                      </div>
-
-                      {/* Account Number */}
-                      <div className="mb-3">
-                        <p className="text-xs text-gray-500 mb-1">Account</p>
-                        <p className="text-sm font-mono tracking-wide text-gray-800">{item.accountNumber}</p>
-                      </div>
-
-                      {/* Bottom Info */}
-                      <div className="flex items-center justify-between text-xs">
-                        <div>
-                          <p className="text-gray-500">IFSC</p>
-                          <p className="font-mono text-gray-700">{item.ifscCode}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-gray-500">Branch</p>
-                          <p className="truncate max-w-20 text-gray-700">{item.branchName}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="bg-white p-2 border-t border-gray-100">
-                      <div className="flex space-x-1">
-                        <button
-                          onClick={() => handleViewAccount(item)}
-                          className="flex-1 px-2 py-1.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors flex items-center justify-center space-x-1 text-xs"
-                        >
-                          <FiEye className="w-3 h-3" />
-                          <span>View</span>
-                        </button>
-                        <button
-                          onClick={() => handleEditAccount(item)}
-                          className="flex-1 px-2 py-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors flex items-center justify-center space-x-1 text-xs"
-                        >
-                          <FiEdit className="w-3 h-3" />
-                          <span>Edit</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            ))}
-          </div>
-          )}
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : activeTab === 'pending-recovery' ? (
+            /* Pending Recovery Table */
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse min-w-[800px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Project</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Client</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Pending Recovery</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Recovered Amount</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Total Cost</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Sales / Channel Partner</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 w-[140px]">Progress</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedData.map((row, index) => (
+                      <motion.tr
+                        key={row.projectId || `rec-${index}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2, delay: index * 0.02 }}
+                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900">{row.projectName || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{row.clientName || '—'}</td>
+                        <td className="py-3 px-4 text-right text-sm font-semibold text-amber-600">{formatCurrency(row.pendingRecovery || 0)}</td>
+                        <td className="py-3 px-4 text-right text-sm font-medium text-green-600">{formatCurrency(row.recoveredAmount || 0)}</td>
+                        <td className="py-3 px-4 text-right text-sm font-medium text-gray-900">{formatCurrency(row.totalCost || 0)}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{row.relatedSalesOrCp || '—'}</td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 min-w-[64px] h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                                style={{ width: `${Math.min(100, Math.max(0, row.progress || 0))}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-medium text-gray-600 tabular-nums w-9">{row.progress != null ? `${Math.round(row.progress)}%` : '0%'}</span>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : activeTab === 'accounts' ? (
+            /* Accounts Table */
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Account Name</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Bank</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Account Number</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">IFSC</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Branch</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Type</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedData.map((item, index) => (
+                      <motion.tr
+                        key={item._id || item.id || `acc-${index}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2, delay: index * 0.02 }}
+                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900">{item.accountName || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{item.bankName || '—'}</td>
+                        <td className="py-3 px-4 text-sm font-mono text-gray-700">{item.accountNumber || '—'}</td>
+                        <td className="py-3 px-4 text-sm font-mono text-gray-600">{item.ifscCode || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{item.branchName || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600 capitalize">{item.accountType || '—'}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${item.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            {item.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => handleViewAccount(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View"><FiEye className="h-4 w-4" /></button>
+                            <button onClick={() => handleEditAccount(item)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Edit"><FiEdit className="h-4 w-4" /></button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
 
           {/* Enhanced Pagination */}
           {totalPages > 1 && (
@@ -2466,6 +2738,8 @@ const Admin_finance_management = () => {
                       <>Showing <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold">{Math.min(currentPage * itemsPerPage, budgetsTotal)}</span> of <span className="font-semibold">{budgetsTotal}</span> budgets</>
                     ) : activeTab === 'project-expenses' ? (
                       <>Showing <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold">{Math.min(currentPage * itemsPerPage, projectExpensesTotal)}</span> of <span className="font-semibold">{projectExpensesTotal}</span> project expenses</>
+                    ) : activeTab === 'payment-approvals' ? (
+                      <>Showing <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold">{Math.min(currentPage * itemsPerPage, paymentApprovalTotal)}</span> of <span className="font-semibold">{paymentApprovalTotal}</span> payment approval requests</>
                     ) : (
                       <>Showing <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> of <span className="font-semibold">{filteredData.length}</span> results</>
                     )}
@@ -4227,6 +4501,87 @@ const Admin_finance_management = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Payment Approval View Modal */}
+      {showPaymentApprovalViewModal && selectedPaymentRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
+          >
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">{selectedPaymentRequest.title}</h2>
+              <button onClick={() => { setShowPaymentApprovalViewModal(false); setSelectedPaymentRequest(null) }} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg">
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <p className="text-sm text-gray-600">{selectedPaymentRequest.description}</p>
+              <div className="text-xs text-gray-500">
+                <p>From: {selectedPaymentRequest.submittedBy}</p>
+                <p>Project: {selectedPaymentRequest.projectName}</p>
+                <p>Submitted: {selectedPaymentRequest.submittedDate ? formatDate(selectedPaymentRequest.submittedDate) : '—'}</p>
+                {selectedPaymentRequest.amount != null && selectedPaymentRequest.amount !== '' && (
+                  <p className="font-semibold text-teal-600 mt-1">Amount: {formatCurrency(selectedPaymentRequest.amount)}</p>
+                )}
+              </div>
+              <div>
+                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getRequestStatusColor(selectedPaymentRequest.status)}`}>{selectedPaymentRequest.status}</span>
+              </div>
+              {selectedPaymentRequest.response && (
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs font-medium text-gray-700 mb-1">Response: {selectedPaymentRequest.response.type}</p>
+                  <p className="text-sm text-gray-600">{selectedPaymentRequest.response.message}</p>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-gray-200 bg-gray-50">
+              <button onClick={() => { setShowPaymentApprovalViewModal(false); setSelectedPaymentRequest(null) }} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Close</button>
+              {selectedPaymentRequest.status === 'pending' && (
+                <button onClick={() => { setShowPaymentApprovalViewModal(false); handlePaymentApprovalRespond(selectedPaymentRequest) }} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Respond</button>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Payment Approval Respond Modal */}
+      {showPaymentApprovalRespondModal && selectedPaymentRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
+          >
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Respond to request</h2>
+              <button onClick={() => { setShowPaymentApprovalRespondModal(false); setSelectedPaymentRequest(null); setPaymentResponseText(''); setPaymentResponseType('approve') }} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg">
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <p className="text-sm text-gray-600">{selectedPaymentRequest.title}</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Response</label>
+                <div className="flex gap-2 mb-3">
+                  <button type="button" onClick={() => setPaymentResponseType('approve')} className={`px-3 py-2 rounded-lg text-sm font-medium ${paymentResponseType === 'approve' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>Approve</button>
+                  <button type="button" onClick={() => setPaymentResponseType('reject')} className={`px-3 py-2 rounded-lg text-sm font-medium ${paymentResponseType === 'reject' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>Reject</button>
+                  <button type="button" onClick={() => setPaymentResponseType('request_changes')} className={`px-3 py-2 rounded-lg text-sm font-medium ${paymentResponseType === 'request_changes' ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>Request changes</button>
+                </div>
+                <textarea value={paymentResponseText} onChange={(e) => setPaymentResponseText(e.target.value)} placeholder={paymentResponseType === 'approve' ? 'Optional message...' : 'Message (required for reject/request changes)'} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" rows={3} />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-gray-200 bg-gray-50">
+              <button onClick={() => { setShowPaymentApprovalRespondModal(false); setSelectedPaymentRequest(null); setPaymentResponseText(''); setPaymentResponseType('approve') }} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={handleSubmitPaymentResponse} disabled={isSubmittingPaymentResponse || (paymentResponseType !== 'approve' && !paymentResponseText.trim())} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                {isSubmittingPaymentResponse ? <Loading size="small" className="h-4 w-4" /> : <FiSend className="h-4 w-4" />}
+                Submit
+              </button>
+            </div>
+          </motion.div>
         </div>
       )}
     </div>

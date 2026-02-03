@@ -59,10 +59,10 @@ router.post('/attendance/upload', upload.single('file'), uploadAttendance);
 router.get('/attendance', getAttendance);
 
 // Salary Management (Admin/HR) - Must come before generic routes
-router.post('/salary/generate/:month', generateMonthlySalaries);
-router.get('/salary/generate/:month', generateMonthlySalaries);
+router.post('/salary/generate/:month', protect, authorize('admin', 'hr'), generateMonthlySalaries);
+router.get('/salary/generate/:month', protect, authorize('admin', 'hr'), generateMonthlySalaries);
 router.get('/salary/employee/:userType/:employeeId', getEmployeeSalaryHistory);
-router.put('/salary/set/:userType/:employeeId', setEmployeeSalary);
+router.put('/salary/set/:userType/:employeeId', protect, authorize('admin', 'hr'), setEmployeeSalary);
 router.put('/salary/:id/incentive', updateIncentivePayment);
 router.put('/salary/:id/reward', updateRewardPayment);
 router.get('/salary/:id', getSalaryRecord);

@@ -1,5 +1,6 @@
 import { apiRequest, tokenUtils, pmStorage } from './baseApiService';
 import { registerFCMToken } from '../../../services/pushNotificationService';
+import { clearOtherRoleSessions } from '../../../utils/clearOtherRoleSessions';
 
 // PM Authentication Service - Only for login/logout functionality
 export const pmAuthService = {
@@ -13,6 +14,7 @@ export const pmAuthService = {
 
       // Store token in localStorage
       if (response.data && response.data.token) {
+        clearOtherRoleSessions('pm'); // so refresh doesn't show admin/other role
         tokenUtils.set(response.data.token);
       }
 
@@ -26,7 +28,7 @@ export const pmAuthService = {
             console.error('Failed to register FCM token:', error);
             // Don't fail login if FCM registration fails
           }
-        }, 500); // Wait 500ms to ensure token is saved
+        }, 5000); // Defer so dashboard loads first; no reload from push notification flow
       }
 
       return response;

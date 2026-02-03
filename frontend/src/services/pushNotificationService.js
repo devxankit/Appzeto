@@ -4,19 +4,23 @@ import { getApiUrl } from '../config/env';
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
 /**
- * Register service worker for push notifications
+ * Get or register service worker for push notifications.
+ * Reuses existing registration when possible. Never calls registration.update()
+ * so the app does not reload after login.
  */
-async function registerServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-      return registration;
-    } catch (error) {
-      console.error('❌ Service Worker registration failed:', error);
-      throw error;
-    }
-  } else {
+async function getOrRegisterServiceWorker() {
+  if (!('serviceWorker' in navigator)) {
     throw new Error('Service Workers are not supported in this browser');
+  }
+  try {
+    const existing = await navigator.serviceWorker.getRegistration('/');
+    if (existing) {
+      return existing;
+    }
+    return await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+  } catch (error) {
+    console.error('❌ Service Worker registration failed:', error?.message || error);
+    throw error;
   }
 }
 
@@ -70,18 +74,20 @@ async function getFCMToken() {
 }
 
 /**
- * Get authentication token from localStorage
- * Checks all possible token keys used by different user types
+ * Get authentication token from localStorage.
+ * Only one role session should exist at a time (others cleared on login).
+ * Check all role token keys so FCM works for whichever role is logged in.
  */
 function getAuthToken() {
-  // Check all possible token keys used by different user types
-  return localStorage.getItem('token') || 
-         localStorage.getItem('salesToken') || 
-         localStorage.getItem('adminToken') ||
-         localStorage.getItem('pmToken') ||
-         localStorage.getItem('employeeToken') ||
-         localStorage.getItem('clientToken') ||
-         localStorage.getItem('cpToken');
+  return (
+    localStorage.getItem('adminToken') ||
+    localStorage.getItem('salesToken') ||
+    localStorage.getItem('cpToken') ||
+    localStorage.getItem('pmToken') ||
+    localStorage.getItem('employeeToken') ||
+    localStorage.getItem('clientToken') ||
+    localStorage.getItem('token')
+  );
 }
 
 /**
@@ -145,11 +151,10 @@ async function registerFCMToken(forceUpdate = false) {
     if (response.ok) {
       localStorage.setItem('fcm_token_web', token);
 
-      // Send test notification after successful registration
-      // Wait a bit to ensure token is fully saved in database
+      // Optional: send test notification later so it doesn't feel tied to registration
       setTimeout(() => {
         sendTestNotification().catch(() => {});
-      }, 2000);
+      }, 8000);
       
       return token;
     } else {
@@ -260,15 +265,15 @@ function setupForegroundNotificationHandler(handler) {
 }
 
 /**
- * Initialize push notifications
+ * Initialize push notifications (register SW in background, no reload).
+ * Does not call update() or force activation; FCM token is obtained later when needed.
  */
 async function initializePushNotifications() {
   try {
-    // Only initialize if user is authenticated
     const authToken = getAuthToken();
     if (!authToken) return;
 
-    await registerServiceWorker();
+    await getOrRegisterServiceWorker();
   } catch (error) {
     console.error('Push notifications init failed:', error?.message || error);
     // Don't throw - allow app to continue

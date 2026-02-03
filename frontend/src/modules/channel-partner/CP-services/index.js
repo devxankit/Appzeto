@@ -7,6 +7,7 @@ export { default as cpRewardService } from './cpRewardService';
 export { default as cpPaymentRecoveryService } from './cpPaymentRecoveryService';
 export { default as cpNotificationService } from './cpNotificationService';
 export { default as cpDashboardService } from './cpDashboardService';
+export { cpRequestService } from './cpRequestService';
 
 // Re-export commonly used functions
 export {

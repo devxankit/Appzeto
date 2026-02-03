@@ -49,6 +49,9 @@ router.get('/wallet/transactions', cpWalletController.getTransactions);
 router.post('/wallet/withdraw', cpWalletController.createWithdrawalRequest);
 router.get('/wallet/withdrawals', cpWalletController.getWithdrawalHistory);
 router.get('/wallet/earnings', cpWalletController.getEarningsBreakdown);
+// Withdrawal requests from shared Request model (CP-only; avoids 401 on /api/requests)
+router.get('/wallet/requests', cpWalletController.getWithdrawalRequests);
+router.post('/wallet/request', cpWalletController.createWithdrawalRequestAsRequest);
 
 // Rewards routes
 router.get('/rewards', cpRewardController.getRewards);

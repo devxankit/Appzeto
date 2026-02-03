@@ -1,5 +1,7 @@
 const { CPWallet, CPWalletTransaction, CPWithdrawalRequest } = require('../models/CPWallet');
 const ChannelPartner = require('../models/ChannelPartner');
+const Request = require('../models/Request');
+const Admin = require('../models/Admin');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 
@@ -238,5 +240,99 @@ exports.getEarningsBreakdown = asyncHandler(async (req, res, next) => {
       byMonth: earningsByMonth,
       total: wallet.totalEarned
     }
+  });
+});
+
+// --- Shared Request model endpoints (CP-only; same data as /api/requests so Wallet works without calling /api/requests) ---
+
+// @desc    List my withdrawal requests from the shared Request model (for admin approval flow)
+// @route   GET /api/cp/wallet/requests
+// @access  Private (Channel Partner only)
+exports.getWithdrawalRequests = asyncHandler(async (req, res, next) => {
+  const cpId = req.channelPartner.id;
+  const { page = 1, limit = 20 } = req.query;
+
+  const filter = {
+    requestedBy: cpId,
+    requestedByModel: 'ChannelPartner',
+    type: 'withdrawal-request'
+  };
+
+  const pageNum = parseInt(page, 10);
+  const limitNum = parseInt(limit, 10);
+  const skip = (pageNum - 1) * limitNum;
+
+  const requests = await Request.find(filter)
+    .populate('requestedBy', 'name email phoneNumber')
+    .populate('recipient', 'name email phoneNumber')
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limitNum);
+
+  const total = await Request.countDocuments(filter);
+
+  res.status(200).json({
+    success: true,
+    message: 'Requests fetched successfully',
+    data: requests,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      pages: Math.ceil(total / limitNum)
+    }
+  });
+});
+
+// @desc    Create a withdrawal request in the shared Request model (for admin approval; same as POST /api/requests)
+// @route   POST /api/cp/wallet/request
+// @access  Private (Channel Partner only)
+exports.createWithdrawalRequestAsRequest = asyncHandler(async (req, res, next) => {
+  const cpId = req.channelPartner.id;
+  const { amount, title, description } = req.body;
+
+  if (!amount || amount <= 0) {
+    return next(new ErrorResponse('Valid withdrawal amount is required', 400));
+  }
+
+  const wallet = await CPWallet.findOne({ channelPartner: cpId });
+  if (!wallet) {
+    return next(new ErrorResponse('Wallet not found. Please contact support.', 404));
+  }
+  if (wallet.balance < parseFloat(amount)) {
+    return next(new ErrorResponse('Insufficient wallet balance', 400));
+  }
+
+  const admin = await Admin.findOne({ isActive: true }).select('_id');
+  if (!admin) {
+    return next(new ErrorResponse('No administrator available to process withdrawal requests', 500));
+  }
+
+  const requestData = {
+    module: 'channel-partner',
+    type: 'withdrawal-request',
+    title: title || `Withdrawal Request - ₹${parseFloat(amount).toLocaleString('en-IN')}`,
+    description: description || `Channel Partner withdrawal request for ₹${parseFloat(amount).toLocaleString('en-IN')}`,
+    category: '',
+    priority: 'normal',
+    requestedBy: cpId,
+    requestedByModel: 'ChannelPartner',
+    recipient: admin._id,
+    recipientModel: 'Admin',
+    amount: parseFloat(amount),
+    status: 'pending',
+    metadata: { channelPartnerId: cpId, walletId: wallet._id.toString() }
+  };
+
+  const request = await Request.create(requestData);
+  await request.populate([
+    { path: 'requestedBy', select: 'name email phoneNumber' },
+    { path: 'recipient', select: 'name email phoneNumber' }
+  ]);
+
+  res.status(201).json({
+    success: true,
+    message: 'Withdrawal request created successfully',
+    data: request
   });
 });

@@ -6,7 +6,14 @@ const smsService = require('../services/smsService');
 // Helper function to send token response
 const sendTokenResponse = (channelPartner, statusCode, res) => {
   const token = channelPartner.getSignedJwtToken();
-  
+  const cookieOptions = {
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    httpOnly: false, // so CP frontend can also send it in Authorization if needed
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+  };
+  res.cookie('cpToken', token, cookieOptions);
+
   res.status(statusCode).json({
     success: true,
     token,

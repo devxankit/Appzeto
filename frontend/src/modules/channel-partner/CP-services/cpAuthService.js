@@ -1,5 +1,6 @@
 import { apiRequest, tokenUtils, cpStorage } from './baseApiService';
 import { registerFCMToken } from '../../../services/pushNotificationService';
+import { clearOtherRoleSessions } from '../../../utils/clearOtherRoleSessions';
 
 export const cpAuthService = {
   // Send OTP to phone number
@@ -24,12 +25,13 @@ export const cpAuthService = {
       });
 
       if (response.data && response.token) {
+        clearOtherRoleSessions('cp'); // so refresh doesn't show admin/other role
         tokenUtils.set(response.token);
         cpStorage.set(response.data);
       }
 
-      // Register FCM token after successful login
-      // Wait a bit to ensure token is saved in localStorage
+      // Register FCM token after successful login (defer until after navigation to cp-dashboard)
+      // So any service-worker reload happens on /cp-dashboard, not before navigate
       if (response.success || response.data) {
         setTimeout(async () => {
           try {
@@ -38,7 +40,7 @@ export const cpAuthService = {
             console.error('Failed to register FCM token:', error);
             // Don't fail login if FCM registration fails
           }
-        }, 500); // Wait 500ms to ensure token is saved
+        }, 5000); // Defer so dashboard loads first; no reload from push notification flow
       }
 
       return response;

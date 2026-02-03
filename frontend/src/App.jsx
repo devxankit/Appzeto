@@ -137,6 +137,7 @@ import Admin_notice_board from './modules/admin/admin-pages/Admin_notice_board'
 import Admin_recent_activities from './modules/admin/admin-pages/Admin_recent_activities'
 import Admin_project_expenses_management from './modules/admin/admin-pages/Admin_project_expenses_management'
 import ResetPassword from './components/auth/ResetPassword'
+import RootRedirect from './components/auth/RootRedirect'
 import { AdminSidebarProvider } from './modules/admin/admin-contexts/AdminSidebarContext'
 
 function App() {
@@ -160,7 +161,7 @@ function App() {
         <Router>
           <Routes>
           //Login pages start here //
-            <Route path="/" element={<Navigate to="/admin-login" replace />} />
+            <Route path="/" element={<RootRedirect />} />
             <Route path="/sales-login" element={<SL_login />} />
             <Route path="/employee-login" element={<Employee_login />} />
             <Route path="/pm-login" element={<PM_login />} />
