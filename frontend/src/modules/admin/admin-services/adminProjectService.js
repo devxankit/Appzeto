@@ -331,6 +331,8 @@ class AdminProjectService {
       lastProject: client.lastProject,
       // Tag field (populated from backend)
       tag: client.tag || null,
+      // Birthday field
+      dateOfBirth: client.dateOfBirth || null,
       // Additional fields for comprehensive display
       userType: 'client',
       role: 'Client',

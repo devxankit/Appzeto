@@ -15,7 +15,8 @@ import {
   FiFilter,
   FiPlus,
   FiTag,
-  FiX
+  FiX,
+  FiGift
 } from 'react-icons/fi'
 import { 
   Filter,
@@ -62,6 +63,7 @@ const getStatusColor = (status) => {
 const Admin_client_management = () => {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
+  const [activeSection, setActiveSection] = useState('clients') // 'clients' or 'birthdays'
   const [clients, setClients] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
@@ -112,6 +114,9 @@ const Admin_client_management = () => {
       newThisMonth: 0
     }
   })
+
+  // Birthdays filter state
+  const [birthdayFilter, setBirthdayFilter] = useState('week') // 'today', 'week', 'month'
 
   // Load tags from backend on mount
   useEffect(() => {
@@ -393,6 +398,85 @@ const Admin_client_management = () => {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   )
+
+  // Get clients with birthdays based on filter (today, week, month)
+  const getFilteredBirthdays = () => {
+    if (!clients || clients.length === 0) return []
+    
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    today.setHours(0, 0, 0, 0)
+    
+    let startDate, endDate
+    
+    switch (birthdayFilter) {
+      case 'today':
+        startDate = new Date(today)
+        endDate = new Date(today)
+        endDate.setHours(23, 59, 59, 999)
+        break
+      case 'week':
+        const dayOfWeek = today.getDay() // 0 = Sunday, 6 = Saturday
+        startDate = new Date(today)
+        startDate.setDate(today.getDate() - dayOfWeek) // Start from Sunday
+        startDate.setHours(0, 0, 0, 0)
+        endDate = new Date(startDate)
+        endDate.setDate(startDate.getDate() + 6) // End on Saturday
+        endDate.setHours(23, 59, 59, 999)
+        break
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+        startDate.setHours(0, 0, 0, 0)
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+        endDate.setHours(23, 59, 59, 999)
+        break
+      default:
+        startDate = today
+        endDate = today
+    }
+    
+    const filteredBirthdays = clients
+      .filter(client => {
+        // Check multiple possible field names for dateOfBirth
+        const dob = client.dateOfBirth || client.dateOfbirth || client.dob || client.birthday
+        if (!dob) return false
+        
+        try {
+          const birthDate = new Date(dob)
+          if (isNaN(birthDate.getTime())) return false
+          
+          const thisYearBirthday = new Date(now.getFullYear(), birthDate.getMonth(), birthDate.getDate())
+          thisYearBirthday.setHours(0, 0, 0, 0)
+          
+          // Check if birthday falls within the selected period
+          return thisYearBirthday >= startDate && thisYearBirthday <= endDate
+        } catch (e) {
+          console.error('Error parsing dateOfBirth for client:', client.name, e)
+          return false
+        }
+      })
+      .map(client => {
+        const dob = client.dateOfBirth || client.dateOfbirth || client.dob || client.birthday
+        const birthDate = new Date(dob)
+        const thisYearBirthday = new Date(now.getFullYear(), birthDate.getMonth(), birthDate.getDate())
+        thisYearBirthday.setHours(0, 0, 0, 0)
+        const dayOfWeek = thisYearBirthday.getDay()
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        
+        return {
+          ...client,
+          birthdayDate: thisYearBirthday,
+          dayName: dayNames[dayOfWeek],
+          dayOfMonth: birthDate.getDate(),
+          month: birthDate.toLocaleDateString('en-US', { month: 'short' })
+        }
+      })
+      .sort((a, b) => a.birthdayDate - b.birthdayDate) // Sort by date
+    
+    return filteredBirthdays
+  }
+
+  const weeklyBirthdays = getFilteredBirthdays()
 
   const handleEdit = (item) => {
     setSelectedItem(item)
@@ -712,6 +796,37 @@ const Admin_client_management = () => {
             </motion.div>
           </div>
 
+          {/* Section Tabs */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+            <nav className="flex space-x-8 px-6">
+              <button
+                onClick={() => setActiveSection('clients')}
+                className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  activeSection === 'clients'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FiHome className="h-4 w-4" />
+                <span>Clients</span>
+              </button>
+              <button
+                onClick={() => setActiveSection('birthdays')}
+                className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  activeSection === 'birthdays'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FiGift className="h-4 w-4" />
+                <span>Birthdays</span>
+              </button>
+            </nav>
+          </div>
+
+          {/* Content based on active section */}
+          {activeSection === 'clients' && (
+            <>
           {/* Clients Table */}
           <Card className="shadow-sm border border-gray-200">
             <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
@@ -1019,6 +1134,133 @@ const Admin_client_management = () => {
               )}
             </CardContent>
           </Card>
+            </>
+          )}
+
+          {activeSection === 'birthdays' && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
+                      Client Birthdays
+                    </CardTitle>
+                    <p className="text-sm text-gray-600 mt-1">View and manage client birthdays</p>
+                  </div>
+                  
+                  {/* Filter Buttons */}
+                  <div className="flex items-center space-x-2 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                    <button
+                      onClick={() => setBirthdayFilter('today')}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                        birthdayFilter === 'today'
+                          ? 'bg-pink-500 text-white shadow-sm'
+                          : 'text-gray-600 hover:bg-white'
+                      }`}
+                    >
+                      Today
+                    </button>
+                    <button
+                      onClick={() => setBirthdayFilter('week')}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                        birthdayFilter === 'week'
+                          ? 'bg-pink-500 text-white shadow-sm'
+                          : 'text-gray-600 hover:bg-white'
+                      }`}
+                    >
+                      This Week
+                    </button>
+                    <button
+                      onClick={() => setBirthdayFilter('month')}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                        birthdayFilter === 'month'
+                          ? 'bg-pink-500 text-white shadow-sm'
+                          : 'text-gray-600 hover:bg-white'
+                      }`}
+                    >
+                      This Month
+                    </button>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-4 lg:p-6">
+                {weeklyBirthdays && weeklyBirthdays.length > 0 ? (
+                  <>
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-600">
+                        Showing <span className="font-semibold text-gray-900">{weeklyBirthdays.length}</span> {weeklyBirthdays.length === 1 ? 'birthday' : 'birthdays'} {birthdayFilter === 'today' ? 'today' : birthdayFilter === 'week' ? 'this week' : 'this month'}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {weeklyBirthdays.map((client, index) => {
+                        const today = new Date()
+                        today.setHours(0, 0, 0, 0)
+                        const isToday = client.birthdayDate && client.birthdayDate.getTime() === today.getTime()
+                        return (
+                          <motion.div
+                            key={client._id || client.id || `birthday-${index}`}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.05 * index }}
+                            className={`bg-gradient-to-br rounded-lg p-4 border-2 shadow-sm hover:shadow-md transition-all duration-200 ${
+                              isToday 
+                                ? 'border-pink-400 from-pink-50 to-purple-50' 
+                                : 'border-pink-200 from-white to-pink-50'
+                            }`}
+                          >
+                            <div className="flex items-start space-x-3">
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-white shadow-md flex-shrink-0 ${
+                                isToday 
+                                  ? 'bg-gradient-to-br from-pink-500 to-purple-600' 
+                                  : 'bg-gradient-to-br from-teal-500 to-cyan-600'
+                              }`}>
+                                {client.name?.charAt(0)?.toUpperCase() || 'C'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center space-x-2 mb-1">
+                                  <h3 className="text-sm font-semibold text-gray-900 truncate">
+                                    {client.name || client.companyName || 'Unknown'}
+                                  </h3>
+                                  {isToday && (
+                                    <span className="px-2 py-0.5 bg-pink-500 text-white text-xs font-bold rounded-full animate-pulse flex-shrink-0">
+                                      Today!
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center space-x-2 text-xs text-gray-600 mb-1">
+                                  <FiCalendar className="h-3 w-3 text-pink-500 flex-shrink-0" />
+                                  <span className="font-medium">
+                                    {client.dayName}, {client.month} {client.dayOfMonth}
+                                  </span>
+                                </div>
+                                {client.companyName && client.name !== client.companyName && (
+                                  <p className="text-xs text-gray-500 truncate">{client.companyName}</p>
+                                )}
+                                {client.email && (
+                                  <p className="text-xs text-gray-400 truncate mt-1">{client.email}</p>
+                                )}
+                              </div>
+                            </div>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-16">
+                    <div className="w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <FiGift className="h-10 w-10 text-pink-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">No Birthdays Found</h3>
+                    <p className="text-gray-600 text-sm">
+                      No client birthdays {birthdayFilter === 'today' ? 'today' : birthdayFilter === 'week' ? 'this week' : 'this month'}. Add date of birth to client profiles to see birthdays here.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </div>
+          )}
         </div>
       </div>
 
