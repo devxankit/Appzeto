@@ -290,6 +290,7 @@ app.use('/admin/analytics', adminAnalyticsRoutes);
 app.use('/admin/sales', adminSalesRoutes);
 app.use('/admin/finance', adminFinanceRoutes);
 app.use('/admin/project-expenses', adminProjectExpenseRoutes);
+app.use('/admin/project-expense-categories', adminProjectExpenseCategoryRoutes);
 app.use('/admin/rewards', adminRewardRoutes);
 app.use('/admin/notices', adminNoticeRoutes);
 app.use('/admin/client-tags', adminClientTagRoutes);
