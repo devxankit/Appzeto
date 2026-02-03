@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
@@ -13,7 +13,9 @@ import {
   DollarSign,
   TrendingUp,
   Clock,
-  ArrowRight
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import Loading from '../../../components/ui/loading'
 import adminDashboardService from '../admin-services/adminDashboardService'
@@ -22,6 +24,8 @@ const Admin_recent_activities = () => {
   const [recentActivities, setRecentActivities] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   // Helper function to get activity icon
   const getActivityIcon = (iconType, color) => {
@@ -100,6 +104,24 @@ const Admin_recent_activities = () => {
     return () => clearInterval(activityInterval)
   }, [])
 
+  // Reset to first page whenever activities list changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [recentActivities.length])
+
+  const totalPages = useMemo(
+    () => (recentActivities.length > 0 ? Math.ceil(recentActivities.length / itemsPerPage) : 1),
+    [recentActivities.length]
+  )
+
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = Math.min(startIndex + itemsPerPage, recentActivities.length)
+
+  const paginatedActivities = useMemo(
+    () => recentActivities.slice(startIndex, endIndex),
+    [recentActivities, startIndex, endIndex]
+  )
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
@@ -151,7 +173,7 @@ const Admin_recent_activities = () => {
               </div>
             ) : recentActivities.length > 0 ? (
               <div className="space-y-4">
-                {recentActivities.map((activity, index) => {
+                {paginatedActivities.map((activity, index) => {
                   const iconColor = activity.color || 'blue'
                   return (
                     <motion.div
@@ -181,6 +203,51 @@ const Admin_recent_activities = () => {
                     </motion.div>
                   )
                 })}
+
+                {totalPages > 1 && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="text-xs text-gray-500">
+                      Showing{' '}
+                      <span className="font-semibold">
+                        {startIndex + 1}
+                      </span>
+                      {' '}
+                      to{' '}
+                      <span className="font-semibold">
+                        {endIndex}
+                      </span>{' '}
+                      of{' '}
+                      <span className="font-semibold">
+                        {recentActivities.length}
+                      </span>{' '}
+                      activities
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 text-xs text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                      >
+                        <ChevronLeft className="h-3 w-3" />
+                        <span>Previous</span>
+                      </button>
+                      <span className="text-xs text-gray-600">
+                        Page <span className="font-semibold">{currentPage}</span> of{' '}
+                        <span className="font-semibold">{totalPages}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 text-xs text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                      >
+                        <span>Next</span>
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center py-12 text-gray-500">

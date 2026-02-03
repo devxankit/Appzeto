@@ -204,28 +204,31 @@ const Admin_sidebar = ({ isOpen, onClose }) => {
             </div>
           )}
 
-          <nav className="space-y-2 flex-1">
-            {getFilteredMenuItems().map((item) => {
-              const Icon = item.icon
-              const active = isActive(item.path)
-              
-              return (
-                <Button
-                  key={item.id}
-                  variant={active ? "default" : "ghost"}
-                  className={`w-full justify-start space-x-3 transition-all duration-300 ease-in-out ${
-                    active 
-                      ? 'bg-teal-50/80 text-teal-600 border-teal-100 shadow-sm' 
-                      : 'text-gray-500 hover:bg-gray-50/60 hover:text-gray-600'
-                  }`}
-                  onClick={() => handleNavigation(item.path)}
-                >
-                  <Icon className={`h-5 w-5 transition-colors duration-300 ease-in-out ${active ? 'text-teal-500' : 'text-gray-400 hover:text-gray-500'}`} />
-                  <span className={`font-medium transition-colors duration-300 ease-in-out ${active ? 'text-teal-600' : 'text-gray-500'}`}>{item.label}</span>
-                </Button>
-              )
-            })}
-          </nav>
+          {/* Scrollable menu area with only vertical slider */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 custom-scrollbar">
+            <nav className="space-y-2">
+              {getFilteredMenuItems().map((item) => {
+                const Icon = item.icon
+                const active = isActive(item.path)
+                
+                return (
+                  <Button
+                    key={item.id}
+                    variant={active ? "default" : "ghost"}
+                    className={`w-full justify-start space-x-3 transition-all duration-300 ease-in-out ${
+                      active 
+                        ? 'bg-teal-50/80 text-teal-600 border-teal-100 shadow-sm' 
+                        : 'text-gray-500 hover:bg-gray-50/60 hover:text-gray-600'
+                    }`}
+                    onClick={() => handleNavigation(item.path)}
+                  >
+                    <Icon className={`h-5 w-5 transition-colors duration-300 ease-in-out ${active ? 'text-teal-500' : 'text-gray-400 hover:text-gray-500'}`} />
+                    <span className={`font-medium transition-colors duration-300 ease-in-out ${active ? 'text-teal-600' : 'text-gray-500'}`}>{item.label}</span>
+                  </Button>
+                )
+              })}
+            </nav>
+          </div>
         </div>
       </div>
     </>

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
 import { adminFinanceService } from '../admin-services/adminFinanceService'
 import { adminProjectExpenseCategoryService } from '../admin-services/adminProjectExpenseCategoryService'
+import { adminProjectCredentialService } from '../admin-services/adminProjectCredentialService'
 import { useToast } from '../../../contexts/ToastContext'
 import { adminStorage } from '../admin-services/baseApiService'
 import { 
@@ -22,7 +23,11 @@ import {
   FiPieChart,
   FiX,
   FiCalendar,
-  FiTag
+  FiTag,
+  FiKey,
+  FiLock,
+  FiGlobe,
+  FiServer
 } from 'react-icons/fi'
 import { IndianRupee } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
@@ -80,7 +85,33 @@ const Admin_project_expenses_management = () => {
   const [creatingCategory, setCreatingCategory] = useState(false)
   const [updatingCategory, setUpdatingCategory] = useState(false)
   const [deletingCategory, setDeletingCategory] = useState(false)
-  const [activeSection, setActiveSection] = useState('expenses') // 'expenses' or 'categories'
+  const [activeSection, setActiveSection] = useState('expenses') // 'expenses', 'categories', or 'credentials'
+  
+  // Credentials management state
+  const [credentials, setCredentials] = useState([])
+  const [projectsWithExpenses, setProjectsWithExpenses] = useState([])
+  const [credentialsLoading, setCredentialsLoading] = useState(false)
+  const [showCredentialModal, setShowCredentialModal] = useState(false)
+  const [showCredentialEditModal, setShowCredentialEditModal] = useState(false)
+  const [showCredentialDeleteModal, setShowCredentialDeleteModal] = useState(false)
+  const [showCredentialViewModal, setShowCredentialViewModal] = useState(false)
+  const [viewingCredential, setViewingCredential] = useState(null)
+  const [selectedCredential, setSelectedCredential] = useState(null)
+  const [credentialFormData, setCredentialFormData] = useState({
+    projectId: '',
+    credentials: ''
+  })
+  const [creatingCredential, setCreatingCredential] = useState(false)
+  const [updatingCredential, setUpdatingCredential] = useState(false)
+  const [deletingCredential, setDeletingCredential] = useState(false)
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState('all')
+  const [projectSearchTerm, setProjectSearchTerm] = useState('')
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false)
+  const [formProjectSearchTerm, setFormProjectSearchTerm] = useState('')
+  const [showExpenseProjectDropdown, setShowExpenseProjectDropdown] = useState(false)
+  const [expenseProjectSearchTerm, setExpenseProjectSearchTerm] = useState('')
+  const projectDropdownRef = useRef(null)
+  const expenseProjectDropdownRef = useRef(null)
 
   // Statistics state
   const [statistics, setStatistics] = useState({
@@ -605,14 +636,267 @@ const Admin_project_expenses_management = () => {
     }
   }
 
+  // Filter projects based on search term (for filter bar)
+  const filteredProjectsForFilter = useMemo(() => {
+    if (!projectSearchTerm.trim()) {
+      return projectsWithExpenses
+    }
+    const searchLower = projectSearchTerm.toLowerCase()
+    return projectsWithExpenses.filter(project => 
+      project.name?.toLowerCase().includes(searchLower)
+    )
+  }, [projectsWithExpenses, projectSearchTerm])
+
+  // Filter projects for form dropdown
+  const filteredProjectsForForm = useMemo(() => {
+    if (!formProjectSearchTerm.trim()) {
+      return projectsWithExpenses
+    }
+    const searchLower = formProjectSearchTerm.toLowerCase()
+    return projectsWithExpenses.filter(project => 
+      project.name?.toLowerCase().includes(searchLower)
+    )
+  }, [projectsWithExpenses, formProjectSearchTerm])
+
+  // Filter projects for expense form dropdown
+  const filteredProjectsForExpense = useMemo(() => {
+    if (!expenseProjectSearchTerm.trim()) {
+      return projectsList
+    }
+    const searchLower = expenseProjectSearchTerm.toLowerCase()
+    return projectsList.filter(project => 
+      project.label?.toLowerCase().includes(searchLower) ||
+      project.clientName?.toLowerCase().includes(searchLower)
+    )
+  }, [projectsList, expenseProjectSearchTerm])
+
+  // Fetch credentials
+  const fetchCredentials = async () => {
+    try {
+      setCredentialsLoading(true)
+      const params = {}
+      if (selectedProjectFilter !== 'all') {
+        params.projectId = selectedProjectFilter
+      }
+      const response = await adminProjectCredentialService.getAllCredentials(params)
+      if (response && response.success) {
+        let filteredData = response.data || []
+        // Apply search filter on frontend if search term exists
+        if (projectSearchTerm.trim() && selectedProjectFilter === 'all') {
+          const searchLower = projectSearchTerm.toLowerCase()
+          filteredData = filteredData.filter(cred => 
+            cred.project?.name?.toLowerCase().includes(searchLower) ||
+            cred.title?.toLowerCase().includes(searchLower) ||
+            cred.additionalInfo?.toLowerCase().includes(searchLower)
+          )
+        }
+        setCredentials(filteredData)
+      }
+    } catch (err) {
+      console.error('Error fetching credentials:', err)
+      toast.error('Failed to load credentials')
+    } finally {
+      setCredentialsLoading(false)
+    }
+  }
+
+  // Fetch projects with expenses
+  const fetchProjectsWithExpenses = async () => {
+    try {
+      const response = await adminProjectCredentialService.getProjectsWithExpenses()
+      if (response && response.success) {
+        setProjectsWithExpenses(response.data || [])
+      }
+    } catch (err) {
+      console.error('Error fetching projects with expenses:', err)
+    }
+  }
+
+  // Credential CRUD handlers
+  const handleCreateCredential = () => {
+    setCredentialFormData({
+      projectId: '',
+      credentials: ''
+    })
+    setSelectedCredential(null)
+    setShowCredentialModal(true)
+  }
+
+  const handleEditCredential = (credential) => {
+    // Combine all credential details into one text field
+    const credentialsText = [
+      credential.username && `Username: ${credential.username}`,
+      credential.email && `Email: ${credential.email}`,
+      credential.password && `Password: ${credential.password}`,
+      credential.url && `URL: ${credential.url}`,
+      credential.ipAddress && `IP: ${credential.ipAddress}${credential.port ? `:${credential.port}` : ''}`,
+      credential.additionalInfo && `Additional Info: ${credential.additionalInfo}`,
+      credential.notes && `Notes: ${credential.notes}`,
+      credential.expiryDate && `Expiry: ${formatDate(credential.expiryDate)}`
+    ].filter(Boolean).join('\n')
+
+    setCredentialFormData({
+      projectId: credential.project?._id || credential.project || '',
+      credentials: credentialsText || ''
+    })
+    setSelectedCredential(credential)
+    setShowCredentialEditModal(true)
+  }
+
+  const handleViewCredential = (credential) => {
+    setViewingCredential(credential)
+    setShowCredentialViewModal(true)
+  }
+
+  const handleDeleteCredential = (credential) => {
+    setSelectedCredential(credential)
+    setShowCredentialDeleteModal(true)
+  }
+
+  const confirmDeleteCredential = async () => {
+    if (!selectedCredential) return
+
+    try {
+      setDeletingCredential(true)
+      const response = await adminProjectCredentialService.deleteCredential(
+        selectedCredential._id || selectedCredential.id
+      )
+      if (response.success) {
+        toast.success('Credential deleted successfully')
+        setShowCredentialDeleteModal(false)
+        setSelectedCredential(null)
+        await fetchCredentials()
+      } else {
+        toast.error(response.message || 'Failed to delete credential')
+      }
+    } catch (err) {
+      console.error('Error deleting credential:', err)
+      toast.error(err.message || 'Failed to delete credential')
+    } finally {
+      setDeletingCredential(false)
+    }
+  }
+
+  const handleSaveCredential = async () => {
+    if (!credentialFormData.projectId || !credentialFormData.credentials) {
+      toast.error('Project and credentials are required')
+      return
+    }
+
+    try {
+      setCreatingCredential(true)
+      // Store credentials in the additionalInfo field as a simple text
+      const response = await adminProjectCredentialService.createCredential({
+        projectId: credentialFormData.projectId,
+        credentialType: 'other', // Default type since we're simplifying
+        title: 'Credential', // Auto-generated title
+        password: 'N/A', // Required field, but we'll store actual credentials in additionalInfo
+        additionalInfo: credentialFormData.credentials.trim(),
+        isActive: true
+      })
+      if (response.success) {
+        toast.success('Credential created successfully')
+        setShowCredentialModal(false)
+        setCredentialFormData({
+          projectId: '',
+          credentials: ''
+        })
+        await fetchCredentials()
+        await fetchProjectsWithExpenses()
+      } else {
+        toast.error(response.message || 'Failed to create credential')
+      }
+    } catch (err) {
+      console.error('Error creating credential:', err)
+      toast.error(err.message || 'Failed to create credential')
+    } finally {
+      setCreatingCredential(false)
+    }
+  }
+
+  const handleToggleCredentialStatus = async (credential) => {
+    try {
+      const response = await adminProjectCredentialService.updateCredential(
+        credential._id || credential.id,
+        {
+          isActive: !credential.isActive
+        }
+      )
+      if (response.success) {
+        toast.success(`Credential ${!credential.isActive ? 'activated' : 'deactivated'} successfully`)
+        await fetchCredentials()
+      } else {
+        toast.error(response.message || 'Failed to update credential status')
+      }
+    } catch (err) {
+      console.error('Error toggling credential status:', err)
+      toast.error(err.message || 'Failed to update credential status')
+    }
+  }
+
+  const handleUpdateCredential = async () => {
+    if (!credentialFormData.credentials || !selectedCredential) {
+      toast.error('Credentials are required')
+      return
+    }
+
+    try {
+      setUpdatingCredential(true)
+      const response = await adminProjectCredentialService.updateCredential(
+        selectedCredential._id || selectedCredential.id,
+        {
+          additionalInfo: credentialFormData.credentials.trim()
+        }
+      )
+      if (response.success) {
+        toast.success('Credential updated successfully')
+        setShowCredentialEditModal(false)
+        setSelectedCredential(null)
+        setCredentialFormData({
+          projectId: '',
+          credentials: ''
+        })
+        await fetchCredentials()
+        await fetchProjectsWithExpenses()
+      } else {
+        toast.error(response.message || 'Failed to update credential')
+      }
+    } catch (err) {
+      console.error('Error updating credential:', err)
+      toast.error(err.message || 'Failed to update credential')
+    } finally {
+      setUpdatingCredential(false)
+    }
+  }
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (projectDropdownRef.current && !projectDropdownRef.current.contains(event.target)) {
+        setShowProjectDropdown(false)
+      }
+      if (expenseProjectDropdownRef.current && !expenseProjectDropdownRef.current.contains(event.target)) {
+        setShowExpenseProjectDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
   // Fetch data on component mount and when filters change
   useEffect(() => {
     fetchProjectExpenses()
     fetchStatistics()
     fetchProjectsList()
     fetchCategories()
+    if (activeSection === 'credentials') {
+      fetchCredentials()
+      fetchProjectsWithExpenses()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, selectedFilter, searchTerm])
+  }, [currentPage, selectedFilter, searchTerm, activeSection, selectedProjectFilter, projectSearchTerm])
 
   // Reset to page 1 when search or filter changes
   useEffect(() => {
@@ -686,21 +970,21 @@ const Admin_project_expenses_management = () => {
             </div>
           </motion.div>
 
-          {/* Section Tabs - Only show Categories tab for admins */}
-          {isAdmin && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <nav className="flex space-x-8 px-6">
-                <button
-                  onClick={() => setActiveSection('expenses')}
-                  className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
-                    activeSection === 'expenses'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <FiFileText className="h-4 w-4" />
-                  <span>Expenses</span>
-                </button>
+          {/* Section Tabs */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <nav className="flex space-x-8 px-6">
+              <button
+                onClick={() => setActiveSection('expenses')}
+                className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  activeSection === 'expenses'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FiFileText className="h-4 w-4" />
+                <span>Expenses</span>
+              </button>
+              {isAdmin && (
                 <button
                   onClick={() => setActiveSection('categories')}
                   className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
@@ -712,9 +996,20 @@ const Admin_project_expenses_management = () => {
                   <FiTag className="h-4 w-4" />
                   <span>Categories</span>
                 </button>
-              </nav>
-            </div>
-          )}
+              )}
+              <button
+                onClick={() => setActiveSection('credentials')}
+                className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  activeSection === 'credentials'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FiKey className="h-4 w-4" />
+                <span>Project Credentials</span>
+              </button>
+            </nav>
+          </div>
 
           {/* Content based on active section */}
           {activeSection === 'expenses' && (
@@ -1007,20 +1302,66 @@ const Admin_project_expenses_management = () => {
                     handleSaveProjectExpense(); 
                   }
                 }} className="space-y-4">
-                  <div>
+                  <div className="relative" ref={expenseProjectDropdownRef}>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Project *</label>
-                    <select
-                      value={String(projectExpenseFormData.projectId || '')}
-                      onChange={(e) => handleProjectChange(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                      disabled={projectExpenseModalMode === 'view'}
-                    >
-                      <option value="">Select a project</option>
-                      {projectsList.map(project => (
-                        <option key={String(project.value)} value={String(project.value)}>{project.label}</option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => !(projectExpenseModalMode === 'view') && setShowExpenseProjectDropdown(!showExpenseProjectDropdown)}
+                        disabled={projectExpenseModalMode === 'view'}
+                        className="w-full px-4 py-3 text-left border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white flex items-center justify-between hover:border-gray-400 transition-colors disabled:bg-gray-50 disabled:cursor-not-allowed"
+                      >
+                        <span className={projectExpenseFormData.projectId ? 'text-gray-900' : 'text-gray-500'}>
+                          {projectExpenseFormData.projectId 
+                            ? projectsList.find(p => String(p.value) === String(projectExpenseFormData.projectId))?.label || 'Select Project'
+                            : 'Select Project'}
+                        </span>
+                        <FiFilter className={`h-4 w-4 text-gray-400 transition-transform ${showExpenseProjectDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+                      {showExpenseProjectDropdown && projectExpenseModalMode !== 'view' && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-64 overflow-hidden">
+                          <div className="p-2 border-b border-gray-200 bg-gray-50">
+                            <div className="relative">
+                              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                              <input
+                                type="text"
+                                placeholder="Search projects..."
+                                value={expenseProjectSearchTerm}
+                                onChange={(e) => setExpenseProjectSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                onClick={(e) => e.stopPropagation()}
+                                autoFocus
+                              />
+                            </div>
+                          </div>
+                          <div className="max-h-48 overflow-y-auto">
+                            {filteredProjectsForExpense.length > 0 ? (
+                              filteredProjectsForExpense.map(project => (
+                                <button
+                                  key={project.value}
+                                  type="button"
+                                  onClick={() => {
+                                    handleProjectChange(String(project.value))
+                                    setShowExpenseProjectDropdown(false)
+                                    setExpenseProjectSearchTerm('')
+                                  }}
+                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 ${
+                                    String(projectExpenseFormData.projectId) === String(project.value) ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-900'
+                                  }`}
+                                >
+                                  <div className="font-medium">{project.label}</div>
+                                  {project.clientName && (
+                                    <div className="text-xs text-gray-500 mt-0.5">{project.clientName}</div>
+                                  )}
+                                </button>
+                              ))
+                            ) : (
+                              <div className="px-4 py-3 text-sm text-gray-500 text-center">No projects found</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div>
@@ -1454,6 +1795,503 @@ const Admin_project_expenses_management = () => {
                     className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {deletingCategory ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Project Credentials Section */}
+          {activeSection === 'credentials' && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Project Credentials</h3>
+                  <p className="text-gray-600 text-sm mt-1">Manage credentials for projects with purchases</p>
+                </div>
+                {isAdmin && (
+                  <button
+                    onClick={handleCreateCredential}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <FiPlus className="h-4 w-4" />
+                    <span>Add Credential</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Filters - Compact Search Bar */}
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1 max-w-xs">
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <input
+                    type="text"
+                    placeholder="Search projects..."
+                    value={projectSearchTerm}
+                    onChange={(e) => {
+                      setProjectSearchTerm(e.target.value)
+                      if (e.target.value.trim() === '') {
+                        setSelectedProjectFilter('all')
+                      }
+                    }}
+                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                {projectSearchTerm && (
+                  <button
+                    onClick={() => {
+                      setProjectSearchTerm('')
+                      setSelectedProjectFilter('all')
+                    }}
+                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Credentials List */}
+              {credentialsLoading ? (
+                <div className="flex justify-center items-center py-12">
+                  <Loading size="medium" />
+                </div>
+              ) : credentials.length === 0 ? (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                  <FiKey className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-gray-600">No credentials found</p>
+                  {isAdmin && (
+                    <button
+                      onClick={handleCreateCredential}
+                      className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Add First Credential
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-gray-50">
+                          <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Project</th>
+                          <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Credentials</th>
+                          <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
+                          <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {credentials.map((credential, index) => (
+                          <motion.tr
+                            key={credential._id || credential.id || `cred-${index}`}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.2, delay: index * 0.02 }}
+                            className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                          >
+                            <td className="py-3 px-4">
+                              <div className="font-semibold text-gray-900 text-sm">
+                                {credential.project?.name || 'N/A'}
+                              </div>
+                              {credential.project?.client && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {credential.project.client?.companyName || credential.project.client?.name || ''}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="text-sm text-gray-600 max-w-[300px]">
+                                {credential.additionalInfo ? (
+                                  <div className="truncate" title={credential.additionalInfo}>
+                                    {credential.additionalInfo.substring(0, 80)}
+                                    {credential.additionalInfo.length > 80 ? '...' : ''}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">No details</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              {isAdmin ? (
+                                <button
+                                  onClick={() => handleToggleCredentialStatus(credential)}
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                                    credential.isActive ? 'bg-green-600' : 'bg-gray-300'
+                                  }`}
+                                  title={`Click to ${credential.isActive ? 'deactivate' : 'activate'}`}
+                                >
+                                  <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                      credential.isActive ? 'translate-x-6' : 'translate-x-1'
+                                    }`}
+                                  />
+                                </button>
+                              ) : (
+                                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                                  credential.isActive 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {credential.isActive ? 'Active' : 'Inactive'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center justify-end space-x-2">
+                                <button
+                                  onClick={() => handleViewCredential(credential)}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="View Details"
+                                >
+                                  <FiEye className="h-4 w-4" />
+                                </button>
+                                {isAdmin && (
+                                  <>
+                                    <button
+                                      onClick={() => handleEditCredential(credential)}
+                                      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                      title="Edit"
+                                    >
+                                      <FiEdit className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteCredential(credential)}
+                                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                      title="Delete"
+                                    >
+                                      <FiTrash2 className="h-4 w-4" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </motion.tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Create Credential Modal */}
+          {showCredentialModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">Add Credential</h3>
+                  <button
+                    onClick={() => setShowCredentialModal(false)}
+                    className="p-2 hover:bg-gray-100 rounded-full"
+                  >
+                    <FiX className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={(e) => {
+                  e.preventDefault()
+                  handleSaveCredential()
+                }} className="space-y-4">
+                  <div className="relative" ref={projectDropdownRef}>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Project *</label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowProjectDropdown(!showProjectDropdown)}
+                        className="w-full px-4 py-3 text-left border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white flex items-center justify-between hover:border-gray-400 transition-colors"
+                      >
+                        <span className={credentialFormData.projectId ? 'text-gray-900' : 'text-gray-500'}>
+                          {credentialFormData.projectId 
+                            ? projectsWithExpenses.find(p => (p._id || p.id) === credentialFormData.projectId)?.name || 'Select Project'
+                            : 'Select Project'}
+                        </span>
+                        <FiFilter className={`h-4 w-4 text-gray-400 transition-transform ${showProjectDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+                      {showProjectDropdown && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-64 overflow-hidden">
+                          <div className="p-2 border-b border-gray-200 bg-gray-50">
+                            <div className="relative">
+                              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                              <input
+                                type="text"
+                                placeholder="Search projects..."
+                                value={formProjectSearchTerm}
+                                onChange={(e) => setFormProjectSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                onClick={(e) => e.stopPropagation()}
+                                autoFocus
+                              />
+                            </div>
+                          </div>
+                          <div className="max-h-48 overflow-y-auto">
+                            {filteredProjectsForForm.length > 0 ? (
+                              filteredProjectsForForm.map(project => (
+                                <button
+                                  key={project._id || project.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setCredentialFormData({...credentialFormData, projectId: project._id || project.id})
+                                    setShowProjectDropdown(false)
+                                    setFormProjectSearchTerm('')
+                                  }}
+                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 ${
+                                    credentialFormData.projectId === (project._id || project.id) ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-900'
+                                  }`}
+                                >
+                                  <div className="font-medium">{project.name}</div>
+                                  {project.credentialCount > 0 && (
+                                    <div className="text-xs text-gray-500 mt-0.5">{project.credentialCount} credential{project.credentialCount !== 1 ? 's' : ''}</div>
+                                  )}
+                                </button>
+                              ))
+                            ) : (
+                              <div className="px-4 py-3 text-sm text-gray-500 text-center">No projects found</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Credentials *</label>
+                    <textarea
+                      value={credentialFormData.credentials}
+                      onChange={(e) => setCredentialFormData({...credentialFormData, credentials: e.target.value})}
+                      rows={8}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter all credential details here, e.g:&#10;Email: admin@example.com&#10;Password: yourpassword123&#10;Domain: example.com&#10;URL: https://example.com&#10;IP: 192.168.1.1:80&#10;Additional notes..."
+                      required
+                    />
+                    <p className="mt-2 text-xs text-gray-500">
+                      Enter all credential information in this box (email, password, domain name, URL, IP address, etc.)
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setShowCredentialModal(false)}
+                      className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={creatingCredential}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
+                    >
+                      <FiPlus className="h-4 w-4" />
+                      <span>{creatingCredential ? 'Creating...' : 'Create Credential'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Credential Modal */}
+          {showCredentialEditModal && selectedCredential && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-2xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">Edit Credential</h3>
+                  <button
+                    onClick={() => {
+                      setShowCredentialEditModal(false)
+                      setSelectedCredential(null)
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded-full"
+                  >
+                    <FiX className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={(e) => {
+                  e.preventDefault()
+                  handleUpdateCredential()
+                }} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Project</label>
+                    <input
+                      type="text"
+                      value={selectedCredential.project?.name || 'N/A'}
+                      disabled
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-gray-500 cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Credentials *</label>
+                    <textarea
+                      value={credentialFormData.credentials}
+                      onChange={(e) => setCredentialFormData({...credentialFormData, credentials: e.target.value})}
+                      rows={8}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter all credential details here, e.g:&#10;Email: admin@example.com&#10;Password: yourpassword123&#10;Domain: example.com&#10;URL: https://example.com&#10;IP: 192.168.1.1:80&#10;Additional notes..."
+                      required
+                    />
+                    <p className="mt-2 text-xs text-gray-500">
+                      Enter all credential information in this box (email, password, domain name, URL, IP address, etc.)
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCredentialEditModal(false)
+                        setSelectedCredential(null)
+                      }}
+                      className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={updatingCredential}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
+                    >
+                      <FiEdit className="h-4 w-4" />
+                      <span>{updatingCredential ? 'Updating...' : 'Update Credential'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* View Credential Modal */}
+          {showCredentialViewModal && viewingCredential && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">Credential Details</h3>
+                  <button
+                    onClick={() => {
+                      setShowCredentialViewModal(false)
+                      setViewingCredential(null)
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded-full"
+                  >
+                    <FiX className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Project & Client Information */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-200">
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Project</label>
+                        <p className="text-lg font-bold text-gray-900 mt-1">
+                          {viewingCredential.project?.name || 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Client</label>
+                        <p className="text-base font-semibold text-gray-800 mt-1">
+                          {viewingCredential.project?.client?.companyName || 
+                           viewingCredential.project?.client?.name || 
+                           (typeof viewingCredential.project?.client === 'string' ? viewingCredential.project.client : 'N/A')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Credentials Details */}
+                  {viewingCredential.additionalInfo && (
+                    <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-4 flex items-center space-x-2">
+                        <FiLock className="h-4 w-4 text-blue-600" />
+                        <span>Credential Details</span>
+                      </h4>
+                      <div className="bg-white rounded-lg p-4 border border-gray-200">
+                        <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+                          {viewingCredential.additionalInfo}
+                        </pre>
+                      </div>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(viewingCredential.additionalInfo)
+                          toast.success('Credentials copied to clipboard')
+                        }}
+                        className="mt-3 px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors flex items-center space-x-2"
+                      >
+                        <FiFileText className="h-4 w-4" />
+                        <span>Copy All</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Status & Actions */}
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-xs font-medium text-gray-500 uppercase">Status:</span>
+                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
+                        viewingCredential.isActive 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {viewingCredential.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          setShowCredentialViewModal(false)
+                          handleEditCredential(viewingCredential)
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                      >
+                        <FiEdit className="h-4 w-4" />
+                        <span>Edit</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Credential Confirmation Modal */}
+          {showCredentialDeleteModal && selectedCredential && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">Delete Credential</h3>
+                  <button
+                    onClick={() => {
+                      setShowCredentialDeleteModal(false)
+                      setSelectedCredential(null)
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded-full"
+                  >
+                    <FiX className="h-5 w-5" />
+                  </button>
+                </div>
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to delete the credential <strong>"{selectedCredential.title}"</strong>? 
+                  <span className="block mt-2">This action cannot be undone.</span>
+                </p>
+                <div className="flex items-center justify-end space-x-3">
+                  <button
+                    onClick={() => {
+                      setShowCredentialDeleteModal(false)
+                      setSelectedCredential(null)
+                    }}
+                    className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDeleteCredential}
+                    disabled={deletingCredential}
+                    className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deletingCredential ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
               </div>

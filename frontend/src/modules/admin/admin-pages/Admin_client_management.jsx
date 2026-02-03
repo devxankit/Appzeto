@@ -141,7 +141,12 @@ const Admin_client_management = () => {
     if (!loading) {
       loadClients()
     }
-  }, [selectedFilter, searchTerm, currentPage, selectedTagFilter])
+  }, [selectedFilter, searchTerm, selectedTagFilter])
+
+  // Reset pagination when filters/search change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedFilter, searchTerm, selectedTagFilter, dateFilterType, startDate, endDate])
 
   const loadData = async () => {
     setLoading(true)
@@ -160,11 +165,11 @@ const Admin_client_management = () => {
 
   const loadClients = async () => {
     try {
+      // Fetch a large list of clients once, then handle search/filter/pagination on frontend
       const clientsResponse = await adminProjectService.getClients({
         status: selectedFilter !== 'all' ? selectedFilter : undefined,
         search: searchTerm || undefined,
-        page: currentPage,
-        limit: itemsPerPage
+        limit: 1000
       })
       if (clientsResponse.success) {
         setClients(clientsResponse.data || [])
@@ -334,15 +339,22 @@ const Admin_client_management = () => {
 
     // Date filter
     if (dateFilterType !== 'all') {
-      const now = new Date()
-      let dateToCheck
-      
-      dateToCheck = client.createdAt || client.joinDate || client.dateCreated || client.lastActivity
-      
-      if (dateToCheck) {
-        const itemDate = new Date(dateToCheck)
-        let periodStart = new Date()
-        
+      // Custom range: use explicit start/end dates
+      if (dateFilterType === 'custom' && startDate && endDate) {
+        const start = new Date(startDate)
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59, 999)
+
+        filtered = filtered.filter(client => {
+          const dateToCheck = client.createdAt || client.joinDate || client.dateCreated || client.lastActivity
+          if (!dateToCheck) return false
+          const clientDate = new Date(dateToCheck)
+          return clientDate >= start && clientDate <= end
+        })
+      } else if (dateFilterType !== 'custom') {
+        const now = new Date()
+        const periodStart = new Date()
+
         switch (dateFilterType) {
           case 'day':
             periodStart.setHours(0, 0, 0, 0)
@@ -359,26 +371,16 @@ const Admin_client_management = () => {
             periodStart.setMonth(0, 1)
             periodStart.setHours(0, 0, 0, 0)
             break
-          case 'custom':
-            if (startDate && endDate) {
-              const start = new Date(startDate)
-              const end = new Date(endDate)
-              end.setHours(23, 59, 59, 999)
-              filtered = filtered.filter(client => {
-                const clientDate = new Date(dateToCheck)
-                return clientDate >= start && clientDate <= end
-              })
-              return filtered
-            }
+          default:
             break
         }
-        
-        if (dateFilterType !== 'custom') {
-          filtered = filtered.filter(client => {
-            const clientDate = new Date(dateToCheck)
-            return clientDate >= periodStart
-          })
-        }
+
+        filtered = filtered.filter(client => {
+          const dateToCheck = client.createdAt || client.joinDate || client.dateCreated || client.lastActivity
+          if (!dateToCheck) return false
+          const clientDate = new Date(dateToCheck)
+          return clientDate >= periodStart
+        })
       }
     }
 
@@ -480,44 +482,66 @@ const Admin_client_management = () => {
         return
       }
 
-      // Fetch all projects for this client
-      const response = await adminProjectService.getActiveProjects({ 
-        client: clientId,
-        limit: 1000 
-      })
-      
       let allProjects = []
-      
-      if (response.success && response.data) {
-        // Filter active projects by client ID (in case API doesn't filter properly)
-        const activeProjects = (response.data || []).filter(project => {
-          const projectClientId = typeof project.client === 'object' 
-            ? (project.client._id || project.client.id || project.client.userId)
-            : (project.client || project.clientId)
-          return String(projectClientId) === String(clientId)
-        })
-        allProjects = [...activeProjects]
-      }
-      
-      // Also fetch completed projects
+
       try {
-        const completedResponse = await adminProjectService.getCompletedProjects({ 
-          limit: 1000 
-        })
-        
-        if (completedResponse.success && completedResponse.data) {
-          // Filter completed projects by client ID
-          const clientCompletedProjects = (completedResponse.data || []).filter(project => {
+        // Use direct API call to fetch ALL projects for this client (no hasPM filter, all statuses)
+        const { apiRequest } = await import('../admin-services/baseApiService')
+        const queryParams = new URLSearchParams()
+        queryParams.append('client', clientId)
+        queryParams.append('limit', '1000')
+
+        const response = await apiRequest(`/admin/projects?${queryParams.toString()}`)
+
+        if (response && response.success && response.data) {
+          const projects = (response.data || []).filter(project => {
             const projectClientId = typeof project.client === 'object' 
               ? (project.client._id || project.client.id || project.client.userId)
               : (project.client || project.clientId)
             return String(projectClientId) === String(clientId)
           })
-          allProjects = [...allProjects, ...clientCompletedProjects]
+          allProjects = [...projects]
         }
-      } catch (completedError) {
-        console.error('Error fetching completed projects:', completedError)
-        // Continue with active projects only
+      } catch (directError) {
+        console.error('Error fetching client projects directly:', directError)
+        // Fallback to existing service methods (with hasPM filter) if direct API fails
+        try {
+          const response = await adminProjectService.getActiveProjects({ 
+            client: clientId,
+            limit: 1000 
+          })
+          
+          if (response.success && response.data) {
+            const activeProjects = (response.data || []).filter(project => {
+              const projectClientId = typeof project.client === 'object' 
+                ? (project.client._id || project.client.id || project.client.userId)
+                : (project.client || project.clientId)
+              return String(projectClientId) === String(clientId)
+            })
+            allProjects = [...activeProjects]
+          }
+
+          try {
+            const completedResponse = await adminProjectService.getCompletedProjects({ 
+              limit: 1000 
+            })
+            if (completedResponse.success && completedResponse.data) {
+              const completedProjects = (completedResponse.data || []).filter(project => {
+                const projectClientId = typeof project.client === 'object' 
+                  ? (project.client._id || project.client.id || project.client.userId)
+                  : (project.client || project.clientId)
+                return String(projectClientId) === String(clientId)
+              })
+              const existingIds = new Set(allProjects.map(p => String(p._id || p.id)))
+              const uniqueCompleted = completedProjects.filter(p => !existingIds.has(String(p._id || p.id)))
+              allProjects = [...allProjects, ...uniqueCompleted]
+            }
+          } catch (completedError) {
+            console.error('Error fetching completed projects in fallback:', completedError)
+          }
+        } catch (serviceError) {
+          console.error('Error fetching projects via adminProjectService:', serviceError)
+        }
       }
       
       setClientProjects(allProjects)
