@@ -207,7 +207,9 @@ class AdminUserService {
         position: user.position,
         salary: user.salary,
         skills: user.skills,
-        experience: user.experience
+        experience: user.experience,
+        isTeamLead: user.isTeamLead,
+        teamMembers: user.teamMembers
       }),
       ...(user.userType === 'sales' && {
         salesTarget: user.salesTarget,
@@ -329,6 +331,23 @@ class AdminUserService {
       { value: 'active', label: 'Active', icon: 'CheckCircle' },
       { value: 'inactive', label: 'Inactive', icon: 'AlertCircle' }
     ];
+  }
+
+  // Update developer team members assignment
+  async updateDeveloperTeamMembers(memberId, teamData) {
+    try {
+      const response = await apiRequest(`/admin/users/developers/${memberId}/team-members`, {
+        method: 'PUT',
+        body: JSON.stringify(teamData),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response;
+    } catch (error) {
+      console.error('Error updating developer team members:', error);
+      throw error;
+    }
   }
 }
 

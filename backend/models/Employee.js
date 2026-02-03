@@ -135,6 +135,15 @@ const employeeSchema = new mongoose.Schema({
     totalPointsEarned: { type: Number, default: 0 },
     totalPointsDeducted: { type: Number, default: 0 }
   },
+  // Team management fields (for developer team leads)
+  isTeamLead: {
+    type: Boolean,
+    default: false
+  },
+  teamMembers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Employee'
+  }],
   resetPasswordToken: {
     type: String,
     select: false

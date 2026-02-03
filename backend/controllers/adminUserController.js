@@ -632,11 +632,66 @@ const getUserStatistics = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Update developer team member team assignment
+// @route   PUT /api/admin/users/developers/:id/team-members
+// @access  Private (Admin/HR only)
+const updateDeveloperTeamMembers = asyncHandler(async (req, res, next) => {
+  const { teamMembers, isTeamLead } = req.body;
+
+  const member = await Employee.findById(req.params.id);
+
+  if (!member) {
+    return next(new ErrorResponse('Developer team member not found', 404));
+  }
+
+  // Ensure this is a developer team member
+  if (member.team !== 'developer') {
+    return next(new ErrorResponse('This endpoint is only for developer team members', 400));
+  }
+
+  // Update team members if provided
+  if (teamMembers !== undefined) {
+    // Validate team members are valid ObjectIds
+    if (Array.isArray(teamMembers)) {
+      const mongoose = require('mongoose');
+      const validTeamMembers = teamMembers.filter(id => {
+        try {
+          return mongoose.Types.ObjectId.isValid(id);
+        } catch {
+          return false;
+        }
+      });
+      member.teamMembers = validTeamMembers;
+    } else {
+      member.teamMembers = [];
+    }
+  }
+
+  // Update isTeamLead if provided
+  if (isTeamLead !== undefined) {
+    member.isTeamLead = Boolean(isTeamLead);
+  }
+
+  await member.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Team members updated successfully',
+    data: {
+      id: member._id,
+      name: member.name,
+      isTeamLead: member.isTeamLead,
+      teamMembers: member.teamMembers
+    }
+  });
+});
+
 module.exports = {
   getAllUsers,
   getUser,
   createUser,
   updateUser,
   deleteUser,
-  getUserStatistics
+  getUserStatistics,
+  updateDeveloperTeamMembers
 };

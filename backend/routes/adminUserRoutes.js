@@ -6,7 +6,8 @@ const {
   createUser,
   updateUser,
   deleteUser,
-  getUserStatistics
+  getUserStatistics,
+  updateDeveloperTeamMembers
 } = require('../controllers/adminUserController');
 const { protect, authorize } = require('../middlewares/auth');
 const upload = require('../middlewares/upload');
@@ -86,6 +87,12 @@ router.get('/recurring-expenses/:id', protect, authorize('admin', 'hr'), getRecu
 router.put('/recurring-expenses/:id', protect, authorize('admin', 'hr'), updateRecurringExpense);
 router.delete('/recurring-expenses/:id', protect, authorize('admin', 'hr'), deleteRecurringExpense);
 router.get('/recurring-expenses', protect, authorize('admin', 'hr'), getAllRecurringExpenses);
+
+// Developer Team Lead Management - Must come before generic routes
+// @route   PUT /api/admin/users/developers/:id/team-members
+// @desc    Update team members assignment for developer team lead
+// @access  Private (Admin/HR only)
+router.put('/developers/:id/team-members', protect, authorize('admin', 'hr'), updateDeveloperTeamMembers);
 
 // Generic user routes (must come after all specific routes)
 // @route   GET /api/admin/users

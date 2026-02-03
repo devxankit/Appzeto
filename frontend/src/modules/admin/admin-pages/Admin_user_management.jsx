@@ -53,8 +53,22 @@ const Admin_user_management = () => {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showDeleteTeamLeadModal, setShowDeleteTeamLeadModal] = useState(false)
+  const [selectedTeamLeadForDelete, setSelectedTeamLeadForDelete] = useState(null)
+  const [showAssignDevTeamModal, setShowAssignDevTeamModal] = useState(false)
+  const [showTeamMembersModal, setShowTeamMembersModal] = useState(false)
+  const [selectedTeamLeadForMembers, setSelectedTeamLeadForMembers] = useState(null)
   const [selectedUser, setSelectedUser] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [selectedDevTeamMembers, setSelectedDevTeamMembers] = useState([])
+  const [alreadyAssignedDevMembers, setAlreadyAssignedDevMembers] = useState([])
+  const [assigningDevMembers, setAssigningDevMembers] = useState(false)
+  const [deletingTeamLead, setDeletingTeamLead] = useState(false)
+  const [devLeadToggle, setDevLeadToggle] = useState(false)
+  const [developerTeam, setDeveloperTeam] = useState([])
+  const [showCreateDevLeadModal, setShowCreateDevLeadModal] = useState(false)
+  const [selectedDeveloperForLead, setSelectedDeveloperForLead] = useState(null)
+  const [devLeadCreationStep, setDevLeadCreationStep] = useState(1) // 1: Select developer, 2: Assign team
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -90,8 +104,27 @@ const Admin_user_management = () => {
   const [users, setUsers] = useState([])
   const { addToast } = useToast()
 
+  // Load developer team (employees with team='developer')
+  const loadDeveloperTeam = async () => {
+    try {
+      const response = await adminUserService.getAllUsers({
+        role: 'employee',
+        team: 'developer',
+        status: 'active',
+        limit: 10000
+      })
+      if (response.success) {
+        const formattedDevelopers = response.data.map(user => adminUserService.formatUserForDisplay(user))
+        setDeveloperTeam(formattedDevelopers)
+      }
+    } catch (error) {
+      console.error('Error loading developer team:', error)
+    }
+  }
+
   useEffect(() => {
     loadData()
+    loadDeveloperTeam()
   }, [])
 
   // Reload users when filters change (without full page reload)
@@ -206,6 +239,8 @@ const Admin_user_management = () => {
       switch (activeTab) {
         case 'employees':
           return user.userType === 'employee' || user.userType === 'sales'
+        case 'developer-team-leads':
+          return user.userType === 'employee' && user.team === 'developer' && user.isTeamLead === true
         case 'project-managers':
           return user.userType === 'project-manager'
         case 'clients':
@@ -436,12 +471,254 @@ const Admin_user_management = () => {
     }
   }
 
+  const handleRemoveTeamLead = (teamLead) => {
+    setSelectedTeamLeadForDelete(teamLead)
+    setShowDeleteTeamLeadModal(true)
+  }
+
+  const confirmRemoveTeamLead = async () => {
+    // Prevent multiple clicks
+    if (deletingTeamLead || !selectedTeamLeadForDelete) {
+      return
+    }
+
+    try {
+      setDeletingTeamLead(true)
+      const teamLeadId = selectedTeamLeadForDelete.id || selectedTeamLeadForDelete._id
+      const teamMembers = selectedTeamLeadForDelete.teamMembers || []
+      const teamMemberCount = Array.isArray(teamMembers) ? teamMembers.length : 0
+
+      // Remove team lead status and unassign all team members
+      await adminUserService.updateDeveloperTeamMembers(teamLeadId, {
+        teamMembers: [],
+        isTeamLead: false
+      })
+      
+      addToast({ 
+        type: 'success', 
+        message: `${selectedTeamLeadForDelete.name} has been removed as team lead. ${teamMemberCount} team member(s) have been unassigned.` 
+      })
+
+      // Close modal
+      setShowDeleteTeamLeadModal(false)
+      setSelectedTeamLeadForDelete(null)
+
+      // Reload data
+      await loadUsersOnly()
+      await loadDeveloperTeam()
+    } catch (error) {
+      console.error('Error removing team lead:', error)
+      addToast({ 
+        type: 'error', 
+        message: error.response?.data?.message || 'Failed to remove team lead status' 
+      })
+    } finally {
+      setDeletingTeamLead(false)
+    }
+  }
+
+  const handleAssignDevTeam = async (user) => {
+    setSelectedUser(user)
+    
+    // Ensure developer team is loaded before opening modal
+    if (developerTeam.length === 0) {
+      await loadDeveloperTeam()
+    }
+    
+    // Get currently assigned team members if any
+    const existingTeamMembers = user.teamMembers || []
+    const existingTeamMemberIds = existingTeamMembers.map(tm => {
+      return typeof tm === 'object' ? String(tm._id || tm.id) : String(tm)
+    })
+    setAlreadyAssignedDevMembers(existingTeamMemberIds)
+    setSelectedDevTeamMembers([])
+    setDevLeadToggle(user.isTeamLead || false)
+    
+    setShowAssignDevTeamModal(true)
+  }
+
+  // Get all developers already assigned to any team leads (excluding current team lead if editing)
+  const getAssignedToOtherLeads = (currentTeamLeadId = null) => {
+    const assignedIds = new Set()
+    users.forEach(user => {
+      if (user.userType === 'employee' && user.team === 'developer' && user.isTeamLead) {
+        const teamLeadId = String(user.id || user._id)
+        // If currentTeamLeadId is provided, exclude that team lead's members
+        if (!currentTeamLeadId || teamLeadId !== String(currentTeamLeadId)) {
+          const teamMembers = user.teamMembers || []
+          teamMembers.forEach(memberId => {
+            const id = typeof memberId === 'object' ? String(memberId._id || memberId.id) : String(memberId)
+            assignedIds.add(id)
+          })
+        }
+      }
+    })
+    return Array.from(assignedIds)
+  }
+
+  // Get all developers who are team leads
+  const getAllTeamLeadIds = () => {
+    const teamLeadIds = new Set()
+    users.forEach(user => {
+      if (user.userType === 'employee' && user.team === 'developer' && user.isTeamLead) {
+        const teamLeadId = String(user.id || user._id)
+        teamLeadIds.add(teamLeadId)
+      }
+    })
+    return Array.from(teamLeadIds)
+  }
+
+  const handleDevTeamMemberToggle = (memberId) => {
+    // Use selectedDeveloperForLead if creating new, otherwise use selectedUser
+    const userToUse = selectedDeveloperForLead || selectedUser
+    const currentTeamLeadId = userToUse?.id || userToUse?._id
+    
+    // Check if this member is already assigned to another team lead
+    const assignedToOtherLeads = getAssignedToOtherLeads(currentTeamLeadId)
+    const memberIdStr = String(memberId)
+    
+    if (assignedToOtherLeads.includes(memberIdStr)) {
+      const member = developerTeam.find(m => {
+        const mId = String(m.id || m._id)
+        return mId === memberIdStr
+      })
+      const memberName = member?.name || 'This developer'
+      addToast({ 
+        type: 'error', 
+        message: `${memberName} is already assigned to another team lead. Please remove them from that team lead first.` 
+      })
+      return
+    }
+    
+    setSelectedDevTeamMembers(prev => {
+      if (prev.includes(memberId)) {
+        return prev.filter(id => id !== memberId)
+      } else {
+        return [...prev, memberId]
+      }
+    })
+  }
+
+  const handleConfirmDevAssignment = async () => {
+    // Prevent multiple clicks
+    if (assigningDevMembers) {
+      return
+    }
+
+    // Use selectedDeveloperForLead if creating new, otherwise use selectedUser
+    const userToUse = selectedDeveloperForLead || selectedUser
+    
+    if (!userToUse) {
+      addToast({ type: 'error', message: 'Please select a developer to make a team lead' })
+      return
+    }
+    
+    try {
+      setAssigningDevMembers(true)
+      const userId = userToUse.id || userToUse._id
+      
+      if (!userId) {
+        addToast({ type: 'error', message: 'Team leader ID not found' })
+        return
+      }
+      
+      // Check if any selected members are already assigned to other team leads
+      const assignedToOtherLeads = getAssignedToOtherLeads(userId)
+      const conflictingMembers = selectedDevTeamMembers.filter(memberId => {
+        const memberIdStr = String(memberId)
+        return assignedToOtherLeads.includes(memberIdStr)
+      })
+      
+      if (conflictingMembers.length > 0) {
+        const conflictingNames = conflictingMembers.map(memberId => {
+          const member = developerTeam.find(m => {
+            const mId = String(m.id || m._id)
+            return mId === String(memberId)
+          })
+          return member?.name || 'Unknown'
+        }).join(', ')
+        
+        addToast({ 
+          type: 'error', 
+          message: `Cannot assign: ${conflictingNames} ${conflictingMembers.length > 1 ? 'are' : 'is'} already assigned to another team lead. Please remove them first.` 
+        })
+        setAssigningDevMembers(false)
+        return
+      }
+      
+      // Merge newly selected members with already assigned members
+      const allAssignedIds = [...new Set([
+        ...alreadyAssignedDevMembers.map(id => typeof id === 'object' ? String(id._id || id.id) : String(id)),
+        ...selectedDevTeamMembers.map(id => String(id))
+      ])]
+      
+      // Save to backend
+      const response = await adminUserService.updateDeveloperTeamMembers(userId, {
+        teamMembers: allAssignedIds,
+        isTeamLead: devLeadToggle
+      })
+      
+      if (response && response.success) {
+        const teamLeadStatus = devLeadToggle ? 'enabled' : 'disabled'
+        const membersCount = allAssignedIds.length
+        
+        if (selectedDeveloperForLead) {
+          addToast({ type: 'success', message: `Team lead created successfully! ${membersCount} team member(s) assigned` })
+        } else {
+          addToast({ type: 'success', message: `Team lead status: ${teamLeadStatus}, ${membersCount} team member(s) assigned` })
+        }
+      } else {
+        throw new Error(response?.message || 'Failed to update team members')
+      }
+      
+      // Close modals after confirmation
+      setShowAssignDevTeamModal(false)
+      setShowCreateDevLeadModal(false)
+      setSelectedUser(null)
+      setSelectedDeveloperForLead(null)
+      setSelectedDevTeamMembers([])
+      setAlreadyAssignedDevMembers([])
+      setDevLeadToggle(false)
+      setDevLeadCreationStep(1)
+      
+      // Reload users to reflect changes
+      await loadUsersOnly()
+      await loadDeveloperTeam()
+      
+    } catch (error) {
+      console.error('Error assigning team member:', error)
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to assign team member'
+      addToast({ type: 'error', message: errorMessage })
+    } finally {
+      setAssigningDevMembers(false)
+    }
+  }
+
+  const handleSelectDeveloperForLead = (developer) => {
+    setSelectedDeveloperForLead(developer)
+    setAlreadyAssignedDevMembers([])
+    setSelectedDevTeamMembers([])
+    setDevLeadToggle(true) // Auto-enable team lead toggle when creating new
+    setDevLeadCreationStep(2) // Move to step 2: assign team
+  }
+
   const closeModals = () => {
     setShowCreateModal(false)
     setShowEditModal(false)
     setShowViewModal(false)
     setShowDeleteModal(false)
+    setShowDeleteTeamLeadModal(false)
+    setSelectedTeamLeadForDelete(null)
+    setShowAssignDevTeamModal(false)
+    setShowCreateDevLeadModal(false)
+    setShowTeamMembersModal(false)
+    setSelectedTeamLeadForMembers(null)
     setSelectedUser(null)
+    setSelectedDeveloperForLead(null)
+    setSelectedDevTeamMembers([])
+    setAlreadyAssignedDevMembers([])
+    setDevLeadToggle(false)
+    setDevLeadCreationStep(1)
     setFormData({
       name: '',
       email: '',
@@ -470,9 +747,17 @@ const Admin_user_management = () => {
     setCurrentPage(1)
   }, [activeTab, selectedFilter, selectedDepartment, searchTerm])
 
+  // Get developer team leads count
+  const developerTeamLeadsCount = users.filter(user => 
+    user.userType === 'employee' && 
+    user.team === 'developer' && 
+    user.isTeamLead === true
+  ).length
+
   const tabs = [
     { key: 'project-managers', label: 'Project Managers', icon: Shield, count: statistics.projectManagers || 0 },
     { key: 'employees', label: 'Employees', icon: Code, count: statistics.employees || 0 },
+    { key: 'developer-team-leads', label: 'Dev Leads', icon: Users, count: developerTeamLeadsCount },
     { key: 'clients', label: 'Clients', icon: Home, count: statistics.clients || 0 },
     { key: 'admin-hr', label: 'Admin & HR', icon: User, count: (statistics.admins || 0) + (statistics.hr || 0) },
     { key: 'accountant', label: 'Accountant', icon: Calculator, count: statistics.accountant || 0 },
@@ -853,7 +1138,7 @@ const Admin_user_management = () => {
             <CardContent className="p-0">
               {/* Tabs */}
               <div className="border-b border-gray-200">
-                <nav className="flex space-x-8 px-6">
+                <nav className="flex space-x-6 px-6 overflow-x-auto">
                   {tabs.map((tab) => {
                     const Icon = tab.icon
                     const isActive = activeTab === tab.key
@@ -862,15 +1147,15 @@ const Admin_user_management = () => {
                       <button
                         key={tab.key}
                         onClick={() => setActiveTab(tab.key)}
-                        className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                        className={`flex items-center space-x-1.5 py-3 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
                           isActive
                             ? 'border-blue-500 text-blue-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                         }`}
                       >
-                        <Icon className="h-4 w-4" />
-                        <span>{tab.label}</span>
-                        <span className={`px-2 py-1 text-xs rounded-full ${
+                        <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="text-xs">{tab.label}</span>
+                        <span className={`px-1.5 py-0.5 text-xs rounded-full min-w-[20px] text-center ${
                           isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
                         }`}>
                           {tab.count}
@@ -892,7 +1177,371 @@ const Admin_user_management = () => {
                   </div>
                 ) : (
                   <>
-                    {getCurrentUsers().length === 0 ? (
+                    {/* Developer Team Leads Section */}
+                    {activeTab === 'developer-team-leads' ? (
+                      <>
+                        {/* Header Actions */}
+                        <div className="flex items-center justify-end space-x-3 mb-4">
+                          <Button
+                            onClick={async () => {
+                              if (usersLoading) return
+                              setUsersLoading(true)
+                              try {
+                                await Promise.all([
+                                  loadUsersOnly(),
+                                  loadDeveloperTeam()
+                                ])
+                              } finally {
+                                setUsersLoading(false)
+                              }
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            disabled={usersLoading || assigningDevMembers || deletingTeamLead}
+                          >
+                            <RefreshCw className={`h-4 w-4 ${usersLoading ? 'animate-spin' : ''}`} />
+                            {usersLoading ? 'Refreshing...' : 'Refresh'}
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              if (assigningDevMembers || deletingTeamLead) return
+                              setSelectedDeveloperForLead(null)
+                              setDevLeadCreationStep(1)
+                              setDevLeadToggle(false)
+                              setSelectedDevTeamMembers([])
+                              setAlreadyAssignedDevMembers([])
+                              setShowCreateDevLeadModal(true)
+                              if (developerTeam.length === 0) {
+                                loadDeveloperTeam()
+                              }
+                            }}
+                            disabled={assigningDevMembers || deletingTeamLead}
+                            className="gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <UserPlus className="h-4 w-4" />
+                            Create Team Lead
+                          </Button>
+                        </div>
+
+                        {getCurrentUsers().length === 0 ? (
+                          <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                            <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                            <h3 className="text-lg font-medium text-gray-900 mb-2">No Developer Team Leads</h3>
+                            <p className="text-gray-600 mb-4">No developers have been assigned as team leads yet.</p>
+                            <Button
+                              onClick={() => {
+                                if (assigningDevMembers || deletingTeamLead) return
+                                setSelectedDeveloperForLead(null)
+                                setDevLeadCreationStep(1)
+                                setDevLeadToggle(false)
+                                setSelectedDevTeamMembers([])
+                                setAlreadyAssignedDevMembers([])
+                                setShowCreateDevLeadModal(true)
+                                if (developerTeam.length === 0) {
+                                  loadDeveloperTeam()
+                                }
+                              }}
+                              disabled={assigningDevMembers || deletingTeamLead}
+                              className="gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <UserPlus className="h-4 w-4" />
+                              Create Your First Team Lead
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Table Layout */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full min-w-[1000px] border-collapse text-xs">
+                                <thead>
+                                  <tr className="border-b border-gray-200 bg-gray-50">
+                                    <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[180px]">Name</th>
+                                    <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[180px]">Email</th>
+                                    <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px] hidden md:table-cell">Department</th>
+                                    <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px] hidden md:table-cell">Phone</th>
+                                    <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Team Members</th>
+                                    <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Status</th>
+                                    <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[110px] hidden lg:table-cell">Joining Date</th>
+                                    <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px]">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {getPaginatedUsers().map((teamLead, index) => {
+                                    const teamLeadId = teamLead.id || teamLead._id
+                                    const teamMembers = teamLead.teamMembers || []
+                                    const teamMemberCount = Array.isArray(teamMembers) ? teamMembers.length : 0
+                                    const teamMemberNames = teamMembers.slice(0, 3).map(memberId => {
+                                      const member = developerTeam.find(m => {
+                                        const mId = m.id || m._id
+                                        const compareId = typeof memberId === 'object' ? (memberId._id || memberId.id) : memberId
+                                        return mId && compareId && String(mId) === String(compareId)
+                                      })
+                                      return member?.name
+                                    }).filter(Boolean)
+                                    
+                                    return (
+                                      <tr key={teamLeadId} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                        <td className="py-2 px-2">
+                                          <div className="flex items-center space-x-2">
+                                            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
+                                              {teamLead.avatar}
+                                            </div>
+                                            <div className="min-w-0">
+                                              <p className="text-xs font-semibold text-gray-900 truncate">{teamLead.name}</p>
+                                              <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800 mt-0.5">
+                                                Team Lead
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </td>
+                                        <td className="py-2 px-2">
+                                          <div className="text-xs text-gray-600 truncate max-w-[180px]">
+                                            {teamLead.email}
+                                          </div>
+                                        </td>
+                                        <td className="py-2 px-2 hidden md:table-cell">
+                                          {teamLead.department ? (
+                                            <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-800">
+                                              {teamLead.department}
+                                            </span>
+                                          ) : (
+                                            <span className="text-xs text-gray-400">N/A</span>
+                                          )}
+                                        </td>
+                                        <td className="py-2 px-2 hidden md:table-cell">
+                                          <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                            <Phone className="h-3 w-3 flex-shrink-0 text-gray-400" />
+                                            <span className="truncate max-w-[100px]">{teamLead.phone || 'N/A'}</span>
+                                          </div>
+                                        </td>
+                                        <td className="py-2 px-2">
+                                          <button
+                                            onClick={() => {
+                                              setSelectedTeamLeadForMembers(teamLead)
+                                              setShowTeamMembersModal(true)
+                                            }}
+                                            className="flex items-center space-x-2 hover:text-indigo-600 transition-colors group"
+                                          >
+                                            <Users className="h-3.5 w-3.5 text-indigo-600 flex-shrink-0 group-hover:text-indigo-700" />
+                                            <span className="text-xs font-semibold text-indigo-600 group-hover:text-indigo-700 underline cursor-pointer">
+                                              {teamMemberCount}
+                                            </span>
+                                          </button>
+                                        </td>
+                                        <td className="py-2 px-2">
+                                          <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(teamLead.status)}`}>
+                                            {teamLead.status === 'active' ? 'Active' : 'Inactive'}
+                                          </span>
+                                        </td>
+                                        <td className="py-2 px-2 hidden lg:table-cell">
+                                          <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                            <Calendar className="h-3 w-3 flex-shrink-0 text-gray-400" />
+                                            <span className="truncate">{formatDate(teamLead.joiningDate)}</span>
+                                          </div>
+                                        </td>
+                                        <td className="py-2 px-2">
+                                          <div className="flex items-center justify-end space-x-1">
+                                            <button
+                                              onClick={() => handleViewUser(teamLead)}
+                                              disabled={assigningDevMembers || deletingTeamLead}
+                                              className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                              title="View"
+                                            >
+                                              <Eye className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                if (!assigningDevMembers && !deletingTeamLead) {
+                                                  handleAssignDevTeam(teamLead)
+                                                }
+                                              }}
+                                              disabled={assigningDevMembers || deletingTeamLead}
+                                              className="text-gray-400 hover:text-purple-600 p-1 rounded hover:bg-purple-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                              title="Manage Team"
+                                            >
+                                              <Users className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                if (!assigningDevMembers && !deletingTeamLead) {
+                                                  handleRemoveTeamLead(teamLead)
+                                                }
+                                              }}
+                                              disabled={assigningDevMembers || deletingTeamLead}
+                                              className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                              title="Remove as Team Lead"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                              <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-200">
+                                {/* Results Info */}
+                                <div className="text-sm text-gray-600">
+                                  Showing <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold">{Math.min(currentPage * itemsPerPage, getCurrentUsers().length)}</span> of <span className="font-semibold">{getCurrentUsers().length}</span> team leads
+                                </div>
+
+                                {/* Items Per Page Selector */}
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-sm text-gray-600">Show:</span>
+                                  <select
+                                    value={itemsPerPage}
+                                    onChange={(e) => {
+                                      setItemsPerPage(Number(e.target.value))
+                                      setCurrentPage(1)
+                                    }}
+                                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  >
+                                    <option value={10}>10</option>
+                                    <option value={20}>20</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                  </select>
+                                  <span className="text-sm text-gray-500">per page</span>
+                                </div>
+
+                                {/* Pagination Controls */}
+                                <div className="flex items-center space-x-2">
+                                  {/* First Page */}
+                                  <button
+                                    onClick={() => setCurrentPage(1)}
+                                    disabled={currentPage === 1}
+                                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="First page"
+                                  >
+                                    <span className="text-sm font-medium">««</span>
+                                  </button>
+                                  {/* Previous Page */}
+                                  <button
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Previous page"
+                                  >
+                                    <span className="text-sm font-medium">‹</span>
+                                  </button>
+                                  {/* Page Numbers */}
+                                  {(() => {
+                                    const pages = []
+                                    const maxVisiblePages = 5
+                                    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
+                                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+
+                                    if (endPage - startPage < maxVisiblePages - 1) {
+                                      startPage = Math.max(1, endPage - maxVisiblePages + 1)
+                                    }
+
+                                    // First page
+                                    if (startPage > 1) {
+                                      pages.push(
+                                        <button
+                                          key={1}
+                                          onClick={() => setCurrentPage(1)}
+                                          className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+                                        >
+                                          1
+                                        </button>
+                                      )
+                                      if (startPage > 2) {
+                                        pages.push(
+                                          <span key="ellipsis1" className="px-2 text-gray-500">...</span>
+                                        )
+                                      }
+                                    }
+
+                                    // Visible page numbers
+                                    for (let i = startPage; i <= endPage; i++) {
+                                      pages.push(
+                                        <button
+                                          key={i}
+                                          onClick={() => setCurrentPage(i)}
+                                          className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+                                            currentPage === i
+                                              ? 'bg-blue-600 text-white border-blue-600'
+                                              : 'border-gray-300 hover:bg-gray-50'
+                                          }`}
+                                        >
+                                          {i}
+                                        </button>
+                                      )
+                                    }
+
+                                    // Last page
+                                    if (endPage < totalPages) {
+                                      if (endPage < totalPages - 1) {
+                                        pages.push(
+                                          <span key="ellipsis2" className="px-2 text-gray-500">...</span>
+                                        )
+                                      }
+                                      pages.push(
+                                        <button
+                                          key={totalPages}
+                                          onClick={() => setCurrentPage(totalPages)}
+                                          className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+                                        >
+                                          {totalPages}
+                                        </button>
+                                      )
+                                    }
+
+                                    return pages
+                                  })()}
+                                  {/* Next Page */}
+                                  <button
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Next page"
+                                  >
+                                    <span className="text-sm font-medium">›</span>
+                                  </button>
+                                  {/* Last Page */}
+                                  <button
+                                    onClick={() => setCurrentPage(totalPages)}
+                                    disabled={currentPage === totalPages}
+                                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Last page"
+                                  >
+                                    <span className="text-sm font-medium">»»</span>
+                                  </button>
+                                </div>
+
+                                {/* Jump to Page */}
+                                {totalPages > 10 && (
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-sm text-gray-600">Go to page:</span>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={totalPages}
+                                      value={currentPage}
+                                      onChange={(e) => {
+                                        const page = parseInt(e.target.value)
+                                        if (page >= 1 && page <= totalPages) {
+                                          setCurrentPage(page)
+                                        }
+                                      }}
+                                      className="w-16 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                    <span className="text-sm text-gray-600">of {totalPages}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </>
+                    ) : getCurrentUsers().length === 0 ? (
                       <div className="text-center py-12">
                         <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                         <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
@@ -911,7 +1560,7 @@ const Admin_user_management = () => {
                                 )}
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px] hidden md:table-cell">Phone</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Role</th>
-                                {activeTab !== 'clients' && activeTab !== 'admin-hr' && activeTab !== 'project-managers' && activeTab !== 'accountant' && activeTab !== 'pem' && (
+                                {activeTab !== 'clients' && activeTab !== 'admin-hr' && activeTab !== 'project-managers' && activeTab !== 'accountant' && activeTab !== 'pem' && activeTab !== 'developer-team-leads' && (
                                   <>
                                     <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px] hidden md:table-cell">Team</th>
                                     <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[120px] hidden lg:table-cell">Department</th>
@@ -960,7 +1609,7 @@ const Admin_user_management = () => {
                                          user.role === 'employee' ? 'Emp' : 'Client'}
                                       </span>
                                     </td>
-                                    {activeTab !== 'clients' && activeTab !== 'admin-hr' && activeTab !== 'project-managers' && activeTab !== 'accountant' && activeTab !== 'pem' && (
+                                    {activeTab !== 'clients' && activeTab !== 'admin-hr' && activeTab !== 'project-managers' && activeTab !== 'accountant' && activeTab !== 'pem' && activeTab !== 'developer-team-leads' && (
                                       <>
                                         <td className="py-2 px-2 hidden md:table-cell">
                                           {user.team ? (
@@ -1726,6 +2375,122 @@ const Admin_user_management = () => {
           </motion.div>
         )}
 
+        {/* Delete Team Lead Confirmation Modal */}
+        {showDeleteTeamLeadModal && selectedTeamLeadForDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowDeleteTeamLeadModal(false)
+              setSelectedTeamLeadForDelete(null)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-xl max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header with gradient background */}
+              <div className="bg-gradient-to-r from-orange-500 to-red-600 p-6 text-white rounded-t-2xl">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                    <Users className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Remove Team Lead</h3>
+                    <p className="text-orange-100 text-sm">Remove team lead status and unassign team members</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6">
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center space-x-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                    <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                      {selectedTeamLeadForDelete.avatar}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{selectedTeamLeadForDelete.name}</p>
+                      <p className="text-sm text-gray-600">{selectedTeamLeadForDelete.email}</p>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const teamMembers = selectedTeamLeadForDelete.teamMembers || []
+                    const teamMemberCount = Array.isArray(teamMembers) ? teamMembers.length : 0
+                    
+                    return (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start space-x-3">
+                      <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-blue-800 mb-1">Remove Team Lead Status</p>
+                        <p className="text-sm text-blue-700">
+                          Are you sure you want to remove <strong>{selectedTeamLeadForDelete.name}</strong> as a team lead?
+                          {teamMemberCount > 0 && (
+                            <span className="block mt-1">
+                              This will automatically unassign <strong>{teamMemberCount} team member{teamMemberCount > 1 ? 's' : ''}</strong> from this team lead.
+                            </span>
+                          )}
+                          <span className="block mt-2 text-xs">
+                            Note: The user will remain in the system but will no longer be a team lead.
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                    )
+                  })()}
+                </motion.div>
+
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="flex flex-col sm:flex-row gap-3 pt-6"
+                >
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!deletingTeamLead) {
+                        setShowDeleteTeamLeadModal(false)
+                        setSelectedTeamLeadForDelete(null)
+                      }
+                    }}
+                    disabled={deletingTeamLead}
+                    className="flex-1 h-12 rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={confirmRemoveTeamLead}
+                    disabled={deletingTeamLead}
+                    className="flex-1 h-12 rounded-xl bg-gradient-to-r from-orange-600 to-red-600 text-white hover:shadow-lg transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  >
+                    {deletingTeamLead ? (
+                      <span className="flex items-center justify-center">
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Removing...
+                      </span>
+                    ) : (
+                      'Remove as Team Lead'
+                    )}
+                  </Button>
+                </motion.div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
         {/* Delete Confirmation Modal */}
         {showDeleteModal && selectedUser && (
           <motion.div
@@ -1805,6 +2570,768 @@ const Admin_user_management = () => {
                     Delete User
                   </Button>
                 </motion.div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Create Developer Team Lead Modal */}
+        {showCreateDevLeadModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowCreateDevLeadModal(false)
+              setSelectedDeveloperForLead(null)
+              setSelectedDevTeamMembers([])
+              setAlreadyAssignedDevMembers([])
+              setDevLeadToggle(false)
+              setDevLeadCreationStep(1)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold">
+                      Create Developer Team Lead
+                    </h3>
+                    <p className="text-indigo-100 text-sm mt-1">
+                      {devLeadCreationStep === 1 
+                        ? 'Step 1: Select a developer to make team lead'
+                        : 'Step 2: Assign team members'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowCreateDevLeadModal(false)
+                      setSelectedDeveloperForLead(null)
+                      setSelectedDevTeamMembers([])
+                      setAlreadyAssignedDevMembers([])
+                      setDevLeadToggle(false)
+                      setDevLeadCreationStep(1)
+                    }}
+                    className="text-white hover:text-gray-200 transition-colors"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 max-h-[60vh] overflow-y-auto">
+                {devLeadCreationStep === 1 ? (
+                  /* Step 1: Select Developer */
+                  <div>
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Developer
+                      </label>
+                      <p className="text-xs text-gray-500 mb-3">
+                        Choose a developer to make a team lead. Team leads and developers assigned to any team lead cannot be selected.
+                      </p>
+                    </div>
+                    <div className="border border-gray-300 rounded-lg max-h-96 overflow-y-auto">
+                      {developerTeam.length > 0 ? (
+                        <div className="divide-y divide-gray-200">
+                          {developerTeam
+                            .filter((member) => {
+                              const memberId = String(member.id || member._id)
+                              const isTeamLead = member.isTeamLead === true
+                              // Get all team lead IDs and assigned members
+                              const teamLeadIds = getAllTeamLeadIds()
+                              const assignedToLeads = getAssignedToOtherLeads()
+                              // Exclude if: is team lead OR assigned to any team lead
+                              const isAssignedToAnyLead = assignedToLeads.includes(memberId)
+                              return !isTeamLead && !isAssignedToAnyLead
+                            })
+                            .map((member) => {
+                              const memberId = member.id || member._id
+                              const isSelected = selectedDeveloperForLead && (selectedDeveloperForLead.id || selectedDeveloperForLead._id) === memberId
+                              const memberIdStr = String(memberId)
+                              const assignedToLeads = getAssignedToOtherLeads()
+                              const isAssignedToAnyLead = assignedToLeads.includes(memberIdStr)
+                              const isTeamLead = member.isTeamLead === true
+                              
+                              return (
+                                <div
+                                  key={memberId}
+                                  className={`p-4 transition-colors ${
+                                    isAssignedToAnyLead || isTeamLead
+                                      ? 'opacity-50 cursor-not-allowed bg-gray-100'
+                                      : isSelected 
+                                        ? 'bg-indigo-50 border-l-4 border-indigo-500 cursor-pointer hover:bg-indigo-100' 
+                                        : 'cursor-pointer hover:bg-gray-50'
+                                  }`}
+                                  onClick={() => {
+                                    if (!isAssignedToAnyLead && !isTeamLead) {
+                                      handleSelectDeveloperForLead(member)
+                                    } else {
+                                      const reason = isTeamLead ? 'already a team lead' : 'assigned to another team lead'
+                                      addToast({ 
+                                        type: 'error', 
+                                        message: `${member?.name || 'This developer'} is ${reason}. Please remove them first.` 
+                                      })
+                                    }
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                                        isSelected ? 'bg-indigo-600' : isAssignedToAnyLead || isTeamLead ? 'bg-gray-300' : 'bg-gray-400'
+                                      }`}>
+                                        {member?.avatar || member?.name?.charAt(0) || 'D'}
+                                      </div>
+                                      <div>
+                                        <p className={`text-sm font-semibold ${isAssignedToAnyLead || isTeamLead ? 'text-gray-500' : 'text-gray-900'}`}>
+                                          {member?.name || 'Unknown Developer'}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {member?.department || member?.email || 'Developer'}
+                                        </p>
+                                        {(isAssignedToAnyLead || isTeamLead) && (
+                                          <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800 mt-1">
+                                            {isTeamLead ? 'Team Lead' : 'Assigned to team'}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                      isSelected 
+                                        ? 'bg-indigo-600 border-indigo-600' 
+                                        : 'border-gray-300'
+                                    }`}>
+                                      {isSelected && (
+                                        <CheckCircle className="h-4 w-4 text-white" />
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center text-gray-500 text-sm">
+                          No developers available
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : devLeadCreationStep === 2 && selectedDeveloperForLead ? (
+                  /* Step 2: Assign Team Members */
+                  <div>
+                    <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                          {selectedDeveloperForLead?.avatar || selectedDeveloperForLead?.name?.charAt(0) || 'TL'}
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-purple-900">Selected Team Lead</p>
+                          <p className="text-xs text-purple-700">{selectedDeveloperForLead?.name}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Developer Lead Toggle Section */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Developer Team Lead
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setDevLeadToggle(!devLeadToggle)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                            devLeadToggle ? 'bg-indigo-600' : 'bg-gray-300'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              devLeadToggle ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Team Members Dropdown - Only show when Developer Lead toggle is ON */}
+                    {devLeadToggle && (
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Assign Team Members
+                          </label>
+                          <span className="text-xs text-gray-500 italic">
+                            Team leads excluded
+                          </span>
+                        </div>
+                    <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-800 flex items-center space-x-1">
+                        <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                        <span>Team leads and developers assigned to any team lead cannot be selected. Remove them from their current team first.</span>
+                      </p>
+                    </div>
+                        <div className="border border-gray-300 rounded-lg max-h-64 overflow-y-auto">
+                          {developerTeam.length > 0 ? (
+                            <div className="divide-y divide-gray-200">
+                              {developerTeam
+                                .filter((member) => {
+                                  const memberId = member.id || member._id
+                                  const selectedUserId = selectedDeveloperForLead?.id || selectedDeveloperForLead?._id
+                                  const isTeamLead = member.isTeamLead === true
+                                  // Check if member is assigned to another team lead
+                                  const assignedToOtherLeads = getAssignedToOtherLeads(selectedUserId)
+                                  const isAssignedToOtherLead = assignedToOtherLeads.includes(String(memberId))
+                                  return String(memberId) !== String(selectedUserId) && !isTeamLead && !isAssignedToOtherLead
+                                })
+                                .map((member) => {
+                                  const memberId = member.id || member._id
+                                  const isSelected = selectedDevTeamMembers.includes(memberId)
+                                  // Check if assigned to another team lead
+                                  const selectedUserId = selectedDeveloperForLead?.id || selectedDeveloperForLead?._id
+                                  const assignedToOtherLeads = getAssignedToOtherLeads(selectedUserId)
+                                  const isAssignedToOtherLead = assignedToOtherLeads.includes(String(memberId))
+                                  
+                                  return (
+                                    <div
+                                      key={memberId}
+                                      className={`p-3 transition-colors ${
+                                        isAssignedToOtherLead 
+                                          ? 'opacity-50 cursor-not-allowed bg-gray-100' 
+                                          : isSelected 
+                                            ? 'bg-indigo-50 border-l-4 border-indigo-500 cursor-pointer hover:bg-indigo-100' 
+                                            : 'cursor-pointer hover:bg-gray-50'
+                                      }`}
+                                      onClick={() => !isAssignedToOtherLead && handleDevTeamMemberToggle(memberId)}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-3">
+                                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                                            isSelected ? 'bg-indigo-600' : isAssignedToOtherLead ? 'bg-gray-300' : 'bg-gray-400'
+                                          }`}>
+                                            {member?.avatar || member?.name?.charAt(0) || 'D'}
+                                          </div>
+                                          <div>
+                                            <p className={`text-sm font-semibold ${isAssignedToOtherLead ? 'text-gray-500' : 'text-gray-900'}`}>
+                                              {member?.name || 'Unknown Member'}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                              {member?.department || member?.email || 'Developer'}
+                                            </p>
+                                            {isAssignedToOtherLead && (
+                                              <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800 mt-1">
+                                                Assigned to another lead
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                          isSelected 
+                                            ? 'bg-indigo-600 border-indigo-600' 
+                                            : 'border-gray-300'
+                                        }`}>
+                                          {isSelected && (
+                                            <CheckCircle className="h-4 w-4 text-white" />
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                            </div>
+                          ) : (
+                            <div className="p-4 text-center text-gray-500 text-sm">
+                              No team members available
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-50 px-6 py-4 flex justify-between space-x-3 border-t border-gray-200">
+                {devLeadCreationStep === 2 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setDevLeadCreationStep(1)
+                      setSelectedDevTeamMembers([])
+                    }}
+                    disabled={assigningDevMembers}
+                    className="px-4 py-2"
+                  >
+                    Back
+                  </Button>
+                )}
+                <div className="flex space-x-3 ml-auto">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!assigningDevMembers && !deletingTeamLead) {
+                        setShowCreateDevLeadModal(false)
+                        setSelectedDeveloperForLead(null)
+                        setSelectedDevTeamMembers([])
+                        setAlreadyAssignedDevMembers([])
+                        setDevLeadToggle(false)
+                        setDevLeadCreationStep(1)
+                      }
+                    }}
+                    disabled={assigningDevMembers || deletingTeamLead}
+                    className="px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </Button>
+                  {devLeadCreationStep === 1 ? (
+                    <Button
+                      onClick={() => {
+                        if (assigningDevMembers || deletingTeamLead) return
+                        if (selectedDeveloperForLead) {
+                          setDevLeadCreationStep(2)
+                        } else {
+                          addToast({ type: 'error', message: 'Please select a developer first' })
+                        }
+                      }}
+                      disabled={!selectedDeveloperForLead || assigningDevMembers || deletingTeamLead}
+                      className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleConfirmDevAssignment}
+                      disabled={assigningDevMembers || deletingTeamLead || !devLeadToggle}
+                      className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {assigningDevMembers ? (
+                        <span className="flex items-center">
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Creating...
+                        </span>
+                      ) : (
+                        'Create Team Lead'
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* View Team Members Modal */}
+        {showTeamMembersModal && selectedTeamLeadForMembers && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowTeamMembersModal(false)
+              setSelectedTeamLeadForMembers(null)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold">Team Members</h3>
+                    <p className="text-indigo-100 text-sm mt-1">
+                      {selectedTeamLeadForMembers.name}'s team
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowTeamMembersModal(false)
+                      setSelectedTeamLeadForMembers(null)
+                    }}
+                    className="text-white hover:text-gray-200 transition-colors"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 max-h-[60vh] overflow-y-auto">
+                {(() => {
+                  const teamMembers = selectedTeamLeadForMembers.teamMembers || []
+                  const teamMemberCount = Array.isArray(teamMembers) ? teamMembers.length : 0
+                  
+                  if (teamMemberCount === 0) {
+                    return (
+                      <div className="text-center py-12">
+                        <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Team Members</h3>
+                        <p className="text-gray-600">This team lead doesn't have any team members assigned yet.</p>
+                        <Button
+                          onClick={() => {
+                            if (!assigningDevMembers && !deletingTeamLead) {
+                              setShowTeamMembersModal(false)
+                              handleAssignDevTeam(selectedTeamLeadForMembers)
+                            }
+                          }}
+                          disabled={assigningDevMembers || deletingTeamLead}
+                          className="mt-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Users className="h-4 w-4 mr-2" />
+                          Assign Team Members
+                        </Button>
+                      </div>
+                    )
+                  }
+
+                  const teamMemberList = teamMembers.map(memberId => {
+                    const member = developerTeam.find(m => {
+                      const mId = m.id || m._id
+                      const compareId = typeof memberId === 'object' ? (memberId._id || memberId.id) : memberId
+                      return mId && compareId && String(mId) === String(compareId)
+                    })
+                    return member
+                  }).filter(Boolean)
+
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                        <div className="flex items-center space-x-2">
+                          <Users className="h-5 w-5 text-indigo-600" />
+                          <span className="text-sm font-semibold text-indigo-900">Total Team Members</span>
+                        </div>
+                        <span className="text-lg font-bold text-indigo-600">{teamMemberCount}</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {teamMemberList.map((member, index) => {
+                          const memberId = member.id || member._id
+                          return (
+                            <div
+                              key={memberId || index}
+                              className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                            >
+                              <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
+                                {member.avatar || member.name?.charAt(0) || 'M'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-900 truncate">{member.name}</p>
+                                <p className="text-xs text-gray-600 truncate">{member.email}</p>
+                                {member.department && (
+                                  <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-800 mt-1">
+                                    {member.department}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                {member.phone && (
+                                  <div className="flex items-center space-x-1 text-xs text-gray-500">
+                                    <Phone className="h-3 w-3" />
+                                    <span>{member.phone}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-200">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!assigningDevMembers && !deletingTeamLead) {
+                      setShowTeamMembersModal(false)
+                      setSelectedTeamLeadForMembers(null)
+                    }
+                  }}
+                  disabled={assigningDevMembers || deletingTeamLead}
+                  className="px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Close
+                </Button>
+                {selectedTeamLeadForMembers && (selectedTeamLeadForMembers.teamMembers || []).length > 0 && (
+                  <Button
+                    onClick={() => {
+                      if (!assigningDevMembers && !deletingTeamLead) {
+                        setShowTeamMembersModal(false)
+                        handleAssignDevTeam(selectedTeamLeadForMembers)
+                      }
+                    }}
+                    disabled={assigningDevMembers || deletingTeamLead}
+                    className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    Manage Team
+                  </Button>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Assign Developer Team Modal */}
+        {showAssignDevTeamModal && selectedUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowAssignDevTeamModal(false)
+              setSelectedUser(null)
+              setSelectedDevTeamMembers([])
+              setAlreadyAssignedDevMembers([])
+              setDevLeadToggle(false)
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold">
+                      Manage Developer Team Lead
+                    </h3>
+                    <p className="text-indigo-100 text-sm mt-1">
+                      Update team lead and assigned members
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowAssignDevTeamModal(false)
+                      setSelectedUser(null)
+                      setSelectedDevTeamMembers([])
+                      setAlreadyAssignedDevMembers([])
+                      setDevLeadToggle(false)
+                    }}
+                    className="text-white hover:text-gray-200 transition-colors"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 max-h-[60vh] overflow-y-auto">
+                {/* Developer Lead Toggle Section */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Developer Team Lead
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setDevLeadToggle(!devLeadToggle)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                        devLeadToggle ? 'bg-indigo-600' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          devLeadToggle ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Team Members Dropdown - Only show when Developer Lead toggle is ON */}
+                {devLeadToggle && (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Assign Team Members
+                      </label>
+                      <span className="text-xs text-gray-500 italic">
+                        Team leads excluded
+                      </span>
+                    </div>
+                    <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-800 flex items-center space-x-1">
+                        <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                        <span>Team leads cannot be added as team members.</span>
+                      </p>
+                    </div>
+                    <div className="border border-gray-300 rounded-lg max-h-64 overflow-y-auto">
+                      {developerTeam.length > 0 ? (
+                        <div className="divide-y divide-gray-200">
+                          {developerTeam
+                            .filter((member) => {
+                              const memberId = member.id || member._id
+                              const selectedUserId = selectedUser?.id || selectedUser?._id
+                              const isTeamLead = member.isTeamLead === true
+                              const isAlreadyAssigned = alreadyAssignedDevMembers.some(assignedId => {
+                                const assignedIdStr = typeof assignedId === 'object' ? String(assignedId._id || assignedId.id) : String(assignedId)
+                                return String(memberId) === assignedIdStr
+                              })
+                              // Check if member is assigned to another team lead
+                              const assignedToOtherLeads = getAssignedToOtherLeads(selectedUserId)
+                              const isAssignedToOtherLead = assignedToOtherLeads.includes(String(memberId))
+                              return String(memberId) !== String(selectedUserId) && !isAlreadyAssigned && !isTeamLead && !isAssignedToOtherLead
+                            })
+                            .map((member) => {
+                              const memberId = member.id || member._id
+                              const isSelected = selectedDevTeamMembers.includes(memberId)
+                              // Check if assigned to another team lead
+                              const selectedUserId = selectedUser?.id || selectedUser?._id
+                              const assignedToOtherLeads = getAssignedToOtherLeads(selectedUserId)
+                              const isAssignedToOtherLead = assignedToOtherLeads.includes(String(memberId))
+                              
+                              return (
+                                <div
+                                  key={memberId}
+                                  className={`p-3 transition-colors ${
+                                    isAssignedToOtherLead 
+                                      ? 'opacity-50 cursor-not-allowed bg-gray-100' 
+                                      : isSelected 
+                                        ? 'bg-indigo-50 border-l-4 border-indigo-500 cursor-pointer hover:bg-indigo-100' 
+                                        : 'cursor-pointer hover:bg-gray-50'
+                                  }`}
+                                  onClick={() => !isAssignedToOtherLead && handleDevTeamMemberToggle(memberId)}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                                        isSelected ? 'bg-indigo-600' : isAssignedToOtherLead ? 'bg-gray-300' : 'bg-gray-400'
+                                      }`}>
+                                        {member?.avatar || member?.name?.charAt(0) || 'D'}
+                                      </div>
+                                      <div>
+                                        <p className={`text-sm font-semibold ${isAssignedToOtherLead ? 'text-gray-500' : 'text-gray-900'}`}>
+                                          {member?.name || 'Unknown Member'}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {member?.department || member?.email || 'Developer'}
+                                        </p>
+                                        {isAssignedToOtherLead && (
+                                          <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800 mt-1">
+                                            Assigned to another lead
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                      isSelected 
+                                        ? 'bg-indigo-600 border-indigo-600' 
+                                        : 'border-gray-300'
+                                    }`}>
+                                      {isSelected && (
+                                        <CheckCircle className="h-4 w-4 text-white" />
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center text-gray-500 text-sm">
+                          No team members available
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Already Assigned Members Display */}
+                {alreadyAssignedDevMembers.length > 0 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Already Assigned
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {alreadyAssignedDevMembers.map((memberId, index) => {
+                        const member = developerTeam.find(m => {
+                          const mId = m.id || m._id
+                          const compareId = typeof memberId === 'object' ? (memberId._id || memberId.id) : memberId
+                          return mId && compareId && String(mId) === String(compareId)
+                        })
+                        const memberName = member?.name || (typeof memberId === 'object' ? memberId.name : null) || `Member ${index + 1}`
+                        const actualMemberId = typeof memberId === 'object' ? (memberId._id || memberId.id) : memberId
+                        return (
+                          <div
+                            key={actualMemberId}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-800 rounded-full text-sm font-medium"
+                          >
+                            <span>{memberName}</span>
+                            <button
+                              onClick={() => {
+                                setAlreadyAssignedDevMembers(prev => prev.filter(id => {
+                                  const idStr = typeof id === 'object' ? String(id._id || id.id) : String(id)
+                                  return idStr !== String(actualMemberId)
+                                }))
+                              }}
+                              className="text-green-700 hover:text-green-900"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-200">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!assigningDevMembers && !deletingTeamLead) {
+                      setShowAssignDevTeamModal(false)
+                      setSelectedUser(null)
+                      setSelectedDevTeamMembers([])
+                      setAlreadyAssignedDevMembers([])
+                      setDevLeadToggle(false)
+                    }
+                  }}
+                  disabled={assigningDevMembers || deletingTeamLead}
+                  className="px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirmDevAssignment}
+                  disabled={assigningDevMembers || deletingTeamLead}
+                  className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {assigningDevMembers ? (
+                    <span className="flex items-center">
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </span>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </Button>
               </div>
             </motion.div>
           </motion.div>
