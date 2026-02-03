@@ -1,4 +1,5 @@
 import { apiRequest, tokenUtils, clientStorage } from './clientBaseApiService';
+import { registerFCMToken } from '../../../services/pushNotificationService';
 
 export const clientAuthService = {
   // Send OTP to phone number
@@ -26,6 +27,20 @@ export const clientAuthService = {
         tokenUtils.set(response.token);
         clientStorage.set(response.data);
       }
+
+      // Register FCM token after successful login
+      // Wait a bit to ensure token is saved in localStorage
+      if (response.success || response.data) {
+        setTimeout(async () => {
+          try {
+            await registerFCMToken(true); // forceUpdate = true
+          } catch (error) {
+            console.error('Failed to register FCM token:', error);
+            // Don't fail login if FCM registration fails
+          }
+        }, 500); // Wait 500ms to ensure token is saved
+      }
+
       return response;
     } catch (error) {
       throw error;

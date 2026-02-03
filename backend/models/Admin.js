@@ -74,6 +74,15 @@ const adminSchema = new mongoose.Schema({
   resetPasswordExpire: {
     type: Date,
     select: false
+  },
+  // FCM Tokens for push notifications
+  fcmTokens: {
+    type: [String],
+    default: []
+  },
+  fcmTokenMobile: {
+    type: [String],
+    default: []
   }
 }, {
   timestamps: true

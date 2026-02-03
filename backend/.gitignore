@@ -56,3 +56,7 @@ public/uploads/
 storage/
 tmp/
 temp/
+
+# Firebase Service Account (sensitive)
+config/firebase-service-account.json
+*.firebase-service-account.json

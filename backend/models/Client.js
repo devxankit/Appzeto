@@ -163,8 +163,17 @@ const clientSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Sales',
       required: true
-    }
-  }]
+      }
+    }],
+  // FCM Tokens for push notifications
+  fcmTokens: {
+    type: [String],
+    default: []
+  },
+  fcmTokenMobile: {
+    type: [String],
+    default: []
+  }
 }, {
   timestamps: true
 });

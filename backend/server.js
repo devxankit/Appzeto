@@ -61,6 +61,7 @@ const clientNotificationRoutes = require('./routes/clientNotificationRoutes');
 const clientExploreRoutes = require('./routes/clientExploreRoutes');
 const requestRoutes = require('./routes/requestRoutes');
 const cpRoutes = require('./routes/cpRoutes');
+const fcmTokenRoutes = require('./routes/fcmTokenRoutes');
 
 // Import socket service
 const socketService = require('./services/socketService');
@@ -237,6 +238,7 @@ app.use('/cp', cpRoutes);
 
 // Universal API routes with /api prefix (available to all authenticated users)
 app.use('/api/requests', requestRoutes);
+app.use('/api/fcm-tokens', fcmTokenRoutes);
 
 // PM Module API routes (PM-only) with /api prefix
 app.use('/api/projects', projectRoutes);
@@ -247,6 +249,7 @@ app.use('/api/analytics', analyticsRoutes);
 
 // Universal API routes without /api prefix (for reverse proxy compatibility)
 app.use('/requests', requestRoutes);
+app.use('/fcm-tokens', fcmTokenRoutes);
 
 // PM Module API routes without /api prefix (for reverse proxy compatibility)
 app.use('/projects', projectRoutes);

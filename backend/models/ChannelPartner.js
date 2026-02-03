@@ -136,6 +136,15 @@ const channelPartnerSchema = new mongoose.Schema({
   teamLeadAssignedDate: {
     type: Date,
     default: null
+  },
+  // FCM Tokens for push notifications
+  fcmTokens: {
+    type: [String],
+    default: []
+  },
+  fcmTokenMobile: {
+    type: [String],
+    default: []
   }
 }, {
   timestamps: true

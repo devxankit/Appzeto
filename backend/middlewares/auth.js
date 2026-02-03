@@ -36,7 +36,7 @@ const protect = async (req, res, next) => {
     try {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      
+
       // Try to find admin first
       let admin = await Admin.findById(decoded.id);
       if (admin && admin.isActive) {
@@ -391,7 +391,6 @@ const optionalAuth = async (req, res, next) => {
         }
       } catch (error) {
         // Token is invalid, but we don't fail the request
-        console.log('Optional auth - invalid token:', error.message);
       }
     }
 

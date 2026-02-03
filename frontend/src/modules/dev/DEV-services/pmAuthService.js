@@ -1,4 +1,5 @@
 import { apiRequest, tokenUtils, pmStorage } from './baseApiService';
+import { registerFCMToken } from '../../../services/pushNotificationService';
 
 // PM Authentication Service - Only for login/logout functionality
 export const pmAuthService = {
@@ -13,6 +14,19 @@ export const pmAuthService = {
       // Store token in localStorage
       if (response.data && response.data.token) {
         tokenUtils.set(response.data.token);
+      }
+
+      // Register FCM token after successful login
+      // Wait a bit to ensure token is saved in localStorage
+      if (response.success) {
+        setTimeout(async () => {
+          try {
+            await registerFCMToken(true); // forceUpdate = true
+          } catch (error) {
+            console.error('Failed to register FCM token:', error);
+            // Don't fail login if FCM registration fails
+          }
+        }, 500); // Wait 500ms to ensure token is saved
       }
 
       return response;

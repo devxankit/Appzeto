@@ -10,6 +10,8 @@ import EmployeeProtectedRoute from './components/ui/EmployeeProtectedRoute'
 import ClientProtectedRoute from './components/ui/ClientProtectedRoute'
 import CPProtectedRoute from './components/ui/CPProtectedRoute'
 import { ToastProvider } from './contexts/ToastContext'
+import { initializePushNotifications, setupForegroundNotificationHandler } from './services/pushNotificationService'
+import { useEffect } from 'react'
 
 //SL pages start here //
 import SL_login from './modules/sells/SL-pages/SL_login'
@@ -138,6 +140,19 @@ import ResetPassword from './components/auth/ResetPassword'
 import { AdminSidebarProvider } from './modules/admin/admin-contexts/AdminSidebarContext'
 
 function App() {
+  useEffect(() => {
+    // Initialize push notifications on app load
+    initializePushNotifications();
+    
+    // Setup foreground notification handler
+    setupForegroundNotificationHandler((payload) => {
+      if (payload.data?.link) {
+        // Navigate to link
+        window.location.href = payload.data.link;
+      }
+    });
+  }, []);
+
   return (
     <ErrorBoundary>
       <ToastProvider>

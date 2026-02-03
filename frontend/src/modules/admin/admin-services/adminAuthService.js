@@ -1,4 +1,5 @@
 import { apiRequest, tokenUtils, adminStorage } from './baseApiService';
+import { registerFCMToken } from '../../../services/pushNotificationService';
 
 // Admin Authentication Service - Only for login/logout functionality
 export const adminAuthService = {
@@ -10,9 +11,50 @@ export const adminAuthService = {
         body: JSON.stringify({ email, password })
       });
 
+      console.log('📦 Login response:', {
+        success: response.success,
+        hasData: !!response.data,
+        hasToken: !!(response.data && response.data.token),
+        responseKeys: Object.keys(response)
+      });
+
       // Store token in localStorage
-      if (response.data && response.data.token) {
-        tokenUtils.set(response.data.token);
+      // Check multiple possible response structures
+      const token = (response.data && response.data.token) || response.token || (response.data && response.data.admin && response.data.admin.token);
+      if (token) {
+        tokenUtils.set(token);
+        console.log('✅ Auth token stored in localStorage as adminToken');
+        console.log('✅ Token preview:', token.substring(0, 30) + '...');
+        
+        // Verify token was saved
+        const savedToken = localStorage.getItem('adminToken');
+        if (savedToken === token) {
+          console.log('✅ Token verified in localStorage');
+        } else {
+          console.error('❌ Token mismatch! Saved:', savedToken?.substring(0, 30), 'Expected:', token.substring(0, 30));
+        }
+      } else {
+        console.warn('⚠️  No token found in login response:', response);
+      }
+
+      // Register FCM token after successful login
+      // Wait a bit to ensure token is saved in localStorage and backend session is established
+      if (response.success && token) {
+        setTimeout(async () => {
+          try {
+            console.log('🔄 Registering FCM token after login...');
+            // Double-check token is available
+            const checkToken = localStorage.getItem('adminToken');
+            if (!checkToken) {
+              console.error('❌ Token not found when trying to register FCM token!');
+              return;
+            }
+            await registerFCMToken(true); // forceUpdate = true
+          } catch (error) {
+            console.error('Failed to register FCM token:', error);
+            // Don't fail login if FCM registration fails
+          }
+        }, 1000); // Wait 1 second to ensure token is saved and session is established
       }
 
       return response;
