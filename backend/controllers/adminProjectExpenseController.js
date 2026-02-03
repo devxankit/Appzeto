@@ -2,6 +2,9 @@ const Project = require('../models/Project');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 
+// Note: The 'vendor' field in project expenses stores the client name, not a vendor/provider name.
+// This field is auto-populated from the project's client information if not provided.
+
 // @desc    Get all project expenses across all projects
 // @route   GET /api/admin/project-expenses
 // @access  Admin only
@@ -34,9 +37,12 @@ const getAllProjectExpenses = asyncHandler(async (req, res, next) => {
   }
   if (search) {
     expenseFilter.$or = [
-      { 'expenses.name': { $regex: search, $options: 'i' } },
+      { 'expenses.category': { $regex: search, $options: 'i' } },
       { 'expenses.description': { $regex: search, $options: 'i' } },
-      { 'expenses.vendor': { $regex: search, $options: 'i' } }
+      { 'expenses.vendor': { $regex: search, $options: 'i' } }, // vendor field stores client name
+      { 'name': { $regex: search, $options: 'i' } }, // Search by project name
+      { 'client.name': { $regex: search, $options: 'i' } },
+      { 'client.companyName': { $regex: search, $options: 'i' } }
     ];
   }
 
@@ -72,16 +78,26 @@ const getAllProjectExpenses = asyncHandler(async (req, res, next) => {
           
           if (search) {
             const searchLower = search.toLowerCase();
+            const projectClientName = project.client 
+              ? (typeof project.client === 'object' 
+                  ? (project.client.companyName || project.client.name || '').toLowerCase()
+                  : '')
+              : '';
+            const projectName = (project.name || '').toLowerCase();
             const matchesSearch = 
-              expense.name?.toLowerCase().includes(searchLower) ||
+              expense.category?.toLowerCase().includes(searchLower) ||
               expense.description?.toLowerCase().includes(searchLower) ||
-              expense.vendor?.toLowerCase().includes(searchLower);
+              expense.vendor?.toLowerCase().includes(searchLower) || // vendor field stores client name
+              projectName.includes(searchLower) ||
+              projectClientName.includes(searchLower);
             if (!matchesSearch) {
               includeExpense = false;
             }
           }
           
           if (includeExpense) {
+            // Ensure project name is included
+            const projectName = project.name || project._id?.toString() || 'Unknown Project';
             allExpenses.push({
               _id: expense._id,
               name: expense.name,
@@ -97,10 +113,11 @@ const getAllProjectExpenses = asyncHandler(async (req, res, next) => {
               updatedAt: expense.updatedAt,
               project: {
                 _id: project._id,
-                name: project.name,
+                name: projectName,
                 client: project.client,
                 projectManager: project.projectManager
-              }
+              },
+              projectName: projectName // Also include as direct field for easier access
             });
           }
         });
@@ -186,10 +203,18 @@ const getProjectExpenses = asyncHandler(async (req, res, next) => {
   
   if (search) {
     const searchLower = search.toLowerCase();
+    const clientName = project.client 
+      ? (typeof project.client === 'object' 
+          ? (project.client.companyName || project.client.name || '').toLowerCase()
+          : '')
+      : '';
+    const projectName = (project.name || '').toLowerCase();
     expenses = expenses.filter(e => 
-      e.name?.toLowerCase().includes(searchLower) ||
+      e.category?.toLowerCase().includes(searchLower) ||
       e.description?.toLowerCase().includes(searchLower) ||
-      e.vendor?.toLowerCase().includes(searchLower)
+      e.vendor?.toLowerCase().includes(searchLower) || // vendor field stores client name
+      projectName.includes(searchLower) ||
+      clientName.includes(searchLower)
     );
   }
 
@@ -243,14 +268,15 @@ const createProjectExpense = asyncHandler(async (req, res, next) => {
   } = req.body;
 
   // Validate required fields
-  if (!projectId || !name || !category || !amount || !expenseDate) {
-    return next(new ErrorResponse('Project ID, name, category, amount, and expense date are required', 400));
+  if (!projectId || !category || !amount || !expenseDate) {
+    return next(new ErrorResponse('Project ID, category, amount, and expense date are required', 400));
   }
 
-  // Validate category
-  const validCategories = ['domain', 'server', 'api', 'hosting', 'ssl', 'other'];
-  if (!validCategories.includes(category)) {
-    return next(new ErrorResponse(`Invalid category. Must be one of: ${validCategories.join(', ')}`, 400));
+  // Validate category exists (check against ProjectExpenseCategory model)
+  // Category validation is now optional - any category name can be used
+  // But we can optionally check if it exists in the category list
+  if (!category || !category.trim()) {
+    return next(new ErrorResponse('Category is required', 400));
   }
 
   // Validate payment method
@@ -260,18 +286,32 @@ const createProjectExpense = asyncHandler(async (req, res, next) => {
   }
 
   try {
-    const project = await Project.findById(projectId);
+    const project = await Project.findById(projectId)
+      .populate('client', 'name companyName');
     
     if (!project) {
       return next(new ErrorResponse('Project not found', 404));
     }
 
+    // Auto-populate vendor (client name) if not provided
+    let clientName = vendor ? vendor.trim() : '';
+    if (!clientName && project.client) {
+      // Use companyName if available, otherwise use name
+      if (typeof project.client === 'object') {
+        clientName = project.client.companyName || project.client.name || '';
+      }
+    }
+
+    // Auto-generate name from category if not provided
+    // Use category name with "Expense" suffix, capitalizing first letter
+    const expenseName = name ? name.trim() : (category ? `${category.charAt(0).toUpperCase() + category.slice(1)} Expense` : 'Project Expense');
+
     // Create expense object
     const newExpense = {
-      name: name.trim(),
+      name: expenseName,
       category,
       amount: parseFloat(amount),
-      vendor: vendor ? vendor.trim() : '',
+      vendor: clientName, // vendor field stores client name
       paymentMethod: paymentMethod || 'Bank Transfer',
       expenseDate: new Date(expenseDate),
       description: description ? description.trim() : '',
@@ -350,16 +390,30 @@ const updateProjectExpense = asyncHandler(async (req, res, next) => {
     }
 
     // Update fields
-    if (name !== undefined) expense.name = name.trim();
+    if (name !== undefined) {
+      expense.name = name.trim();
+    } else if (category !== undefined) {
+      // Auto-generate name from category if category changed but name not provided
+    // Use category name with "Expense" suffix
+    expense.name = category ? `${category.charAt(0).toUpperCase() + category.slice(1)} Expense` : 'Project Expense';
+    }
     if (category !== undefined) {
-      const validCategories = ['domain', 'server', 'api', 'hosting', 'ssl', 'other'];
-      if (!validCategories.includes(category)) {
-        return next(new ErrorResponse(`Invalid category. Must be one of: ${validCategories.join(', ')}`, 400));
+      if (!category || !category.trim()) {
+        return next(new ErrorResponse('Category is required', 400));
       }
-      expense.category = category;
+      expense.category = category.trim();
     }
     if (amount !== undefined) expense.amount = parseFloat(amount);
-    if (vendor !== undefined) expense.vendor = vendor.trim();
+    if (vendor !== undefined) {
+      // Auto-populate vendor (client name) if not provided
+      let clientName = vendor.trim();
+      if (!clientName && project.client) {
+        if (typeof project.client === 'object') {
+          clientName = project.client.companyName || project.client.name || '';
+        }
+      }
+      expense.vendor = clientName; // vendor field stores client name
+    }
     if (paymentMethod !== undefined) {
       const validPaymentMethods = ['Bank Transfer', 'UPI', 'Credit Card', 'Debit Card', 'Cash', 'Cheque', 'Other'];
       if (!validPaymentMethods.includes(paymentMethod)) {
@@ -458,13 +512,19 @@ const getProjectExpenseStats = asyncHandler(async (req, res, next) => {
     // Get all projects with expenses
     const projects = await Project.find(dateFilter).select('expenses');
 
-    // Calculate total
-    let totalAmount = 0;
-    let expenseCount = 0;
+    // Calculate totals
+    let totalExpenses = 0;
+    let totalProjects = new Set();
+    let monthlyExpenses = 0;
+    let todayExpenses = 0;
     const categoryBreakdown = {};
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     projects.forEach(project => {
       if (project.expenses && project.expenses.length > 0) {
+        let projectHasExpenses = false;
         project.expenses.forEach(expense => {
           // Apply date filter if provided
           if (startDate && new Date(expense.expenseDate) < new Date(startDate)) {
@@ -474,21 +534,40 @@ const getProjectExpenseStats = asyncHandler(async (req, res, next) => {
             return;
           }
 
-          totalAmount += expense.amount || 0;
-          expenseCount++;
+          const expenseDate = new Date(expense.expenseDate);
+          const expenseAmount = expense.amount || 0;
+
+          totalExpenses += expenseAmount;
+          projectHasExpenses = true;
+          
+          // Monthly expenses (current month)
+          if (expenseDate >= startOfMonth) {
+            monthlyExpenses += expenseAmount;
+          }
+          
+          // Today's expenses
+          if (expenseDate >= startOfToday) {
+            todayExpenses += expenseAmount;
+          }
           
           // Category breakdown
           const cat = expense.category || 'other';
-          categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + (expense.amount || 0);
+          categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + expenseAmount;
         });
+        
+        if (projectHasExpenses) {
+          totalProjects.add(project._id.toString());
+        }
       }
     });
 
     res.status(200).json({
       success: true,
       data: {
-        totalAmount,
-        expenseCount,
+        totalExpenses,
+        totalProjects: totalProjects.size,
+        monthlyExpenses,
+        todayExpenses,
         categoryBreakdown
       }
     });

@@ -14,7 +14,8 @@ import {
   FileText,
   Handshake,
   Activity,
-  Home
+  Home,
+  Receipt
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { adminStorage } from '../admin-services/baseApiService'
@@ -109,6 +110,12 @@ const Admin_sidebar = ({ isOpen, onClose }) => {
       icon: IndianRupee
     },
     {
+      id: 'project-expenses-management',
+      label: 'Project Expenses',
+      path: '/admin-project-expenses-management',
+      icon: Receipt
+    },
+    {
       id: 'reward-management',
       label: 'Reward Management',
       path: '/admin-reward-management',
@@ -149,10 +156,10 @@ const Admin_sidebar = ({ isOpen, onClose }) => {
       return menuItems.filter(item => item.id === 'finance-management')
     }
     
-    // PEM - for now show all (will be configured later)
-    // if (role === 'pem') {
-    //   return menuItems.filter(item => ...)
-    // }
+    // PEM can only see Project Expenses Management
+    if (role === 'pem') {
+      return menuItems.filter(item => item.id === 'project-expenses-management')
+    }
     
     // Admin and other roles see all items
     return menuItems

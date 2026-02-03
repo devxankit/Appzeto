@@ -3,6 +3,7 @@ import ErrorBoundary from './components/ui/error-boundary'
 import NotFound from './components/ui/not-found'
 import ProtectedRoute from './components/ui/ProtectedRoute'
 import HRProtectedRoute from './components/ui/HRProtectedRoute'
+import PEMProtectedRoute from './components/ui/PEMProtectedRoute'
 import PMProtectedRoute from './components/ui/PMProtectedRoute'
 import SalesProtectedRoute from './components/ui/SalesProtectedRoute'
 import EmployeeProtectedRoute from './components/ui/EmployeeProtectedRoute'
@@ -132,6 +133,7 @@ import Admin_channel_partner_management from './modules/admin/admin-pages/Admin_
 import Admin_client_management from './modules/admin/admin-pages/Admin_client_management'
 import Admin_notice_board from './modules/admin/admin-pages/Admin_notice_board'
 import Admin_recent_activities from './modules/admin/admin-pages/Admin_recent_activities'
+import Admin_project_expenses_management from './modules/admin/admin-pages/Admin_project_expenses_management'
 import ResetPassword from './components/auth/ResetPassword'
 import { AdminSidebarProvider } from './modules/admin/admin-contexts/AdminSidebarContext'
 
@@ -617,6 +619,11 @@ function App() {
               <ProtectedRoute>
                 <Admin_finance_management />
               </ProtectedRoute>
+            } />
+            <Route path="/admin-project-expenses-management" element={
+              <PEMProtectedRoute>
+                <Admin_project_expenses_management />
+              </PEMProtectedRoute>
             } />
             <Route path="/admin-leaderboard" element={
               <ProtectedRoute>

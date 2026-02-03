@@ -234,15 +234,17 @@ const projectSchema = new mongoose.Schema({
   expenses: [{
     name: {
       type: String,
-      required: [true, 'Expense name is required'],
+      required: false, // Name is auto-generated from category if not provided
       trim: true,
-      maxlength: [200, 'Expense name cannot exceed 200 characters']
+      maxlength: [200, 'Expense name cannot exceed 200 characters'],
+      default: ''
     },
     category: {
       type: String,
       required: [true, 'Expense category is required'],
-      enum: ['domain', 'server', 'api', 'hosting', 'ssl', 'other'],
-      trim: true
+      trim: true,
+      // Category is now managed dynamically through ProjectExpenseCategory model
+      // No enum restriction - any category name can be used
     },
     amount: {
       type: Number,
@@ -252,8 +254,9 @@ const projectSchema = new mongoose.Schema({
     vendor: {
       type: String,
       trim: true,
-      maxlength: [200, 'Vendor name cannot exceed 200 characters'],
-      default: ''
+      maxlength: [200, 'Client name cannot exceed 200 characters'],
+      default: '',
+      // Note: This field stores the client name (not vendor/provider name)
     },
     paymentMethod: {
       type: String,

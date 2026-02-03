@@ -33,7 +33,13 @@ const ProtectedRoute = ({ children, requiredRole = 'admin' }) => {
       }
     }
     
-    // PEM - for now can access everything (will be configured later)
+    // PEM can only access Project Expenses Management
+    if (role === 'pem') {
+      if (currentPath !== '/admin-project-expenses-management') {
+        return <Navigate to="/admin-project-expenses-management" replace />
+      }
+    }
+    
     // Admin users can access everything, so no restriction needed
   }
   
