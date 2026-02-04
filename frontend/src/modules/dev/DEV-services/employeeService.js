@@ -271,6 +271,16 @@ const employeeService = {
     } catch (error) {
       throw new Error(`Failed to fetch points history: ${error.message}`);
     }
+  },
+
+  // My Team (for team leads only)
+  async getMyTeam() {
+    try {
+      const response = await apiRequest('/employee/my-team');
+      return response;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 

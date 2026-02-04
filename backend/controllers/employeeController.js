@@ -158,6 +158,8 @@ const getEmployeeProfile = async (req, res) => {
           projectsAssigned: employee.projectsAssigned,
           tasksAssigned: employee.tasksAssigned,
           manager: employee.manager,
+          isTeamLead: employee.isTeamLead || false,
+          teamMembers: employee.teamMembers || [],
           createdAt: employee.createdAt
         }
       }
@@ -516,6 +518,65 @@ const resetPassword = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get my team (for developer team leads only)
+// @route   GET /api/employee/my-team
+// @access  Private (Employee - Team Lead only)
+const getMyTeam = async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.employee.id)
+      .select('name email position department isTeamLead teamMembers')
+      .populate('teamMembers', 'name email phone position department experience skills');
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    if (!employee.isTeamLead) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only team leads can access this endpoint'
+      });
+    }
+
+    const teamMembers = (employee.teamMembers || []).map((m) => ({
+      id: m._id,
+      name: m.name,
+      email: m.email,
+      phone: m.phone,
+      position: m.position,
+      department: m.department,
+      experience: m.experience,
+      skills: m.skills || []
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        teamLead: {
+          id: employee._id,
+          name: employee.name,
+          email: employee.email,
+          position: employee.position,
+          department: employee.department
+        },
+        teamMembers,
+        teamStats: {
+          totalMembers: teamMembers.length
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get my team error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching team'
+    });
+  }
+};
+
 module.exports = {
   loginEmployee,
   getEmployeeProfile,
@@ -524,5 +585,6 @@ module.exports = {
   getWalletSummary,
   getWalletTransactions,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  getMyTeam
 };

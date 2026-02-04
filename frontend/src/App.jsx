@@ -85,6 +85,7 @@ import PM_notice_board from './modules/dev/DEV-pages/PM-pages/PM_notice_board'
 import Employee_notification from './modules/dev/DEV-pages/Employee-pages/Employee_notification'
 import Employee_wallet from './modules/dev/DEV-pages/Employee-pages/Employee_wallet'
 import Employee_notice_board from './modules/dev/DEV-pages/Employee-pages/Employee_notice_board'
+import Employee_my_team from './modules/dev/DEV-pages/Employee-pages/Employee_my_team'
 
 //Client pages start here //
 import Client_dashboard from './modules/dev/DEV-pages/Client-pages/Client_dashboard'
@@ -467,6 +468,11 @@ function App() {
             <Route path="/employee-wallet" element={
               <EmployeeProtectedRoute>
                 <Employee_wallet />
+              </EmployeeProtectedRoute>
+            } />
+            <Route path="/employee-my-team" element={
+              <EmployeeProtectedRoute>
+                <Employee_my_team />
               </EmployeeProtectedRoute>
             } />
 

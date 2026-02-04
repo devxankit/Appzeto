@@ -7,6 +7,7 @@ import {
   FiCheckSquare,
   FiTrendingUp,
   FiUser,
+  FiUsers,
   FiLogOut,
   FiX,
   FiCreditCard
@@ -29,6 +30,7 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
     email: 'employee@appzeto.com',
     avatar: 'EM'
   })
+  const [isTeamLead, setIsTeamLead] = useState(false)
   const [walletSummary, setWalletSummary] = useState({
     monthlySalary: 0,
     monthlyRewards: 0,
@@ -83,6 +85,7 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
             email: normalizedStored.email,
             avatar: normalizedStored.avatar
           })
+          setIsTeamLead(Boolean(storedProfile?.isTeamLead))
         }
 
         const [profileResponse, walletResponse] = await Promise.allSettled([
@@ -107,6 +110,7 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
               email: normalizedApiProfile.email,
               avatar: normalizedApiProfile.avatar
             })
+            setIsTeamLead(Boolean(rawProfile?.isTeamLead))
             const dataToStore = normalizedApiProfile.raw || rawProfile || {
               name: normalizedApiProfile.name,
               email: normalizedApiProfile.email
@@ -143,13 +147,15 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
     }
   }, [isOpen])
 
-  const navItems = [
+  const baseNavItems = [
     { path: '/employee-dashboard', label: 'Home', icon: FiHome },
     { path: '/employee-projects', label: 'Projects', icon: FiFolder },
     { path: '/employee-tasks', label: 'Tasks', icon: FiCheckSquare },
+    ...(isTeamLead ? [{ path: '/employee-my-team', label: 'My Team', icon: FiUsers }] : []),
     { path: '/employee-leaderboard', label: 'Leaderboard', icon: FiTrendingUp },
     { path: '/employee-profile', label: 'Profile', icon: FiUser }
   ]
+  const navItems = baseNavItems
 
   const handleLogout = async () => {
     try {

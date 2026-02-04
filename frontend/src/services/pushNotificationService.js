@@ -47,7 +47,7 @@ async function getFCMToken() {
       throw new Error('Firebase messaging is not initialized');
     }
 
-    const registration = await registerServiceWorker();
+    const registration = await getOrRegisterServiceWorker();
     await registration.update(); // Update service worker
     
     if (!VAPID_KEY) {

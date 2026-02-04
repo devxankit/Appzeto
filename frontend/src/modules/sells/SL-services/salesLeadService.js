@@ -413,12 +413,11 @@ export const getLeadActivities = (lead) => {
   return activities;
 };
 
-// Get channel partner shared leads
+// Get channel partner leads (type: 'received' = from CP, 'shared' = shared by me with CP)
 export const getChannelPartnerLeads = async (params = {}) => {
   try {
     const queryParams = new URLSearchParams();
-    
-    // Add parameters if they exist
+    if (params.type) queryParams.append('type', params.type);
     if (params.category) queryParams.append('category', params.category);
     if (params.priority) queryParams.append('priority', params.priority);
     if (params.search) queryParams.append('search', params.search);
@@ -427,22 +426,36 @@ export const getChannelPartnerLeads = async (params = {}) => {
     if (params.limit) queryParams.append('limit', params.limit);
 
     const url = `/sales/channel-partner-leads${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    
-    const response = await apiRequest(url, {
-      method: 'GET'
-    });
-    
+    const response = await apiRequest(url, { method: 'GET' });
     return response;
   } catch (error) {
     console.error('Error fetching channel partner leads:', error);
-    // Return empty response if API fails
-    return {
-      data: [],
-      count: 0,
-      total: 0,
-      page: 1,
-      pages: 0
-    };
+    return { data: [], count: 0, total: 0, page: 1, pages: 0 };
+  }
+};
+
+// Get channel partners assigned to this sales (for sharing leads)
+export const getAssignedChannelPartners = async () => {
+  try {
+    const response = await apiRequest('/sales/assigned-channel-partners', { method: 'GET' });
+    return response.success ? (response.data || []) : [];
+  } catch (error) {
+    console.error('Error fetching assigned channel partners:', error);
+    return [];
+  }
+};
+
+// Share a sales lead with a channel partner
+export const shareLeadWithCP = async (leadId, cpId) => {
+  try {
+    const response = await apiRequest(`/sales/leads/${leadId}/share-with-cp`, {
+      method: 'POST',
+      body: JSON.stringify({ cpId })
+    });
+    return response;
+  } catch (error) {
+    console.error('Error sharing lead with CP:', error);
+    throw error;
   }
 };
 
@@ -520,6 +533,8 @@ const salesLeadService = {
   getMyLeads,
   getLeadsByStatus,
   getChannelPartnerLeads,
+  getAssignedChannelPartners,
+  shareLeadWithCP,
   getLeadDetail,
   updateLeadStatus,
   createLeadProfile,

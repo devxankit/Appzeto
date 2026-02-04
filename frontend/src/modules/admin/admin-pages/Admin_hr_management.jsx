@@ -1587,8 +1587,8 @@ const Admin_hr_management = () => {
       return
     }
 
-    // Allow creation of Employee, Project Manager, PEM, Accountant, HR
-    if (!['employee', 'project-manager', 'pem', 'accountant', 'hr'].includes(formData.role)) {
+    // Allow creation/update of Employee, Sales, Project Manager, PEM, Accountant, HR
+    if (!['employee', 'sales', 'project-manager', 'pem', 'accountant', 'hr'].includes(formData.role)) {
       addToast({ type: 'error', message: 'Please select a valid role' })
       return
     }
@@ -2605,10 +2605,11 @@ const Admin_hr_management = () => {
     { key: 'expenses', label: 'Recurring Expenses', icon: Receipt }
   ]
 
-  // Combobox options for HR: employees, PMs, PEM, accountant, HR
+  // Combobox options for HR: employees, sales, PMs, PEM, accountant, HR (all must match list/API for edit mode to retain role)
   const roleOptions = [
     { value: 'project-manager', label: 'Project Manager', icon: Shield },
     { value: 'employee', label: 'Employee', icon: Code },
+    { value: 'sales', label: 'Sales', icon: TrendingUp },
     { value: 'pem', label: 'PEM', icon: ClipboardList },
     { value: 'accountant', label: 'Accountant', icon: Calculator },
     { value: 'hr', label: 'HR', icon: UserCheck }

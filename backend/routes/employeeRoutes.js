@@ -7,7 +7,8 @@ const {
   getWalletSummary,
   getWalletTransactions,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  getMyTeam
 } = require('../controllers/employeeController');
 const {
   getPublishedNoticesForEmployee,
@@ -27,6 +28,7 @@ router.put('/reset-password/:resettoken', resetPassword);
 router.use(protect); // All routes below this middleware are protected
 
 router.get('/profile', getEmployeeProfile);
+router.get('/my-team', getMyTeam);
 router.post('/logout', logoutEmployee);
 
 // Notice board routes

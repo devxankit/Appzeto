@@ -16,6 +16,7 @@ const Client = require('../models/Client');
 const Request = require('../models/Request');
 const Admin = require('../models/Admin');
 const CPLead = require('../models/CPLead');
+const ChannelPartner = require('../models/ChannelPartner');
 // Ensure LeadProfile model is registered before any populate calls
 require('../models/LeadProfile');
 
@@ -2472,13 +2473,14 @@ const getLeadsByStatus = async (req, res) => {
   }
 };
 
-// @desc    Get channel partner shared leads
-// @route   GET /api/sales/channel-partner-leads
+// @desc    Get channel partner leads (received from CP or shared with CP)
+// @route   GET /api/sales/channel-partner-leads?type=received|shared
 // @access  Private (Sales only)
 const getChannelPartnerLeads = async (req, res) => {
   try {
     const salesId = req.sales.id;
     const { 
+      type = 'received', // 'received' = leads CPs shared with me, 'shared' = leads I shared with CPs
       category, 
       priority, 
       search, 
@@ -2487,7 +2489,84 @@ const getChannelPartnerLeads = async (req, res) => {
       limit = 12 
     } = req.query;
 
-    // Build filter to find CPLeads shared with this sales employee
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    if (type === 'shared') {
+      // Leads this sales person shared WITH channel partners (sharedFromSales.sharedBy = me)
+      const filter = {
+        'sharedFromSales.sharedBy': new mongoose.Types.ObjectId(salesId)
+      };
+      if (category && category !== 'all') {
+        try { filter.category = new mongoose.Types.ObjectId(category); } catch (e) { /* ignore */ }
+      }
+      if (priority && priority !== 'all') filter.priority = priority;
+      if (search && search.trim() !== '') {
+        filter.$or = [
+          { name: { $regex: search, $options: 'i' } },
+          { phone: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+          { company: { $regex: search, $options: 'i' } }
+        ];
+      }
+      if (timeFrame && timeFrame !== 'all') {
+        const now = new Date();
+        let startDate, endDate;
+        switch (timeFrame) {
+          case 'today':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            break;
+          case 'yesterday':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+            break;
+          case 'week':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            break;
+          case 'month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            break;
+          default: startDate = null; endDate = null;
+        }
+        if (startDate) {
+          filter['sharedFromSales.sharedAt'] = { $gte: startDate };
+          if (endDate) filter['sharedFromSales.sharedAt'].$lte = endDate;
+        }
+      }
+      const leads = await CPLead.find(filter)
+        .populate('category', 'name color icon')
+        .populate('assignedTo', 'name email phoneNumber companyName')
+        .populate('sharedFromSales.leadId', 'name phone email company')
+        .populate('sharedFromSales.sharedBy', 'name email phoneNumber')
+        .populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent')
+        .sort({ 'sharedFromSales.sharedAt': -1 })
+        .skip(skip)
+        .limit(limitNum);
+      const total = await CPLead.countDocuments(filter);
+      const formattedLeads = leads.map(lead => {
+        const leadObj = lead.toObject();
+        const shareEntry = leadObj.sharedFromSales?.find(
+          s => String(s.sharedBy?._id || s.sharedBy) === String(salesId)
+        );
+        leadObj.sharedAt = shareEntry?.sharedAt || leadObj.createdAt;
+        leadObj.channelPartner = leadObj.assignedTo;
+        return leadObj;
+      });
+      return res.status(200).json({
+        success: true,
+        data: formattedLeads,
+        count: formattedLeads.length,
+        total,
+        page: pageNum,
+        pages: Math.ceil(total / limitNum)
+      });
+    }
+
+    // Default: received from CP (CPLeads shared WITH this sales employee)
     const filter = {
       'sharedWithSales.salesId': new mongoose.Types.ObjectId(salesId)
     };
@@ -2548,11 +2627,6 @@ const getChannelPartnerLeads = async (req, res) => {
       }
     }
 
-    // Calculate pagination
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
     // Query CPLeads shared with this sales employee
     const leads = await CPLead.find(filter)
       .populate('category', 'name color icon')
@@ -2591,6 +2665,152 @@ const getChannelPartnerLeads = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while fetching channel partner leads'
+    });
+  }
+};
+
+// @desc    Get channel partners assigned to this sales (for sharing leads)
+// @route   GET /api/sales/assigned-channel-partners
+// @access  Private (Sales only)
+const getAssignedChannelPartners = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const partners = await ChannelPartner.find({
+      salesTeamLeadId: new mongoose.Types.ObjectId(salesId),
+      isActive: true
+    })
+      .select('name email phoneNumber companyName partnerId')
+      .sort({ name: 1 })
+      .lean();
+    res.status(200).json({
+      success: true,
+      data: partners,
+      count: partners.length
+    });
+  } catch (error) {
+    console.error('Get assigned channel partners error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching assigned channel partners'
+    });
+  }
+};
+
+// @desc    Share sales lead with a channel partner
+// @route   POST /api/sales/leads/:id/share-with-cp
+// @access  Private (Sales only)
+const shareLeadWithCP = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const leadId = req.params.id;
+    const { cpId } = req.body;
+    if (!cpId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Channel partner ID (cpId) is required'
+      });
+    }
+    const lead = await Lead.findOne({ _id: leadId, assignedTo: salesId })
+      .populate('category', 'name color icon');
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or not assigned to you'
+      });
+    }
+    const cp = await ChannelPartner.findById(cpId).select('name companyName');
+    if (!cp || !cp._id) {
+      return res.status(404).json({
+        success: false,
+        message: 'Channel partner not found'
+      });
+    }
+    const cpObjectId = new mongoose.Types.ObjectId(cpId);
+    const salesObjectId = new mongoose.Types.ObjectId(salesId);
+    const leadPhone = (lead.phone || '').replace(/\D/g, '').slice(-10);
+    if (!leadPhone || leadPhone.length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lead must have a valid 10-digit phone number to share'
+      });
+    }
+    let cpLead = await CPLead.findOne({ phone: leadPhone });
+    if (cpLead) {
+      if (String(cpLead.assignedTo) !== String(cpId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'This lead (phone) is already assigned to another channel partner'
+        });
+      }
+      const alreadyShared = (cpLead.sharedFromSales || []).some(
+        s => String(s.leadId) === String(leadId)
+      );
+      if (alreadyShared) {
+        return res.status(200).json({
+          success: true,
+          message: 'Lead already shared with this channel partner',
+          data: cpLead
+        });
+      }
+      cpLead.sharedFromSales = cpLead.sharedFromSales || [];
+      cpLead.sharedFromSales.push({
+        leadId: lead._id,
+        sharedBy: salesObjectId,
+        sharedAt: new Date()
+      });
+      await cpLead.save();
+      await cpLead.populate('assignedTo', 'name email phoneNumber companyName');
+      await cpLead.populate('sharedFromSales.leadId', 'name phone email company');
+      await cpLead.populate('sharedFromSales.sharedBy', 'name email phoneNumber');
+      await cpLead.populate('category', 'name color icon');
+      return res.status(200).json({
+        success: true,
+        message: 'Lead shared with channel partner',
+        data: cpLead
+      });
+    }
+    const LeadCategory = require('../models/LeadCategory');
+    const defaultCategory = await LeadCategory.findOne().sort({ name: 1 });
+    if (!defaultCategory) {
+      return res.status(500).json({
+        success: false,
+        message: 'No lead category found. Please create a category first.'
+      });
+    }
+    cpLead = await CPLead.create({
+      phone: leadPhone,
+      name: lead.name || '',
+      company: lead.company || '',
+      email: lead.email || '',
+      status: lead.status === 'converted' ? 'new' : (lead.status === 'lost' ? 'lost' : (lead.status === 'connected' ? 'connected' : 'new')),
+      priority: lead.priority || 'medium',
+      source: 'manual',
+      value: lead.value || 0,
+      assignedTo: cpObjectId,
+      notes: lead.notes || '',
+      category: lead.category?._id || defaultCategory._id,
+      createdBy: cpObjectId,
+      creatorModel: 'ChannelPartner',
+      sharedFromSales: [{
+        leadId: lead._id,
+        sharedBy: salesObjectId,
+        sharedAt: new Date()
+      }]
+    });
+    await cpLead.populate('assignedTo', 'name email phoneNumber companyName');
+    await cpLead.populate('sharedFromSales.leadId', 'name phone email company');
+    await cpLead.populate('sharedFromSales.sharedBy', 'name email phoneNumber');
+    await cpLead.populate('category', 'name color icon');
+    res.status(201).json({
+      success: true,
+      message: 'Lead shared with channel partner',
+      data: cpLead
+    });
+  } catch (error) {
+    console.error('Share lead with CP error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while sharing lead with channel partner'
     });
   }
 };
@@ -5095,6 +5315,8 @@ module.exports = {
   getMyLeads,
   getLeadsByStatus,
   getChannelPartnerLeads,
+  getAssignedChannelPartners,
+  shareLeadWithCP,
   getLeadDetail,
   updateLeadStatus,
   addFollowUp,

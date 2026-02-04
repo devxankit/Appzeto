@@ -154,9 +154,13 @@ const SL_leadProfile = () => {
           reference: ''
         })
         
+        const leadCategoryId = (response.category?._id ?? response.category ?? lp?.category?._id ?? lp?.category)
         setConversionData({
           projectName: lp?.businessName || '',
-          categoryId: lp?.category?._id || lp?.category || '',
+          categoryId: leadCategoryId ? String(leadCategoryId) : '',
+          projectType: (lp?.projectType && typeof lp.projectType === 'object')
+            ? { web: !!lp.projectType.web, app: !!lp.projectType.app, taxi: !!lp.projectType.taxi }
+            : { web: false, app: false, taxi: false },
           totalCost: lp?.estimatedCost?.toString() || '',
           finishedDays: '',
           advanceReceived: '',
@@ -666,8 +670,9 @@ const SL_leadProfile = () => {
       toast.error('Please enter a valid total cost')
       return
     }
-    if (!conversionData.projectType.web && !conversionData.projectType.app && !conversionData.projectType.taxi) {
-      toast.error('Please select at least one project type')
+    // Project type = lead category (e.g. Apps, Web, Taxi)
+    if (!conversionData.categoryId || !conversionData.categoryId.toString().trim()) {
+      toast.error('Please select a project category')
       return
     }
 
@@ -694,6 +699,7 @@ const SL_leadProfile = () => {
       setConversionData({
         projectName: '',
         categoryId: '',
+        projectType: { web: false, app: false, taxi: false },
         totalCost: '',
         finishedDays: '',
         advanceReceived: '',
