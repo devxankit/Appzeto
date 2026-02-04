@@ -31,6 +31,7 @@ import FollowUpDialog from '../SL-components/FollowUpDialog'
 import { salesLeadService } from '../SL-services'
 import { salesMeetingsService } from '../SL-services'
 import { useToast } from '../../../contexts/ToastContext'
+import { salesPaymentsService } from '../SL-services'
 
 const SL_leadProfile = () => {
   const { id } = useParams()
@@ -81,6 +82,7 @@ const SL_leadProfile = () => {
     totalCost: '',
     finishedDays: '',
     advanceReceived: '',
+    advanceAccount: '',
     includeGST: false,
     description: '',
     screenshot: null
@@ -109,6 +111,7 @@ const SL_leadProfile = () => {
   const [salesTeam, setSalesTeam] = useState([])
   const [myClients, setMyClients] = useState([])
   const [selectedStatus, setSelectedStatus] = useState('')
+  const [accounts, setAccounts] = useState([])
 
   // Fetch lead data on component mount
   useEffect(() => {
@@ -126,6 +129,8 @@ const SL_leadProfile = () => {
         setMyClients(cl || [])
         const cats = await salesLeadService.getLeadCategories()
         setCategories(cats || [])
+        const accs = await salesPaymentsService.getAccounts()
+        setAccounts(accs || [])
       } catch (e) {
         // ignore
       }
@@ -168,6 +173,7 @@ const SL_leadProfile = () => {
           totalCost: lp?.estimatedCost?.toString() || '',
           finishedDays: '',
           advanceReceived: '',
+          advanceAccount: '',
           includeGST: false,
           description: lp?.description || '',
           screenshot: null
@@ -679,13 +685,16 @@ const SL_leadProfile = () => {
 
     setIsLoading(true)
     try {
-      // Prepare project data
+      // Prepare project data (whole-number amounts)
+      const totalCostValue = Math.round(Number(conversionData.totalCost) || 0)
+      const advanceValue = Math.round(Number(conversionData.advanceReceived) || 0)
       const projectData = {
         projectName: conversionData.projectName.trim(),
         categoryId: conversionData.categoryId,
-        totalCost: parseFloat(conversionData.totalCost) || 0,
-        finishedDays: conversionData.finishedDays ? parseInt(conversionData.finishedDays) : undefined,
-        advanceReceived: conversionData.advanceReceived ? parseFloat(conversionData.advanceReceived) : 0,
+        totalCost: totalCostValue,
+        finishedDays: conversionData.finishedDays ? parseInt(conversionData.finishedDays, 10) : undefined,
+        advanceReceived: advanceValue,
+        advanceAccount: conversionData.advanceAccount || '',
         includeGST: conversionData.includeGST || false,
         description: conversionData.description.trim() || '',
         screenshot: conversionData.screenshot || null
@@ -704,6 +713,7 @@ const SL_leadProfile = () => {
         totalCost: '',
         finishedDays: '',
         advanceReceived: '',
+        advanceAccount: '',
         includeGST: false,
         description: '',
         screenshot: null
@@ -1201,7 +1211,7 @@ const SL_leadProfile = () => {
                   <input
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="1"
                       value={conversionData.totalCost}
                       onChange={(e) => setConversionData({ ...conversionData, totalCost: e.target.value })}
                       placeholder="Total cost"
@@ -1221,12 +1231,31 @@ const SL_leadProfile = () => {
                   <input
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="1"
                       value={conversionData.advanceReceived}
                       onChange={(e) => setConversionData({ ...conversionData, advanceReceived: e.target.value })}
                       placeholder="Advance received"
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                   />
+                  </div>
+                  {/* Advance Account - use actual finance accounts */}
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Advance Account *</label>
+                    <select
+                      value={conversionData.advanceAccount}
+                      onChange={(e) => setConversionData({ ...conversionData, advanceAccount: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    >
+                      <option value="">Select account</option>
+                      {accounts.map((account) => (
+                        <option key={account._id || account.id} value={account._id || account.id}>
+                          {account.name} {account.bankName ? `- ${account.bankName}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      This should match an Admin finance account. Money is only credited after finance approves the request.
+                    </p>
                   </div>
                 </div>
 

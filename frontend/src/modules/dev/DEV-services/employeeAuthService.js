@@ -1,5 +1,6 @@
 import { apiRequest, tokenUtils, employeeStorage } from './employeeBaseApiService';
 import { registerFCMToken } from '../../../services/pushNotificationService';
+import { clearOtherRoleSessions } from '../../../utils/clearOtherRoleSessions';
 
 // Employee Authentication Service - Only for login/logout functionality
 export const employeeAuthService = {

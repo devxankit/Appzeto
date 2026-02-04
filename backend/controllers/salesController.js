@@ -213,7 +213,7 @@ const createPaymentReceipt = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Amount and account are required' });
     }
 
-    const amountValue = parseFloat(amount);
+    const amountValue = Math.round(parseFloat(amount));
     if (isNaN(amountValue) || amountValue <= 0) {
       return res.status(400).json({ success: false, message: 'Amount must be a positive number' });
     }
@@ -850,7 +850,8 @@ const loginSales = async (req, res) => {
             experience: sales.experience,
             skills: sales.skills,
             isTeamLead: sales.isTeamLead || false,
-            teamMembers: sales.teamMembers || []
+            teamMembers: sales.teamMembers || [],
+            createdAt: sales.createdAt
           },
           token
         }
@@ -3882,7 +3883,7 @@ const convertLeadToClient = async (req, res) => {
     const totalCost = projectData?.totalCost ? Number(projectData.totalCost) : (lead.leadProfile.estimatedCost || 0);
     const advanceReceived = projectData?.advanceReceived ? Number(projectData.advanceReceived) : 0;
     const includeGST = projectData?.includeGST || false;
-    const remainingAmount = totalCost - advanceReceived;
+    const remainingAmount = totalCost; // No advance applied until finance approves
 
     const name = projectData?.projectName || 'Sales Converted Project';
     const description = projectData?.description || lead.leadProfile.description || 'Created from sales conversion';
@@ -3954,7 +3955,7 @@ const convertLeadToClient = async (req, res) => {
       originLead: lead._id,
       financialDetails: {
         totalCost,
-        advanceReceived,
+        advanceReceived: 0, // Initial advance is 0; will increase only after finance approval
         includeGST,
         remainingAmount
       }
@@ -3970,51 +3971,55 @@ const convertLeadToClient = async (req, res) => {
 
     const newProject = await Project.create(projectFields);
 
-    // Create incoming transaction for advance payment (if advanceReceived > 0)
+    // If there is an advance amount, create a pending PaymentReceipt and a payment-recovery
+    // request. Admin approval will approve the receipt and update financials/finance via
+    // existing hooks.
     if (advanceReceived > 0) {
       try {
-        const { createIncomingTransaction } = require('../utils/financeTransactionHelper');
-        const AdminFinance = require('../models/AdminFinance');
+        const Request = require('../models/Request');
         const Admin = require('../models/Admin');
-        
-        // Check if transaction already exists (prevent duplicates)
-        const existing = await AdminFinance.findOne({
-          recordType: 'transaction',
-          'metadata.sourceType': 'project_conversion',
-          'metadata.projectId': newProject._id.toString()
+        const PaymentReceipt = require('../models/PaymentReceipt');
+
+        // Create a pending payment receipt tied to the selected account
+        const receipt = await PaymentReceipt.create({
+          client: client._id,
+          project: newProject._id,
+          amount: advanceReceived,
+          account: projectData?.advanceAccount,
+          method: 'other',
+          notes: `Advance payment from sales conversion for project "${newProject.name}"`,
+          status: 'pending',
+          createdBy: req.sales.id
         });
-        
-        if (!existing) {
-          // Find first active admin as createdBy
-          const admin = await Admin.findOne({ isActive: true }).select('_id');
-          const adminId = admin ? admin._id : null;
-          
-          if (adminId) {
-            await createIncomingTransaction({
-              amount: advanceReceived,
-              category: 'Advance Payment',
-              transactionDate: newProject.createdAt || new Date(),
-              createdBy: adminId,
-              client: client._id,
-              project: newProject._id,
-              description: `Advance payment received for project "${newProject.name}"`,
-              metadata: {
-                sourceType: 'project_conversion',
-                projectId: newProject._id.toString(),
-                leadId: lead._id.toString()
-              },
-              checkDuplicate: true
-            });
-            console.log(`Created finance transaction for advance payment: ₹${advanceReceived} for project ${newProject._id}`);
-          } else {
-            console.warn('No active admin found to create finance transaction for advance payment');
-          }
+
+        const admin = await Admin.findOne({ isActive: true }).select('_id');
+        if (admin && admin._id) {
+          await Request.create({
+            module: 'sales',
+            type: 'payment-recovery',
+            title: `Advance payment request for project "${newProject.name}"`,
+            description: `Advance payment of ₹${advanceReceived} requested from sales conversion.`,
+            category: 'Advance Payment',
+            priority: 'high',
+            requestedBy: req.sales.id,
+            requestedByModel: 'Sales',
+            recipient: admin._id,
+            recipientModel: 'Admin',
+            project: newProject._id,
+            client: client._id,
+            amount: advanceReceived,
+            metadata: {
+              source: 'sales-conversion',
+              leadId: lead._id.toString(),
+              projectId: newProject._id.toString(),
+              paymentReceiptId: receipt._id
+            }
+          });
         } else {
-          console.log(`Finance transaction already exists for project conversion: ${newProject._id}`);
+          console.warn('No active admin found to create advance payment request');
         }
       } catch (error) {
-        // Log error but don't fail the conversion
-        console.error('Error creating finance transaction for project advance:', error);
+        console.error('Error creating advance payment request:', error);
       }
     }
 

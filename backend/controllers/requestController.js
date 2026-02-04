@@ -447,6 +447,7 @@ const respondToRequest = asyncHandler(async (req, res, next) => {
     }
   }
 
+
   // Handle installment payment approval - update installment status if approved
   if (request.type === 'approval' && request.module === 'sales' && request.metadata?.installmentId) {
     if (responseType === 'approve') {

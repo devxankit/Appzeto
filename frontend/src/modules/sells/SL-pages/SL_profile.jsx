@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SL_navbar from '../SL-components/SL_navbar'
 import { FiUser as User, FiMail as Mail, FiCamera as Camera, FiSave as Save, FiX as X, FiCalendar as Calendar, FiAward as Award, FiBriefcase as Briefcase, FiLogOut as LogOut, FiLoader as Loader, FiTrendingUp, FiUsers, FiTarget } from 'react-icons/fi'
-import { logoutSales, clearSalesData, getStoredSalesData } from '../SL-services/salesAuthService'
+import { logoutSales, clearSalesData, getSalesProfile, getStoredSalesData } from '../SL-services/salesAuthService'
 import { useToast } from '../../../contexts/ToastContext'
 import { salesAnalyticsService } from '../SL-services'
 import { salesPaymentsService } from '../SL-services'
@@ -37,14 +37,45 @@ const SL_profile = () => {
   })
   const [statsLoading, setStatsLoading] = useState(true)
 
+  const formatJoinDate = (value) => {
+    if (!value) return 'N/A'
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return 'N/A'
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: '2-digit'
+    }).format(d)
+  }
+
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       await new Promise(r => setTimeout(r, 400))
       
       // Load profile data from stored Sales data
-      const storedSalesData = getStoredSalesData()
+      let storedSalesData = getStoredSalesData()
+
+      // Ensure we have a reliable join date from backend (createdAt)
+      if (storedSalesData && !storedSalesData.joiningDate && !storedSalesData.createdAt) {
+        try {
+          const prof = await getSalesProfile()
+          const createdAt = prof?.data?.sales?.createdAt
+          if (createdAt) {
+            storedSalesData = { ...storedSalesData, createdAt }
+            localStorage.setItem('salesUser', JSON.stringify(storedSalesData))
+          }
+        } catch (e) {
+          // ignore; we'll fall back below
+        }
+      }
+
       if (storedSalesData) {
+        const joinDate =
+          storedSalesData.joiningDate ||
+          storedSalesData.createdAt ||
+          storedSalesData.loginTime ||
+          new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString()
         setProfileData({
           fullName: storedSalesData.name || 'Sales User',
           email: storedSalesData.email || 'sales@example.com',
@@ -52,7 +83,7 @@ const SL_profile = () => {
           department: storedSalesData.department || 'Sales',
           jobTitle: storedSalesData.position || 'Sales Representative',
           workTitle: storedSalesData.position || 'Sales Representative',
-          joinDate: storedSalesData.joiningDate || new Date(Date.now()-200*24*60*60*1000).toISOString(),
+          joinDate,
           avatar: 'SL',
           phone: storedSalesData.phone || '+91 90000 00000',
           location: 'Indore, IN',
@@ -125,7 +156,24 @@ const SL_profile = () => {
 
   const handleSaveProfile = async () => {
     setSaving(true)
-    await new Promise(r => setTimeout(r, 500))
+    try {
+      // Persist editable fields locally (no backend update endpoint for Sales profile)
+      const stored = getStoredSalesData() || {}
+      const updated = {
+        ...stored,
+        name: profileData.fullName,
+        // Store as joiningDate so it's consistent across app
+        joiningDate: profileData.joinDate,
+        // Keep a backup in case older code reads createdAt/loginTime
+        updatedAt: new Date().toISOString()
+      }
+      localStorage.setItem('salesUser', JSON.stringify(updated))
+      await new Promise(r => setTimeout(r, 300))
+      toast.success('Profile updated')
+    } catch (e) {
+      console.error('Failed to save profile locally:', e)
+      toast.error('Failed to save profile')
+    }
     setSaving(false)
     setIsEditing(false)
   }
@@ -259,7 +307,20 @@ const SL_profile = () => {
                     <label className="block text-xs font-medium text-gray-700 mb-1">Join Date</label>
                     <div className="flex items-center space-x-2">
                       <Calendar className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-900">Joined {new Date(profileData.joinDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}</span>
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={(() => {
+                            const d = new Date(profileData.joinDate)
+                            if (Number.isNaN(d.getTime())) return ''
+                            return d.toISOString().split('T')[0]
+                          })()}
+                          onChange={(e) => handleProfileUpdate('joinDate', e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 text-sm font-medium"
+                        />
+                      ) : (
+                        <span className="text-sm font-medium text-gray-900">Joined {formatJoinDate(profileData.joinDate)}</span>
+                      )}
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">Start date</p>
                   </div>

@@ -62,6 +62,11 @@ const SL_ClientProfile = () => {
   const [increaseReason, setIncreaseReason] = useState('')
   const [accounts, setAccounts] = useState([])
   const [salesTeam, setSalesTeam] = useState([])
+
+  const formatWhole = (value) => {
+    const n = Math.round(Number(value || 0))
+    return n.toLocaleString()
+  }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isTransferred, setIsTransferred] = useState(false)
   const dropdownRef = useRef(null)
@@ -157,7 +162,7 @@ const SL_ClientProfile = () => {
   }
 
   const handleAddMoney = async () => {
-    const amountValue = parseFloat(amount)
+    const amountValue = Math.round(Number(amount) || 0)
     if (!amountValue || amountValue <= 0) {
       toast.error('Please enter a valid amount greater than 0')
       return
@@ -465,7 +470,7 @@ const SL_ClientProfile = () => {
                   {/* Total Cost */}
                   <div className="flex justify-between items-center pb-2 border-b border-teal-200">
                     <span className="text-teal-700 text-sm font-medium">Total Cost</span>
-                    <span className="text-teal-800 font-bold text-base">₹{(financial?.totalCost || 0).toLocaleString()}</span>
+                    <span className="text-teal-800 font-bold text-base">₹{formatWhole(financial?.totalCost || 0)}</span>
                   </div>
                   
                   {/* Payment Breakdown */}
@@ -476,7 +481,7 @@ const SL_ClientProfile = () => {
                     {(financial?.breakdown?.initialAdvance || 0) > 0 && (
                       <div className="flex justify-between items-center pl-3">
                         <span className="text-teal-600 text-xs">Initial Advance</span>
-                        <span className="text-teal-700 font-semibold text-xs">₹{(financial?.breakdown?.initialAdvance || 0).toLocaleString()}</span>
+                        <span className="text-teal-700 font-semibold text-xs">₹{formatWhole(financial?.breakdown?.initialAdvance || 0)}</span>
                       </div>
                     )}
                     
@@ -484,7 +489,7 @@ const SL_ClientProfile = () => {
                     {(financial?.breakdown?.fromReceipts || 0) > 0 && (
                       <div className="flex justify-between items-center pl-3">
                         <span className="text-teal-600 text-xs">From Receipts</span>
-                        <span className="text-teal-700 font-semibold text-xs">₹{(financial?.breakdown?.fromReceipts || 0).toLocaleString()}</span>
+                        <span className="text-teal-700 font-semibold text-xs">₹{formatWhole(financial?.breakdown?.fromReceipts || 0)}</span>
                       </div>
                     )}
                     
@@ -492,14 +497,14 @@ const SL_ClientProfile = () => {
                     {(financial?.breakdown?.fromInstallments || 0) > 0 && (
                       <div className="flex justify-between items-center pl-3">
                         <span className="text-teal-600 text-xs">From Installments</span>
-                        <span className="text-teal-700 font-semibold text-xs">₹{(financial?.breakdown?.fromInstallments || 0).toLocaleString()}</span>
+                        <span className="text-teal-700 font-semibold text-xs">₹{formatWhole(financial?.breakdown?.fromInstallments || 0)}</span>
                       </div>
                     )}
                     
                     {/* Total Paid */}
                     <div className="flex justify-between items-center pt-1.5 mt-1.5 border-t border-teal-200">
                       <span className="text-teal-700 text-sm font-semibold">Total Paid</span>
-                      <span className="text-teal-800 font-bold text-sm">₹{(financial?.breakdown?.totalPaid || financial?.advanceReceived || 0).toLocaleString()}</span>
+                      <span className="text-teal-800 font-bold text-sm">₹{formatWhole(financial?.breakdown?.totalPaid || financial?.advanceReceived || 0)}</span>
                     </div>
                   </div>
                   
@@ -507,7 +512,7 @@ const SL_ClientProfile = () => {
                   <div className="flex justify-between items-center pt-2 border-t border-teal-300">
                     <span className="text-teal-700 text-sm font-semibold">Pending</span>
                     <span className={`font-bold text-base ${(financial?.pending || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      ₹{(financial?.pending || 0).toLocaleString()}
+                      ₹{formatWhole(financial?.pending || 0)}
                     </span>
                   </div>
                 </div>
@@ -750,6 +755,8 @@ const SL_ClientProfile = () => {
                     </div>
                     <input
                       type="number"
+                      min="0"
+                      step="1"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       placeholder="Enter amount"

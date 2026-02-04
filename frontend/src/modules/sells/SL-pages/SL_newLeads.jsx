@@ -85,15 +85,21 @@ const SL_newLeads = () => {
       }
 
       const response = await salesLeadService.getLeadsByStatus('new', params)
-      setLeadsData(response.data)
+      const data = Array.isArray(response.data) ? response.data : []
+      const page = response.page || params.page || 1
+      const limit = response.limit || params.limit || 12
+      const total = typeof response.total === 'number' ? response.total : data.length
+      const pages = response.pages || Math.max(1, Math.ceil(total / limit))
+
+      setLeadsData(data)
       setPagination({
-        page: response.page,
-        limit: response.limit,
-        total: response.total,
-        pages: response.pages
+        page,
+        limit,
+        total,
+        pages
       })
       // Store total count for statistics display
-      setTotalNewLeads(response.total)
+      setTotalNewLeads(total)
     } catch (error) {
       console.error('Error fetching leads:', error)
       // Show error message

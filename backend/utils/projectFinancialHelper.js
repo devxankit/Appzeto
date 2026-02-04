@@ -36,11 +36,11 @@ const recalculateProjectFinancials = async (project, totals) => {
     };
   }
 
-  const totalCost = Number(project.financialDetails.totalCost || project.budget || 0);
+  const totalCost = Math.round(Number(project.financialDetails.totalCost || project.budget || 0));
   
   // Calculate paid installments
   const installmentTotals = totals || calculateInstallmentTotals(project.installmentPlan);
-  const collectedFromInstallments = Number(installmentTotals.paid || 0);
+  const collectedFromInstallments = Math.round(Number(installmentTotals.paid || 0));
   
   // Calculate approved PaymentReceipts
   const PaymentReceipt = require('../models/PaymentReceipt');
@@ -48,7 +48,10 @@ const recalculateProjectFinancials = async (project, totals) => {
     project: project._id,
     status: 'approved'
   }).select('amount');
-  const totalApprovedPayments = approvedReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
+  const totalApprovedPayments = approvedReceipts.reduce(
+    (sum, receipt) => sum + Math.round(Number(receipt.amount || 0)),
+    0
+  );
   
   // Calculate total received from all sources:
   // 1. Approved PaymentReceipts (from PaymentReceipt model)
@@ -65,11 +68,13 @@ const recalculateProjectFinancials = async (project, totals) => {
   const totalReceived = totalFromReceiptsAndInstallments;
   
   // Update advanceReceived to reflect current total received
-  project.financialDetails.advanceReceived = totalReceived;
+  project.financialDetails.advanceReceived = Math.round(totalReceived);
   
   // Calculate remaining amount
   const remainingRaw = totalCost - totalReceived;
-  const remainingAmount = Number.isFinite(remainingRaw) ? Math.max(remainingRaw, 0) : 0;
+  const remainingAmount = Number.isFinite(remainingRaw)
+    ? Math.max(Math.round(remainingRaw), 0)
+    : 0;
 
   project.financialDetails.remainingAmount = remainingAmount;
 };
