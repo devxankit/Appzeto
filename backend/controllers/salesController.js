@@ -2669,6 +2669,235 @@ const getChannelPartnerLeads = async (req, res) => {
   }
 };
 
+// @desc    Get single channel partner lead detail (CPLead) for Sales
+// @route   GET /api/sales/channel-partner-leads/:id
+// @access  Private (Sales only)
+const getChannelPartnerLeadDetail = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const cpLeadId = req.params.id;
+
+    const cpLead = await CPLead.findById(cpLeadId)
+      .populate('category', 'name color icon description')
+      .populate('assignedTo', 'name email phoneNumber companyName partnerId')
+      .populate('sharedWithSales.salesId', 'name email phoneNumber')
+      .populate('sharedWithSales.sharedBy', 'name email phoneNumber companyName')
+      .populate('sharedFromSales.leadId', 'name phone email company category')
+      .populate('sharedFromSales.sharedBy', 'name email phoneNumber')
+      .populate('leadProfile', 'name businessName email projectType estimatedCost description quotationSent demoSent notes documents');
+
+    if (!cpLead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Channel partner lead not found'
+      });
+    }
+
+    const leadObj = cpLead.toObject();
+    const allowed =
+      (Array.isArray(leadObj.sharedWithSales) &&
+        leadObj.sharedWithSales.some(s => String(s.salesId?._id || s.salesId) === String(salesId))) ||
+      (Array.isArray(leadObj.sharedFromSales) &&
+        leadObj.sharedFromSales.some(s => String(s.sharedBy?._id || s.sharedBy) === String(salesId)));
+
+    if (!allowed) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have access to this channel partner lead'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: leadObj
+    });
+  } catch (error) {
+    console.error('Get channel partner lead detail error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while fetching channel partner lead detail'
+    });
+  }
+};
+
+// @desc    Update a channel partner lead (CPLead) for Sales
+// @route   PUT /api/sales/channel-partner-leads/:id
+// @access  Private (Sales only)
+const updateChannelPartnerLead = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const cpLeadId = req.params.id;
+    const { status, category, categoryId, notes, priority } = req.body || {};
+
+    const cpLead = await CPLead.findById(cpLeadId);
+    if (!cpLead) {
+      return res.status(404).json({ success: false, message: 'Channel partner lead not found' });
+    }
+
+    const leadObj = cpLead.toObject();
+    const allowed =
+      (Array.isArray(leadObj.sharedWithSales) &&
+        leadObj.sharedWithSales.some(s => String(s.salesId?._id || s.salesId) === String(salesId))) ||
+      (Array.isArray(leadObj.sharedFromSales) &&
+        leadObj.sharedFromSales.some(s => String(s.sharedBy?._id || s.sharedBy) === String(salesId)));
+
+    if (!allowed) {
+      return res.status(403).json({ success: false, message: 'You do not have access to this channel partner lead' });
+    }
+
+    if (status) cpLead.status = status;
+    const categoryToUse = categoryId || category;
+    if (categoryToUse) cpLead.category = categoryToUse;
+    if (notes !== undefined) cpLead.notes = notes || '';
+    if (priority) cpLead.priority = priority;
+
+    await cpLead.save();
+
+    await cpLead.populate('category', 'name color icon description');
+    await cpLead.populate('assignedTo', 'name email phoneNumber companyName partnerId');
+    await cpLead.populate('leadProfile', 'name businessName email projectType estimatedCost description quotationSent demoSent notes documents category');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Channel partner lead updated successfully',
+      data: cpLead
+    });
+  } catch (error) {
+    console.error('Update channel partner lead error:', error);
+    return res.status(500).json({ success: false, message: 'Server error while updating channel partner lead' });
+  }
+};
+
+// @desc    Upsert channel partner lead profile (CPLeadProfile) for Sales
+// @route   PUT /api/sales/channel-partner-leads/:id/profile
+// @access  Private (Sales only)
+const upsertChannelPartnerLeadProfile = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const cpLeadId = req.params.id;
+    const updateData = req.body || {};
+
+    const cpLead = await CPLead.findById(cpLeadId).populate('leadProfile');
+    if (!cpLead) {
+      return res.status(404).json({ success: false, message: 'Channel partner lead not found' });
+    }
+
+    const leadObj = cpLead.toObject();
+    const allowed =
+      (Array.isArray(leadObj.sharedWithSales) &&
+        leadObj.sharedWithSales.some(s => String(s.salesId?._id || s.salesId) === String(salesId))) ||
+      (Array.isArray(leadObj.sharedFromSales) &&
+        leadObj.sharedFromSales.some(s => String(s.sharedBy?._id || s.sharedBy) === String(salesId)));
+
+    if (!allowed) {
+      return res.status(403).json({ success: false, message: 'You do not have access to this channel partner lead' });
+    }
+
+    const CPLeadProfile = require('../models/CPLeadProfile');
+
+    let profile = null;
+    if (cpLead.leadProfile && cpLead.leadProfile._id) {
+      profile = await CPLeadProfile.findByIdAndUpdate(cpLead.leadProfile._id, updateData, { new: true, runValidators: true });
+    } else {
+      // Minimal required fields: lead + name + createdBy
+      const nameToUse = updateData.name || cpLead.name || 'Client';
+      profile = await CPLeadProfile.create({
+        lead: cpLead._id,
+        name: nameToUse,
+        businessName: updateData.businessName || cpLead.company || '',
+        email: updateData.email || cpLead.email || '',
+        category: updateData.categoryId || updateData.category || cpLead.category || null,
+        projectType: updateData.projectType || { web: false, app: false, taxi: false, other: false },
+        estimatedCost: updateData.estimatedCost || 0,
+        description: updateData.description || '',
+        quotationSent: !!updateData.quotationSent,
+        demoSent: !!updateData.demoSent,
+        createdBy: cpLead.assignedTo // channel partner
+      });
+      cpLead.leadProfile = profile._id;
+      await cpLead.save();
+    }
+
+    // Sync CPLead.category when profile category changes (preferred "project type")
+    const categoryToSync = updateData.categoryId || updateData.category;
+    if (categoryToSync) {
+      try {
+        cpLead.category = categoryToSync;
+        await cpLead.save();
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Channel partner lead profile updated successfully',
+      data: profile
+    });
+  } catch (error) {
+    console.error('Upsert channel partner lead profile error:', error);
+    return res.status(500).json({ success: false, message: 'Server error while updating channel partner lead profile' });
+  }
+};
+
+// @desc    Add follow-up to a channel partner lead (CPLead) for Sales
+// @route   POST /api/sales/channel-partner-leads/:id/followups
+// @access  Private (Sales only)
+const addChannelPartnerLeadFollowUp = async (req, res) => {
+  try {
+    const salesId = req.sales.id;
+    const cpLeadId = req.params.id;
+    const { date, time, notes, priority = 'medium', type = 'call' } = req.body || {};
+
+    if (!date || !time) {
+      return res.status(400).json({ success: false, message: 'date and time are required' });
+    }
+
+    const cpLead = await CPLead.findById(cpLeadId);
+    if (!cpLead) {
+      return res.status(404).json({ success: false, message: 'Channel partner lead not found' });
+    }
+
+    const leadObj = cpLead.toObject();
+    const allowed =
+      (Array.isArray(leadObj.sharedWithSales) &&
+        leadObj.sharedWithSales.some(s => String(s.salesId?._id || s.salesId) === String(salesId))) ||
+      (Array.isArray(leadObj.sharedFromSales) &&
+        leadObj.sharedFromSales.some(s => String(s.sharedBy?._id || s.sharedBy) === String(salesId)));
+
+    if (!allowed) {
+      return res.status(403).json({ success: false, message: 'You do not have access to this channel partner lead' });
+    }
+
+    cpLead.followUps = cpLead.followUps || [];
+    cpLead.followUps.push({
+      scheduledDate: new Date(date),
+      scheduledTime: time,
+      type,
+      notes: notes || '',
+      priority,
+      status: 'pending',
+      createdAt: new Date()
+    });
+
+    // Set status to followup for visibility
+    if (cpLead.status !== 'converted' && cpLead.status !== 'lost') {
+      cpLead.status = 'followup';
+    }
+
+    await cpLead.save();
+
+    return res.status(201).json({
+      success: true,
+      message: 'Follow-up scheduled successfully',
+      data: cpLead
+    });
+  } catch (error) {
+    console.error('Add channel partner lead followup error:', error);
+    return res.status(500).json({ success: false, message: 'Server error while scheduling follow-up' });
+  }
+};
+
 // @desc    Get channel partners assigned to this sales (for sharing leads)
 // @route   GET /api/sales/assigned-channel-partners
 // @access  Private (Sales only)
@@ -3503,6 +3732,17 @@ const updateLeadProfile = async (req, res) => {
       { new: true, runValidators: true }
     );
 
+    // Keep Lead.category in sync with LeadProfile.category (preferred "project type")
+    const categoryIdToSync = updateData?.categoryId || updateData?.category;
+    if (categoryIdToSync) {
+      try {
+        lead.category = categoryIdToSync;
+        await lead.save();
+      } catch (e) {
+        // Ignore sync failures; profile update is still successful
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: 'Lead profile updated successfully',
@@ -3556,20 +3796,60 @@ const convertLeadToClient = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized to convert this lead' });
     }
 
-    // Verify lead has profile
-    if (!lead.leadProfile) {
-      return res.status(400).json({ success: false, message: 'Lead must have a profile before conversion' });
-    }
-
     // Idempotency: if a project already exists for this lead, return it
     const Project = require('../models/Project');
     const existingProject = await Project.findOne({ originLead: id }).populate('client');
     if (lead.status === 'converted' && existingProject) {
-      return res.status(409).json({
+      // Treat as success (idempotent) so frontend doesn't fail on repeat clicks
+      return res.status(200).json({
         success: true,
         message: 'Lead already converted',
         data: { client: existingProject.client, project: existingProject, lead }
       });
+    }
+
+    // Ensure lead has profile (auto-create minimal profile if missing)
+    if (!lead.leadProfile) {
+      const LeadProfile = require('../models/LeadProfile');
+      const categoryIdToUse =
+        projectData?.categoryId ||
+        projectData?.category ||
+        lead.category?._id ||
+        lead.category ||
+        null;
+
+      if (!categoryIdToUse) {
+        return res.status(400).json({
+          success: false,
+          message: 'Project category is required before conversion'
+        });
+      }
+
+      // Keep Lead.category in sync as well (preferred project type)
+      try {
+        lead.category = categoryIdToUse;
+        await lead.save();
+      } catch (e) {
+        // ignore
+      }
+
+      const newProfile = await LeadProfile.create({
+        lead: lead._id,
+        name: lead.name || 'Client',
+        businessName: lead.company || '',
+        email: lead.email || '',
+        category: categoryIdToUse,
+        projectType: projectData?.projectType || { web: false, app: false, taxi: false },
+        estimatedCost: projectData?.totalCost ? Number(projectData.totalCost) : 0,
+        description: projectData?.description || '',
+        quotationSent: false,
+        demoSent: false,
+        createdBy: req.sales.id
+      });
+
+      lead.leadProfile = newProfile._id;
+      await lead.save();
+      await lead.populate('leadProfile');
     }
 
     // Upsert Client by phone number
@@ -3611,6 +3891,13 @@ const convertLeadToClient = async (req, res) => {
     // Legacy: Keep projectType for backward compatibility
     const projectType = projectData?.projectType || lead.leadProfile?.projectType || { web: false, app: false, taxi: false };
     const finishedDays = projectData?.finishedDays ? parseInt(projectData.finishedDays) : undefined;
+
+    if (!categoryId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project category is required to convert lead'
+      });
+    }
 
     // Handle screenshot upload if present
     let screenshotAttachment = null;
@@ -5315,6 +5602,10 @@ module.exports = {
   getMyLeads,
   getLeadsByStatus,
   getChannelPartnerLeads,
+  getChannelPartnerLeadDetail,
+  updateChannelPartnerLead,
+  upsertChannelPartnerLeadProfile,
+  addChannelPartnerLeadFollowUp,
   getAssignedChannelPartners,
   shareLeadWithCP,
   getLeadDetail,

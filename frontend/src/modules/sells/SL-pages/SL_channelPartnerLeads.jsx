@@ -194,8 +194,8 @@ const SL_channelPartnerLeads = () => {
 
   const handleProfile = (leadId) => {
     // For channel partner leads, we might need a different profile page
-    // For now, navigate to the regular lead profile page
-    navigate(`/lead-profile/${leadId}`)
+    // Navigate to Sales-side CP lead profile page
+    navigate(`/channel-partner-lead-profile/${leadId}`)
   }
 
   // Mobile Lead Card Component

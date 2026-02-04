@@ -91,6 +91,7 @@ const SL_leadProfile = () => {
   const [showMeetingDialog, setShowMeetingDialog] = useState(false)
   const [showMeetingTypeDropdown, setShowMeetingTypeDropdown] = useState(false)
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
+  const [projectCategoryId, setProjectCategoryId] = useState('')
   const [meetingForm, setMeetingForm] = useState({
     clientName: '',
     meetingDate: '',
@@ -147,6 +148,10 @@ const SL_leadProfile = () => {
         
         // Update status checkboxes based on lead status and profile data
         updateStatusFromLeadStatus(response.status, lp)
+        // Project Type = Category (preferred)
+        const leadCategoryId = (response.category?._id ?? response.category ?? lp?.category?._id ?? lp?.category)
+        const leadCategoryIdStr = leadCategoryId ? String(leadCategoryId) : ''
+        setProjectCategoryId(leadCategoryIdStr)
         setDemoData({
           clientName: lp?.name || response.name || '',
           mobileNumber: response.phone || '',
@@ -154,10 +159,9 @@ const SL_leadProfile = () => {
           reference: ''
         })
         
-        const leadCategoryId = (response.category?._id ?? response.category ?? lp?.category?._id ?? lp?.category)
         setConversionData({
           projectName: lp?.businessName || '',
-          categoryId: leadCategoryId ? String(leadCategoryId) : '',
+          categoryId: leadCategoryIdStr,
           projectType: (lp?.projectType && typeof lp.projectType === 'object')
             ? { web: !!lp.projectType.web, app: !!lp.projectType.app, taxi: !!lp.projectType.taxi }
             : { web: false, app: false, taxi: false },
@@ -253,21 +257,9 @@ const SL_leadProfile = () => {
   const handleStatusChange = (statusKey) => {
     setStatus(prev => {
       const newStatus = { ...prev }
-      
-      // Project types (web, app, taxi) are mutually exclusive - radio button behavior
-      if (statusKey === 'web' || statusKey === 'app' || statusKey === 'taxi') {
-        // Reset all project types
-        newStatus.web = false
-        newStatus.app = false
-        newStatus.taxi = false
-        // Set the selected one (always true for radio buttons - can't unselect)
-        if (!prev[statusKey]) {
-          newStatus[statusKey] = true
-        }
-      } else {
-        // Status flags (quotationSent, demoSent, hotLead) can be multiple - checkbox behavior
-        newStatus[statusKey] = !prev[statusKey] // Toggle
-      }
+
+      // Status flags (quotationSent, demoSent, hotLead) can be multiple - checkbox behavior
+      newStatus[statusKey] = !prev[statusKey] // Toggle
       
       return newStatus
     })
@@ -280,7 +272,7 @@ const SL_leadProfile = () => {
     try {
       // Determine primary lead status based on priority:
       // 1. Hot Lead takes highest priority (it's a status, not just a flag)
-      // 2. Then project type (web, app, taxi) 
+      // 2. Then project type = category (App/Web mapping where applicable)
       // 3. Then status flags (quotation_sent, demo_requested)
       // 4. Default to 'connected'
       // Note: quotationSent and demoSent are stored as flags in leadProfile, allowing leads to appear in multiple pages
@@ -289,16 +281,19 @@ const SL_leadProfile = () => {
       if (status.hotLead) {
         // Hot lead is a status - takes priority over everything else
         newLeadStatus = 'hot'
-      } else if (status.web) {
-        newLeadStatus = 'web'
-      } else if (status.app) {
-        newLeadStatus = 'app_client'
-      } else if (status.taxi) {
-        newLeadStatus = 'taxi'
-      } else if (status.quotationSent) {
-        newLeadStatus = 'quotation_sent'
-      } else if (status.demoSent) {
-        newLeadStatus = 'demo_requested'
+      } else {
+        // Map category name -> legacy status pages (keeps existing Sales tabs working)
+        const selectedCat = categories.find(cat => String(cat._id) === String(projectCategoryId))
+        const catName = (selectedCat?.name || '').toLowerCase()
+        if (catName.includes('web')) {
+          newLeadStatus = 'web'
+        } else if (catName.includes('app')) {
+          newLeadStatus = 'app_client'
+        } else if (status.quotationSent) {
+          newLeadStatus = 'quotation_sent'
+        } else if (status.demoSent) {
+          newLeadStatus = 'demo_requested'
+        }
       }
       
       // Update lead status (this determines which status-specific page the lead appears on)
@@ -315,14 +310,20 @@ const SL_leadProfile = () => {
       // Always update leadProfile with status flags and project type
       // This allows leads to appear in multiple pages (quotation_sent, demo_sent) based on flags
       if (leadProfile) {
+        const selectedCat = categories.find(cat => String(cat._id) === String(projectCategoryId))
+        const catName = (selectedCat?.name || '').toLowerCase()
+        const legacyProjectType = {
+          web: catName.includes('web'),
+          app: catName.includes('app'),
+          taxi: catName.includes('taxi')
+        }
         const profileUpdateData = {
           quotationSent: status.quotationSent,
           demoSent: status.demoSent,
-          projectType: {
-            web: status.web,
-            app: status.app,
-            taxi: status.taxi
-          }
+          // Project Type = Category (preferred)
+          categoryId: projectCategoryId || undefined,
+          // Keep legacy field updated for older logic
+          projectType: legacyProjectType
         }
         await salesLeadService.updateLeadProfile(id, profileUpdateData)
       } else {
@@ -949,43 +950,24 @@ const SL_leadProfile = () => {
               </div>
             </div>
 
-            {/* Project Type - Only one at a time */}
+            {/* Project Type = Category */}
             <div>
               <h4 className="text-sm font-semibold text-teal-800 mb-3">Project Type</h4>
-              <div className="grid grid-cols-3 gap-3">
-                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
-                  <input
-                    type="radio"
-                    name="projectType"
-                    checked={status.web}
-                    onChange={() => handleStatusChange('web')}
-                    className="w-5 h-5 text-teal-600 border-teal-300 focus:ring-teal-500 focus:ring-2"
-                  />
-                  <span className="text-sm font-medium text-teal-800">Web</span>
-                </label>
-                
-                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
-                  <input
-                    type="radio"
-                    name="projectType"
-                    checked={status.app}
-                    onChange={() => handleStatusChange('app')}
-                    className="w-5 h-5 text-teal-600 border-teal-300 focus:ring-teal-500 focus:ring-2"
-                  />
-                  <span className="text-sm font-medium text-teal-800">App</span>
-                </label>
-                
-                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
-                  <input
-                    type="radio"
-                    name="projectType"
-                    checked={status.taxi}
-                    onChange={() => handleStatusChange('taxi')}
-                    className="w-5 h-5 text-teal-600 border-teal-300 focus:ring-teal-500 focus:ring-2"
-                  />
-                  <span className="text-sm font-medium text-teal-800">Taxi</span>
-                </label>
-              </div>
+              <select
+                value={projectCategoryId}
+                onChange={(e) => setProjectCategoryId(e.target.value)}
+                className="w-full px-4 py-3 border border-teal-200 rounded-xl bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+              >
+                <option value="">Select Category</option>
+                {categories.map((cat) => (
+                  <option key={cat._id} value={cat._id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-teal-700 mt-2">
+                Project type is based on the lead category (e.g. Apps, Web, Taxi).
+              </p>
             </div>
           </motion.div>
 

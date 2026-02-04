@@ -29,6 +29,7 @@ import SL_wallet from './modules/sells/SL-pages/SL_wallet'
 import SL_team_management from './modules/sells/SL-pages/SL_team_management'
 import SL_newLeads from './modules/sells/SL-pages/SL_newLeads'
 import SL_channelPartnerLeads from './modules/sells/SL-pages/SL_channelPartnerLeads'
+import SL_channelPartnerLeadProfile from './modules/sells/SL-pages/SL_channelPartnerLeadProfile'
 import SL_connected from './modules/sells/SL-pages/SL_connected'
 import SL_leadProfile from './modules/sells/SL-pages/SL_leadProfile'
 import SL_ClientProfile from './modules/sells/SL-pages/SL_ClientProfile'
@@ -195,6 +196,11 @@ function App() {
             <Route path="/channel-partner-leads" element={
               <SalesProtectedRoute>
                 <SL_channelPartnerLeads />
+              </SalesProtectedRoute>
+            } />
+            <Route path="/channel-partner-lead-profile/:id" element={
+              <SalesProtectedRoute>
+                <SL_channelPartnerLeadProfile />
               </SalesProtectedRoute>
             } />
             <Route path="/connected" element={

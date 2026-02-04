@@ -434,6 +434,59 @@ export const getChannelPartnerLeads = async (params = {}) => {
   }
 };
 
+// Get single channel partner lead detail (CPLead) for Sales
+export const getChannelPartnerLeadDetail = async (cpLeadId) => {
+  try {
+    const response = await apiRequest(`/sales/channel-partner-leads/${cpLeadId}`, { method: 'GET' });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching channel partner lead detail:', error);
+    throw error;
+  }
+};
+
+// Update channel partner lead (CPLead) for Sales
+export const updateChannelPartnerLead = async (cpLeadId, updateData) => {
+  try {
+    const response = await apiRequest(`/sales/channel-partner-leads/${cpLeadId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updateData || {})
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating channel partner lead:', error);
+    throw error;
+  }
+};
+
+// Upsert channel partner lead profile (CPLeadProfile) for Sales
+export const upsertChannelPartnerLeadProfile = async (cpLeadId, updateData) => {
+  try {
+    const response = await apiRequest(`/sales/channel-partner-leads/${cpLeadId}/profile`, {
+      method: 'PUT',
+      body: JSON.stringify(updateData || {})
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating channel partner lead profile:', error);
+    throw error;
+  }
+};
+
+// Add follow-up to channel partner lead (CPLead) for Sales
+export const addChannelPartnerLeadFollowUp = async (cpLeadId, followUpPayload) => {
+  try {
+    const response = await apiRequest(`/sales/channel-partner-leads/${cpLeadId}/followups`, {
+      method: 'POST',
+      body: JSON.stringify(followUpPayload || {})
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error adding channel partner lead follow-up:', error);
+    throw error;
+  }
+};
+
 // Get channel partners assigned to this sales (for sharing leads)
 export const getAssignedChannelPartners = async () => {
   try {
@@ -533,6 +586,10 @@ const salesLeadService = {
   getMyLeads,
   getLeadsByStatus,
   getChannelPartnerLeads,
+  getChannelPartnerLeadDetail,
+  updateChannelPartnerLead,
+  upsertChannelPartnerLeadProfile,
+  addChannelPartnerLeadFollowUp,
   getAssignedChannelPartners,
   shareLeadWithCP,
   getLeadDetail,
