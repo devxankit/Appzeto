@@ -1,5 +1,6 @@
 import { apiRequest, tokenUtils, clientStorage } from './clientBaseApiService';
 import { registerFCMToken } from '../../../services/pushNotificationService';
+import { clearOtherRoleSessions } from '../../../utils/clearOtherRoleSessions';
 
 export const clientAuthService = {
   // Send OTP to phone number
