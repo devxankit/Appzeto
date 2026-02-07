@@ -11,7 +11,8 @@ const {
   uploadProjectAttachment,
   removeProjectAttachment,
   updateProjectRevisionStatus,
-  getProjectTeamMembers
+  getProjectTeamMembers,
+  getCategories
 } = require('../controllers/projectController');
 const { protect, authorize } = require('../middlewares/auth');
 const upload = require('../middlewares/upload');
@@ -41,5 +42,8 @@ router.patch('/:id/revisions/:revisionType', updateProjectRevisionStatus);
 
 // Project team routes
 router.get('/:id/team', getProjectTeamMembers);
+
+// Categories route
+router.get('/meta/categories', getCategories);
 
 module.exports = router;

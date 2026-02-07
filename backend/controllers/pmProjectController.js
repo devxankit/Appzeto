@@ -9,21 +9,21 @@ const socketService = require('../services/socketService');
 // @access  PM only
 const getNewProjects = asyncHandler(async (req, res, next) => {
   const { status, priority, search, page = 1, limit = 20 } = req.query;
-  
+
   // Build filter object
   const filter = {
     projectManager: req.user.id,
     status: { $in: ['untouched', 'started'] }
   };
-  
+
   if (status && status !== 'all') {
     filter.status = status;
   }
-  
+
   if (priority && priority !== 'all') {
     filter.priority = priority;
   }
-  
+
   if (search) {
     filter.$or = [
       { name: { $regex: search, $options: 'i' } },
@@ -81,7 +81,7 @@ const updateMeetingStatus = asyncHandler(async (req, res, next) => {
 
   // Check if project status allows meeting status update
   if (!['untouched', 'started'].includes(project.status)) {
-    return next(new ErrorResponse('Meeting status can only be updated for untouched or started projects', 400));
+    return next(new ErrorResponse('Meeting status can only be updated for untouched or acknowledged projects', 400));
   }
 
   // Update meeting status
@@ -112,7 +112,7 @@ const updateMeetingStatus = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Start a project (convert untouched → started)
+// @desc    Acknowledge a project (convert untouched → acknowledged)
 // @route   PATCH /api/pm/projects/:id/start
 // @access  PM only
 const startProject = asyncHandler(async (req, res, next) => {
@@ -131,7 +131,7 @@ const startProject = asyncHandler(async (req, res, next) => {
 
   // Check if project status allows starting
   if (project.status !== 'untouched') {
-    return next(new ErrorResponse('Project can only be started from untouched status', 400));
+    return next(new ErrorResponse('Project can only be acknowledged from untouched status', 400));
   }
 
   // Update status to started
@@ -144,24 +144,24 @@ const startProject = asyncHandler(async (req, res, next) => {
     'project_started',
     req.user.id,
     'PM',
-    `Project started by PM`,
+    `Project acknowledged by PM`,
     { projectName: project.name }
   );
 
   // Emit WebSocket event
   socketService.emitToProject(project._id, 'project_started', {
     project: project,
-    startedBy: req.user.name
+    acknowledgedBy: req.user.name
   });
 
   res.json({
     success: true,
     data: project,
-    message: 'Project started successfully'
+    message: 'Project acknowledged successfully'
   });
 });
 
-// @desc    Activate a project (convert started → active with full details)
+// @desc    Activate a project (convert acknowledged → active with full details)
 // @route   PATCH /api/pm/projects/:id/activate
 // @access  PM only
 const activateProject = asyncHandler(async (req, res, next) => {
@@ -189,7 +189,7 @@ const activateProject = asyncHandler(async (req, res, next) => {
 
   // Check if project status allows activation
   if (project.status !== 'started') {
-    return next(new ErrorResponse('Project can only be activated from started status', 400));
+    return next(new ErrorResponse('Project can only be activated from acknowledged status', 400));
   }
 
   // Update project with full details
@@ -198,7 +198,7 @@ const activateProject = asyncHandler(async (req, res, next) => {
   project.assignedTeam = assignedTeam;
   if (estimatedHours) project.estimatedHours = estimatedHours;
   if (tags) project.tags = tags;
-  
+
   await project.save();
 
   // Create activity log
@@ -208,7 +208,7 @@ const activateProject = asyncHandler(async (req, res, next) => {
     req.user.id,
     'PM',
     `Project activated with team assignment`,
-    { 
+    {
       projectName: project.name,
       teamSize: assignedTeam.length,
       dueDate: project.dueDate

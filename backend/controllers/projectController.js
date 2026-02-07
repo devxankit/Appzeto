@@ -3,6 +3,7 @@ const Milestone = require('../models/Milestone');
 const Task = require('../models/Task');
 const Activity = require('../models/Activity');
 const PM = require('../models/PM');
+const LeadCategory = require('../models/LeadCategory');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../services/cloudinaryService');
 const socketService = require('../services/socketService');
 const asyncHandler = require('../middlewares/asyncHandler');
@@ -167,6 +168,7 @@ const getAllProjects = asyncHandler(async (req, res, next) => {
 const getProjectById = asyncHandler(async (req, res, next) => {
   const project = await Project.findById(req.params.id)
     .populate('client', 'name companyName email phoneNumber address')
+    .populate('category', 'name color icon')
     .populate('projectManager', 'name email phone')
     .populate('assignedTeam', 'name email position department')
     .populate({
@@ -222,7 +224,9 @@ const updateProject = asyncHandler(async (req, res, next) => {
     assignedTeam,
     budget,
     estimatedHours,
-    tags
+    tags,
+    category,
+    categoryId
   } = req.body;
 
   // Build update object with only provided fields
@@ -405,7 +409,7 @@ const getProjectsByPM = asyncHandler(async (req, res, next) => {
 // @access  PM, Admin
 const getProjectStatistics = asyncHandler(async (req, res, next) => {
   const filter = {};
-  
+
   // Role-based filtering
   if (req.user.role === 'project-manager') {
     filter.projectManager = req.user.id;
@@ -572,27 +576,27 @@ const removeProjectAttachment = asyncHandler(async (req, res, next) => {
 const updateProjectRevisionStatus = asyncHandler(async (req, res, next) => {
   const { id, revisionType } = req.params;
   const { status, feedback } = req.body;
-  
+
   // Validate revisionType
   if (!['firstRevision', 'secondRevision'].includes(revisionType)) {
     return next(new ErrorResponse('Invalid revision type', 400));
   }
-  
+
   // Validate status
   if (!['pending', 'completed'].includes(status)) {
     return next(new ErrorResponse('Invalid status value', 400));
   }
-  
+
   const project = await Project.findById(id);
   if (!project) {
     return next(new ErrorResponse('Project not found', 404));
   }
-  
+
   // Check if user is the project manager
   if (!project.projectManager.equals(req.user.id)) {
     return next(new ErrorResponse('Not authorized', 403));
   }
-  
+
   // Ensure revisions object exists before updating
   if (!project.revisions) {
     project.revisions = {
@@ -600,10 +604,10 @@ const updateProjectRevisionStatus = asyncHandler(async (req, res, next) => {
       secondRevision: { status: 'pending', completedDate: null, feedback: null }
     };
   }
-  
+
   // Update revision status using the model method
   await project.updateRevisionStatus(revisionType, status, feedback);
-  
+
   // Log activity
   await Activity.logProjectActivity(
     project._id,
@@ -613,14 +617,14 @@ const updateProjectRevisionStatus = asyncHandler(async (req, res, next) => {
     `Revision status updated to "${status}" for ${revisionType} in project "${project.name}"`,
     { revisionType, status }
   );
-  
+
   // Emit WebSocket event
   socketService.emitToProjectRoom(id, 'project_revision_updated', {
     revisionType,
     status,
     completedDate: project.revisions[revisionType].completedDate
   });
-  
+
   res.status(200).json({
     success: true,
     data: project.revisions
@@ -632,24 +636,38 @@ const updateProjectRevisionStatus = asyncHandler(async (req, res, next) => {
 // @access  PM only
 const getProjectTeamMembers = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
-  
+
   const project = await Project.findById(id)
     .populate('assignedTeam', 'name email position department employeeId')
     .populate('projectManager', 'name email')
     .select('assignedTeam name projectManager');
-  
+
   if (!project) {
     return next(new ErrorResponse('Project not found', 404));
   }
-  
+
   // Check if user is the project manager
   if (!project.projectManager || !project.projectManager._id.equals(req.user.id)) {
     return next(new ErrorResponse('Not authorized to access this project', 403));
   }
-  
+
   res.status(200).json({
     success: true,
     data: project.assignedTeam
+  });
+});
+
+// @desc    Get all project categories (LeadCategories)
+// @route   GET /api/projects/meta/categories
+// @access  PM only
+const getCategories = asyncHandler(async (req, res, next) => {
+  const categories = await LeadCategory.find()
+    .select('name description color icon')
+    .sort('name');
+
+  res.status(200).json({
+    success: true,
+    data: categories
   });
 });
 
@@ -665,5 +683,6 @@ module.exports = {
   uploadProjectAttachment,
   removeProjectAttachment,
   updateProjectRevisionStatus,
-  getProjectTeamMembers // Export the new function
+  getProjectTeamMembers,
+  getCategories
 };

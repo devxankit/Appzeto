@@ -32,7 +32,7 @@ const PM_project_detail = () => {
       loadProjectData()
       setupWebSocket()
     }
-    
+
     return () => {
       // Only cleanup event listeners, not the connection itself
       socketService.off('project_updated')
@@ -47,36 +47,36 @@ const PM_project_detail = () => {
     const token = localStorage.getItem('pmToken')
     if (token) {
       socketService.connect(token)
-      
+
       // Listen for real-time updates
       socketService.on('project_updated', () => {
         if (id && id !== 'null' && id !== null) loadProjectData()
       })
-      
+
       socketService.on('milestone_created', () => {
         if (id && id !== 'null' && id !== null) loadMilestones()
       })
-      
+
       socketService.on('milestone_updated', () => {
         if (id && id !== 'null' && id !== null) loadMilestones()
       })
-      
+
       socketService.on('milestone_deleted', () => {
         if (id && id !== 'null' && id !== null) loadMilestones()
       })
-      
+
       socketService.on('task_created', () => {
         if (id && id !== 'null' && id !== null) loadTasks()
       })
-      
+
       socketService.on('task_updated', () => {
         if (id && id !== 'null' && id !== null) loadTasks()
       })
-      
+
       socketService.on('task_deleted', () => {
         if (id && id !== 'null' && id !== null) loadTasks()
       })
-      
+
       socketService.on('project_revision_updated', () => {
         if (id && id !== 'null' && id !== null) loadProjectData()
       })
@@ -88,11 +88,11 @@ const PM_project_detail = () => {
       console.warn('No project ID provided')
       return
     }
-    
+
     try {
       setIsLoading(true)
       const response = await projectService.getProjectById(id)
-      
+
       // Transform the data to match component expectations
       const projectData = {
         _id: response.data?._id || response._id,
@@ -107,37 +107,39 @@ const PM_project_detail = () => {
         customer: (response.data?.client || response.client) ? {
           name: (response.data?.client || response.client)?.name || (response.data?.client || response.client)?.companyName
         } : null,
+        client: response.data?.client || response.client,
+        category: response.data?.category || response.category,
         attachments: response.data?.attachments || response.attachments || []
       }
-      
+
       setProject(projectData)
-      
+
       // Load related data - milestones first so we can calculate progress
       const milestonesResponse = await milestoneService.getMilestonesByProject(id)
       const loadedMilestones = milestonesResponse.data || milestonesResponse || []
-      
+
       // Calculate progress based on completed milestones vs total milestones
       if (loadedMilestones.length > 0) {
         const totalMilestones = loadedMilestones.length
         const completedMilestones = loadedMilestones.filter(m => m.status === 'completed').length
-        projectData.progress = totalMilestones > 0 
-          ? Math.round((completedMilestones / totalMilestones) * 100) 
+        projectData.progress = totalMilestones > 0
+          ? Math.round((completedMilestones / totalMilestones) * 100)
           : (projectData.progress || 0)
         setProject(projectData)
       }
-      
+
       setMilestones(loadedMilestones)
-      
+
       // Load tasks
       await loadTasks()
-      
+
     } catch (error) {
       console.error('Error loading project:', error)
-      
+
       // Show error message (baseApiService already provides user-friendly messages)
       const errorMessage = error.message || 'Failed to load project details'
       toast.error(errorMessage)
-      
+
       // Navigate back if project not found or unauthorized
       if (error.message?.includes('404') || error.message?.includes('not found')) {
         setTimeout(() => {
@@ -154,15 +156,15 @@ const PM_project_detail = () => {
       const response = await milestoneService.getMilestonesByProject(id)
       const loadedMilestones = response.data || response || []
       setMilestones(loadedMilestones)
-      
+
       // Update project progress based on completed milestones
       if (loadedMilestones.length > 0 && project) {
         const totalMilestones = loadedMilestones.length
         const completedMilestones = loadedMilestones.filter(m => m.status === 'completed').length
-        const calculatedProgress = totalMilestones > 0 
-          ? Math.round((completedMilestones / totalMilestones) * 100) 
+        const calculatedProgress = totalMilestones > 0
+          ? Math.round((completedMilestones / totalMilestones) * 100)
           : (project.progress || 0)
-        
+
         setProject(prev => ({
           ...prev,
           progress: calculatedProgress
@@ -233,7 +235,7 @@ const PM_project_detail = () => {
   const getCountdownColor = () => {
     if (!project?.dueDate) return 'text-gray-600'
     const now = new Date(); const due = new Date(project.dueDate)
-    const diff = due.getTime() - now.getTime(); const days = Math.floor(diff / (1000*60*60*24))
+    const diff = due.getTime() - now.getTime(); const days = Math.floor(diff / (1000 * 60 * 60 * 24))
     if (diff < 0) return 'text-red-600'; if (days <= 1) return 'text-orange-600'; if (days <= 3) return 'text-yellow-600'; return 'text-blue-600'
   }
 
@@ -242,7 +244,7 @@ const PM_project_detail = () => {
     if (file) {
       setNewAttachment(file)
       setIsUploading(true)
-      
+
       try {
         await projectService.uploadProjectAttachment(id, file)
         toast.success('File uploaded successfully!')
@@ -271,17 +273,18 @@ const PM_project_detail = () => {
   }
 
   const handleProjectFormSubmit = async (formData) => {
-    // The form handles the update internally when projectData is provided
-    // This callback is just for refreshing the page and showing success
     try {
+      setIsLoading(true)
+      await projectService.updateProject(id, formData)
       toast.success('Project updated successfully!')
       setIsProjectFormOpen(false)
       // Reload project data to show updated information
-      loadProjectData()
+      await loadProjectData()
     } catch (error) {
-      console.error('Error after project update:', error)
-      // Still reload even if toast fails
-      loadProjectData()
+      console.error('Error updating project:', error)
+      toast.error(error.message || 'Failed to update project')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -315,12 +318,12 @@ const PM_project_detail = () => {
 
   const handleRevisionStatusChange = async (newStatus) => {
     if (!selectedRevision) return;
-    
-    
+
+
     try {
       await projectService.updateProjectRevisionStatus(
-        id, 
-        selectedRevision.type, 
+        id,
+        selectedRevision.type,
         { status: newStatus }
       );
       toast.success('Revision status updated successfully!');
@@ -411,7 +414,7 @@ const PM_project_detail = () => {
             <input type="file" onChange={handleUploadChange} className="hidden" accept=".pdf,.png,.jpg,.jpeg,.docx,.mp4,.fig,.txt,.zip" />
           </label>
         </div>
-        
+
         {isUploading && (
           <div className="mb-3 p-2 bg-blue-50 rounded-lg">
             <div className="flex items-center space-x-2">
@@ -420,7 +423,7 @@ const PM_project_detail = () => {
             </div>
           </div>
         )}
-        
+
         {newAttachment && (
           <div className="mb-3 p-2 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-between">
@@ -452,17 +455,17 @@ const PM_project_detail = () => {
                   </div>
                 </div>
                 <div className="flex items-center space-x-1 shrink-0">
-                  <a 
-                    href={att.secure_url} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
+                  <a
+                    href={att.secure_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
                   >
                     <Eye className="h-3.5 w-3.5" />
                   </a>
-                  <a 
-                    href={att.secure_url} 
-                    download={att.originalName || att.original_filename} 
+                  <a
+                    href={att.secure_url}
+                    download={att.originalName || att.original_filename}
                     className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
                   >
                     <Download className="h-3.5 w-3.5" />
@@ -491,7 +494,7 @@ const PM_project_detail = () => {
         <div className="flex items-center space-x-4 mb-6">
           <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center">
             <div className="w-14 h-14 bg-primary rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-lg">{project.customer?.name ? project.customer.name.split(' ').map(w=>w[0]).join('').substring(0,2) : 'C'}</span>
+              <span className="text-white font-bold text-lg">{project.customer?.name ? project.customer.name.split(' ').map(w => w[0]).join('').substring(0, 2) : 'C'}</span>
             </div>
           </div>
           <div>
@@ -505,7 +508,7 @@ const PM_project_detail = () => {
               <div className="p-2 bg-green-100 rounded-lg"><Calendar className="h-4 w-4 text-green-600" /></div>
               <div>
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Start Date</p>
-                <p className="text-sm font-bold text-gray-900">{project.startDate ? new Date(project.startDate).toLocaleDateString('en-US', {year:'numeric', month:'short', day:'numeric'}) : 'Not set'}</p>
+                <p className="text-sm font-bold text-gray-900">{project.startDate ? new Date(project.startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not set'}</p>
               </div>
             </div>
           </div>
@@ -514,7 +517,7 @@ const PM_project_detail = () => {
               <div className="p-2 bg-orange-100 rounded-lg"><Clock className="h-4 w-4 text-orange-600" /></div>
               <div>
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Due Date</p>
-                <p className="text-sm font-bold text-gray-900">{project.dueDate ? new Date(project.dueDate).toLocaleDateString('en-US', {year:'numeric', month:'short', day:'numeric'}) : 'Not set'}</p>
+                <p className="text-sm font-bold text-gray-900">{project.dueDate ? new Date(project.dueDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not set'}</p>
               </div>
             </div>
           </div>
@@ -529,40 +532,38 @@ const PM_project_detail = () => {
           </div>
           <h3 className="text-lg font-bold text-gray-900">Project Revisions</h3>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* First Revision Card */}
-            <div 
+          <div
             onClick={() => handleRevisionClick('firstRevision', project.revisions?.firstRevision)}
-              className="group bg-white rounded-xl p-4 border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all duration-200 cursor-pointer"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                  project.revisions?.firstRevision?.status === 'completed' 
-                      ? 'bg-green-100 text-green-600' 
-                      : 'bg-yellow-100 text-yellow-600'
+            className="group bg-white rounded-xl p-4 border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all duration-200 cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${project.revisions?.firstRevision?.status === 'completed'
+                  ? 'bg-green-100 text-green-600'
+                  : 'bg-yellow-100 text-yellow-600'
                   }`}>
                   {project.revisions?.firstRevision?.status === 'completed' ? '✓' : '1'}
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">
                     First Revision
-                    </h4>
+                  </h4>
                   <p className="text-xs text-gray-600 mt-0.5">Initial review and feedback</p>
-                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
-                  project.revisions?.firstRevision?.status === 'completed'
-                    ? 'bg-green-100 text-green-800 border-green-200'
-                    : 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                }`}>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${project.revisions?.firstRevision?.status === 'completed'
+                  ? 'bg-green-100 text-green-800 border-green-200'
+                  : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                  }`}>
                   {project.revisions?.firstRevision?.status || 'pending'}
-                  </span>
-                  </div>
-                </div>
-              
+                </span>
+              </div>
+            </div>
+
             {project.revisions?.firstRevision?.completedDate && (
               <div className="mt-3 pt-3 border-t border-gray-100">
                 <div className="text-xs text-gray-500">
@@ -574,20 +575,19 @@ const PM_project_detail = () => {
                 </div>
               </div>
             )}
-              </div>
-              
+          </div>
+
           {/* Second Revision Card */}
-          <div 
+          <div
             onClick={() => handleRevisionClick('secondRevision', project.revisions?.secondRevision)}
             className="group bg-white rounded-xl p-4 border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all duration-200 cursor-pointer"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                  project.revisions?.secondRevision?.status === 'completed' 
-                    ? 'bg-green-100 text-green-600' 
-                    : 'bg-yellow-100 text-yellow-600'
-                }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${project.revisions?.secondRevision?.status === 'completed'
+                  ? 'bg-green-100 text-green-600'
+                  : 'bg-yellow-100 text-yellow-600'
+                  }`}>
                   {project.revisions?.secondRevision?.status === 'completed' ? '✓' : '2'}
                 </div>
                 <div>
@@ -598,28 +598,27 @@ const PM_project_detail = () => {
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
-                  project.revisions?.secondRevision?.status === 'completed'
-                    ? 'bg-green-100 text-green-800 border-green-200'
-                    : 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                }`}>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${project.revisions?.secondRevision?.status === 'completed'
+                  ? 'bg-green-100 text-green-800 border-green-200'
+                  : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                  }`}>
                   {project.revisions?.secondRevision?.status || 'pending'}
                 </span>
               </div>
             </div>
-            
+
             {project.revisions?.secondRevision?.completedDate && (
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <div className="text-xs text-gray-500">
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="text-xs text-gray-500">
                   Completed: {new Date(project.revisions.secondRevision.completedDate).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric'
-                    })}
-                  </div>
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                  })}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -699,50 +698,71 @@ const PM_project_detail = () => {
 
   const renderTeam = () => {
     return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {!project?.assignedTeam || !Array.isArray(project.assignedTeam) || project.assignedTeam.length === 0 ? (
-        <div className="col-span-2 text-center py-8">
-          <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No team members assigned</h3>
-          <p className="text-gray-600">Team members will appear here when assigned to the project</p>
-        </div>
-      ) : (
-        project.assignedTeam.filter(member => member && member._id).map((member) => {
-          // Handle different possible name fields and ensure we have a name
-          const memberName = member.fullName || member.name || 
-            (member.firstName && member.lastName ? `${member.firstName} ${member.lastName}` : null) || 
-            'Unknown Member';
-          
-          // Safely generate initials
-          let initials = 'UM';
-          if (memberName && memberName !== 'Unknown Member' && typeof memberName === 'string') {
-            try {
-              initials = memberName.split(' ').map(w => w[0]).join('').substring(0, 2);
-            } catch (error) {
-              console.warn('Error generating initials for member:', member, error);
-              initials = 'UM';
-            }
-          }
-          const jobTitle = member.jobTitle || member.position || member.role || 'Team Member';
-          
-          return (
-          <div key={member._id} className="group bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200">
-            <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full flex items-center justify-center">
-                  <span className="text-base font-bold text-primary">{initials}</span>
-            </div>
-                <div className="flex-1">
-                  <h3 className="text-base font-bold text-gray-900 group-hover:text-primary transition-colors duration-200">
-                    {memberName}
-                  </h3>
-                  <p className="text-sm text-gray-600">{jobTitle}</p>
+          <div className="col-span-2 text-center py-8">
+            <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No team members assigned</h3>
+            <p className="text-gray-600">Team members will appear here when assigned to the project</p>
           </div>
+        ) : (
+          project.assignedTeam.map((member) => {
+            // Handle case where member might be just an ID string
+            if (typeof member === 'string') {
+              // If we only have an ID, we might need to fetch details or just show a placeholder
+              // For now, let's try to find it in the milestones or tasks if possible, or just show ID
+              return (
+                <div key={member} className="group bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                      <span className="text-base font-bold text-gray-500">?</span>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-base font-bold text-gray-900">
+                        Unknown Member ({member.substring(0, 6)}...)
+                      </h3>
+                      <p className="text-sm text-gray-600">Details not loaded</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Handle different possible name fields and ensure we have a name
+            const memberName = member.fullName || member.name ||
+              (member.firstName && member.lastName ? `${member.firstName} ${member.lastName}` : null) ||
+              'Unknown Member';
+
+            // Safely generate initials
+            let initials = 'UM';
+            if (memberName && memberName !== 'Unknown Member' && typeof memberName === 'string') {
+              try {
+                initials = memberName.split(' ').map(w => w[0]).join('').substring(0, 2);
+              } catch (error) {
+                console.warn('Error generating initials for member:', member, error);
+                initials = 'UM';
+              }
+            }
+            const jobTitle = member.jobTitle || member.position || member.role || 'Team Member';
+
+            return (
+              <div key={member._id || Math.random()} className="group bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full flex items-center justify-center">
+                    <span className="text-base font-bold text-primary">{initials}</span>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-base font-bold text-gray-900 group-hover:text-primary transition-colors duration-200">
+                      {memberName}
+                    </h3>
+                    <p className="text-sm text-gray-600">{jobTitle}</p>
+                  </div>
+                </div>
               </div>
-            </div>
-          );
-        })
-      )}
-    </div>
+            );
+          })
+        )}
+      </div>
     );
   }
 
@@ -800,7 +820,7 @@ const PM_project_detail = () => {
                   <div className="flex items-center space-x-3 mb-3">
                     <div className="p-2 bg-gradient-to-br from-primary/10 to-primary/20 rounded-xl"><FolderKanban className="h-6 w-6 text-primary" /></div>
                     <h1 className="text-lg md:text-xl font-semibold text-gray-900 leading-tight line-clamp-2 flex-1">{project.name}</h1>
-                    <button 
+                    <button
                       onClick={handleEditProject}
                       className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200 flex-shrink-0"
                       title="Edit Project"
@@ -835,7 +855,7 @@ const PM_project_detail = () => {
                 <div className="flex items-center space-x-4 mb-4 flex-1">
                   <div className="p-3 bg-gradient-to-br from-primary/10 to-primary/20 rounded-2xl"><FolderKanban className="h-8 w-8 text-primary" /></div>
                   <h1 className="text-xl lg:text-2xl font-semibold text-gray-900 line-clamp-2">{project.name}</h1>
-                  <button 
+                  <button
                     onClick={handleEditProject}
                     className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200 flex-shrink-0"
                     title="Edit Project"
@@ -862,22 +882,26 @@ const PM_project_detail = () => {
           {/* Mobile tabs */}
           <div className="md:hidden mb-6">
             <div className="grid grid-cols-2 gap-3">
-              {tabs.map(t => { const I = t.icon; return (
-                <button key={t.key} onClick={() => setActiveTab(t.key)} className={`p-4 rounded-2xl shadow-sm border transition-all ${activeTab === t.key ? 'bg-primary text-white border-primary shadow-md' : 'bg-white text-gray-600 border-gray-200 active:scale-95'}`}>
-                  <div className="flex flex-col items-center space-y-2"><I className="h-6 w-6" /><span className="text-sm font-medium">{t.label}</span></div>
-                </button>
-              )})}
+              {tabs.map(t => {
+                const I = t.icon; return (
+                  <button key={t.key} onClick={() => setActiveTab(t.key)} className={`p-4 rounded-2xl shadow-sm border transition-all ${activeTab === t.key ? 'bg-primary text-white border-primary shadow-md' : 'bg-white text-gray-600 border-gray-200 active:scale-95'}`}>
+                    <div className="flex flex-col items-center space-y-2"><I className="h-6 w-6" /><span className="text-sm font-medium">{t.label}</span></div>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
           {/* Desktop tabs */}
           <div className="hidden md:block mb-8">
             <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
-              {tabs.map(t => { const I = t.icon; return (
-                <button key={t.key} onClick={() => setActiveTab(t.key)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${activeTab === t.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>
-                  <I className="h-4 w-4" /><span>{t.label}</span>
-                </button>
-              )})}
+              {tabs.map(t => {
+                const I = t.icon; return (
+                  <button key={t.key} onClick={() => setActiveTab(t.key)} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${activeTab === t.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>
+                    <I className="h-4 w-4" /><span>{t.label}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -885,29 +909,29 @@ const PM_project_detail = () => {
         </div>
       </main>
 
-      <PM_milestone_form 
-        isOpen={isMilestoneFormOpen} 
-        onClose={() => setIsMilestoneFormOpen(false)} 
-        onSubmit={(milestone) => { 
+      <PM_milestone_form
+        isOpen={isMilestoneFormOpen}
+        onClose={() => setIsMilestoneFormOpen(false)}
+        onSubmit={(milestone) => {
           setIsMilestoneFormOpen(false);
           // Reload milestones after creation
           loadMilestones();
           toast.success('Milestone created successfully!');
-        }} 
-        projectId={project?._id} 
+        }}
+        projectId={project?._id}
       />
-      <PM_task_form 
-        isOpen={isTaskFormOpen} 
-        onClose={() => setIsTaskFormOpen(false)} 
-        onSubmit={async (taskData) => { 
+      <PM_task_form
+        isOpen={isTaskFormOpen}
+        onClose={() => setIsTaskFormOpen(false)}
+        onSubmit={async (taskData) => {
           try {
             // Create task
             const createdTask = await taskService.createTask(taskData)
-            
+
             // Upload attachments if any
             if (taskData.attachments && taskData.attachments.length > 0) {
               toast.info(`Uploading ${taskData.attachments.length} attachment(s)...`)
-              
+
               for (const attachment of taskData.attachments) {
                 try {
                   const file = attachment.file || attachment
@@ -919,7 +943,7 @@ const PM_project_detail = () => {
                 }
               }
             }
-            
+
             setIsTaskFormOpen(false);
             loadTasks();
             toast.success('Task created successfully!');
@@ -927,7 +951,7 @@ const PM_project_detail = () => {
             console.error('Error creating task:', error)
             toast.error(error.message || 'Failed to create task')
           }
-        }} 
+        }}
         projectId={project?._id}
         milestoneId={null} // Let user select milestone
       />
@@ -956,19 +980,18 @@ const PM_project_detail = () => {
 
             <div className="mb-6">
               <p className="text-sm text-gray-600 mb-4">
-                {selectedRevision.type === 'firstRevision' 
-                  ? 'Initial review and feedback for the project' 
+                {selectedRevision.type === 'firstRevision'
+                  ? 'Initial review and feedback for the project'
                   : 'Final review and approval for the project'
                 }
               </p>
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-700">Current Status:</span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    selectedRevision.data?.status === 'completed'
-                      ? 'bg-green-100 text-green-800 border-green-200'
-                      : 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                  }`}>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${selectedRevision.data?.status === 'completed'
+                    ? 'bg-green-100 text-green-800 border-green-200'
+                    : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                    }`}>
                     {selectedRevision.data?.status || 'pending'}
                   </span>
                 </div>
@@ -989,11 +1012,10 @@ const PM_project_detail = () => {
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => handleRevisionStatusChange('pending')}
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    selectedRevision.data?.status === 'pending'
-                      ? 'border-yellow-300 bg-yellow-50 text-yellow-800'
-                      : 'border-gray-200 hover:border-yellow-300 hover:bg-yellow-50 text-gray-700'
-                  }`}
+                  className={`p-3 rounded-lg border-2 transition-all ${selectedRevision.data?.status === 'pending'
+                    ? 'border-yellow-300 bg-yellow-50 text-yellow-800'
+                    : 'border-gray-200 hover:border-yellow-300 hover:bg-yellow-50 text-gray-700'
+                    }`}
                 >
                   <div className="flex items-center space-x-2">
                     <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
@@ -1002,11 +1024,10 @@ const PM_project_detail = () => {
                 </button>
                 <button
                   onClick={() => handleRevisionStatusChange('completed')}
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    selectedRevision.data?.status === 'completed'
-                      ? 'border-green-300 bg-green-50 text-green-800'
-                      : 'border-gray-200 hover:border-green-300 hover:bg-green-50 text-gray-700'
-                  }`}
+                  className={`p-3 rounded-lg border-2 transition-all ${selectedRevision.data?.status === 'completed'
+                    ? 'border-green-300 bg-green-50 text-green-800'
+                    : 'border-gray-200 hover:border-green-300 hover:bg-green-50 text-gray-700'
+                    }`}
                 >
                   <div className="flex items-center space-x-2">
                     <div className="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -1029,7 +1050,7 @@ const PM_project_detail = () => {
       )}
 
       {/* Project Form Dialog */}
-      <PM_project_form 
+      <PM_project_form
         isOpen={isProjectFormOpen}
         onClose={handleProjectFormClose}
         onSubmit={handleProjectFormSubmit}

@@ -13,20 +13,21 @@ import PM_navbar from './PM_navbar';
 import CloudinaryUpload from '../../../components/ui/cloudinary-upload';
 import { teamService, projectService } from '../DEV-services';
 
-const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
+const PM_project_form = ({ isOpen, onClose, onSubmit, onAcknowledge, projectData }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+
   // Determine if this is edit mode
   // If isOpen is provided, it's dialog mode - always use dialog even if editing
   // If id is in URL, it's page mode - use full page layout
   const isDialogMode = isOpen !== undefined; // Dialog mode when isOpen prop is provided
   const isEditMode = !!id || (projectData && projectData._id && !isDialogMode);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     client: '',
+    category: '',
     priority: 'normal',
     dueDate: '',
     assignedTeam: [],
@@ -39,6 +40,9 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [clients, setClients] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [categories, setCategories] = useState([]);
+
+  const [fetchedProjectData, setFetchedProjectData] = useState(null);
 
   // Load users data when component mounts
   useEffect(() => {
@@ -58,9 +62,10 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
         name: projectData.name || '',
         description: projectData.description || '',
         client: projectData.client?._id || projectData.client || '', // Will be updated after clients are loaded if needed
+        category: projectData.category?._id || projectData.category || '',
         priority: projectData.priority || 'normal',
         dueDate: projectData.dueDate ? (typeof projectData.dueDate === 'string' ? projectData.dueDate.split('T')[0] : new Date(projectData.dueDate).toISOString().split('T')[0]) : '',
-        assignedTeam: Array.isArray(projectData.assignedTeam) 
+        assignedTeam: Array.isArray(projectData.assignedTeam)
           ? projectData.assignedTeam.map(member => member._id || member)
           : [],
         status: projectData.status || 'planning',
@@ -71,52 +76,93 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
 
   // Set client after clients are loaded (if not already set)
   useEffect(() => {
-    if (projectData && clients.length > 0) {
+    const activeProjectData = projectData || fetchedProjectData;
+
+    if (activeProjectData && clients.length > 0) {
       const currentClientId = formData.client;
-      const projectClientId = projectData.client?._id || projectData.client;
-      
+      // Get the ID whether it's an object or string
+      const projectClientId = activeProjectData.client?._id || (typeof activeProjectData.client === 'string' ? activeProjectData.client : null);
+
       // Only update if client is not already set correctly
-      if (!currentClientId || currentClientId !== projectClientId) {
+      if (projectClientId && (!currentClientId || currentClientId !== projectClientId)) {
         // Try to find by ID first
         const clientById = clients.find(client => client.value === projectClientId);
-        
+
         if (clientById) {
           setFormData(prev => ({ ...prev, client: clientById.value }));
-        } else {
-          // Fallback: Find client by matching client name or company
-          const matchingClient = clients.find(client => 
-            client.subtitle === projectData.client?.name || 
-            client.subtitle === projectData.client?.companyName ||
-            client.label === projectData.client?.name ||
-            client.label === projectData.client?.company
+        } else if (typeof projectClientId === 'string') {
+          // If projectClientId is a string but not found in values, it might be a name
+          // Try to find by label or subtitle
+          const matchingClient = clients.find(client =>
+            client.label === projectClientId ||
+            client.subtitle === projectClientId ||
+            client.value === projectClientId
           );
-          
+
+          if (matchingClient) {
+            setFormData(prev => ({ ...prev, client: matchingClient.value }));
+          }
+        }
+      } else if (!projectClientId && activeProjectData.client) {
+        // Fallback if client is an object but doesn't have _id (unlikely but possible)
+        const clientName = activeProjectData.client.name || activeProjectData.client.companyName;
+        if (clientName) {
+          const matchingClient = clients.find(client =>
+            client.label === clientName ||
+            client.subtitle === clientName
+          );
           if (matchingClient) {
             setFormData(prev => ({ ...prev, client: matchingClient.value }));
           }
         }
       }
     }
-  }, [clients, projectData]);
+  }, [clients, projectData, fetchedProjectData]);
+
+  // Set category after categories are loaded
+  useEffect(() => {
+    const activeProjectData = projectData || fetchedProjectData;
+    if (activeProjectData && categories.length > 0) {
+      const projectCategoryId = activeProjectData.category?._id || (typeof activeProjectData.category === 'string' ? activeProjectData.category : null);
+      if (projectCategoryId && (!formData.category || formData.category !== projectCategoryId)) {
+        const categoryMatch = categories.find(cat => cat.value === projectCategoryId);
+        if (categoryMatch) {
+          setFormData(prev => ({ ...prev, category: categoryMatch.value }));
+        }
+      }
+    }
+  }, [categories, projectData, fetchedProjectData]);
+
+  // Effect to pre-fill category when client is selected
+  useEffect(() => {
+    if (formData.client && !formData.category && clients.length > 0) {
+      const selectedClient = clients.find(c => c.value === formData.client);
+      if (selectedClient && selectedClient.category) {
+        setFormData(prev => ({ ...prev, category: selectedClient.category }));
+      }
+    }
+  }, [formData.client, clients]);
 
   const loadUsersData = async () => {
     setIsLoading(true);
     try {
-      // Load clients and team members from API
-      const [clientsResponse, teamResponse] = await Promise.all([
+      // Load clients, team members and categories from API
+      const [clientsResponse, teamResponse, categoriesResponse] = await Promise.all([
         teamService.getClientsForProject(),
-        teamService.getTeamMembersForProject()
+        teamService.getTeamMembersForProject(),
+        projectService.getCategories()
       ]);
-      
+
       // Format clients data - prioritize client names over company names
       const formattedClients = clientsResponse.data.map(client => ({
         value: client._id,
         label: client.name, // Show client name as primary label
         subtitle: client.companyName, // Show company as subtitle
         icon: Building2,
-        avatar: client.name.substring(0, 2).toUpperCase()
+        avatar: client.name.substring(0, 2).toUpperCase(),
+        category: client.category // Include category stored on client (from lead)
       }));
-      
+
       // Format team members data
       const formattedTeamMembers = teamResponse.data.map(member => ({
         value: member._id,
@@ -124,14 +170,24 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
         subtitle: `${member.position} - ${member.department}`,
         avatar: member.name.substring(0, 2).toUpperCase()
       }));
-      
+
+      // Format categories data
+      const formattedCategories = categoriesResponse.data.map(cat => ({
+        value: cat._id,
+        label: cat.name,
+        subtitle: cat.description,
+        color: cat.color
+      }));
+
       setClients(formattedClients);
       setTeamMembers(formattedTeamMembers);
+      setCategories(formattedCategories);
     } catch (error) {
       console.error('Error loading users data:', error);
       // Fallback to empty arrays on error
       setClients([]);
       setTeamMembers([]);
+      setCategories([]);
     } finally {
       setIsLoading(false);
     }
@@ -143,7 +199,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
       // Load project data from API
       const response = await projectService.getProjectById(id);
       const project = response.data;
-      
+
       // Format dueDate for DatePicker (YYYY-MM-DD format)
       let formattedDueDate = '';
       if (project.dueDate) {
@@ -154,13 +210,16 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
         }
       }
 
+      setFetchedProjectData(project);
+
       setFormData({
         name: project.name || '',
         description: project.description || '',
-        client: project.client?._id || '',
+        client: project.client?._id || project.client || '',
+        category: project.category?._id || project.category || '',
         priority: project.priority || 'normal',
         dueDate: formattedDueDate,
-        assignedTeam: project.assignedTeam?.map(member => member._id || member) || [],
+        assignedTeam: project.assignedTeam?.filter(m => m).map(member => member._id || member) || [],
         status: project.status || 'planning',
         attachments: project.attachments || [],
       });
@@ -180,6 +239,9 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
   ];
 
   const statuses = [
+    { value: 'pending-assignment', label: 'Pending Assignment', icon: Clock },
+    { value: 'untouched', label: 'Untouched', icon: AlertCircle },
+    { value: 'started', label: 'Acknowledged', icon: CheckCircle },
     { value: 'planning', label: 'Planning', icon: Star },
     { value: 'active', label: 'Active', icon: CheckCircle },
     { value: 'on-hold', label: 'On Hold', icon: Clock },
@@ -198,12 +260,12 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
 
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
-    const newAttachments = files.map((file, index) => ({ 
-      id: `att-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`, 
-      name: file.name, 
-      size: file.size, 
-      type: file.type, 
-      file 
+    const newAttachments = files.map((file, index) => ({
+      id: `att-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      file
     }));
     setFormData(prev => ({ ...prev, attachments: [...prev.attachments, ...newAttachments] }));
   };
@@ -234,33 +296,43 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (validateForm()) {
       setIsSubmitting(true);
-      
+
       try {
+        // Prepare data for submission - ensure assignedTeam is just IDs
+        const submissionData = {
+          ...formData,
+          assignedTeam: formData.assignedTeam.map(item =>
+            typeof item === 'object' ? (item._id || item.value) : item
+          )
+        };
+
         // Check if editing: URL id or projectData with _id
         const isEditing = !!id || (projectData && projectData._id);
-        
+
         if (isEditing) {
           // Update existing project - use id from URL or from projectData
           const projectId = id || projectData?._id;
           if (!projectId) {
             throw new Error('Project ID is required for editing');
           }
-          await projectService.updateProject(projectId, formData);
-          
-          // If onSubmit is provided (dialog mode), call it to allow parent to handle success/refresh
-          // For URL-based edit mode, we'll navigate after success
+
+          // If onSubmit is provided (dialog mode), call it and let the parent handle the update
+          // This prevents double-submission in components that handle state transitions (like PM_new_projects)
           if (onSubmit) {
-            await onSubmit(formData);
-          } else if (id) {
-            // URL-based edit mode - navigate back
-            navigate('/pm-projects');
+            await onSubmit(submissionData);
+          } else {
+            // URL-based edit mode or internal use: save here
+            await projectService.updateProject(projectId, submissionData);
+            if (id) {
+              navigate('/pm-projects');
+            }
           }
         } else {
           // Create new project
-          await onSubmit(formData);
+          await onSubmit(submissionData);
         }
         handleClose();
       } catch (error) {
@@ -290,7 +362,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
   const renderFormContent = () => (
     <>
       {/* Project Name - Required */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
@@ -304,15 +376,14 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
           placeholder="Enter project name"
           value={formData.name}
           onChange={(e) => handleInputChange('name', e.target.value)}
-          className={`h-12 rounded-xl border-2 transition-all duration-200 ${
-            errors.name 
-              ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' 
-              : 'border-gray-200 focus:border-primary focus:ring-primary/20'
-          }`}
+          className={`h-12 rounded-xl border-2 transition-all duration-200 ${errors.name
+            ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+            : 'border-gray-200 focus:border-primary focus:ring-primary/20'
+            }`}
         />
         <AnimatePresence>
           {errors.name && (
-            <motion.p 
+            <motion.p
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -326,7 +397,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
       </motion.div>
 
       {/* Project Description */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
@@ -342,7 +413,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
       </motion.div>
 
       {/* Client Selection */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
@@ -356,11 +427,12 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
           value={formData.client}
           onChange={(value) => handleInputChange('client', value)}
           placeholder="Select a client"
+          searchable={true}
           className="h-12 rounded-xl border-2 border-gray-200 focus:border-primary focus:ring-primary/20 transition-all duration-200"
         />
         <AnimatePresence>
           {errors.client && (
-            <motion.p 
+            <motion.p
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -373,9 +445,29 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
         </AnimatePresence>
       </motion.div>
 
+      {/* Project Category */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35 }}
+        className="space-y-2"
+      >
+        <label className="text-sm font-semibold text-gray-700 flex items-center">
+          Project Category
+        </label>
+        <Combobox
+          options={categories}
+          value={formData.category}
+          onChange={(value) => handleInputChange('category', value)}
+          placeholder="Select project category"
+          searchable={true}
+          className="h-12 rounded-xl border-2 border-gray-200 focus:border-primary focus:ring-primary/20 transition-all duration-200"
+        />
+      </motion.div>
+
       {/* Priority and Status */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
@@ -393,7 +485,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
           />
         </motion.div>
 
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
@@ -411,7 +503,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
       </div>
 
       {/* Due Date */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6 }}
@@ -426,7 +518,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
         />
         <AnimatePresence>
           {errors.dueDate && (
-            <motion.p 
+            <motion.p
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -440,7 +532,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
       </motion.div>
 
       {/* Team Assignment */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.7 }}
@@ -459,7 +551,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
         />
         <AnimatePresence>
           {errors.assignedTeam && (
-            <motion.p 
+            <motion.p
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -473,7 +565,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
       </motion.div>
 
       {/* Attachments */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.8 }}
@@ -483,8 +575,8 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
         <CloudinaryUpload
           onUploadSuccess={(uploadData) => {
             const newAttachments = Array.isArray(uploadData) ? uploadData : [uploadData];
-            setFormData(prev => ({ 
-              ...prev, 
+            setFormData(prev => ({
+              ...prev,
               attachments: [...prev.attachments, ...newAttachments.map(data => ({
                 id: data.public_id,
                 name: data.original_filename,
@@ -519,9 +611,9 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
                     <p className="text-xs text-gray-500">{formatFileSize(att.size)}</p>
                   </div>
                 </div>
-                <button 
-                  type="button" 
-                  onClick={() => removeAttachment(att.id)} 
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(att.id)}
                   className="p-1 text-gray-400 hover:text-red-600 transition-colors duration-200"
                 >
                   ×
@@ -556,7 +648,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
         <PM_navbar />
-        
+
         <main className="pt-16 pb-24 md:pt-20 md:pb-8">
           <div className="px-4 md:max-w-4xl md:mx-auto md:px-6 lg:px-8">
             {/* Header */}
@@ -568,7 +660,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
                 <ArrowLeft className="h-4 w-4" />
                 <span className="text-sm font-medium">Back to Project</span>
               </button>
-              
+
               <div className="bg-gradient-to-r from-primary to-primary-dark rounded-2xl p-6 text-white">
                 <h1 className="text-2xl md:text-3xl font-bold mb-2">Edit Project</h1>
                 <p className="text-primary-foreground/80">
@@ -620,7 +712,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
   if (isOpen === undefined) {
     return null; // Don't render anything if isOpen is not provided
   }
-  
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto p-0" onClose={handleClose}>
@@ -631,7 +723,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
               {projectData ? 'Edit Project' : 'Create New Project'}
             </DialogTitle>
             <DialogDescription className="text-primary-foreground/80">
-              {projectData 
+              {projectData
                 ? 'Update the project details below. Fields marked with * are required.'
                 : 'Fill in the project details below. Fields marked with * are required.'
               }
@@ -643,7 +735,7 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
           {renderFormContent()}
 
           {/* Footer Buttons */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.0 }}
@@ -658,6 +750,29 @@ const PM_project_form = ({ isOpen, onClose, onSubmit, projectData }) => {
             >
               Cancel
             </Button>
+            {formData.status === 'untouched' && onAcknowledge && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    setIsSubmitting(true);
+                    const projectId = id || projectData?._id;
+                    await onAcknowledge(projectId);
+                    handleClose();
+                  } catch (error) {
+                    console.error('Error acknowledging project:', error);
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                disabled={isSubmitting}
+                className="w-full sm:w-auto h-12 border-teal-500 text-teal-600 hover:bg-teal-50 rounded-xl transition-all duration-200"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Acknowledge
+              </Button>
+            )}
             <Button
               type="submit"
               disabled={isSubmitting}

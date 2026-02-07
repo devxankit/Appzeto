@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { projectService } from '../../DEV-services/projectService'
-import { 
-  FiFolder, 
-  FiUsers, 
+import {
+  FiFolder,
+  FiUsers,
   FiCalendar,
   FiDollarSign,
   FiPhone,
@@ -59,7 +59,7 @@ const PM_new_projects = () => {
         priority: selectedFilter !== 'all' ? selectedFilter : undefined,
         search: searchTerm || undefined
       })
-      
+
       if (response.success) {
         setNewProjects(response.data)
       }
@@ -74,7 +74,7 @@ const PM_new_projects = () => {
 
   const projectStatuses = [
     { value: 'untouched', label: 'Untouched', color: 'bg-gray-100 text-gray-800', icon: FiClock },
-    { value: 'started', label: 'Started', color: 'bg-yellow-100 text-yellow-800', icon: FiPlay },
+    { value: 'started', label: 'Acknowledged', color: 'bg-blue-100 text-blue-800', icon: FiCheckCircle },
     { value: 'in-progress', label: 'In Progress', color: 'bg-green-100 text-green-800', icon: FiTrendingUp },
     { value: 'milestone-complete', label: 'Milestone Complete', color: 'bg-purple-100 text-purple-800', icon: FiTarget },
     { value: 'project-complete', label: 'Project Complete', color: 'bg-emerald-100 text-emerald-800', icon: FiCheckCircle },
@@ -91,17 +91,17 @@ const PM_new_projects = () => {
   ]
 
   const filteredProjects = newProjects.filter(project => {
-    const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         (project.client?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (project.client?.companyName || '').toLowerCase().includes(searchTerm.toLowerCase())
-    
+    const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (project.client?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (project.client?.companyName || '').toLowerCase().includes(searchTerm.toLowerCase())
+
     const matchesStatus = activeTab === 'all' || project.status === activeTab
-    
-    const matchesFilter = selectedFilter === 'all' || 
-                         (selectedFilter === 'high' && project.priority === 'high') ||
-                         (selectedFilter === 'urgent' && project.priority === 'urgent') ||
-                         (selectedFilter === 'normal' && project.priority === 'normal')
-    
+
+    const matchesFilter = selectedFilter === 'all' ||
+      (selectedFilter === 'high' && project.priority === 'high') ||
+      (selectedFilter === 'urgent' && project.priority === 'urgent') ||
+      (selectedFilter === 'normal' && project.priority === 'normal')
+
     return matchesSearch && matchesStatus && matchesFilter
   })
 
@@ -150,19 +150,19 @@ const PM_new_projects = () => {
   const handleStartProject = async (projectId) => {
     try {
       setLoading(true)
-      
+
       const response = await projectService.startProject(projectId)
-      
+
       if (response.success) {
         // Update the project status in local state
-        setNewProjects(prev => 
-          prev.map(project => 
+        setNewProjects(prev =>
+          prev.map(project =>
             (project._id || project.id) === projectId
               ? { ...project, status: 'started' }
               : project
           )
         )
-        
+
         console.log('Project started successfully:', response.message)
       }
     } catch (error) {
@@ -176,15 +176,15 @@ const PM_new_projects = () => {
   const handleActivateProject = async (projectId, projectData) => {
     try {
       setLoading(true)
-      
+
       const response = await projectService.activateProject(projectId, projectData)
-      
+
       if (response.success) {
         // Remove from new projects (it's now active)
-        setNewProjects(prev => 
+        setNewProjects(prev =>
           prev.filter(project => (project._id || project.id) !== projectId)
         )
-        
+
         console.log('Project activated successfully:', response.message)
         setIsProjectFormOpen(false)
         setEditingProject(null)
@@ -198,8 +198,7 @@ const PM_new_projects = () => {
   }
 
   const handleViewDetails = (projectId) => {
-    console.log('Viewing project details:', projectId)
-    navigate(`/pm-project/${projectId}`)
+    handleEditProject(projectId)
   }
 
   const handleCardClick = (project) => {
@@ -210,7 +209,7 @@ const PM_new_projects = () => {
 
   const handleProjectFormSubmit = async (formData) => {
     console.log('Project form submitted:', formData)
-    
+
     if (editingProject) {
       // Check if project needs to be started first
       if (editingProject.status === 'untouched') {
@@ -220,18 +219,18 @@ const PM_new_projects = () => {
           if (!startResponse.success) {
             throw new Error('Failed to start project')
           }
-          
+
           // Update local state
-          setNewProjects(prev => 
-            prev.map(project => 
+          setNewProjects(prev =>
+            prev.map(project =>
               (project._id || project.id) === (editingProject._id || editingProject.id)
                 ? { ...project, status: 'started' }
                 : project
             )
           )
-          
+
           console.log('Project started successfully:', startResponse.message)
-          
+
           // Then activate it
           await handleActivateProject(editingProject._id || editingProject.id, formData)
         } catch (error) {
@@ -268,22 +267,22 @@ const PM_new_projects = () => {
     if (selectedProjectForMeeting) {
       try {
         setLoading(true)
-        
+
         const response = await projectService.updateMeetingStatus(
           selectedProjectForMeeting._id || selectedProjectForMeeting.id,
           selectedMeetingStatus
         )
-        
+
         if (response.success) {
           // Update the project in the local state
-          setNewProjects(prev => 
-            prev.map(project => 
+          setNewProjects(prev =>
+            prev.map(project =>
               (project._id || project.id) === (selectedProjectForMeeting._id || selectedProjectForMeeting.id)
                 ? { ...project, meetingStatus: selectedMeetingStatus }
                 : project
             )
           )
-          
+
           console.log('Meeting status updated successfully:', response.message)
         }
       } catch (error) {
@@ -329,7 +328,7 @@ const PM_new_projects = () => {
     const StatusIcon = statusInfo.icon
 
     return (
-      <motion.div 
+      <motion.div
         className={`group h-full rounded-xl border border-teal-200 hover:border-teal-300 bg-white p-4 shadow-md hover:shadow-lg transition-shadow ${project.status === 'started' ? 'cursor-pointer' : ''}`}
         onClick={() => handleCardClick(project)}
         {...motionProps}
@@ -398,47 +397,58 @@ const PM_new_projects = () => {
             </svg>
             <span className="font-medium whitespace-nowrap">Due: {project.dueDate ? new Date(project.dueDate).toLocaleDateString() : 'TBD'}</span>
           </div>
-          
+
           {/* Action Buttons */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex flex-wrap items-center justify-end gap-2 text-right">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleStartMeeting(project._id || project.id)
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-lg border border-orange-200 transition-all duration-200"
+              title="Meeting Status"
+            >
+              <FiUsers className="h-3.5 w-3.5" />
+              <span>Meeting</span>
+            </button>
+
             {project.status === 'started' ? (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   handleViewDetails(project._id || project.id)
                 }}
-                className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline px-2 py-1 rounded-md hover:bg-blue-50 transition-colors duration-200"
-                title="View Project Details"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-all duration-200"
+                title="Complete Project Setup"
               >
-                <span>View details</span>
-                <FiEye className="h-3 w-3" />
+                <span>Complete Setup</span>
+                <FiArrowRight className="h-3.5 w-3.5" />
               </button>
             ) : (
-              <>
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleStartMeeting(project._id || project.id)
+                    handleStartProject(project._id || project.id)
                   }}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-orange-600 border border-orange-600 hover:bg-orange-50 px-2 py-1 rounded-md transition-colors duration-200"
-                  title="Start Meeting"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-all duration-200"
+                  title="Acknowledge Project"
                 >
-                  <FiUsers className="h-3 w-3" />
-                  <span className="hidden sm:inline">Start Meeting</span>
-                  <span className="sm:hidden">Meeting</span>
+                  <FiCheckCircle className="h-3.5 w-3.5" />
+                  <span>Acknowledge</span>
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
                     handleEditProject(project._id || project.id)
                   }}
-                  className="inline-flex items-center gap-1 text-sm font-medium text-teal-600 hover:underline px-2 py-1 rounded-md hover:bg-teal-50 transition-colors duration-200"
-                  title="Edit Project"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg border border-gray-200 transition-all duration-200"
+                  title="Edit/Setup Project"
                 >
-                  <FiEdit className="h-4 w-4" />
+                  <FiEdit className="h-3.5 w-3.5" />
                   <span>Edit</span>
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -452,7 +462,7 @@ const PM_new_projects = () => {
     const StatusIcon = statusInfo.icon
 
     return (
-      <motion.div 
+      <motion.div
         className={`group h-full rounded-xl border border-teal-200 hover:border-teal-300 bg-white p-6 shadow-md hover:shadow-lg transition-shadow ${project.status === 'started' ? 'cursor-pointer' : ''}`}
         onClick={() => handleCardClick(project)}
         {...motionProps}
@@ -529,46 +539,58 @@ const PM_new_projects = () => {
             </svg>
             <span className="font-medium whitespace-nowrap">Due: {project.dueDate ? new Date(project.dueDate).toLocaleDateString() : 'TBD'}</span>
           </div>
-          
+
           {/* Action Buttons */}
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleStartMeeting(project._id || project.id)
+              }}
+              className="inline-flex items-center gap-2 text-sm font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 px-4 py-2 rounded-xl border border-orange-200 transition-all duration-200"
+              title="Meeting Status"
+            >
+              <FiUsers className="h-4 w-4" />
+              <span>Start Meeting</span>
+            </button>
+
             {project.status === 'started' ? (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   handleViewDetails(project._id || project.id)
                 }}
-                className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:underline px-3 py-2 rounded-md hover:bg-blue-50 transition-colors duration-200"
-                title="View Project Details"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl border border-blue-200 transition-all duration-200 shadow-sm hover:shadow"
+                title="Complete Project Setup"
               >
-                <span>View details</span>
-                <FiEye className="h-4 w-4" />
+                <span>Complete Setup</span>
+                <FiArrowRight className="h-4 w-4" />
               </button>
             ) : (
-              <>
+              <div className="flex items-center gap-2">
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleStartMeeting(project._id || project.id)
+                    handleStartProject(project._id || project.id)
                   }}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-orange-600 border border-orange-600 hover:bg-orange-50 px-3 py-2 rounded-md transition-colors duration-200"
-                  title="Start Meeting"
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-teal-600 bg-teal-50 hover:bg-teal-100 px-4 py-2 rounded-xl border border-teal-200 transition-all duration-200 shadow-sm hover:shadow"
+                  title="Acknowledge Project"
                 >
-                  <FiUsers className="h-4 w-4" />
-                  <span>Start Meeting</span>
+                  <FiCheckCircle className="h-4 w-4" />
+                  <span>Acknowledge</span>
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
                     handleEditProject(project._id || project.id)
                   }}
-                  className="inline-flex items-center gap-2 text-base font-medium text-teal-600 hover:underline px-3 py-2 rounded-md hover:bg-teal-50 transition-colors duration-200"
-                  title="Edit Project"
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-xl border border-gray-200 transition-all duration-200"
+                  title="Edit/Setup Project"
                 >
-                  <FiEdit className="h-5 w-5" />
+                  <FiEdit className="h-4 w-4" />
                   <span>Edit</span>
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -579,13 +601,13 @@ const PM_new_projects = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <PM_navbar />
-      
+
       <main className="max-w-7xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
-        
+
         {/* Mobile Layout */}
         <div className="lg:hidden">
           {/* Simple Header */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
@@ -600,38 +622,36 @@ const PM_new_projects = () => {
           </motion.div>
 
           {/* Status Tabs */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
             className="mb-4"
           >
-             <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-               <button
-                 onClick={() => setActiveTab('untouched')}
-                 className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                   activeTab === 'untouched'
-                     ? 'bg-teal-500 text-white shadow-sm'
-                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                 }`}
-               >
-                 Untouched
-               </button>
-               <button
-                 onClick={() => setActiveTab('started')}
-                 className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                   activeTab === 'started'
-                     ? 'bg-teal-500 text-white shadow-sm'
-                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                 }`}
-               >
-                 Started
-               </button>
-             </div>
+            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+              <button
+                onClick={() => setActiveTab('untouched')}
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${activeTab === 'untouched'
+                  ? 'bg-teal-500 text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+              >
+                Untouched
+              </button>
+              <button
+                onClick={() => setActiveTab('started')}
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${activeTab === 'started'
+                  ? 'bg-teal-500 text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+              >
+                Acknowledged
+              </button>
+            </div>
           </motion.div>
 
           {/* Search & Filter */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
@@ -648,11 +668,10 @@ const PM_new_projects = () => {
               />
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-lg transition-all duration-200 ${
-                  showFilters 
-                    ? 'bg-teal-500 text-white shadow-md' 
-                    : 'text-gray-500 hover:text-teal-600 hover:bg-teal-50 border border-teal-200'
-                }`}
+                className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-lg transition-all duration-200 ${showFilters
+                  ? 'bg-teal-500 text-white shadow-md'
+                  : 'text-gray-500 hover:text-teal-600 hover:bg-teal-50 border border-teal-200'
+                  }`}
               >
                 <FiFilter className="text-base" />
               </button>
@@ -661,7 +680,7 @@ const PM_new_projects = () => {
 
           {/* Filters - Conditional Display */}
           {showFilters && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -672,11 +691,10 @@ const PM_new_projects = () => {
                 <button
                   key={filter.id}
                   onClick={() => setSelectedFilter(filter.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                    selectedFilter === filter.id
-                      ? 'bg-teal-500 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${selectedFilter === filter.id
+                    ? 'bg-teal-500 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                 >
                   {filter.label}
                 </button>
@@ -685,7 +703,7 @@ const PM_new_projects = () => {
           )}
 
           {/* Results Count */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.4 }}
@@ -697,24 +715,24 @@ const PM_new_projects = () => {
           </motion.div>
 
           {/* Mobile Projects List */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.6 }}
             className="space-y-3"
           >
-             <AnimatePresence>
-               {filteredProjects.map((project, index) => (
-                 <MobileProjectCard 
-                   key={project._id || project.id || index}
-                   project={project}
-                   initial={{ opacity: 0, y: 20 }}
-                   animate={{ opacity: 1, y: 0 }}
-                   exit={{ opacity: 0, y: -20 }}
-                   transition={{ duration: 0.3, delay: index * 0.05 }}
-                 />
-               ))}
-             </AnimatePresence>
+            <AnimatePresence>
+              {filteredProjects.map((project, index) => (
+                <MobileProjectCard
+                  key={project._id || project.id || index}
+                  project={project}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                />
+              ))}
+            </AnimatePresence>
 
             {/* Empty State */}
             {filteredProjects.length === 0 && (
@@ -740,12 +758,12 @@ const PM_new_projects = () => {
         {/* Desktop Layout */}
         <div className="hidden lg:block">
           <div className="grid grid-cols-12 gap-8">
-            
+
             {/* Main Content - 8 columns */}
             <div className="col-span-8 space-y-6">
-              
+
               {/* Desktop Header */}
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
@@ -760,40 +778,38 @@ const PM_new_projects = () => {
               </motion.div>
 
               {/* Desktop Status Tabs */}
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.2 }}
                 className="mb-6"
               >
-                 <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
-                   <button
-                     onClick={() => setActiveTab('untouched')}
-                     className={`px-6 py-3 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
-                       activeTab === 'untouched'
-                         ? 'bg-teal-500 text-white shadow-sm'
-                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                     }`}
-                   >
-                     <FiClock className="h-4 w-4" />
-                     <span>Untouched</span>
-                   </button>
-                   <button
-                     onClick={() => setActiveTab('started')}
-                     className={`px-6 py-3 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
-                       activeTab === 'started'
-                         ? 'bg-teal-500 text-white shadow-sm'
-                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                     }`}
-                   >
-                     <FiPlay className="h-4 w-4" />
-                     <span>Started</span>
-                   </button>
-                 </div>
+                <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+                  <button
+                    onClick={() => setActiveTab('untouched')}
+                    className={`px-6 py-3 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${activeTab === 'untouched'
+                      ? 'bg-teal-500 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                  >
+                    <FiClock className="h-4 w-4" />
+                    <span>Untouched</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('started')}
+                    className={`px-6 py-3 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${activeTab === 'started'
+                      ? 'bg-teal-500 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                  >
+                    <FiCheckCircle className="h-4 w-4" />
+                    <span>Acknowledged</span>
+                  </button>
+                </div>
               </motion.div>
 
               {/* Desktop Search & Filters */}
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.3 }}
@@ -811,20 +827,19 @@ const PM_new_projects = () => {
                     />
                     <button
                       onClick={() => setShowFilters(!showFilters)}
-                      className={`absolute right-4 top-1/2 transform -translate-y-1/2 p-2 rounded-lg transition-all duration-200 ${
-                        showFilters 
-                          ? 'bg-teal-500 text-white shadow-md' 
-                          : 'text-gray-500 hover:text-teal-600 hover:bg-teal-50 border border-teal-200'
-                      }`}
+                      className={`absolute right-4 top-1/2 transform -translate-y-1/2 p-2 rounded-lg transition-all duration-200 ${showFilters
+                        ? 'bg-teal-500 text-white shadow-md'
+                        : 'text-gray-500 hover:text-teal-600 hover:bg-teal-50 border border-teal-200'
+                        }`}
                     >
                       <FiFilter className="text-lg" />
                     </button>
                   </div>
                 </div>
-                
+
                 {/* Filters - Conditional Display */}
                 {showFilters && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
@@ -835,11 +850,10 @@ const PM_new_projects = () => {
                       <button
                         key={filter.id}
                         onClick={() => setSelectedFilter(filter.id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                          selectedFilter === filter.id
-                            ? 'bg-teal-500 text-white shadow-md'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${selectedFilter === filter.id
+                          ? 'bg-teal-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
                       >
                         {filter.label}
                       </button>
@@ -849,24 +863,24 @@ const PM_new_projects = () => {
               </motion.div>
 
               {/* Desktop Projects Grid */}
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.4 }}
                 className="space-y-4"
               >
-                 <AnimatePresence>
-                   {filteredProjects.map((project, index) => (
-                     <DesktopProjectCard 
-                       key={project._id || project.id || index}
-                       project={project}
-                       initial={{ opacity: 0, y: 20 }}
-                       animate={{ opacity: 1, y: 0 }}
-                       exit={{ opacity: 0, y: -20 }}
-                       transition={{ duration: 0.3, delay: index * 0.05 }}
-                     />
-                   ))}
-                 </AnimatePresence>
+                <AnimatePresence>
+                  {filteredProjects.map((project, index) => (
+                    <DesktopProjectCard
+                      key={project._id || project.id || index}
+                      project={project}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                    />
+                  ))}
+                </AnimatePresence>
               </motion.div>
 
               {/* Empty State */}
@@ -891,7 +905,7 @@ const PM_new_projects = () => {
 
             {/* Sidebar - 4 columns */}
             <div className="col-span-4 space-y-6">
-            
+
               {/* Project Status Flow */}
               <motion.div
                 initial={{ opacity: 0, x: 30 }}
@@ -900,7 +914,7 @@ const PM_new_projects = () => {
                 className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-2xl p-6 shadow-xl border border-teal-200/50"
               >
                 <h3 className="text-lg font-bold text-teal-900 mb-4">Project Lifecycle</h3>
-                
+
                 <div className="space-y-3">
                   {projectStatuses.map((status, index) => {
                     const StatusIcon = status.icon
@@ -929,7 +943,7 @@ const PM_new_projects = () => {
                 className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200"
               >
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Project Statistics</h3>
-                
+
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700 text-sm font-medium">Total Projects</span>
@@ -940,7 +954,7 @@ const PM_new_projects = () => {
                     <span className="text-gray-900 text-xl font-bold">{newProjects.filter(p => p.status === 'untouched').length}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-700 text-sm font-medium">Started</span>
+                    <span className="text-gray-700 text-sm font-medium">Acknowledged</span>
                     <span className="text-gray-900 text-xl font-bold">{newProjects.filter(p => p.status === 'started').length}</span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -958,13 +972,13 @@ const PM_new_projects = () => {
                 className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200"
               >
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
-                
+
                 <div className="space-y-3">
                   <button className="w-full bg-teal-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-teal-600 transition-colors duration-200 flex items-center justify-center space-x-2">
                     <FiPlus className="text-lg" />
                     <span>Create Project</span>
                   </button>
-                  
+
                   <button className="w-full bg-white text-gray-700 font-semibold py-3 px-4 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors duration-200 flex items-center justify-center space-x-2">
                     <FiUsers className="text-lg" />
                     <span>Assign Team</span>
@@ -973,151 +987,151 @@ const PM_new_projects = () => {
               </motion.div>
             </div>
           </div>
-         </div>
-       </main>
+        </div>
+      </main>
 
-       {/* Project Form Dialog */}
-       <PM_project_form 
-         isOpen={isProjectFormOpen}
-         onClose={handleProjectFormClose}
-         onSubmit={handleProjectFormSubmit}
-         projectData={editingProject}
-       />
+      {/* Project Form Dialog */}
+      <PM_project_form
+        isOpen={isProjectFormOpen}
+        onClose={handleProjectFormClose}
+        onSubmit={handleProjectFormSubmit}
+        onAcknowledge={handleStartProject}
+        projectData={editingProject}
+      />
 
-       {/* Meeting Dialog */}
-       <AnimatePresence>
-         {isMeetingDialogOpen && selectedProjectForMeeting && (
-           <motion.div
-             initial={{ opacity: 0 }}
-             animate={{ opacity: 1 }}
-             exit={{ opacity: 0 }}
-             className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
-             onClick={handleMeetingDialogClose}
-           >
-             <motion.div
-               initial={{ scale: 0.9, opacity: 0 }}
-               animate={{ scale: 1, opacity: 1 }}
-               exit={{ scale: 0.9, opacity: 0 }}
-               className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl"
-               onClick={(e) => e.stopPropagation()}
-             >
-               <div className="text-center mb-6">
-                 <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                   <FiUsers className="text-orange-600 text-2xl" />
-                 </div>
-                 <h3 className="text-xl font-bold text-gray-900 mb-2">Meeting Status</h3>
-                 <p className="text-gray-600 text-sm">
-                   Update meeting status for <span className="font-semibold">{selectedProjectForMeeting.name}</span>
-                 </p>
-               </div>
+      {/* Meeting Dialog */}
+      <AnimatePresence>
+        {isMeetingDialogOpen && selectedProjectForMeeting && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+            onClick={handleMeetingDialogClose}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FiUsers className="text-orange-600 text-2xl" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Meeting Status</h3>
+                <p className="text-gray-600 text-sm">
+                  Update meeting status for <span className="font-semibold">{selectedProjectForMeeting.name}</span>
+                </p>
+              </div>
 
-               <div className="space-y-4 mb-6">
-                 <div className="bg-gray-50 rounded-lg p-4">
-                   <div className="flex items-center justify-between mb-2">
-                     <span className="text-sm font-medium text-gray-700">Client:</span>
-                     <span className="text-sm text-gray-900">{selectedProjectForMeeting.client?.name || 'Unknown'}</span>
-                   </div>
-                   <div className="flex items-center justify-between mb-2">
-                     <span className="text-sm font-medium text-gray-700">Company:</span>
-                     <span className="text-sm text-gray-900">{selectedProjectForMeeting.client?.companyName || 'N/A'}</span>
-                   </div>
-                   <div className="flex items-center justify-between mb-2">
-                     <span className="text-sm font-medium text-gray-700">Phone:</span>
-                     <div className="flex items-center gap-2">
-                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 text-teal-600">
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
-                       </svg>
-                       <span className="text-sm text-gray-900 font-mono">{selectedProjectForMeeting.client?.phoneNumber || selectedProjectForMeeting.client?.phone || 'N/A'}</span>
-                     </div>
-                   </div>
-                   <div className="flex items-center justify-between">
-                     <span className="text-sm font-medium text-gray-700">Current Status:</span>
-                     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getMeetingStatusColor(selectedProjectForMeeting.meetingStatus)}`}>
-                       {getMeetingStatusLabel(selectedProjectForMeeting.meetingStatus)}
-                     </span>
-                   </div>
-                 </div>
+              <div className="space-y-4 mb-6">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Client:</span>
+                    <span className="text-sm text-gray-900">{selectedProjectForMeeting.client?.name || 'Unknown'}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Company:</span>
+                    <span className="text-sm text-gray-900">{selectedProjectForMeeting.client?.companyName || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Phone:</span>
+                    <div className="flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 text-teal-600">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                      </svg>
+                      <span className="text-sm text-gray-900 font-mono">{selectedProjectForMeeting.client?.phoneNumber || selectedProjectForMeeting.client?.phone || 'N/A'}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">Current Status:</span>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getMeetingStatusColor(selectedProjectForMeeting.meetingStatus)}`}>
+                      {getMeetingStatusLabel(selectedProjectForMeeting.meetingStatus)}
+                    </span>
+                  </div>
+                </div>
 
-                 <div className="space-y-2">
-                   <label className="text-sm font-medium text-gray-700">Select Meeting Status:</label>
-                   <div className="relative dropdown-container">
-                     <button
-                       type="button"
-                       onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                       className="flex h-12 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm transition-all duration-200 hover:border-gray-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 focus:outline-none"
-                     >
-                       <span className="flex items-center space-x-3">
-                         {selectedMeetingStatus === 'pending' ? (
-                           <FiClock className="h-4 w-4 text-yellow-600" />
-                         ) : (
-                           <FiCheckCircle className="h-4 w-4 text-green-600" />
-                         )}
-                         <span>{getMeetingStatusLabel(selectedMeetingStatus)}</span>
-                       </span>
-                       <FiArrowRight className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-90' : ''}`} />
-                     </button>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Select Meeting Status:</label>
+                  <div className="relative dropdown-container">
+                    <button
+                      type="button"
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      className="flex h-12 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm transition-all duration-200 hover:border-gray-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 focus:outline-none"
+                    >
+                      <span className="flex items-center space-x-3">
+                        {selectedMeetingStatus === 'pending' ? (
+                          <FiClock className="h-4 w-4 text-yellow-600" />
+                        ) : (
+                          <FiCheckCircle className="h-4 w-4 text-green-600" />
+                        )}
+                        <span>{getMeetingStatusLabel(selectedMeetingStatus)}</span>
+                      </span>
+                      <FiArrowRight className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-90' : ''}`} />
+                    </button>
 
-                     <AnimatePresence>
-                       {isDropdownOpen && (
-                         <motion.div
-                           initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                           animate={{ opacity: 1, y: 0, scale: 1 }}
-                           exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                           transition={{ duration: 0.15 }}
-                           className="absolute top-full left-0 right-0 z-50 mt-2 max-h-64 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
-                         >
-                           <div className="max-h-48 overflow-y-auto">
-                             {meetingStatusOptions.map((option, index) => (
-                               <motion.button
-                                 key={option.value}
-                                 initial={{ opacity: 0, x: -20 }}
-                                 animate={{ opacity: 1, x: 0 }}
-                                 transition={{ delay: index * 0.05 }}
-                                 type="button"
-                                 onClick={() => handleStatusSelect(option.value)}
-                                 className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors duration-150 hover:bg-gray-50 ${
-                                   selectedMeetingStatus === option.value ? 'bg-teal-50 text-teal-700' : ''
-                                 }`}
-                               >
-                                 <span className="flex items-center space-x-3">
-                                   <option.icon className={`h-4 w-4 ${option.value === 'pending' ? 'text-yellow-600' : 'text-green-600'}`} />
-                                   <span>{option.label}</span>
-                                 </span>
-                                 {selectedMeetingStatus === option.value && (
-                                   <FiCheckCircle className="h-4 w-4 text-teal-600" />
-                                 )}
-                               </motion.button>
-                             ))}
-                           </div>
-                         </motion.div>
-                       )}
-                     </AnimatePresence>
-                   </div>
-                 </div>
-               </div>
+                    <AnimatePresence>
+                      {isDropdownOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute top-full left-0 right-0 z-50 mt-2 max-h-64 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
+                        >
+                          <div className="max-h-48 overflow-y-auto">
+                            {meetingStatusOptions.map((option, index) => (
+                              <motion.button
+                                key={option.value}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: index * 0.05 }}
+                                type="button"
+                                onClick={() => handleStatusSelect(option.value)}
+                                className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors duration-150 hover:bg-gray-50 ${selectedMeetingStatus === option.value ? 'bg-teal-50 text-teal-700' : ''
+                                  }`}
+                              >
+                                <span className="flex items-center space-x-3">
+                                  <option.icon className={`h-4 w-4 ${option.value === 'pending' ? 'text-yellow-600' : 'text-green-600'}`} />
+                                  <span>{option.label}</span>
+                                </span>
+                                {selectedMeetingStatus === option.value && (
+                                  <FiCheckCircle className="h-4 w-4 text-teal-600" />
+                                )}
+                              </motion.button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </div>
 
-               <div className="space-y-3">
-                 <button
-                   onClick={handleMeetingDialogClose}
-                   className="w-full bg-gray-100 text-gray-700 font-semibold py-3 px-4 rounded-xl hover:bg-gray-200 transition-colors duration-200"
-                 >
-                   Cancel
-                 </button>
-                 
-                 <button
-                   onClick={handleMeetingStatusUpdate}
-                   className="w-full bg-teal-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-teal-600 transition-colors duration-200 flex items-center justify-center space-x-2"
-                 >
-                   <FiCheckCircle className="text-lg" />
-                   <span>Confirm Status</span>
-                 </button>
-               </div>
-             </motion.div>
-           </motion.div>
-         )}
-       </AnimatePresence>
-     </div>
-   )
- }
- 
- export default PM_new_projects
+              <div className="space-y-3">
+                <button
+                  onClick={handleMeetingDialogClose}
+                  className="w-full bg-gray-100 text-gray-700 font-semibold py-3 px-4 rounded-xl hover:bg-gray-200 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={handleMeetingStatusUpdate}
+                  className="w-full bg-teal-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-teal-600 transition-colors duration-200 flex items-center justify-center space-x-2"
+                >
+                  <FiCheckCircle className="text-lg" />
+                  <span>Confirm Status</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+export default PM_new_projects

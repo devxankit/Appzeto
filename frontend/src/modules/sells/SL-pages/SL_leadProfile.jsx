@@ -581,9 +581,19 @@ const SL_leadProfile = () => {
     { id: 'phone', label: 'Phone Call', icon: FiPhone }
   ]
 
-  const assignees = salesTeam.map(m => m.name)
-
   const handleAddMeeting = () => {
+    // Prefer the sales person who owns this lead, otherwise first team member
+    let defaultAssigneeName = ''
+    if (lead?.assignedTo && salesTeam.length > 0) {
+      const matchById = salesTeam.find(m => m._id === (lead.assignedTo._id || lead.assignedTo.id))
+      if (matchById) {
+        defaultAssigneeName = matchById.name
+      }
+    }
+    if (!defaultAssigneeName && salesTeam.length > 0) {
+      defaultAssigneeName = salesTeam[0].name
+    }
+
     setMeetingForm({
       clientName: leadProfile?.name || lead?.name || '',
       meetingDate: '',
@@ -591,7 +601,7 @@ const SL_leadProfile = () => {
       meetingType: 'in-person',
       location: '',
       notes: '',
-      assignee: ''
+      assignee: defaultAssigneeName
     })
     setShowMeetingDialog(true)
   }
@@ -609,8 +619,23 @@ const SL_leadProfile = () => {
       return
     }
 
-    // Find client by name from my converted clients
-    const clientId = myClients.find(c => c.name === meetingForm.clientName)?._id
+    // Find client by phone first (most reliable), then by name from my converted clients
+    let clientId = null
+    const leadPhone = (lead?.phone || '').toString().trim()
+    if (leadPhone) {
+      const byPhone = myClients.find(c => (c.phoneNumber || '').toString().trim() === leadPhone)
+      if (byPhone?._id) {
+        clientId = byPhone._id
+      }
+    }
+    if (!clientId) {
+      const targetName = (meetingForm.clientName || '').trim().toLowerCase()
+      const byName = myClients.find(c => (c.name || '').trim().toLowerCase() === targetName)
+      if (byName?._id) {
+        clientId = byName._id
+      }
+    }
+
     if (!clientId) {
       toast.error('Client not found. Convert this lead to a client first')
       return

@@ -12,13 +12,14 @@ const PM_tasks = () => {
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
   const [tasks, setTasks] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
     loadTasks()
     setupWebSocket()
-    
+
     return () => {
       // Only cleanup event listeners, not the connection itself
       socketService.off('task_created')
@@ -33,16 +34,16 @@ const PM_tasks = () => {
     if (token && tokenUtils.isAuthenticated()) {
       try {
         socketService.connect(token)
-        
+
         // Listen for real-time updates
         socketService.on('task_created', () => {
           loadTasks()
         })
-        
+
         socketService.on('task_updated', () => {
           loadTasks()
         })
-        
+
         socketService.on('task_deleted', () => {
           loadTasks()
         })
@@ -58,21 +59,21 @@ const PM_tasks = () => {
     try {
       setIsLoading(true)
       setError(null)
-      
+
       // Check if PM is authenticated
       if (!tokenUtils.isAuthenticated()) {
         throw new Error('PM not authenticated')
       }
-      
+
       // Get all tasks for this PM using the new endpoint
       const tasksResponse = await taskService.getAllTasks({
         limit: 100,
         sortBy: 'createdAt',
         sortOrder: 'desc'
       })
-      
+
       const allTasks = tasksResponse.data || []
-      
+
       setTasks(allTasks)
     } catch (err) {
       console.error('Error loading tasks:', err)
@@ -87,19 +88,19 @@ const PM_tasks = () => {
     try {
       // Create task
       const createdTask = await taskService.createTask(taskData)
-      
+
       // Upload attachments if any
       if (taskData.attachments && taskData.attachments.length > 0) {
         toast.info(`Uploading ${taskData.attachments.length} attachment(s)...`)
-        
+
         for (const attachment of taskData.attachments) {
           try {
             // Check if attachment has a file property, otherwise use the attachment directly
             const file = attachment.file || attachment
-            
+
             // Upload to backend
             await taskService.uploadTaskAttachment(createdTask._id, file)
-            
+
             toast.success(`Attachment ${attachment.name} uploaded successfully`)
           } catch (error) {
             console.error('Attachment upload error:', error)
@@ -107,7 +108,7 @@ const PM_tasks = () => {
           }
         }
       }
-      
+
       toast.success('Task created successfully!')
       loadTasks() // Reload tasks to show the new one
       setIsTaskFormOpen(false)
@@ -139,18 +140,30 @@ const PM_tasks = () => {
     }
   }
 
-  const filteredTasks = filter === 'all' ? tasks : tasks.filter(task => {
+  const filteredTasks = tasks.filter(task => {
     const taskStatus = (task.status || '').toLowerCase()
-    if (filter === 'in progress') {
-      return taskStatus === 'in-progress'
+    let matchesFilter = false;
+
+    if (filter === 'all') {
+      matchesFilter = true;
+    } else if (filter === 'in progress') {
+      matchesFilter = taskStatus === 'in-progress';
+    } else {
+      matchesFilter = taskStatus === filter.toLowerCase();
     }
-    return taskStatus === filter.toLowerCase()
+
+    const matchesSearch = !searchTerm ||
+      task.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      task.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      task.project?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    return matchesFilter && matchesSearch;
   })
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
       <PM_navbar />
-      
+
       <main className="pt-16 pb-24 md:pt-20 md:pb-8">
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
           {/* Error Display */}
@@ -170,7 +183,7 @@ const PM_tasks = () => {
                   <h2 className="text-lg font-bold text-gray-900 mb-1">Manage your tasks</h2>
                   <p className="text-sm text-gray-600">Add new tasks and track progress</p>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsTaskFormOpen(true)}
                   className="ml-4 bg-gradient-to-r from-primary to-primary-dark text-white px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center space-x-2"
                 >
@@ -179,7 +192,7 @@ const PM_tasks = () => {
                 </button>
               </div>
             </div>
-            
+
             {/* Urgent Tasks Card */}
             <div className="mt-4 bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-6 border border-red-200 cursor-pointer hover:shadow-lg transition-all duration-200" onClick={() => navigate('/pm-urgent-tasks')}>
               <div className="flex items-center space-x-3">
@@ -192,26 +205,17 @@ const PM_tasks = () => {
             </div>
           </div>
 
-          {/* Desktop Layout */}
+          {/* Desktop Layout - Header with Create Button */}
           <div className="hidden md:block mb-8">
             <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center space-x-3">
-                <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                  <Search className="h-4 w-4 text-gray-600" />
-                  <span className="text-sm font-medium text-gray-700">Search</span>
-                </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                  <Filter className="h-4 w-4 text-gray-600" />
-                  <span className="text-sm font-medium text-gray-700">Filter</span>
-                </button>
-              </div>
+              <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
               <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl p-4 border border-primary/20">
                 <div className="flex items-center space-x-4">
                   <div className="text-right">
                     <h3 className="text-sm font-semibold text-gray-900">Stay productive today</h3>
                     <p className="text-xs text-gray-600">Add new tasks and track progress</p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setIsTaskFormOpen(true)}
                     className="bg-gradient-to-r from-primary to-primary-dark text-white px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center space-x-2"
                   >
@@ -221,7 +225,7 @@ const PM_tasks = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Urgent Tasks Card - Desktop */}
             <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-6 border border-red-200 cursor-pointer hover:shadow-lg transition-all duration-200" onClick={() => navigate('/pm-urgent-tasks')}>
               <div className="flex items-center space-x-3">
@@ -246,11 +250,10 @@ const PM_tasks = () => {
                 <button
                   key={key}
                   onClick={() => setFilter(key)}
-                  className={`p-4 rounded-2xl shadow-sm border transition-all ${
-                    filter === key
-                      ? 'bg-primary text-white border-primary shadow-md'
-                      : 'bg-white text-gray-600 border-gray-200 active:scale-95'
-                  }`}
+                  className={`p-4 rounded-2xl shadow-sm border transition-all ${filter === key
+                    ? 'bg-primary text-white border-primary shadow-md'
+                    : 'bg-white text-gray-600 border-gray-200 active:scale-95'
+                    }`}
                 >
                   <div className="flex flex-col items-center space-y-1">
                     <span className="text-sm font-medium">{label}</span>
@@ -273,15 +276,28 @@ const PM_tasks = () => {
                 <button
                   key={key}
                   onClick={() => setFilter(key)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
-                    filter === key
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-                  }`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${filter === key
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    }`}
                 >
                   {label} ({count})
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Search Bar - Unified placement below metric cards */}
+          <div className="mb-6">
+            <div className="relative w-full">
+              <input
+                type="text"
+                placeholder="Search tasks by title, description or project..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
+              />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             </div>
           </div>
 
@@ -299,8 +315,8 @@ const PM_tasks = () => {
           {!isLoading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
               {filteredTasks.map((task) => (
-                <div 
-                  key={task._id} 
+                <div
+                  key={task._id}
                   onClick={() => navigate(`/pm-task/${task._id}`)}
                   className="group relative bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer overflow-hidden"
                 >
@@ -318,7 +334,7 @@ const PM_tasks = () => {
                         </h3>
                       </div>
                     </div>
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation() }}
                       className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-md transition-all duration-200 flex-shrink-0"
                     >
@@ -402,7 +418,7 @@ const PM_tasks = () => {
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No tasks found</h3>
               <p className="text-gray-600 mb-4">Try adjusting your filter or create a new task</p>
-              <button 
+              <button
                 onClick={() => setIsTaskFormOpen(true)}
                 className="bg-gradient-to-r from-primary to-primary-dark text-white px-6 py-2 rounded-full text-sm font-medium"
               >

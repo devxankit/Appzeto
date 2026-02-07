@@ -307,8 +307,12 @@ const getRequests = asyncHandler(async (req, res, next) => {
     .skip(skip)
     .limit(parseInt(limit));
 
-  // Populate response.respondedBy
+  // Enrich payment-approval requests with account information and response.respondedBy
+  const PaymentReceipt = require('../models/PaymentReceipt');
+  const Account = require('../models/Account');
+
   for (let request of requests) {
+    // Populate response.respondedBy
     if (request.response && request.response.respondedBy && request.response.respondedByModel) {
       const modelMap = {
         'Admin': Admin,
@@ -324,6 +328,40 @@ const getRequests = asyncHandler(async (req, res, next) => {
         if (responder) {
           request.response.respondedBy = responder;
         }
+      }
+    }
+
+    // For sales payment-recovery approvals, attach account info (for admin payment-approvals table)
+    if (request.type === 'payment-recovery' && request.module === 'sales') {
+      try {
+        // Prefer account from PaymentReceipt if present
+        let accountId = request.metadata?.accountId || null;
+
+        if (request.metadata?.paymentReceiptId) {
+          const receipt = await PaymentReceipt.findById(request.metadata.paymentReceiptId).select('account').populate('account', 'name accountName bankName');
+          if (receipt && receipt.account) {
+            accountId = receipt.account._id || receipt.account.id || receipt.account;
+            const accountName = receipt.account.accountName || receipt.account.name || '';
+            const bankName = receipt.account.bankName || '';
+            request.metadata = request.metadata || {};
+            request.metadata.accountId = accountId;
+            request.metadata.accountName = bankName ? `${accountName} - ${bankName}` : accountName;
+            continue;
+          }
+        }
+
+        // Fallback: look up Account by accountId in metadata
+        if (accountId) {
+          const account = await Account.findById(accountId).select('name accountName bankName');
+          if (account) {
+            const accountName = account.accountName || account.name || '';
+            const bankName = account.bankName || '';
+            request.metadata = request.metadata || {};
+            request.metadata.accountName = bankName ? `${accountName} - ${bankName}` : accountName;
+          }
+        }
+      } catch (err) {
+        console.error('Error enriching request with account info:', err);
       }
     }
   }

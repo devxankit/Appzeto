@@ -3,10 +3,10 @@ import { cn } from '@/lib/utils';
 import { ChevronDown, Check, Search, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const Combobox = ({ 
-  options = [], 
-  value, 
-  onChange, 
+const Combobox = ({
+  options = [],
+  value,
+  onChange,
   placeholder = "Select an option...",
   searchable = false,
   allowCustom = false,
@@ -26,6 +26,16 @@ const Combobox = ({
   );
 
   const selectedOption = options.find(option => option && option.value === value);
+
+  useEffect(() => {
+    // Debug logging for Combobox selection issues
+    if (options.length > 0 && value && !selectedOption) {
+      console.warn('Combobox: Value provided but no option found', { value, optionsSample: options.slice(0, 3) });
+    }
+    if (value) {
+
+    }
+  }, [value, options, selectedOption]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {

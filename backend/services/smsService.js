@@ -4,15 +4,30 @@ class SMSService {
 
   constructor() {
 
-    this.apiUsername = process.env.SMS_INDIA_HUB_USERNAME || '';
+    // Support both new *_HUB_* variables and older names from env.example
+    this.apiUsername =
+      process.env.SMS_INDIA_HUB_USERNAME ||
+      process.env.SMS_INDIA_USERNAME ||
+      '';
 
-    this.apiPassword = process.env.SMS_INDIA_HUB_API_KEY || '';
+    this.apiPassword =
+      process.env.SMS_INDIA_HUB_API_KEY ||
+      process.env.SMS_INDIA_API_KEY ||
+      '';
 
-    this.senderId = process.env.SMS_INDIA_HUB_SENDER_ID || 'SMSHUB';
+    this.senderId =
+      process.env.SMS_INDIA_HUB_SENDER_ID ||
+      process.env.SMS_INDIA_SENDER_ID ||
+      'SMSHUB';
 
-    this.dltTemplateId = process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '';
+    this.dltTemplateId =
+      process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID ||
+      process.env.SMS_INDIA_DLT_TEMPLATE_ID ||
+      '';
 
-    this.baseUrl = process.env.SMS_INDIA_BASE_URL || 'http://cloud.smsindiahub.in/vendorsms/pushsms.aspx';
+    this.baseUrl =
+      process.env.SMS_INDIA_BASE_URL ||
+      'http://cloud.smsindiahub.in/vendorsms/pushsms.aspx';
 
     this.isEnabled = process.env.SMS_INDIA_ENABLED === 'true';
 

@@ -417,6 +417,7 @@ const Admin_finance_management = () => {
           submittedDate: req.createdAt,
           submittedBy: req.requestedBy?.name || 'Unknown',
           projectName: req.project?.name || 'N/A',
+          accountName: req.metadata?.accountName || '',
           category: req.category || '',
           amount: req.amount,
           response: req.response ? { type: req.response.type, message: req.response.message, respondedDate: req.response.respondedDate, respondedBy: req.response.respondedBy?.name } : null,
@@ -2581,6 +2582,7 @@ const Admin_finance_management = () => {
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Title</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">From</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Project</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Account</th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Amount</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Date</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
@@ -2603,6 +2605,9 @@ const Admin_finance_management = () => {
                         </td>
                         <td className="py-3 px-4 text-sm text-gray-600">{item.submittedBy || '—'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600 max-w-[120px] truncate" title={item.projectName}>{item.projectName || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600 max-w-[160px] truncate" title={item.accountName}>
+                          {item.accountName || '—'}
+                        </td>
                         <td className="py-3 px-4 text-right">
                           {item.amount != null && item.amount !== '' ? <span className="text-sm font-semibold text-teal-600">{formatCurrency(item.amount)}</span> : <span className="text-gray-400">—</span>}
                         </td>
@@ -4520,9 +4525,12 @@ const Admin_finance_management = () => {
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               <p className="text-sm text-gray-600">{selectedPaymentRequest.description}</p>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-500 space-y-0.5">
                 <p>From: {selectedPaymentRequest.submittedBy}</p>
                 <p>Project: {selectedPaymentRequest.projectName}</p>
+                {selectedPaymentRequest.accountName && (
+                  <p>Account: {selectedPaymentRequest.accountName}</p>
+                )}
                 <p>Submitted: {selectedPaymentRequest.submittedDate ? formatDate(selectedPaymentRequest.submittedDate) : '—'}</p>
                 {selectedPaymentRequest.amount != null && selectedPaymentRequest.amount !== '' && (
                   <p className="font-semibold text-teal-600 mt-1">Amount: {formatCurrency(selectedPaymentRequest.amount)}</p>

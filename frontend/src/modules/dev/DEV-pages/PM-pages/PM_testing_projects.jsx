@@ -25,7 +25,7 @@ const PM_testing_projects = () => {
       const response = await projectService.getAllProjects({ status: 'testing', limit: 100 });
       // Handle both array response and object with data property
       const testingProjects = Array.isArray(response) ? response : (response?.data || []);
-      
+
       // Transform the data to match the component structure
       const formattedProjects = testingProjects.map(project => ({
         _id: project._id,
@@ -41,7 +41,7 @@ const PM_testing_projects = () => {
         assignedTeam: project.assignedTeam || [],
         dueDate: project.dueDate
       }));
-      
+
       setProjects(formattedProjects);
     } catch (error) {
       console.error('Error loading testing projects:', error);
@@ -105,17 +105,20 @@ const PM_testing_projects = () => {
   };
 
   const handleProjectFormSubmit = async (formData) => {
-    // The form handles the update internally when projectData is provided
-    // This callback is just for refreshing the list and showing success
     try {
-      toast.success('Project updated successfully!');
+      if (editingProject) {
+        setIsLoading(true);
+        await projectService.updateProject(editingProject._id, formData);
+        toast.success('Project updated successfully!');
+      }
       setIsProjectFormOpen(false);
       setEditingProject(null);
       loadProjects(); // Refresh the list
     } catch (error) {
-      console.error('Error after project update:', error);
-      // Still refresh the list even if toast fails
-      loadProjects();
+      console.error('Error updating project:', error);
+      toast.error(error.message || 'Failed to update project');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -127,7 +130,7 @@ const PM_testing_projects = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
       <PM_navbar />
-      
+
       <main className="pt-16 pb-24 md:pt-20 md:pb-8">
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
           {/* Loading State */}
@@ -142,105 +145,105 @@ const PM_testing_projects = () => {
           {!isLoading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {projects.map((project) => (
-                <div 
-                  key={project._id} 
+                <div
+                  key={project._id}
                   onClick={() => navigate(`/pm-project/${project._id}`)}
                   className="group bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-300 cursor-pointer transform hover:-translate-y-0.5 active:scale-[0.98]"
                 >
-                {/* Header Section */}
-                    <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-start space-x-3 flex-1">
-                    <div className="p-2 bg-gradient-to-br from-primary/10 to-primary/20 rounded-xl group-hover:from-primary/20 group-hover:to-primary/30 transition-all duration-300">
-                      <FolderKanban className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between mb-1">
-                        <h3 className="text-sm md:text-base font-semibold text-gray-900 leading-tight group-hover:text-primary transition-colors duration-300 line-clamp-2">
-                          {project.name}
-                        </h3>
-                        <button 
-                          onClick={(e) => handleEditProject(project._id, e)}
-                          className="p-1 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200 ml-1"
-                          title="Edit Project"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
+                  {/* Header Section */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start space-x-3 flex-1">
+                      <div className="p-2 bg-gradient-to-br from-primary/10 to-primary/20 rounded-xl group-hover:from-primary/20 group-hover:to-primary/30 transition-all duration-300">
+                        <FolderKanban className="h-5 w-5 text-primary" />
                       </div>
-                      <div className="flex items-center space-x-1.5 mb-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(project.priority)}`}>
-                          {formatPriority(project.priority)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-1">
+                          <h3 className="text-sm md:text-base font-semibold text-gray-900 leading-tight group-hover:text-primary transition-colors duration-300 line-clamp-2">
+                            {project.name}
+                          </h3>
+                          <button
+                            onClick={(e) => handleEditProject(project._id, e)}
+                            className="p-1 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200 ml-1"
+                            title="Edit Project"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="flex items-center space-x-1.5 mb-2">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(project.priority)}`}>
+                            {formatPriority(project.priority)}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(project.status)}`}>
+                            {formatStatus(project.status)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <p className="text-sm text-gray-600 leading-relaxed mb-3 line-clamp-2">
+                    {project.description}
+                  </p>
+
+                  {/* Progress Section */}
+                  <div className="mb-3">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-medium text-gray-700">Progress</span>
+                      <span className="text-sm font-bold text-gray-900">{project.progress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-primary to-primary-dark h-2 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${project.progress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  {/* Footer Section */}
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                    <div className="flex items-center space-x-3">
+                      <div className="flex items-center space-x-1 text-gray-500">
+                        <Users className="h-3.5 w-3.5" />
+                        <span className="text-xs font-medium">
+                          {Array.isArray(project.assignedTeam) ? project.assignedTeam.length : (typeof project.assignedTeam === 'object' && project.assignedTeam !== null ? Object.keys(project.assignedTeam).length : 0)}
                         </span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(project.status)}`}>
-                          {formatStatus(project.status)}
+                      </div>
+                      <div className="flex items-center space-x-1 text-gray-500">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span className="text-xs font-medium">
+                          {project.dueDate ? new Date(project.dueDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric'
+                          }) : 'No date'}
                         </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-semibold text-gray-700">
+                        {(() => {
+                          if (!project.dueDate) return 'No date';
+
+                          const now = new Date();
+                          const dueDate = new Date(project.dueDate);
+                          const diffTime = dueDate.getTime() - now.getTime();
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                          if (diffDays < 0) {
+                            return `${Math.abs(diffDays)}d overdue`;
+                          } else if (diffDays === 0) {
+                            return 'Today';
+                          } else if (diffDays === 1) {
+                            return 'Tomorrow';
+                          } else {
+                            return `${diffDays}d left`;
+                          }
+                        })()}
                       </div>
                     </div>
                   </div>
                 </div>
-
-                {/* Description */}
-                <p className="text-sm text-gray-600 leading-relaxed mb-3 line-clamp-2">
-                  {project.description}
-                </p>
-
-                {/* Progress Section */}
-                <div className="mb-3">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-medium text-gray-700">Progress</span>
-                    <span className="text-sm font-bold text-gray-900">{project.progress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className="bg-gradient-to-r from-primary to-primary-dark h-2 rounded-full transition-all duration-500 ease-out"
-                      style={{ width: `${project.progress}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* Footer Section */}
-                <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex items-center space-x-1 text-gray-500">
-                      <Users className="h-3.5 w-3.5" />
-                      <span className="text-xs font-medium">
-                        {Array.isArray(project.assignedTeam) ? project.assignedTeam.length : (typeof project.assignedTeam === 'object' && project.assignedTeam !== null ? Object.keys(project.assignedTeam).length : 0)}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-1 text-gray-500">
-                      <Calendar className="h-3.5 w-3.5" />
-                      <span className="text-xs font-medium">
-                        {project.dueDate ? new Date(project.dueDate).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric'
-                        }) : 'No date'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs font-semibold text-gray-700">
-                      {(() => {
-                        if (!project.dueDate) return 'No date';
-                        
-                        const now = new Date();
-                        const dueDate = new Date(project.dueDate);
-                        const diffTime = dueDate.getTime() - now.getTime();
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                        
-                        if (diffDays < 0) {
-                          return `${Math.abs(diffDays)}d overdue`;
-                        } else if (diffDays === 0) {
-                          return 'Today';
-                        } else if (diffDays === 1) {
-                          return 'Tomorrow';
-                        } else {
-                          return `${diffDays}d left`;
-                        }
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+              ))}
             </div>
           )}
 
@@ -258,7 +261,7 @@ const PM_testing_projects = () => {
       </main>
 
       {/* Project Form Dialog */}
-      <PM_project_form 
+      <PM_project_form
         isOpen={isProjectFormOpen}
         onClose={handleProjectFormClose}
         onSubmit={handleProjectFormSubmit}

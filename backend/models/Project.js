@@ -306,30 +306,30 @@ projectSchema.index({ createdAt: -1 });
 projectSchema.index({ category: 1 });
 
 // Virtual for calculating completion percentage from milestones
-projectSchema.virtual('completionPercentage').get(function() {
+projectSchema.virtual('completionPercentage').get(function () {
   if (!this.milestones || this.milestones.length === 0) {
     return 0;
   }
-  
+
   // This will be calculated when milestones are populated
   return this.progress;
 });
 
 // Virtual for checking if project is overdue
-projectSchema.virtual('isOverdue').get(function() {
+projectSchema.virtual('isOverdue').get(function () {
   if (!this.dueDate) return false;
   return new Date() > this.dueDate && this.status !== 'completed';
 });
 
 // Method to update project progress
-projectSchema.methods.updateProgress = async function() {
+projectSchema.methods.updateProgress = async function () {
   try {
     // Calculate progress based on completed milestones vs total milestones
     // This matches the calculation used in backend controllers for consistency
-    const milestones = await this.constructor.model('Milestone').find({ 
-      project: this._id 
+    const milestones = await this.constructor.model('Milestone').find({
+      project: this._id
     });
-    
+
     if (milestones.length === 0) {
       this.progress = 0;
     } else {
@@ -342,7 +342,7 @@ projectSchema.methods.updateProgress = async function() {
         this.progress = Math.round((completedMilestones / milestones.length) * 100);
       }
     }
-    
+
     await this.save();
     return this.progress;
   } catch (error) {
@@ -357,7 +357,7 @@ projectSchema.methods.updateProgress = async function() {
 // };
 
 // Method to add team member
-projectSchema.methods.addTeamMember = function(employeeId) {
+projectSchema.methods.addTeamMember = function (employeeId) {
   if (!this.assignedTeam.includes(employeeId)) {
     this.assignedTeam.push(employeeId);
     return this.save();
@@ -366,13 +366,13 @@ projectSchema.methods.addTeamMember = function(employeeId) {
 };
 
 // Method to remove team member
-projectSchema.methods.removeTeamMember = function(employeeId) {
+projectSchema.methods.removeTeamMember = function (employeeId) {
   this.assignedTeam = this.assignedTeam.filter(id => !id.equals(employeeId));
   return this.save();
 };
 
 // Method to add milestone
-projectSchema.methods.addMilestone = function(milestoneId) {
+projectSchema.methods.addMilestone = function (milestoneId) {
   if (!this.milestones.includes(milestoneId)) {
     this.milestones.push(milestoneId);
     return this.save();
@@ -381,28 +381,28 @@ projectSchema.methods.addMilestone = function(milestoneId) {
 };
 
 // Method to add attachment
-projectSchema.methods.addAttachment = function(attachmentData) {
+projectSchema.methods.addAttachment = function (attachmentData) {
   this.attachments.push(attachmentData);
   return this.save();
 };
 
 // Method to remove attachment
-projectSchema.methods.removeAttachment = function(attachmentId) {
+projectSchema.methods.removeAttachment = function (attachmentId) {
   this.attachments = this.attachments.filter(att => att._id.toString() !== attachmentId);
   return this.save();
 };
 
 // Method to update revision status
-projectSchema.methods.updateRevisionStatus = function(revisionType, status, feedback) {
+projectSchema.methods.updateRevisionStatus = function (revisionType, status, feedback) {
   if (!['firstRevision', 'secondRevision'].includes(revisionType)) {
     throw new Error('Invalid revision type');
   }
-  
+
   // Validate status
   if (!['pending', 'completed'].includes(status)) {
     throw new Error('Invalid status value');
   }
-  
+
   // Ensure revisions object exists
   if (!this.revisions) {
     this.revisions = {
@@ -410,44 +410,44 @@ projectSchema.methods.updateRevisionStatus = function(revisionType, status, feed
       secondRevision: { status: 'pending', completedDate: null, feedback: null }
     };
   }
-  
+
   // Ensure the specific revision object exists
   if (!this.revisions[revisionType]) {
     this.revisions[revisionType] = { status: 'pending', completedDate: null, feedback: null };
   }
-  
+
   // Update the revision status
   this.revisions[revisionType].status = status;
-  
+
   if (status === 'completed') {
     this.revisions[revisionType].completedDate = new Date();
   } else {
     this.revisions[revisionType].completedDate = null;
   }
-  
+
   if (feedback) {
     this.revisions[revisionType].feedback = feedback;
   }
-  
+
   // Mark the revisions field as modified
   this.markModified('revisions');
-  
+
   return this.save();
 };
 
 // Method to create project from lead conversion
-projectSchema.methods.createFromLeadConversion = function(leadProfileData, salesId) {
+projectSchema.methods.createFromLeadConversion = function (leadProfileData, salesId) {
   this.originLead = leadProfileData.leadId;
   this.submittedBy = salesId;
   this.status = 'pending-assignment';
-  
+
   // Set category from lead's category (preferred)
   if (leadProfileData.categoryId) {
     this.category = leadProfileData.categoryId;
   } else if (leadProfileData.leadCategory) {
     this.category = leadProfileData.leadCategory;
   }
-  
+
   // Legacy: Set project type from lead profile (for backward compatibility)
   if (leadProfileData.projectType) {
     this.projectType = {
@@ -456,7 +456,7 @@ projectSchema.methods.createFromLeadConversion = function(leadProfileData, sales
       taxi: leadProfileData.projectType.taxi || false
     };
   }
-  
+
   // Set financial details from conversion data
   if (leadProfileData.conversionData) {
     this.financialDetails = {
@@ -465,48 +465,48 @@ projectSchema.methods.createFromLeadConversion = function(leadProfileData, sales
       includeGST: leadProfileData.conversionData.includeGST || false,
       remainingAmount: (leadProfileData.conversionData.totalCost || 0) - (leadProfileData.conversionData.advanceReceived || 0)
     };
-    
+
     // Set budget from total cost
     this.budget = leadProfileData.conversionData.totalCost || 0;
   }
-  
+
   // Set finished days
   if (leadProfileData.conversionData && leadProfileData.conversionData.finishedDays) {
     this.finishedDays = leadProfileData.conversionData.finishedDays;
   }
-  
+
   // Set project name from conversion data
   if (leadProfileData.conversionData && leadProfileData.conversionData.projectName) {
     this.name = leadProfileData.conversionData.projectName;
   }
-  
+
   return this.save();
 };
 
 // Method to update financial details
-projectSchema.methods.updateFinancialDetails = function(financialData) {
+projectSchema.methods.updateFinancialDetails = function (financialData) {
   this.financialDetails = {
     ...this.financialDetails,
     ...financialData
   };
-  
+
   // Recalculate remaining amount
   this.financialDetails.remainingAmount = this.financialDetails.totalCost - this.financialDetails.advanceReceived;
-  
+
   // Update budget to match total cost
   this.budget = this.financialDetails.totalCost;
-  
+
   return this.save();
 };
 
 // Method to update project category
-projectSchema.methods.updateCategory = function(categoryId) {
+projectSchema.methods.updateCategory = function (categoryId) {
   this.category = categoryId;
   return this.save();
 };
 
 // Legacy method: Update project type (for backward compatibility)
-projectSchema.methods.updateProjectType = function(projectTypeData) {
+projectSchema.methods.updateProjectType = function (projectTypeData) {
   this.projectType = {
     ...this.projectType,
     ...projectTypeData
@@ -515,7 +515,7 @@ projectSchema.methods.updateProjectType = function(projectTypeData) {
 };
 
 // Pre-save middleware to ensure revisions object is initialized
-projectSchema.pre('save', function(next) {
+projectSchema.pre('save', function (next) {
   // Initialize revisions object if it doesn't exist
   if (!this.revisions) {
     this.revisions = {
@@ -523,7 +523,7 @@ projectSchema.pre('save', function(next) {
       secondRevision: { status: 'pending', completedDate: null, feedback: null }
     };
   }
-  
+
   // Ensure each revision has the required structure
   if (!this.revisions.firstRevision) {
     this.revisions.firstRevision = { status: 'pending', completedDate: null, feedback: null };
@@ -531,29 +531,29 @@ projectSchema.pre('save', function(next) {
   if (!this.revisions.secondRevision) {
     this.revisions.secondRevision = { status: 'pending', completedDate: null, feedback: null };
   }
-  
+
   // Custom validation: projectManager is required unless status is 'pending-assignment'
   if (this.status !== 'pending-assignment' && !this.projectManager) {
     return next(new Error('Project manager is required for projects with status other than pending-assignment'));
   }
-  
+
   // Custom validation: dueDate is required unless status is 'pending-assignment'
   if (this.status !== 'pending-assignment' && !this.dueDate) {
     return next(new Error('Due date is required for projects with status other than pending-assignment'));
   }
-  
+
   next();
 });
 
 // Pre-save middleware to update progress if milestones are modified
-projectSchema.pre('save', async function(next) {
+projectSchema.pre('save', async function (next) {
   if (this.isModified('milestones') && !this.isNew) {
     try {
       // Calculate progress based on milestones without calling save again
-      const milestones = await this.constructor.model('Milestone').find({ 
-        project: this._id 
+      const milestones = await this.constructor.model('Milestone').find({
+        project: this._id
       });
-      
+
       if (milestones.length === 0) {
         this.progress = 0;
       } else {
@@ -572,50 +572,32 @@ projectSchema.pre('save', async function(next) {
 // Use a Set to track projects currently being processed to prevent infinite recursion
 const processingProjects = new Set();
 
-projectSchema.post('save', async function(doc) {
+projectSchema.post('save', async function (doc) {
   const projectId = doc._id.toString();
-  
+
   // Prevent infinite recursion
   if (processingProjects.has(projectId)) {
     return;
   }
-  
+
   const remainingAmount = doc.financialDetails?.remainingAmount || 0;
   const isNoDues = Number(remainingAmount) === 0;
-  
-  // If project has no dues but status is not completed, automatically mark as completed
-  if (isNoDues && doc.status !== 'completed') {
-    try {
-      processingProjects.add(projectId);
-      // Use updateOne to set status, which will trigger another post-save
-      await mongoose.model('Project').updateOne(
-        { _id: doc._id },
-        { status: 'completed' }
-      );
-      processingProjects.delete(projectId);
-      // Return early - the next post-save will handle incentive movement
-      return;
-    } catch (error) {
-      console.error('Error auto-completing project:', error);
-      processingProjects.delete(projectId);
-    }
-  }
-  
+
   // Check if project is completed and has no dues
   const isCompleted = doc.status === 'completed';
-  
+
   if (isCompleted && isNoDues) {
     try {
       processingProjects.add(projectId);
       const Incentive = mongoose.model('Incentive');
-      
+
       // Find all conversion-based incentives linked to this project that have pending balance
       const incentives = await Incentive.find({
         isConversionBased: true,
         projectId: doc._id,
         pendingBalance: { $gt: 0 }
       });
-      
+
       if (incentives.length > 0) {
         // For each incentive, move the full pending amount to current
         // Since each conversion gets its own incentive, when that project becomes no-dues,
@@ -623,7 +605,7 @@ projectSchema.post('save', async function(doc) {
         for (const incentive of incentives) {
           if (incentive.pendingBalance > 0) {
             const amountToMove = incentive.pendingBalance;
-            
+
             try {
               await incentive.movePendingToCurrent(amountToMove);
               console.log(`Moved ${amountToMove} from pending to current for incentive ${incentive._id} (project ${doc._id})`);
@@ -643,14 +625,14 @@ projectSchema.post('save', async function(doc) {
 });
 
 // Remove password and sensitive data from JSON output
-projectSchema.methods.toJSON = function() {
+projectSchema.methods.toJSON = function () {
   const project = this.toObject();
   return project;
 };
 
 // Post-save hook to create finance transaction when project is created with advanceReceived > 0
 // Note: This serves as a backup. The main transaction creation happens explicitly in convertLeadToClient
-projectSchema.post('save', async function(doc) {
+projectSchema.post('save', async function (doc) {
   // Only create transaction if advanceReceived > 0
   // Check if document was recently created (within last 5 seconds) to identify new projects
   if (doc.financialDetails && doc.financialDetails.advanceReceived > 0) {
@@ -658,26 +640,26 @@ projectSchema.post('save', async function(doc) {
       const now = new Date();
       const createdAt = doc.createdAt || doc._id.getTimestamp();
       const timeDiff = now - createdAt;
-      
+
       // Only process if document was created recently (within 5 seconds) - indicates new project
       // This avoids creating transactions for updates to existing projects
       if (timeDiff < 5000) {
         const { createIncomingTransaction } = require('../utils/financeTransactionHelper');
         const AdminFinance = require('./AdminFinance');
         const Admin = require('./Admin');
-        
+
         // Check if transaction already exists (prevent duplicates)
         const existing = await AdminFinance.findOne({
           recordType: 'transaction',
           'metadata.sourceType': 'project_conversion',
           'metadata.projectId': doc._id.toString()
         });
-        
+
         if (!existing) {
           // Find first active admin as createdBy
           const admin = await Admin.findOne({ isActive: true }).select('_id');
           const adminId = admin ? admin._id : null;
-          
+
           if (adminId) {
             await createIncomingTransaction({
               amount: doc.financialDetails.advanceReceived,
