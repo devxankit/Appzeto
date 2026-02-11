@@ -45,9 +45,11 @@ function initializeFirebaseAdmin() {
     }
 
     initialized = true;
-    console.log('Firebase Admin initialized');
+    console.log('✅ Firebase Admin initialized:');
+    console.log(`   - Project ID: ${serviceAccount.project_id}`);
+    console.log(`   - Client Email: ${serviceAccount.client_email}`);
   } catch (error) {
-    console.error('Firebase Admin init failed:', error.message);
+    console.error('❌ Firebase Admin init failed:', error.message);
     console.warn('   Push notifications will not work until Firebase is configured.');
     // Don't throw - allow app to continue without Firebase
   }
@@ -85,27 +87,38 @@ async function sendPushNotification(tokens, payload) {
     const uniqueTokens = [...new Set(tokens)];
 
     // FCM message.notification only supports: title, body, image. Do NOT use "icon" here (invalid for FCM API).
+    // Simplest possible message payload to isolate the issue
     const message = {
+      tokens: uniqueTokens,
       notification: {
         title: payload.title,
         body: payload.body
       },
       data: payload.data || {},
-      tokens: uniqueTokens
+      // Essential webpush options
+      webpush: {
+        fcmOptions: {
+          link: payload.data?.link || '/'
+        }
+      }
     };
 
     try {
       const response = await admin.messaging().sendEachForMulticast(message);
 
-      // Handle invalid tokens and log only on failure
+      // Handle results and log failures
+      const invalidTokens = [];
       if (response.failureCount > 0) {
-        const invalidTokens = [];
         response.responses.forEach((resp, idx) => {
           if (!resp.success) {
-            console.error('FCM send failed:', resp.error?.code, resp.error?.message);
-            if (resp.error && resp.error.code === 'messaging/invalid-registration-token' ||
-                resp.error && resp.error.code === 'messaging/registration-token-not-registered') {
-              invalidTokens.push(uniqueTokens[idx]);
+            const token = uniqueTokens[idx];
+            console.error(`❌ FCM send failed for token [${token.substring(0, 10)}...]:`, resp.error?.code, resp.error?.message);
+
+            // Treat third-party-auth-error as an invalid token as it usually means a VAPID mismatch
+            if (resp.error?.code === 'messaging/invalid-registration-token' ||
+              resp.error?.code === 'messaging/registration-token-not-registered' ||
+              resp.error?.code === 'messaging/third-party-auth-error') {
+              invalidTokens.push(token);
             }
           }
         });
@@ -115,12 +128,7 @@ async function sendPushNotification(tokens, payload) {
         successCount: response.successCount,
         failureCount: response.failureCount,
         responses: response.responses,
-        invalidTokens: response.responses
-          .map((resp, idx) => (!resp.success && 
-            (resp.error?.code === 'messaging/invalid-registration-token' ||
-             resp.error?.code === 'messaging/registration-token-not-registered')) 
-            ? uniqueTokens[idx] : null)
-          .filter(Boolean)
+        invalidTokens: invalidTokens
       };
     } catch (firebaseError) {
       console.error('❌ Firebase Admin sendEachForMulticast error:', firebaseError);
@@ -128,18 +136,6 @@ async function sendPushNotification(tokens, payload) {
       console.error('   Error message:', firebaseError.message);
       throw firebaseError;
     }
-
-    return {
-      successCount: response.successCount,
-      failureCount: response.failureCount,
-      responses: response.responses,
-      invalidTokens: response.responses
-        .map((resp, idx) => (!resp.success && 
-          (resp.error?.code === 'messaging/invalid-registration-token' ||
-           resp.error?.code === 'messaging/registration-token-not-registered')) 
-          ? uniqueTokens[idx] : null)
-        .filter(Boolean)
-    };
   } catch (error) {
     console.error('❌ Error sending push notification:', error);
     throw error;

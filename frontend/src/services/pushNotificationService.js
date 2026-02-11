@@ -49,17 +49,20 @@ async function getFCMToken() {
 
     const registration = await getOrRegisterServiceWorker();
     await registration.update(); // Update service worker
-    
-    if (!VAPID_KEY) {
-      throw new Error('VAPID key is not configured');
-    }
 
-    if (!VAPID_KEY) {
+    const trimmedVapidKey = VAPID_KEY ? VAPID_KEY.trim() : null;
+
+    if (!trimmedVapidKey) {
+      console.error('❌ VAPID key is missing or empty');
       throw new Error('VAPID key is not configured. Please set VITE_FIREBASE_VAPID_KEY in .env');
     }
 
+    if (import.meta.env.DEV) {
+      console.log('📬 Getting FCM token with VAPID key:', trimmedVapidKey.substring(0, 10) + '...');
+    }
+
     const token = await getToken(messaging, {
-      vapidKey: VAPID_KEY,
+      vapidKey: trimmedVapidKey,
       serviceWorkerRegistration: registration
     });
 
@@ -74,11 +77,32 @@ async function getFCMToken() {
 }
 
 /**
- * Get authentication token from localStorage.
- * Only one role session should exist at a time (others cleared on login).
- * Check all role token keys so FCM works for whichever role is logged in.
+ * Get authentication token from localStorage based on current context.
+ * Replaces the generic getAuthToken with contextual logic as per the guide.
  */
-function getAuthToken() {
+function getAuthTokenForCurrentContext() {
+  const path = window.location.pathname.toLowerCase();
+
+  if (path.startsWith('/admin')) {
+    return localStorage.getItem('adminToken');
+  }
+  if (path.startsWith('/sales')) {
+    return localStorage.getItem('salesToken');
+  }
+  if (path.startsWith('/cp')) {
+    return localStorage.getItem('cpToken') || localStorage.getItem('token');
+  }
+  if (path.startsWith('/pm')) {
+    return localStorage.getItem('pmToken');
+  }
+  if (path.startsWith('/employee')) {
+    return localStorage.getItem('employeeToken');
+  }
+  if (path.startsWith('/client')) {
+    return localStorage.getItem('clientToken');
+  }
+
+  // Fallback to any available token if path is not specific
   return (
     localStorage.getItem('adminToken') ||
     localStorage.getItem('salesToken') ||
@@ -100,23 +124,23 @@ async function registerFCMToken(forceUpdate = false) {
     if (savedToken && !forceUpdate) {
       return savedToken;
     }
-    
+
     // Request permission
     const hasPermission = await requestNotificationPermission();
     if (!hasPermission) {
       throw new Error('Notification permission not granted');
     }
-    
+
     // Get token
     const token = await getFCMToken();
     if (!token) {
       throw new Error('Failed to get FCM token');
     }
-    
+
     // Get auth token - wait a bit to ensure it's saved
     await new Promise(resolve => setTimeout(resolve, 200)); // Small delay
-    
-    const authToken = getAuthToken();
+
+    const authToken = getAuthTokenForCurrentContext();
     if (!authToken) {
       return null;
     }
@@ -140,22 +164,22 @@ async function registerFCMToken(forceUpdate = false) {
     // Read response body once
     const responseText = await response.text();
     let responseData = {};
-    
+
     try {
       responseData = JSON.parse(responseText);
     } catch (e) {
       // Not JSON, that's okay
       responseData = { message: responseText || `Server error: ${response.status}` };
     }
-    
+
     if (response.ok) {
       localStorage.setItem('fcm_token_web', token);
 
       // Optional: send test notification later so it doesn't feel tied to registration
       setTimeout(() => {
-        sendTestNotification().catch(() => {});
+        sendTestNotification().catch(() => { });
       }, 8000);
-      
+
       return token;
     } else {
       throw new Error(responseData.message || `Failed to register token: ${response.status}`);
@@ -171,7 +195,7 @@ async function registerFCMToken(forceUpdate = false) {
  */
 async function sendTestNotification() {
   try {
-    const authToken = getAuthToken();
+    const authToken = getAuthTokenForCurrentContext();
     if (!authToken) return;
 
     const apiUrl = getApiUrl('/fcm-tokens/test');
@@ -202,7 +226,7 @@ async function removeFCMToken() {
       return;
     }
 
-    const authToken = getAuthToken();
+    const authToken = getAuthTokenForCurrentContext();
     if (!authToken) {
       return;
     }

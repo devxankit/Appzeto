@@ -4,38 +4,7 @@ const { protect } = require('../middlewares/auth');
 const { sendPushNotification, isInitialized } = require('../services/firebaseAdmin');
 const { sendNotificationToUser } = require('../utils/pushNotificationHelper');
 
-// Import all user models
-const Admin = require('../models/Admin');
-const PM = require('../models/PM');
-const Sales = require('../models/Sales');
-const Employee = require('../models/Employee');
-const Client = require('../models/Client');
-const ChannelPartner = require('../models/ChannelPartner');
-
-/**
- * Get user model based on userType
- */
-function getUserModel(userType) {
-  switch (userType) {
-    case 'admin':
-    case 'hr':
-    case 'accountant':
-    case 'pem':
-      return Admin;
-    case 'project-manager':
-      return PM;
-    case 'sales':
-      return Sales;
-    case 'employee':
-      return Employee;
-    case 'client':
-      return Client;
-    case 'channel-partner':
-      return ChannelPartner;
-    default:
-      return null;
-  }
-}
+const { getUserModel } = require('../utils/userHelper');
 
 // @route   POST /api/fcm-tokens/save
 // @desc    Save FCM token for authenticated user
@@ -70,45 +39,24 @@ router.post('/save', protect, async (req, res) => {
       });
     }
 
-    // Find user
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    // Determine field based on platform
+    const tokenField = platform === 'web' ? 'fcmTokens' : 'fcmTokenMobile';
 
-    // Add token to appropriate array
-    if (platform === 'web') {
-      if (!user.fcmTokens) {
-        user.fcmTokens = [];
-      }
-      if (!user.fcmTokens.includes(token)) {
-        user.fcmTokens.push(token);
-        if (user.fcmTokens.length > 10) {
-          user.fcmTokens = user.fcmTokens.slice(-10);
-        }
-      }
-    } else if (platform === 'mobile') {
-      if (!user.fcmTokenMobile) {
-        user.fcmTokenMobile = [];
-      }
-      if (!user.fcmTokenMobile.includes(token)) {
-        user.fcmTokenMobile.push(token);
-        if (user.fcmTokenMobile.length > 10) {
-          user.fcmTokenMobile = user.fcmTokenMobile.slice(-10);
-        }
-      }
-    }
+    // Atomic update using $addToSet to avoid duplicates
+    const updateResult = await UserModel.updateOne(
+      { _id: userId },
+      { $addToSet: { [tokenField]: token } }
+    );
 
-    await user.save();
+    // Optional: limit the number of tokens to prevent bloated arrays
+    // We do this as a separate step if needed, but for simplicity we'll just keep them for now
+    // as suggested in the implementation plan.
 
     res.json({
       success: true,
       message: 'FCM token saved successfully',
       platform: platform,
-      tokenCount: platform === 'web' ? user.fcmTokens.length : user.fcmTokenMobile.length
+      alreadyExists: updateResult.modifiedCount === 0
     });
   } catch (error) {
     console.error('Error saving FCM token:', error);
@@ -153,23 +101,14 @@ router.delete('/remove', protect, async (req, res) => {
       });
     }
 
-    // Find user
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    // Determine field based on platform
+    const tokenField = platform === 'web' ? 'fcmTokens' : 'fcmTokenMobile';
 
-    // Remove token from appropriate array
-    if (platform === 'web' && user.fcmTokens) {
-      user.fcmTokens = user.fcmTokens.filter(t => t !== token);
-    } else if (platform === 'mobile' && user.fcmTokenMobile) {
-      user.fcmTokenMobile = user.fcmTokenMobile.filter(t => t !== token);
-    }
-
-    await user.save();
+    // Atomic removal using $pull
+    await UserModel.updateOne(
+      { _id: userId },
+      { $pull: { [tokenField]: token } }
+    );
 
     res.json({
       success: true,

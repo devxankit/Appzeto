@@ -1,0 +1,122 @@
+# JWT and Push Notification Implementation Guide
+
+This guide describes how to implement a secure, multi-role JWT authentication system integrated with Firebase Cloud Messaging (FCM) for push notifications, based on the architecture of this project.
+
+## 1. JWT Authentication Architecture
+
+### Backend: Centralized Auth Middleware
+The backend uses a single [protect](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/SaaS%20CRM/backend/middlewares/auth.js#10-134) middleware to handle multiple user roles (Admin, Employee, PM, etc.).
+
+**Key Principles:**
+- **Token Sources:** Tokens are accepted from `Authorization: Bearer <token>` headers or role-specific cookies (e.g., `employeeToken`).
+- **Role Hierarchy:** The middleware attempts to decode the token and find the user in role-specific collections in priority order.
+- **Request Enrichment:** Once authenticated, the user object and type are attached to the request (e.g., `req.user`, `req.userType`).
+
+```javascript
+// backend/middlewares/auth.js snippet
+const protect = async (req, res, next) => {
+  let token = req.headers.authorization?.split(' ')[1] || req.cookies.token;
+  if (!token) return res.status(401).json({ message: 'Not authorized' });
+
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  // Example check for Admin
+  let admin = await Admin.findById(decoded.id);
+  if (admin) {
+    req.user = admin;
+    req.userType = 'admin';
+    return next();
+  }
+  // ... check other roles ...
+};
+```
+
+### Frontend: Contextual Token Management
+The frontend manages multiple tokens in `localStorage` and selects the correct one based on the current URL path.
+
+```javascript
+// frontend/src/services/fcmTokenService.js snippet
+const getAuthTokenForCurrentContext = () => {
+  const path = window.location.pathname.toLowerCase();
+  if (path.startsWith('/employee')) return localStorage.getItem('employeeToken');
+  if (path.startsWith('/admin')) return localStorage.getItem('adminToken');
+  return localStorage.getItem('token');
+};
+```
+
+---
+
+## 2. Push Notification Architecture
+
+The system uses **Firebase Cloud Messaging (FCM)** for push notifications and **Socket.io** for real-time in-app updates.
+
+### Lifecycle of a Push Notification
+1. **Device Registration:** Frontend requests permission and gets an FCM token from Firebase.
+2. **Token Storage:** Frontend sends the FCM token + JWT to the backend. The backend stores the token in the user's database document.
+3. **Trigger:** An event occurs (e.g., a new task is assigned).
+4. **Broadcast:**
+   - **FCM:** Backend sends a push notification to all stored FCM tokens for that user.
+   - **Socket:** Backend emits a `new_notification` event to the user's active socket connection.
+
+### Token Management (Backend)
+Tokens are stored in an array on the User model to support multiple devices.
+
+```javascript
+// backend/controllers/fcmTokenController.js
+const saveFCMToken = async (req, res) => {
+  const { token } = req.body;
+  const UserModel = getUserModel(req.userType);
+  await UserModel.updateOne(
+    { _id: req.user.id },
+    { $addToSet: { fcmTokens: token } } // Use $addToSet to avoid duplicates
+  );
+};
+```
+
+### Notification Helper (Backend)
+A centralized helper handles multi-channel delivery.
+
+```javascript
+// backend/utils/pushNotificationHelper.js
+const sendNotificationToUser = async (userId, userType, payload) => {
+  const user = await getUserModel(userType).findById(userId);
+  const tokens = user.fcmTokens;
+  
+  // 1. Send via Firebase
+  await sendPushNotification(tokens, payload);
+  
+  // 2. Send via Socket.io for immediate UI update
+  socketService.emitToUser(userId, 'new_notification', payload);
+};
+```
+
+---
+
+## 3. Frontend Implementation Details
+
+### Service Worker ([public/firebase-messaging-sw.js](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/SaaS%20CRM/frontend/public/firebase-messaging-sw.js))
+Handles background notifications. It must be in the `public` folder to have root scope.
+
+### Push Notification Service ([frontend/src/services/pushNotificationService.js](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/SaaS%20CRM/frontend/src/services/pushNotificationService.js))
+- **Initialization:** Registers the service worker and checks for permission on app load.
+- **Registration:** Requests the FCM token and calls the backend API to save it.
+- **Foreground Handling:** Uses `onMessage` to handle notifications while the app is open.
+
+---
+
+## 4. Setup Guide for New Projects
+
+1.  **Firebase Setup:**
+    - Create a project in [Firebase Console](https://console.firebase.google.com/).
+    - Enable **Cloud Messaging**.
+    - Generate a **Web Push VAPID Key**.
+    - Download the **Service Account JSON** for the backend.
+2.  **Environment Variables:**
+    - **Backend:** `FIREBASE_CONFIG` (JSON string) or `FIREBASE_SERVICE_ACCOUNT_PATH`.
+    - **Frontend:** `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_VAPID_KEY`, etc.
+3.  **Dependencies:**
+    - **Backend:** `firebase-admin`, `jsonwebtoken`, `socket.io`.
+    - **Frontend:** `firebase`, `socket.io-client`.
+4.  **Implementation:**
+    - Copy the [auth.js](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/SaaS%20CRM/backend/middlewares/auth.js) logic for multi-role support.
+    - Implement the `fcmTokenController` and `pushNotificationHelper`.
+    - Set up the [firebase-messaging-sw.js](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/SaaS%20CRM/frontend/public/firebase-messaging-sw.js) and `pushNotificationService` on the frontend.

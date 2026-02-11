@@ -157,22 +157,22 @@ channelPartnerSchema.index({ isActive: 1 });
 channelPartnerSchema.index({ partnerId: 1 });
 
 // Virtual for account lock status
-channelPartnerSchema.virtual('isLocked').get(function() {
+channelPartnerSchema.virtual('isLocked').get(function () {
   return !!(this.lockUntil && this.lockUntil > Date.now());
 });
 
 // Virtual for OTP lock status
-channelPartnerSchema.virtual('isOtpLocked').get(function() {
+channelPartnerSchema.virtual('isOtpLocked').get(function () {
   return !!(this.otpLockUntil && this.otpLockUntil > Date.now());
 });
 
 // Virtual for OTP validity
-channelPartnerSchema.virtual('isOtpValid').get(function() {
+channelPartnerSchema.virtual('isOtpValid').get(function () {
   return !!(this.otp && this.otpExpires && this.otpExpires > Date.now());
 });
 
 // Generate OTP
-channelPartnerSchema.methods.generateOTP = function() {
+channelPartnerSchema.methods.generateOTP = function () {
   const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
   this.otp = otp;
   this.otpExpires = Date.now() + 5 * 60 * 1000; // 5 minutes
@@ -182,20 +182,20 @@ channelPartnerSchema.methods.generateOTP = function() {
 };
 
 // Verify OTP
-channelPartnerSchema.methods.verifyOTP = function(candidateOTP) {
+channelPartnerSchema.methods.verifyOTP = function (candidateOTP) {
   if (!this.otp) {
     return false;
   }
-  
+
   if (this.otpExpires && this.otpExpires < Date.now()) {
     return false;
   }
-  
+
   return this.otp === candidateOTP;
 };
 
 // Increment OTP attempts
-channelPartnerSchema.methods.incOtpAttempts = function() {
+channelPartnerSchema.methods.incOtpAttempts = function () {
   // If we have a previous OTP lock that has expired, restart at 1
   if (this.otpLockUntil && this.otpLockUntil < Date.now()) {
     return this.updateOne({
@@ -203,19 +203,19 @@ channelPartnerSchema.methods.incOtpAttempts = function() {
       $set: { otpAttempts: 1 }
     });
   }
-  
+
   const updates = { $inc: { otpAttempts: 1 } };
-  
+
   // Lock OTP after 3 failed attempts for 15 minutes
   if (this.otpAttempts + 1 >= 3 && !this.isOtpLocked) {
     updates.$set = { otpLockUntil: Date.now() + 15 * 60 * 1000 }; // 15 minutes
   }
-  
+
   return this.updateOne(updates);
 };
 
 // Clear OTP
-channelPartnerSchema.methods.clearOTP = function() {
+channelPartnerSchema.methods.clearOTP = function () {
   this.otp = undefined;
   this.otpExpires = undefined;
   this.otpAttempts = 0;
@@ -224,7 +224,7 @@ channelPartnerSchema.methods.clearOTP = function() {
 };
 
 // Increment login attempts
-channelPartnerSchema.methods.incLoginAttempts = function() {
+channelPartnerSchema.methods.incLoginAttempts = function () {
   // If we have a previous lock that has expired, restart at 1
   if (this.lockUntil && this.lockUntil < Date.now()) {
     return this.updateOne({
@@ -232,19 +232,19 @@ channelPartnerSchema.methods.incLoginAttempts = function() {
       $set: { loginAttempts: 1 }
     });
   }
-  
+
   const updates = { $inc: { loginAttempts: 1 } };
-  
+
   // Lock account after 5 failed attempts for 2 hours
   if (this.loginAttempts + 1 >= 5 && !this.isLocked) {
     updates.$set = { lockUntil: Date.now() + 2 * 60 * 60 * 1000 }; // 2 hours
   }
-  
+
   return this.updateOne(updates);
 };
 
 // Reset login attempts
-channelPartnerSchema.methods.resetLoginAttempts = function() {
+channelPartnerSchema.methods.resetLoginAttempts = function () {
   return this.updateOne({
     $unset: { loginAttempts: 1, lockUntil: 1 },
     $set: { lastLogin: new Date() }
@@ -252,21 +252,21 @@ channelPartnerSchema.methods.resetLoginAttempts = function() {
 };
 
 // Sign JWT and return
-channelPartnerSchema.methods.getSignedJwtToken = function() {
-  return jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
+channelPartnerSchema.methods.getSignedJwtToken = function () {
+  return jwt.sign({ id: this._id, role: 'channel-partner' }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE
   });
 };
 
 // Method to update total revenue
-channelPartnerSchema.methods.updateTotalRevenue = function(amount) {
+channelPartnerSchema.methods.updateTotalRevenue = function (amount) {
   this.totalRevenue += amount;
   this.lastActivity = new Date();
   return this.save();
 };
 
 // Remove sensitive data from JSON output
-channelPartnerSchema.methods.toJSON = function() {
+channelPartnerSchema.methods.toJSON = function () {
   const channelPartner = this.toObject();
   delete channelPartner.otp;
   delete channelPartner.otpExpires;

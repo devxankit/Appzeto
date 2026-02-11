@@ -1,10 +1,5 @@
 const { sendPushNotification } = require('../services/firebaseAdmin');
-const Admin = require('../models/Admin');
-const PM = require('../models/PM');
-const Sales = require('../models/Sales');
-const Employee = require('../models/Employee');
-const Client = require('../models/Client');
-const ChannelPartner = require('../models/ChannelPartner');
+const { getUserModel } = require('./userHelper');
 
 /**
  * Send notification to a user by their ID and user type
@@ -19,34 +14,13 @@ const ChannelPartner = require('../models/ChannelPartner');
  */
 async function sendNotificationToUser(userId, userType, payload, includeMobile = true) {
   try {
-    let user;
-
-    // Find user based on userType
-    switch (userType) {
-      case 'admin':
-      case 'hr':
-      case 'accountant':
-      case 'pem':
-        user = await Admin.findById(userId);
-        break;
-      case 'project-manager':
-        user = await PM.findById(userId);
-        break;
-      case 'sales':
-        user = await Sales.findById(userId);
-        break;
-      case 'employee':
-        user = await Employee.findById(userId);
-        break;
-      case 'client':
-        user = await Client.findById(userId);
-        break;
-      case 'channel-partner':
-        user = await ChannelPartner.findById(userId);
-        break;
-      default:
-        throw new Error(`Unknown user type: ${userType}`);
+    // Get user model
+    const UserModel = getUserModel(userType);
+    if (!UserModel) {
+      throw new Error(`Unknown user type: ${userType}`);
     }
+
+    const user = await UserModel.findById(userId);
 
     if (!user) {
       throw new Error('User not found');
@@ -54,7 +28,7 @@ async function sendNotificationToUser(userId, userType, payload, includeMobile =
 
     // Collect tokens
     let tokens = [];
-    
+
     // Add web tokens
     if (user.fcmTokens && user.fcmTokens.length > 0) {
       tokens = [...tokens, ...user.fcmTokens];
@@ -83,12 +57,12 @@ async function sendNotificationToUser(userId, userType, payload, includeMobile =
         if (user.fcmTokens) {
           user.fcmTokens = user.fcmTokens.filter(token => !response.invalidTokens.includes(token));
         }
-        
+
         // Remove invalid tokens from mobile tokens
         if (user.fcmTokenMobile) {
           user.fcmTokenMobile = user.fcmTokenMobile.filter(token => !response.invalidTokens.includes(token));
         }
-        
+
         await user.save();
       } catch (error) {
         console.error('Error removing invalid FCM tokens:', error.message);

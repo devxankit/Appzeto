@@ -15,7 +15,7 @@ const safeObjectId = (value) => {
 
 // Generate JWT Token
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+  return jwt.sign({ id, role: 'employee' }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '7d'
   });
 };
@@ -37,7 +37,7 @@ const loginEmployee = async (req, res) => {
 
     // Check if Employee exists and include password for comparison
     const employee = await Employee.findOne({ email }).select('+password');
-    
+
     if (!employee) {
       return res.status(401).json({
         success: false,
@@ -63,11 +63,11 @@ const loginEmployee = async (req, res) => {
 
     // Check password
     const isPasswordValid = await employee.comparePassword(password);
-    
+
     if (!isPasswordValid) {
       // Increment login attempts
       await employee.incLoginAttempts();
-      
+
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -129,7 +129,7 @@ const loginEmployee = async (req, res) => {
 const getEmployeeProfile = async (req, res) => {
   try {
     const employee = await Employee.findById(req.employee.id);
-    
+
     if (!employee) {
       return res.status(404).json({
         success: false,
@@ -205,7 +205,7 @@ const createDemoEmployee = async (req, res) => {
   try {
     // Check if demo Employee already exists
     const existingEmployee = await Employee.findOne({ email: 'employee@demo.com' });
-    
+
     if (existingEmployee) {
       return res.status(400).json({
         success: false,

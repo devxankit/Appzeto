@@ -41,22 +41,80 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+      // If role is present in token, use it for direct lookup
+      if (decoded.role) {
+        if (['admin', 'hr', 'accountant', 'pem'].includes(decoded.role)) {
+          const admin = await Admin.findById(decoded.id);
+          if (admin && admin.isActive) {
+            req.admin = admin;
+            req.user = admin;
+            req.userType = admin.role; // e.g. 'admin', 'hr'
+            req.user.role = admin.role;
+            return next();
+          }
+        } else if (decoded.role === 'project-manager') {
+          const pm = await PM.findById(decoded.id);
+          if (pm && pm.isActive) {
+            req.pm = pm;
+            req.user = pm;
+            req.userType = 'project-manager';
+            req.user.role = 'project-manager';
+            return next();
+          }
+        } else if (decoded.role === 'sales') {
+          const sales = await Sales.findById(decoded.id);
+          if (sales && sales.isActive) {
+            req.sales = sales;
+            req.user = sales;
+            req.userType = 'sales';
+            req.user.role = 'sales';
+            return next();
+          }
+        } else if (decoded.role === 'employee') {
+          const employee = await Employee.findById(decoded.id);
+          if (employee && employee.isActive) {
+            req.employee = employee;
+            req.user = employee;
+            req.userType = 'employee';
+            req.user.role = 'employee';
+            return next();
+          }
+        } else if (decoded.role === 'client') {
+          const client = await Client.findById(decoded.id);
+          if (client && client.isActive) {
+            req.client = client;
+            req.user = client;
+            req.userType = 'client';
+            req.user.role = 'client';
+            return next();
+          }
+        } else if (decoded.role === 'channel-partner') {
+          const channelPartner = await ChannelPartner.findById(decoded.id);
+          if (channelPartner) {
+            if (!channelPartner.isActive) {
+              return res.status(403).json({
+                success: false,
+                message: 'Your account has been deactivated. Please contact support for assistance.',
+                code: 'ACCOUNT_INACTIVE'
+              });
+            }
+            req.channelPartner = channelPartner;
+            req.user = channelPartner;
+            req.userType = 'channel-partner';
+            req.user.role = 'channel-partner';
+            return next();
+          }
+        }
+      }
+
+      // Legacy fallback (if no role in token or role lookup failed)
       // Try to find admin first
       let admin = await Admin.findById(decoded.id);
       if (admin && admin.isActive) {
         req.admin = admin;
         req.user = admin;
-        // Set userType based on admin role
-        if (admin.role === 'hr') {
-          req.userType = 'hr';
-        } else if (admin.role === 'accountant') {
-          req.userType = 'accountant';
-        } else if (admin.role === 'pem') {
-          req.userType = 'pem';
-        } else {
-          req.userType = 'admin';
-        }
-        req.user.role = admin.role; // Use actual role from database
+        req.userType = admin.role;
+        req.user.role = admin.role;
         return next();
       }
 
@@ -100,7 +158,7 @@ const protect = async (req, res, next) => {
         return next();
       }
 
-      // Try to find Channel Partner if not admin, PM, Sales, Employee, or Client
+      // Try to find Channel Partner
       let channelPartner = await ChannelPartner.findById(decoded.id);
       if (channelPartner) {
         if (!channelPartner.isActive) {
@@ -249,7 +307,7 @@ const canAccessProject = async (req, res, next) => {
   try {
     const Project = require('../models/Project');
     const projectId = req.params.projectId || req.params.id;
-    
+
     if (!projectId) {
       return res.status(400).json({
         success: false,
@@ -305,7 +363,7 @@ const canAccessTask = async (req, res, next) => {
     const Task = require('../models/Task');
     const Project = require('../models/Project');
     const taskId = req.params.taskId || req.params.id;
-    
+
     if (!taskId) {
       return res.status(400).json({
         success: false,
@@ -383,15 +441,36 @@ const optionalAuth = async (req, res, next) => {
       try {
         // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
-        // Get admin from token
-        const admin = await Admin.findById(decoded.id);
-        
-        if (admin && admin.isActive) {
-          req.admin = admin;
-          req.user = admin;
-          req.userType = 'admin';
-          req.user.role = 'admin';
+
+        // If role is present, use it
+        if (decoded.role) {
+          if (['admin', 'hr', 'accountant', 'pem'].includes(decoded.role)) {
+            const admin = await Admin.findById(decoded.id);
+            if (admin && admin.isActive) {
+              req.admin = admin;
+              req.user = admin;
+              req.userType = admin.role;
+              req.user.role = admin.role;
+            }
+          } else if (decoded.role === 'project-manager') {
+            const pm = await PM.findById(decoded.id);
+            if (pm && pm.isActive) {
+              req.pm = pm;
+              req.user = pm;
+              req.userType = 'project-manager';
+              req.user.role = 'project-manager';
+            }
+          }
+          // Add other roles if needed for optionalAuth...
+        } else {
+          // Legacy fallback
+          const admin = await Admin.findById(decoded.id);
+          if (admin && admin.isActive) {
+            req.admin = admin;
+            req.user = admin;
+            req.userType = 'admin';
+            req.user.role = 'admin';
+          }
         }
       } catch (error) {
         // Token is invalid, but we don't fail the request

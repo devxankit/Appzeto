@@ -7,7 +7,7 @@ const ErrorResponse = require('../utils/errorResponse');
 
 // Generate JWT Token
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+  return jwt.sign({ id, role: 'admin' }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '7d'
   });
 };
@@ -29,7 +29,7 @@ const loginAdmin = async (req, res) => {
 
     // Check if admin exists and include password for comparison
     const admin = await Admin.findOne({ email }).select('+password');
-    
+
     if (!admin) {
       return res.status(401).json({
         success: false,
@@ -55,11 +55,11 @@ const loginAdmin = async (req, res) => {
 
     // Check password
     const isPasswordValid = await admin.comparePassword(password);
-    
+
     if (!isPasswordValid) {
       // Increment login attempts
       await admin.incLoginAttempts();
-      
+
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -113,7 +113,7 @@ const loginAdmin = async (req, res) => {
 const getAdminProfile = async (req, res) => {
   try {
     const admin = await Admin.findById(req.admin.id);
-    
+
     if (!admin) {
       return res.status(404).json({
         success: false,
@@ -176,7 +176,7 @@ const createDemoAdmin = async (req, res) => {
   try {
     // Check if demo admin already exists
     const existingAdmin = await Admin.findOne({ email: 'admin@demo.com' });
-    
+
     if (existingAdmin) {
       return res.status(400).json({
         success: false,

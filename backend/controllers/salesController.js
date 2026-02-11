@@ -22,7 +22,7 @@ require('../models/LeadProfile');
 
 // Generate JWT Token
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+  return jwt.sign({ id, role: 'sales' }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '7d'
   });
 };
@@ -145,7 +145,7 @@ const getPaymentRecoveryStats = async (req, res) => {
     // Prefer clients converted by me; fallback to projects submitted by me
     const myClients = await Client.find({ convertedBy: salesId }).select('_id');
     const clientIds = myClients.map(c => c._id);
-    const projectQuery = { $or: [ { client: { $in: clientIds } }, { submittedBy: salesId } ] };
+    const projectQuery = { $or: [{ client: { $in: clientIds } }, { submittedBy: salesId }] };
     const projects = await Project.find(projectQuery).select('dueDate financialDetails');
     let totalDue = 0, overdueCount = 0, overdueAmount = 0;
     const now = new Date();
@@ -239,14 +239,14 @@ const createPaymentReceipt = async (req, res) => {
 
     // Get current remaining amount (including pending receipts)
     const currentRemaining = Number(project.financialDetails.remainingAmount || 0);
-    
+
     // Calculate sum of pending receipts for this project
     const pendingReceipts = await PaymentReceipt.find({
       project: projectId,
       status: 'pending'
     }).select('amount');
     const totalPendingAmount = pendingReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
-    
+
     // Available amount = remainingAmount - pending receipts
     const availableAmount = currentRemaining - totalPendingAmount;
 
@@ -290,7 +290,7 @@ const createPaymentReceipt = async (req, res) => {
         // Get sales person name for description
         const salesPerson = await Sales.findById(salesId).select('name');
         const salesName = salesPerson?.name || 'Sales Employee';
-        
+
         const Request = require('../models/Request');
         await Request.create({
           module: 'sales',
@@ -352,7 +352,7 @@ const getProjectInstallments = async (req, res) => {
 
     // Get installments and check for pending approval requests
     const installments = project.installmentPlan || [];
-    
+
     // Fetch pending approval requests for these installments
     const installmentIds = installments.map(inst => inst._id.toString());
     const pendingRequests = await Request.find({
@@ -389,10 +389,10 @@ const getProjectInstallments = async (req, res) => {
       pendingApproval: requestMap[inst._id.toString()] || null
     }));
 
-    res.json({ 
-      success: true, 
-      data: formattedInstallments, 
-      message: 'Installments fetched successfully' 
+    res.json({
+      success: true,
+      data: formattedInstallments,
+      message: 'Installments fetched successfully'
     });
   } catch (error) {
     console.error('getProjectInstallments error:', error);
@@ -441,9 +441,9 @@ const requestInstallmentPayment = async (req, res) => {
     });
 
     if (existingRequest) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'A pending approval request already exists for this installment' 
+      return res.status(400).json({
+        success: false,
+        message: 'A pending approval request already exists for this installment'
       });
     }
 
@@ -479,10 +479,10 @@ const requestInstallmentPayment = async (req, res) => {
       }
     });
 
-    res.status(201).json({ 
-      success: true, 
-      data: request, 
-      message: 'Payment approval request created successfully. Waiting for admin approval.' 
+    res.status(201).json({
+      success: true,
+      data: request,
+      message: 'Payment approval request created successfully. Waiting for admin approval.'
     });
   } catch (error) {
     console.error('requestInstallmentPayment error:', error);
@@ -498,8 +498,8 @@ const getDemoRequests = async (req, res) => {
     const salesId = safeObjectId(req.sales.id);
     const { search = '', status, category } = req.query;
     // Include leads marked via legacy status 'demo_requested' or with demoRequest subdoc
-    const filter = { 
-      assignedTo: salesId, 
+    const filter = {
+      assignedTo: salesId,
       $or: [
         { 'demoRequest.status': { $exists: true } },
         { status: 'demo_requested' }
@@ -546,12 +546,12 @@ const updateDemoRequestStatus = async (req, res) => {
     const salesId = safeObjectId(req.sales.id);
     const { leadId } = req.params;
     const { status } = req.body; // 'pending' | 'scheduled' | 'completed' | 'cancelled'
-    if (!['pending','scheduled','completed','cancelled'].includes(status)) {
+    if (!['pending', 'scheduled', 'completed', 'cancelled'].includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid status' });
     }
     const lead = await Lead.findOne({ _id: leadId, assignedTo: salesId });
     if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
-    lead.demoRequest = { ...(lead.demoRequest||{}), status, updatedAt: new Date() };
+    lead.demoRequest = { ...(lead.demoRequest || {}), status, updatedAt: new Date() };
     await lead.save();
     res.json({ success: true, data: lead, message: 'Demo status updated' });
   } catch (error) {
@@ -569,8 +569,8 @@ const listSalesTasks = async (req, res) => {
     if (search) {
       q.$or = [{ title: new RegExp(search, 'i') }, { description: new RegExp(search, 'i') }];
     }
-    if (['pending','completed'].includes(filter)) q.completed = filter === 'completed';
-    if (['high','medium','low'].includes(filter)) q.priority = filter;
+    if (['pending', 'completed'].includes(filter)) q.completed = filter === 'completed';
+    if (['high', 'medium', 'low'].includes(filter)) q.priority = filter;
     const items = await SalesTask.find(q).sort({ createdAt: -1 });
     const stats = {
       total: await SalesTask.countDocuments({ owner }),
@@ -639,9 +639,9 @@ const listSalesMeetings = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
     const { search = '', filter = 'all' } = req.query;
-    const q = { $or: [ { assignee: salesId }, { createdBy: salesId } ] };
+    const q = { $or: [{ assignee: salesId }, { createdBy: salesId }] };
     if (search) {
-      q.$or = [ { location: new RegExp(search,'i') } ];
+      q.$or = [{ location: new RegExp(search, 'i') }];
     }
     const items = await SalesMeeting.find(q)
       .populate('client', 'name phoneNumber')
@@ -682,18 +682,18 @@ const updateSalesMeeting = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
     const updateData = { ...req.body };
-    
+
     // If status is being set to completed, add completedAt timestamp
     if (updateData.status === 'completed' && !updateData.completedAt) {
       updateData.completedAt = new Date();
     }
-    
+
     const meeting = await SalesMeeting.findOneAndUpdate(
-      { _id: req.params.id, createdBy: salesId }, 
-      updateData, 
+      { _id: req.params.id, createdBy: salesId },
+      updateData,
       { new: true }
     ).populate('client', 'name phoneNumber').populate('assignee', 'name');
-    
+
     if (!meeting) return res.status(404).json({ success: false, message: 'Meeting not found' });
     res.json({ success: true, data: meeting, message: 'Meeting updated' });
   } catch (error) {
@@ -719,12 +719,12 @@ const getMyConvertedClients = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
     const Project = require('../models/Project');
-    
+
     // First, get clients directly converted by this sales employee
     let clientIds = new Set();
     const directClients = await Client.find({ convertedBy: salesId }).select('_id');
     directClients.forEach(c => clientIds.add(c._id.toString()));
-    
+
     // Also find clients through projects submitted by this sales employee
     // (for backward compatibility - projects have submittedBy field)
     const projects = await Project.find({ submittedBy: salesId }).select('client');
@@ -733,26 +733,26 @@ const getMyConvertedClients = async (req, res) => {
         clientIds.add(p.client.toString());
       }
     });
-    
+
     // Also find clients through converted leads assigned to this sales employee
     // (additional way to find clients if convertedBy wasn't set)
-    const convertedLeads = await Lead.find({ 
-      assignedTo: salesId, 
-      status: 'converted' 
+    const convertedLeads = await Lead.find({
+      assignedTo: salesId,
+      status: 'converted'
     }).select('phone');
-    
+
     if (convertedLeads.length > 0) {
       const phoneNumbers = convertedLeads.map(l => l.phone).filter(Boolean);
       const clientsFromLeads = await Client.find({ phoneNumber: { $in: phoneNumbers } }).select('_id');
       clientsFromLeads.forEach(c => clientIds.add(c._id.toString()));
     }
-    
+
     // Fetch all unique clients
     const clientIdArray = Array.from(clientIds).map(id => safeObjectId(id));
     const clients = await Client.find({ _id: { $in: clientIdArray } })
       .select('name phoneNumber companyName email')
       .sort({ name: 1 });
-    
+
     res.json({ success: true, data: clients, message: 'Clients fetched' });
   } catch (error) {
     console.error('getMyConvertedClients error:', error);
@@ -777,7 +777,7 @@ const loginSales = async (req, res) => {
 
     // Check if Sales exists and include password for comparison
     const sales = await Sales.findOne({ email }).select('+password');
-    
+
     if (!sales) {
       return res.status(401).json({
         success: false,
@@ -803,11 +803,11 @@ const loginSales = async (req, res) => {
 
     // Check password
     const isPasswordValid = await sales.comparePassword(password);
-    
+
     if (!isPasswordValid) {
       // Increment login attempts
       await sales.incLoginAttempts();
-      
+
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -872,7 +872,7 @@ const loginSales = async (req, res) => {
 const getSalesProfile = async (req, res) => {
   try {
     const sales = await Sales.findById(req.sales.id);
-    
+
     if (!sales) {
       return res.status(404).json({
         success: false,
@@ -947,7 +947,7 @@ const createDemoSales = async (req, res) => {
   try {
     // Check if demo Sales already exists
     const existingSales = await Sales.findOne({ email: 'sales@demo.com' });
-    
+
     if (existingSales) {
       return res.status(400).json({
         success: false,
@@ -1066,7 +1066,7 @@ const createLeadBySales = async (req, res) => {
 
   } catch (error) {
     console.error('Create lead by sales error:', error);
-    
+
     // Handle Mongoose validation errors
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => err.message);
@@ -1076,7 +1076,7 @@ const createLeadBySales = async (req, res) => {
         errors: validationErrors
       });
     }
-    
+
     // Handle duplicate key errors
     if (error.code === 11000) {
       return res.status(400).json({
@@ -1084,7 +1084,7 @@ const createLeadBySales = async (req, res) => {
         message: 'Lead with this phone number already exists'
       });
     }
-    
+
     // Handle other errors
     res.status(500).json({
       success: false,
@@ -1122,13 +1122,13 @@ const getLeadCategories = async (req, res) => {
 const debugLeads = async (req, res) => {
   try {
     const salesId = req.sales.id;
-    
+
     // Get all leads for this sales employee
     const leads = await Lead.find({ assignedTo: salesId }).select('phone status assignedTo createdAt');
-    
+
     // Get all leads in the database (for debugging)
     const allLeads = await Lead.find({}).select('phone status assignedTo createdAt').limit(10);
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -1165,12 +1165,12 @@ const getTileCardStats = async (req, res) => {
     const myClients = await Client.find({ convertedBy: salesId }).select('_id');
     const clientIds = myClients.map(c => c._id);
     const projects = await Project.find({ client: { $in: clientIds } }).select('dueDate financialDetails updatedAt createdAt');
-    
+
     // Count pending payments (projects with remainingAmount > 0)
     let pendingPayments = 0;
     let paymentsThisWeek = 0;
     const allPendingProjects = [];
-    
+
     projects.forEach(p => {
       const rem = p.financialDetails?.remainingAmount || 0;
       if (rem > 0) {
@@ -1178,7 +1178,7 @@ const getTileCardStats = async (req, res) => {
         allPendingProjects.push(p);
       }
     });
-    
+
     // Count payments added this week (new projects with pending payments created this week)
     paymentsThisWeek = allPendingProjects.filter(p => {
       const createdDate = p.createdAt || p.updatedAt;
@@ -1186,14 +1186,14 @@ const getTileCardStats = async (req, res) => {
     }).length;
 
     // 2. Demo Requests Stats
-    const demoRequests = await Lead.find({ 
+    const demoRequests = await Lead.find({
       assignedTo: salesId,
       $or: [
         { 'demoRequest.status': { $exists: true } },
         { status: 'demo_requested' }
       ]
     });
-    
+
     let newDemoRequests = 0;
     let demosToday = 0;
     demoRequests.forEach(lead => {
@@ -1210,23 +1210,23 @@ const getTileCardStats = async (req, res) => {
     // 3. Tasks Stats
     const allTasks = await SalesTask.find({ owner: salesId });
     const pendingTasks = allTasks.filter(t => !t.completed).length;
-    
+
     // Count completed tasks today
-    const tasksCompletedToday = allTasks.filter(t => 
-      t.completed && 
-      t.updatedAt && 
-      t.updatedAt >= todayStart && 
+    const tasksCompletedToday = allTasks.filter(t =>
+      t.completed &&
+      t.updatedAt &&
+      t.updatedAt >= todayStart &&
       t.updatedAt <= todayEnd
     ).length;
-    
+
     // Count completed tasks yesterday
-    const tasksCompletedYesterday = allTasks.filter(t => 
-      t.completed && 
-      t.updatedAt && 
-      t.updatedAt >= yesterdayStart && 
+    const tasksCompletedYesterday = allTasks.filter(t =>
+      t.completed &&
+      t.updatedAt &&
+      t.updatedAt >= yesterdayStart &&
       t.updatedAt <= yesterdayEnd
     ).length;
-    
+
     const tasksChange = tasksCompletedToday - tasksCompletedYesterday;
 
     // 4. Meetings Stats
@@ -1236,12 +1236,12 @@ const getTileCardStats = async (req, res) => {
         { createdBy: salesId }
       ]
     });
-    
+
     const todayMeetings = allMeetings.filter(m => {
       const meetingDate = new Date(m.meetingDate);
       return meetingDate >= todayStart && meetingDate <= todayEnd && m.status !== 'cancelled';
     }).length;
-    
+
     const upcomingMeetings = allMeetings.filter(m => {
       const meetingDate = new Date(m.meetingDate);
       return meetingDate > todayEnd && m.status === 'scheduled';
@@ -1284,44 +1284,44 @@ const getDashboardHeroStats = async (req, res) => {
     const Client = require('../models/Client');
     const Project = require('../models/Project');
     const Lead = require('../models/Lead');
-    
+
     // Get sales employee data (including multiple targets and team lead info)
     const sales = await Sales.findById(salesId).select('name salesTarget salesTargets reward incentivePerClient isTeamLead teamMembers teamLeadTarget teamLeadTargetReward');
     if (!sales) {
       return res.status(404).json({ success: false, message: 'Sales employee not found' });
     }
-    
+
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    
+
     // Get clients converted by this sales employee
     const convertedClients = await Client.find({ convertedBy: salesId })
       .select('_id conversionDate')
       .sort({ conversionDate: -1 }); // Sort by conversion date descending
-    
+
     // Get last conversion date (most recent conversion)
     let lastConversionDate = null;
     if (convertedClients.length > 0 && convertedClients[0].conversionDate) {
       lastConversionDate = convertedClients[0].conversionDate;
     }
-    
+
     // Filter clients converted this month and today
     const monthlyClientIds = convertedClients
       .filter(c => c.conversionDate && c.conversionDate >= monthStart && c.conversionDate <= monthEnd)
       .map(c => c._id.toString());
-    
+
     const todayClientIds = convertedClients
       .filter(c => c.conversionDate && c.conversionDate >= todayStart && c.conversionDate <= todayEnd)
       .map(c => c._id.toString());
-    
+
     // Get all projects for clients converted this month and today
     const allClientIds = convertedClients.map(c => c._id);
     const projects = await Project.find({ client: { $in: allClientIds } })
       .select('client financialDetails.totalCost budget createdAt');
-    
+
     // Calculate monthly sales (sum of project costs for clients converted this month)
     let monthlySales = 0;
     projects.forEach(p => {
@@ -1331,7 +1331,7 @@ const getDashboardHeroStats = async (req, res) => {
         monthlySales += cost;
       }
     });
-    
+
     // Calculate today's sales (sum of project costs for clients converted today)
     let todaysSales = 0;
     projects.forEach(p => {
@@ -1341,69 +1341,69 @@ const getDashboardHeroStats = async (req, res) => {
         todaysSales += cost;
       }
     });
-    
+
     // Count clients converted this month
     const monthlyConvertedCount = monthlyClientIds.length;
-    
+
     // Count clients converted today
     const todayConvertedCount = todayClientIds.length;
-    
+
     // Calculate incentives from actual conversion-based incentives
     const Incentive = require('../models/Incentive');
-    
+
     // Get all conversion-based incentives for this sales employee
     const conversionIncentives = await Incentive.find({
       salesEmployee: salesId,
       isConversionBased: true
     }).select('amount dateAwarded');
-    
+
     // Calculate monthly incentive (sum of amounts from incentives created this month)
     const monthlyIncentives = conversionIncentives.filter(inc => {
       const dateAwarded = new Date(inc.dateAwarded);
       return dateAwarded >= monthStart && dateAwarded <= monthEnd;
     });
     const monthlyIncentive = monthlyIncentives.reduce((sum, inc) => sum + (inc.amount || 0), 0);
-    
+
     // Calculate today's incentive (sum of amounts from incentives created today)
     const todaysIncentives = conversionIncentives.filter(inc => {
       const dateAwarded = new Date(inc.dateAwarded);
       return dateAwarded >= todayStart && dateAwarded <= todayEnd;
     });
     const todaysIncentive = todaysIncentives.reduce((sum, inc) => sum + (inc.amount || 0), 0);
-    
+
     // Handle multiple targets - find current active target (not achieved yet)
     let activeTarget = null;
     let activeTargetNumber = null;
     let progressToTarget = 0;
     let allTargets = [];
-    
+
     if (sales.salesTargets && sales.salesTargets.length > 0) {
       // Sort targets by targetNumber (1, 2, 3)
       const sortedTargets = [...sales.salesTargets].sort((a, b) => a.targetNumber - b.targetNumber);
-      
+
       // Calculate cumulative progress: each target's progress is relative to previous achieved targets
       let previousAchievedAmount = 0;
-      
+
       // Find first unachieved target (where monthlySales < target amount)
       for (let i = 0; i < sortedTargets.length; i++) {
         const target = sortedTargets[i];
         const targetAmount = Number(target.amount || 0);
         const targetDate = new Date(target.targetDate);
         const now = new Date();
-        
+
         // Check if target deadline has passed
         const isDeadlinePassed = targetDate < now;
-        
+
         // Calculate progress for this target relative to previous targets
         // If this is not the first target, calculate relative to previous target's amount
         const targetRange = i === 0 ? targetAmount : (targetAmount - previousAchievedAmount);
         const salesInThisTarget = i === 0 ? monthlySales : Math.max(0, monthlySales - previousAchievedAmount);
         const targetProgress = targetRange > 0 ? Math.min((salesInThisTarget / targetRange) * 100, 100) : 0;
         const isAchieved = monthlySales >= targetAmount;
-        
+
         // For display in allTargets, show cumulative progress
         const cumulativeProgress = targetAmount > 0 ? Math.min((monthlySales / targetAmount) * 100, 100) : 0;
-        
+
         allTargets.push({
           targetNumber: target.targetNumber,
           amount: targetAmount,
@@ -1413,7 +1413,7 @@ const getDashboardHeroStats = async (req, res) => {
           isAchieved: isAchieved,
           isDeadlinePassed: isDeadlinePassed
         });
-        
+
         // Set as active if not achieved yet and not passed
         if (!activeTarget && !isAchieved && !isDeadlinePassed) {
           activeTarget = targetAmount;
@@ -1421,13 +1421,13 @@ const getDashboardHeroStats = async (req, res) => {
           // Progress relative to this target only (reset from 0% for this target)
           progressToTarget = Math.round(targetProgress);
         }
-        
+
         // Update previous achieved amount for next iteration
         if (isAchieved) {
           previousAchievedAmount = targetAmount;
         }
       }
-      
+
       // If all targets achieved, use the last one with 100% progress
       if (!activeTarget && sortedTargets.length > 0) {
         const lastTarget = sortedTargets[sortedTargets.length - 1];
@@ -1435,7 +1435,7 @@ const getDashboardHeroStats = async (req, res) => {
         activeTargetNumber = lastTarget.targetNumber;
         progressToTarget = 100;
       }
-      
+
       // Fallback to first target if no active target found
       if (!activeTarget && sortedTargets.length > 0) {
         const firstTarget = sortedTargets[0];
@@ -1449,29 +1449,29 @@ const getDashboardHeroStats = async (req, res) => {
       activeTarget = sales.salesTarget || 0;
       progressToTarget = activeTarget > 0 ? Math.round((monthlySales / activeTarget) * 100) : 0;
     }
-    
+
     // Cap progress at 100%
     progressToTarget = Math.min(progressToTarget, 100);
-    
+
     // Get total leads count
     const totalLeads = await Lead.countDocuments({ assignedTo: salesId });
-    
+
     // Get total clients count
     const totalClients = convertedClients.length;
-    
+
     // Get reward
     const reward = sales.reward || 0;
-    
+
     // Calculate team lead target progress if user is a team lead (optimized with aggregation)
     let teamLeadTarget = 0;
     let teamLeadTargetReward = 0;
     let teamMonthlySales = 0;
     let teamLeadProgress = 0;
-    
+
     if (sales.isTeamLead && sales.teamMembers && sales.teamMembers.length > 0) {
       teamLeadTarget = sales.teamLeadTarget || 0;
       teamLeadTargetReward = sales.teamLeadTargetReward || 0;
-      
+
       try {
         // Optimized: Use aggregation pipeline for faster calculation
         const teamMemberIds = sales.teamMembers.map(id => {
@@ -1481,10 +1481,10 @@ const getDashboardHeroStats = async (req, res) => {
             return id;
           }
         });
-        
+
         // Filter valid ObjectIds
         const validTeamMemberIds = teamMemberIds.filter(id => mongoose.Types.ObjectId.isValid(id));
-        
+
         if (validTeamMemberIds.length > 0) {
           // Optimized single aggregation query: Join projects with clients and filter
           const teamSalesAggregation = await Project.aggregate([
@@ -1522,7 +1522,7 @@ const getDashboardHeroStats = async (req, res) => {
               }
             }
           ]);
-          
+
           teamMonthlySales = teamSalesAggregation.length > 0 ? (Number(teamSalesAggregation[0].totalSales) || 0) : 0;
         }
       } catch (error) {
@@ -1530,20 +1530,20 @@ const getDashboardHeroStats = async (req, res) => {
         // Fallback to 0 if calculation fails
         teamMonthlySales = 0;
       }
-      
+
       // Calculate progress to team target
       if (teamLeadTarget > 0) {
         teamLeadProgress = Math.min((teamMonthlySales / teamLeadTarget) * 100, 100);
       }
     }
-    
+
     // Extract first name from full name
     const getFirstName = (fullName) => {
       if (!fullName) return 'Employee';
       const nameParts = fullName.trim().split(/\s+/);
       return nameParts[0] || 'Employee';
     };
-    
+
     res.json({
       success: true,
       data: {
@@ -1618,25 +1618,25 @@ const getSalesDashboardStats = async (req, res) => {
       assignedTo: new mongoose.Types.ObjectId(salesId),
       leadProfile: { $exists: true, $ne: null }
     });
-    
+
     // Get all leads with profiles and count those with flags
     const leadsWithProfiles = await Lead.find({
       assignedTo: new mongoose.Types.ObjectId(salesId),
       leadProfile: { $exists: true, $ne: null }
     }).populate('leadProfile', 'demoSent quotationSent projectType').lean();
-    
-    const actualDemoSentCount = leadsWithProfiles.filter(lead => 
+
+    const actualDemoSentCount = leadsWithProfiles.filter(lead =>
       lead.leadProfile && lead.leadProfile.demoSent === true
     ).length;
-    
+
     statusCounts.demo_sent = actualDemoSentCount;
 
     // Count quotation_sent leads: status='quotation_sent' OR leadProfile.quotationSent=true
-    const actualQuotationSentCount = leadsWithProfiles.filter(lead => 
-      lead.status === 'quotation_sent' || 
+    const actualQuotationSentCount = leadsWithProfiles.filter(lead =>
+      lead.status === 'quotation_sent' ||
       (lead.leadProfile && lead.leadProfile.quotationSent === true)
     ).length;
-    
+
     statusCounts.quotation_sent = actualQuotationSentCount;
 
     // Count app_client leads: status='app_client' OR leadProfile.category='App' OR leadProfile.projectType.app=true (legacy)
@@ -1648,7 +1648,7 @@ const getSalesDashboardStats = async (req, res) => {
     } catch (err) {
       console.error('Error finding App category:', err);
     }
-    
+
     const actualAppClientCount = leadsWithProfiles.filter(lead => {
       if (lead.status === 'app_client') return true;
       if (lead.leadProfile) {
@@ -1659,7 +1659,7 @@ const getSalesDashboardStats = async (req, res) => {
       }
       return false;
     }).length;
-    
+
     statusCounts.app_client = actualAppClientCount;
 
     // Count web leads: status='web' OR leadProfile.category='Web' OR leadProfile.projectType.web=true (legacy)
@@ -1670,7 +1670,7 @@ const getSalesDashboardStats = async (req, res) => {
     } catch (err) {
       console.error('Error finding Web category:', err);
     }
-    
+
     const actualWebCount = leadsWithProfiles.filter(lead => {
       if (lead.status === 'web') return true;
       if (lead.leadProfile) {
@@ -1681,13 +1681,13 @@ const getSalesDashboardStats = async (req, res) => {
       }
       return false;
     }).length;
-    
+
     statusCounts.web = actualWebCount;
 
     // Count followup leads: leads with pending follow-ups (today onwards, regardless of status)
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    
+
     const followupLeads = await Lead.find({
       assignedTo: new mongoose.Types.ObjectId(salesId),
       followUps: {
@@ -1697,17 +1697,17 @@ const getSalesDashboardStats = async (req, res) => {
         }
       }
     }).lean();
-    
+
     statusCounts.followup = followupLeads.length;
 
     // Map aggregation results to status counts (but don't override calculated ones above)
     stats.forEach(stat => {
-      if (statusCounts.hasOwnProperty(stat._id) && 
-          stat._id !== 'quotation_sent' && 
-          stat._id !== 'demo_sent' && 
-          stat._id !== 'app_client' && 
-          stat._id !== 'web' &&
-          stat._id !== 'followup') {
+      if (statusCounts.hasOwnProperty(stat._id) &&
+        stat._id !== 'quotation_sent' &&
+        stat._id !== 'demo_sent' &&
+        stat._id !== 'app_client' &&
+        stat._id !== 'web' &&
+        stat._id !== 'followup') {
         statusCounts[stat._id] = stat.count;
       }
     });
@@ -1759,13 +1759,14 @@ const getMonthlyConversions = async (req, res) => {
     const since = new Date();
     since.setMonth(since.getMonth() - (months - 1));
     since.setDate(1);
-    since.setHours(0,0,0,0);
+    since.setHours(0, 0, 0, 0);
 
     const agg = await Lead.aggregate([
-      { $match: { assignedTo: salesObjectId, status: 'converted', $or: [ { convertedAt: { $exists: true } }, { updatedAt: { $exists: true } } ] } },
+      { $match: { assignedTo: salesObjectId, status: 'converted', $or: [{ convertedAt: { $exists: true } }, { updatedAt: { $exists: true } }] } },
       { $addFields: { metricDate: { $ifNull: ['$convertedAt', '$updatedAt'] } } },
       { $match: { metricDate: { $gte: since } } },
-      { $group: {
+      {
+        $group: {
           _id: {
             y: { $year: '$metricDate' },
             m: { $month: '$metricDate' }
@@ -1805,12 +1806,12 @@ const getMonthlyConversions = async (req, res) => {
 const getMyLeads = async (req, res) => {
   try {
     const salesId = req.sales.id;
-    const { 
-      status, 
-      category, 
-      priority, 
-      search, 
-      page = 1, 
+    const {
+      status,
+      category,
+      priority,
+      search,
+      page = 1,
       limit = 12,
       sortBy = 'createdAt',
       sortOrder = 'desc'
@@ -1894,13 +1895,13 @@ const getLeadsByStatus = async (req, res) => {
 
     const salesId = req.sales.id;
     const { status } = req.params;
-    const { 
-      category, 
-      priority, 
-      search, 
+    const {
+      category,
+      priority,
+      search,
       timeFrame,
-      page = 1, 
-      limit = 12 
+      page = 1,
+      limit = 12
     } = req.query;
 
     // Validate status (with backward compatibility for today_followup)
@@ -1927,7 +1928,7 @@ const getLeadsByStatus = async (req, res) => {
       // Fallback to string matching if casting fails (should not happen in normal flow)
       assignedToValue = salesId;
     }
-    
+
     // Special handling for status-specific queries:
     // - 'connected': all leads with leadProfile that are not converted/lost/not_interested/not_picked
     // - 'quotation_sent': leads with status='quotation_sent' OR leadProfile.quotationSent=true
@@ -1937,14 +1938,14 @@ const getLeadsByStatus = async (req, res) => {
     // - 'web': leads with status='web' OR leadProfile.projectType.web=true
     let filter;
     if (status === 'connected') {
-      filter = { 
+      filter = {
         assignedTo: assignedToValue,
         leadProfile: { $exists: true, $ne: null },
         status: { $nin: ['converted', 'lost', 'not_interested', 'not_picked'] }
       };
     } else if (status === 'quotation_sent') {
       // Show leads with status='quotation_sent' OR leadProfile.quotationSent=true
-      filter = { 
+      filter = {
         assignedTo: assignedToValue,
         $or: [
           { status: 'quotation_sent' },
@@ -1953,14 +1954,14 @@ const getLeadsByStatus = async (req, res) => {
       };
     } else if (status === 'demo_sent') {
       // Filter leads where leadProfile.demoSent is true
-      filter = { 
+      filter = {
         assignedTo: assignedToValue,
         leadProfile: { $exists: true, $ne: null }
       };
     } else if (status === 'app_client') {
       // Show leads with status='app_client' OR leadProfile.category='App' OR leadProfile.projectType.app=true (legacy)
       // Note: Category filtering will be done in post-query filter since MongoDB doesn't support nested field filtering easily
-      filter = { 
+      filter = {
         assignedTo: assignedToValue,
         $or: [
           { status: 'app_client' },
@@ -1970,7 +1971,7 @@ const getLeadsByStatus = async (req, res) => {
     } else if (status === 'web') {
       // Show leads with status='web' OR leadProfile.category='Web' OR leadProfile.projectType.web=true (legacy)
       // Note: Category filtering will be done in post-query filter since MongoDB doesn't support nested field filtering easily
-      filter = { 
+      filter = {
         assignedTo: assignedToValue,
         $or: [
           { status: 'web' },
@@ -1979,15 +1980,15 @@ const getLeadsByStatus = async (req, res) => {
       };
     } else if (actualStatus === 'followup') {
       // For followup status, don't filter by status - show leads with pending follow-ups regardless of status
-      filter = { 
+      filter = {
         assignedTo: assignedToValue
         // Status filter is NOT applied here - we want leads with pending follow-ups from any status
       };
     } else {
       // For other statuses, use exact status match (allows leads to appear in both connected page and status-specific page)
-      filter = { 
+      filter = {
         assignedTo: assignedToValue,
-        status: actualStatus 
+        status: actualStatus
       };
     }
 
@@ -2010,7 +2011,7 @@ const getLeadsByStatus = async (req, res) => {
           { email: { $regex: search, $options: 'i' } }
         ]
       };
-      
+
       // If filter already has $or (from quotation_sent, web, app_client), use $and
       if (filter.$or) {
         filter.$and = filter.$and || [];
@@ -2025,9 +2026,9 @@ const getLeadsByStatus = async (req, res) => {
     if (actualStatus === 'followup') {
       const now = new Date();
       let startDate, endDate;
-      
+
       if (timeFrame && timeFrame !== 'all') {
-        switch(timeFrame) {
+        switch (timeFrame) {
           case 'today':
             startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
             endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -2050,21 +2051,21 @@ const getLeadsByStatus = async (req, res) => {
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
         endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
       }
-      
+
       // Filter for both pending and completed follow-ups (from today onwards)
       const followUpFilter = {
         scheduledDate: { $gte: startDate },
         status: { $in: ['pending', 'completed'] }
       };
-      
+
       if (endDate) {
         followUpFilter.scheduledDate.$lte = endDate;
       }
-      
+
       filter.followUps = {
         $elemMatch: followUpFilter
       };
-      
+
       console.log('Followup query filter:', JSON.stringify(filter, null, 2));
     } else if (timeFrame && timeFrame !== 'all') {
       // For status-specific queries, determine which date field to use for filtering
@@ -2073,8 +2074,8 @@ const getLeadsByStatus = async (req, res) => {
       const dateField = actualStatus === 'new' ? 'createdAt' : 'updatedAt';
       const now = new Date();
       let startDate, endDate;
-      
-      switch(timeFrame) {
+
+      switch (timeFrame) {
         case 'today':
           startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
           endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -2088,7 +2089,7 @@ const getLeadsByStatus = async (req, res) => {
           endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
           break;
       }
-      
+
       if (startDate) {
         filter[dateField] = { $gte: startDate };
         if (endDate) {
@@ -2106,7 +2107,7 @@ const getLeadsByStatus = async (req, res) => {
       .populate('category', 'name color icon')
       .populate('leadProfile', 'name businessName projectType estimatedCost quotationSent demoSent')
       .sort({ createdAt: -1 });
-    
+
     // For status-specific queries that check leadProfile flags, filter after population
     let leads;
     if (status === 'demo_sent') {
@@ -2118,8 +2119,8 @@ const getLeadsByStatus = async (req, res) => {
     } else if (status === 'quotation_sent') {
       // Get all leads matching the filter, then filter by quotationSent flag
       const allLeads = await query;
-      const filteredLeads = allLeads.filter(lead => 
-        lead.status === 'quotation_sent' || 
+      const filteredLeads = allLeads.filter(lead =>
+        lead.status === 'quotation_sent' ||
         (lead.leadProfile && lead.leadProfile.quotationSent === true)
       );
       // Apply pagination after filtering
@@ -2134,7 +2135,7 @@ const getLeadsByStatus = async (req, res) => {
       } catch (err) {
         console.error('Error finding App category:', err);
       }
-      
+
       const allLeads = await query;
       const filteredLeads = allLeads.filter(lead => {
         if (lead.status === 'app_client') return true;
@@ -2158,7 +2159,7 @@ const getLeadsByStatus = async (req, res) => {
       } catch (err) {
         console.error('Error finding Web category:', err);
       }
-      
+
       const allLeads = await query;
       const filteredLeads = allLeads.filter(lead => {
         if (lead.status === 'web') return true;
@@ -2188,7 +2189,7 @@ const getLeadsByStatus = async (req, res) => {
     if (status === 'converted') {
       const leadIds = leads.map(lead => lead._id);
       const salesObjectId = safeObjectId(salesId);
-      
+
       // Get clients that belong to this sales employee first
       const clientDocs = await Client.find({ convertedBy: salesObjectId })
         .select('_id originLead phoneNumber name companyName convertedBy transferHistory')
@@ -2202,7 +2203,7 @@ const getLeadsByStatus = async (req, res) => {
         });
       const clients = clientDocs.map(doc => doc.toObject());
       const clientIds = clients.map(c => c._id);
-      
+
       // Get projects for both leads and clients
       const projects = await Project.find({
         $or: [
@@ -2214,7 +2215,7 @@ const getLeadsByStatus = async (req, res) => {
         .populate('category', 'name')
         .lean();
       // Clients are already fetched above, no need to query again
-      
+
       // Create maps: leadId -> project and clientId -> project
       const projectMapByLead = {};
       const projectMapByClient = {};
@@ -2237,7 +2238,7 @@ const getLeadsByStatus = async (req, res) => {
           clientMapByPhone.set(client.phoneNumber, client);
         }
       });
-      
+
       // Attach project data to each lead and filter out leads whose clients were transferred
       // For converted status, only show leads that have a client AND that client belongs to this sales employee
       leads = leads
@@ -2255,52 +2256,52 @@ const getLeadsByStatus = async (req, res) => {
             // Verify client belongs to this sales employee
             // Since we already filtered by convertedBy in the query, this should always match
             // But we double-check here for safety - handle both ObjectId and string cases
-            const clientConvertedBy = clientDoc.convertedBy 
+            const clientConvertedBy = clientDoc.convertedBy
               ? String(clientDoc.convertedBy._id || clientDoc.convertedBy)
               : null;
             const currentSalesIdStr = String(salesId);
-            
+
             if (clientConvertedBy && clientConvertedBy !== currentSalesIdStr) {
               // Client doesn't belong to this sales employee, exclude this lead
               return null;
             }
-            
+
             const clientIdStr =
               typeof clientDoc._id === 'object' && clientDoc._id !== null && clientDoc._id.toString
                 ? clientDoc._id.toString()
                 : clientDoc._id;
-            
+
             // Check if this client was transferred to the current sales employee
             const transferHistory = clientDoc.transferHistory || [];
-            const latestTransfer = transferHistory.length > 0 
-              ? transferHistory[transferHistory.length - 1] 
+            const latestTransfer = transferHistory.length > 0
+              ? transferHistory[transferHistory.length - 1]
               : null;
-            
+
             // Check if transferred TO current sales employee (toSales matches current salesId)
             // Handle both ObjectId and populated object cases
             let isTransferred = false;
             let transferredByName = 'Unknown';
             let fromSalesName = 'Unknown';
-            
+
             if (latestTransfer) {
               // Get IDs - handle both populated objects and raw ObjectIds
-              const toSalesId = latestTransfer.toSales?._id 
+              const toSalesId = latestTransfer.toSales?._id
                 ? String(latestTransfer.toSales._id)
                 : String(latestTransfer.toSales || '');
-              const fromSalesId = latestTransfer.fromSales?._id 
+              const fromSalesId = latestTransfer.fromSales?._id
                 ? String(latestTransfer.fromSales._id)
                 : String(latestTransfer.fromSales || '');
-              
+
               // Client was transferred TO this sales employee if:
               // 1. toSales matches current salesId
               // 2. fromSales is different from current salesId (was transferred from someone else)
               isTransferred = toSalesId === currentSalesIdStr && fromSalesId !== currentSalesIdStr && fromSalesId !== '';
-              
+
               // Get names from populated objects
               transferredByName = latestTransfer.transferredBy?.name || 'Unknown';
               fromSalesName = latestTransfer.fromSales?.name || 'Unknown';
             }
-            
+
             leadObj.convertedClient = {
               id: clientIdStr,
               name: clientDoc.name,
@@ -2322,72 +2323,72 @@ const getLeadsByStatus = async (req, res) => {
           }
         })
         .filter(lead => lead !== null && lead.convertedClientId !== null); // Remove leads without valid clients
-        
-        // Also include clients that belong to this sales employee but don't have matching leads
-        // This handles cases where clients were transferred but the original lead isn't assigned to this sales employee
-        const clientIdsInLeads = new Set(leads.map(l => l.convertedClientId).filter(Boolean));
-        const clientsWithoutLeads = clients.filter(client => {
-          const clientIdStr = String(client._id);
-          return !clientIdsInLeads.has(clientIdStr);
-        });
-        
-        // Create lead-like objects for clients without matching leads
-        for (const clientDoc of clientsWithoutLeads) {
-          const clientIdStr = String(clientDoc._id);
-          
-          // Check if this client was transferred to the current sales employee
-          const transferHistory = clientDoc.transferHistory || [];
-          const latestTransfer = transferHistory.length > 0 
-            ? transferHistory[transferHistory.length - 1] 
-            : null;
-          
-          let isTransferred = false;
-          let transferredByName = 'Unknown';
-          let fromSalesName = 'Unknown';
-          
-          if (latestTransfer) {
-            const toSalesId = latestTransfer.toSales?._id 
-              ? String(latestTransfer.toSales._id)
-              : String(latestTransfer.toSales || '');
-            const fromSalesId = latestTransfer.fromSales?._id 
-              ? String(latestTransfer.fromSales._id)
-              : String(latestTransfer.fromSales || '');
-            const currentSalesIdStr = String(salesId);
-            
-            isTransferred = toSalesId === currentSalesIdStr && fromSalesId !== currentSalesIdStr && fromSalesId !== '';
-            
-            transferredByName = latestTransfer.transferredBy?.name || 'Unknown';
-            fromSalesName = latestTransfer.fromSales?.name || 'Unknown';
-          }
-          
-          // Find associated project for this client
-          const clientProject = projectMapByClient[clientIdStr];
-          
-          // Create a lead-like object
-          const clientLeadObj = {
-            _id: clientDoc.originLead || clientDoc._id, // Use originLead if available, otherwise use client ID
-            phone: clientDoc.phoneNumber,
-            name: clientDoc.name,
-            company: clientDoc.companyName,
-            convertedClient: {
-              id: clientIdStr,
-              name: clientDoc.name,
-              phoneNumber: clientDoc.phoneNumber,
-              companyName: clientDoc.companyName,
-              isTransferred: isTransferred,
-              transferInfo: isTransferred ? {
-                transferredBy: transferredByName,
-                transferredAt: latestTransfer.transferredAt,
-                fromSales: fromSalesName
-              } : null
-            },
-            convertedClientId: clientIdStr,
-            project: clientProject || null,
-            updatedAt: latestTransfer?.transferredAt || clientDoc.updatedAt || new Date()
-          };
-          
-          leads.push(clientLeadObj);
+
+      // Also include clients that belong to this sales employee but don't have matching leads
+      // This handles cases where clients were transferred but the original lead isn't assigned to this sales employee
+      const clientIdsInLeads = new Set(leads.map(l => l.convertedClientId).filter(Boolean));
+      const clientsWithoutLeads = clients.filter(client => {
+        const clientIdStr = String(client._id);
+        return !clientIdsInLeads.has(clientIdStr);
+      });
+
+      // Create lead-like objects for clients without matching leads
+      for (const clientDoc of clientsWithoutLeads) {
+        const clientIdStr = String(clientDoc._id);
+
+        // Check if this client was transferred to the current sales employee
+        const transferHistory = clientDoc.transferHistory || [];
+        const latestTransfer = transferHistory.length > 0
+          ? transferHistory[transferHistory.length - 1]
+          : null;
+
+        let isTransferred = false;
+        let transferredByName = 'Unknown';
+        let fromSalesName = 'Unknown';
+
+        if (latestTransfer) {
+          const toSalesId = latestTransfer.toSales?._id
+            ? String(latestTransfer.toSales._id)
+            : String(latestTransfer.toSales || '');
+          const fromSalesId = latestTransfer.fromSales?._id
+            ? String(latestTransfer.fromSales._id)
+            : String(latestTransfer.fromSales || '');
+          const currentSalesIdStr = String(salesId);
+
+          isTransferred = toSalesId === currentSalesIdStr && fromSalesId !== currentSalesIdStr && fromSalesId !== '';
+
+          transferredByName = latestTransfer.transferredBy?.name || 'Unknown';
+          fromSalesName = latestTransfer.fromSales?.name || 'Unknown';
         }
+
+        // Find associated project for this client
+        const clientProject = projectMapByClient[clientIdStr];
+
+        // Create a lead-like object
+        const clientLeadObj = {
+          _id: clientDoc.originLead || clientDoc._id, // Use originLead if available, otherwise use client ID
+          phone: clientDoc.phoneNumber,
+          name: clientDoc.name,
+          company: clientDoc.companyName,
+          convertedClient: {
+            id: clientIdStr,
+            name: clientDoc.name,
+            phoneNumber: clientDoc.phoneNumber,
+            companyName: clientDoc.companyName,
+            isTransferred: isTransferred,
+            transferInfo: isTransferred ? {
+              transferredBy: transferredByName,
+              transferredAt: latestTransfer.transferredAt,
+              fromSales: fromSalesName
+            } : null
+          },
+          convertedClientId: clientIdStr,
+          project: clientProject || null,
+          updatedAt: latestTransfer?.transferredAt || clientDoc.updatedAt || new Date()
+        };
+
+        leads.push(clientLeadObj);
+      }
     }
 
     // For status-specific queries that check leadProfile flags, count needs special handling
@@ -2399,8 +2400,8 @@ const getLeadsByStatus = async (req, res) => {
     } else if (status === 'quotation_sent') {
       const allLeads = await Lead.find(filter)
         .populate('leadProfile', 'quotationSent');
-      totalLeads = allLeads.filter(lead => 
-        lead.status === 'quotation_sent' || 
+      totalLeads = allLeads.filter(lead =>
+        lead.status === 'quotation_sent' ||
         (lead.leadProfile && lead.leadProfile.quotationSent === true)
       ).length;
     } else if (status === 'app_client') {
@@ -2412,7 +2413,7 @@ const getLeadsByStatus = async (req, res) => {
       } catch (err) {
         console.error('Error finding App category:', err);
       }
-      
+
       const allLeads = await Lead.find(filter)
         .populate('leadProfile', 'projectType category');
       totalLeads = allLeads.filter(lead => {
@@ -2434,7 +2435,7 @@ const getLeadsByStatus = async (req, res) => {
       } catch (err) {
         console.error('Error finding Web category:', err);
       }
-      
+
       const allLeads = await Lead.find(filter)
         .populate('leadProfile', 'projectType category');
       totalLeads = allLeads.filter(lead => {
@@ -2480,14 +2481,14 @@ const getLeadsByStatus = async (req, res) => {
 const getChannelPartnerLeads = async (req, res) => {
   try {
     const salesId = req.sales.id;
-    const { 
+    const {
       type = 'received', // 'received' = leads CPs shared with me, 'shared' = leads I shared with CPs
-      category, 
-      priority, 
-      search, 
+      category,
+      priority,
+      search,
       timeFrame,
-      page = 1, 
-      limit = 12 
+      page = 1,
+      limit = 12
     } = req.query;
 
     const pageNum = parseInt(page);
@@ -2600,8 +2601,8 @@ const getChannelPartnerLeads = async (req, res) => {
     if (timeFrame && timeFrame !== 'all') {
       const now = new Date();
       let startDate, endDate;
-      
-      switch(timeFrame) {
+
+      switch (timeFrame) {
         case 'today':
           startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
           endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -2619,7 +2620,7 @@ const getChannelPartnerLeads = async (req, res) => {
           endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
           break;
       }
-      
+
       if (startDate) {
         filter['sharedWithSales.sharedAt'] = { $gte: startDate };
         if (endDate) {
@@ -3053,9 +3054,9 @@ const getLeadDetail = async (req, res) => {
     const salesId = req.sales.id;
     const leadId = req.params.id;
 
-    const lead = await Lead.findOne({ 
-      _id: leadId, 
-      assignedTo: salesId 
+    const lead = await Lead.findOne({
+      _id: leadId,
+      assignedTo: salesId
     })
       .populate('category', 'name color icon description')
       .populate('assignedTo', 'name email phone')
@@ -3108,9 +3109,9 @@ const updateLeadStatus = async (req, res) => {
     }
 
     // Find lead and verify ownership
-    const lead = await Lead.findOne({ 
-      _id: leadId, 
-      assignedTo: salesId 
+    const lead = await Lead.findOne({
+      _id: leadId,
+      assignedTo: salesId
     });
 
     if (!lead) {
@@ -3178,7 +3179,7 @@ const updateLeadStatus = async (req, res) => {
       } else {
         parsedDate = new Date(followupDate);
       }
-      
+
       // Validate the parsed date
       if (isNaN(parsedDate.getTime())) {
         return res.status(400).json({
@@ -3186,8 +3187,8 @@ const updateLeadStatus = async (req, res) => {
           message: 'Invalid follow-up date format'
         });
       }
-      
-      
+
+
       const followUpData = {
         scheduledDate: parsedDate,
         scheduledTime: followupTime,
@@ -3198,7 +3199,7 @@ const updateLeadStatus = async (req, res) => {
       };
 
       lead.followUps.push(followUpData);
-      
+
       // Update lead priority if provided
       if (priority) {
         lead.priority = priority;
@@ -3207,11 +3208,11 @@ const updateLeadStatus = async (req, res) => {
       // Update nextFollowUpDate to the nearest upcoming follow-up (including today)
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Start of today
-      
+
       const upcomingFollowUps = lead.followUps
         .filter(fu => fu.status === 'pending' && fu.scheduledDate >= today)
         .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
-      
+
       if (upcomingFollowUps.length > 0) {
         lead.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
       }
@@ -3286,9 +3287,9 @@ const addFollowUp = async (req, res) => {
     }
 
     // Find lead and verify ownership
-    const lead = await Lead.findOne({ 
-      _id: leadId, 
-      assignedTo: salesId 
+    const lead = await Lead.findOne({
+      _id: leadId,
+      assignedTo: salesId
     });
 
     if (!lead) {
@@ -3305,7 +3306,7 @@ const addFollowUp = async (req, res) => {
     } else {
       parsedDate = new Date(actualDate);
     }
-    
+
     if (isNaN(parsedDate.getTime())) {
       return res.status(400).json({
         success: false,
@@ -3324,7 +3325,7 @@ const addFollowUp = async (req, res) => {
     };
 
     lead.followUps.push(followUpData);
-    
+
     // Update lead priority if provided
     if (priority) {
       lead.priority = priority;
@@ -3333,11 +3334,11 @@ const addFollowUp = async (req, res) => {
     // Update nextFollowUpDate to the nearest upcoming follow-up (including today)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const upcomingFollowUps = lead.followUps
       .filter(fu => fu.status === 'pending' && fu.scheduledDate >= today)
       .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
-    
+
     if (upcomingFollowUps.length > 0) {
       lead.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
     }
@@ -3380,9 +3381,9 @@ const completeFollowUp = async (req, res) => {
     const { leadId, followUpId } = req.params;
 
     // Find lead and verify ownership
-    const lead = await Lead.findOne({ 
-      _id: leadId, 
-      assignedTo: salesId 
+    const lead = await Lead.findOne({
+      _id: leadId,
+      assignedTo: salesId
     });
 
     if (!lead) {
@@ -3411,7 +3412,7 @@ const completeFollowUp = async (req, res) => {
     const upcomingFollowUps = lead.followUps
       .filter(fu => fu.status === 'pending' && fu.scheduledDate >= today)
       .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
-    
+
     if (upcomingFollowUps.length > 0) {
       lead.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
     } else {
@@ -3456,9 +3457,9 @@ const cancelFollowUp = async (req, res) => {
     const { leadId, followUpId } = req.params;
 
     // Find lead and verify ownership
-    const lead = await Lead.findOne({ 
-      _id: leadId, 
-      assignedTo: salesId 
+    const lead = await Lead.findOne({
+      _id: leadId,
+      assignedTo: salesId
     });
 
     if (!lead) {
@@ -3486,7 +3487,7 @@ const cancelFollowUp = async (req, res) => {
     const upcomingFollowUps = lead.followUps
       .filter(fu => fu.status === 'pending' && fu.scheduledDate >= today)
       .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
-    
+
     if (upcomingFollowUps.length > 0) {
       lead.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
     } else {
@@ -3532,9 +3533,9 @@ const rescheduleFollowUp = async (req, res) => {
     const { scheduledDate, scheduledTime, notes, type, priority } = req.body;
 
     // Find lead and verify ownership
-    const lead = await Lead.findOne({ 
-      _id: leadId, 
-      assignedTo: salesId 
+    const lead = await Lead.findOne({
+      _id: leadId,
+      assignedTo: salesId
     });
 
     if (!lead) {
@@ -3568,7 +3569,7 @@ const rescheduleFollowUp = async (req, res) => {
     } else {
       parsedDate = new Date(scheduledDate);
     }
-    
+
     if (isNaN(parsedDate.getTime())) {
       return res.status(400).json({
         success: false,
@@ -3594,7 +3595,7 @@ const rescheduleFollowUp = async (req, res) => {
     const upcomingFollowUps = lead.followUps
       .filter(fu => fu.status === 'pending' && fu.scheduledDate >= today)
       .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
-    
+
     if (upcomingFollowUps.length > 0) {
       lead.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
     }
@@ -3638,9 +3639,9 @@ const createLeadProfile = async (req, res) => {
     const { name, businessName, email, categoryId, category, projectType, estimatedCost, description, quotationSent, demoSent } = req.body;
 
     // Find lead and verify ownership
-    const lead = await Lead.findOne({ 
-      _id: leadId, 
-      assignedTo: salesId 
+    const lead = await Lead.findOne({
+      _id: leadId,
+      assignedTo: salesId
     }).populate('category');
 
     if (!lead) {
@@ -3660,7 +3661,7 @@ const createLeadProfile = async (req, res) => {
 
     // Use categoryId from request, or lead's category, or fall back to legacy projectType
     const categoryIdToUse = categoryId || category || lead.category?._id || lead.category || null;
-    
+
     // Create lead profile
     const LeadProfile = require('../models/LeadProfile');
     const leadProfile = await LeadProfile.create({
@@ -3706,9 +3707,9 @@ const updateLeadProfile = async (req, res) => {
     const updateData = req.body;
 
     // Find lead and verify ownership
-    const lead = await Lead.findOne({ 
-      _id: leadId, 
-      assignedTo: salesId 
+    const lead = await Lead.findOne({
+      _id: leadId,
+      assignedTo: salesId
     }).populate('leadProfile');
 
     if (!lead) {
@@ -3765,7 +3766,7 @@ const updateLeadProfile = async (req, res) => {
 const convertLeadToClient = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Handle both FormData and JSON requests
     let projectData;
     if (req.body.projectData) {
@@ -3905,15 +3906,15 @@ const convertLeadToClient = async (req, res) => {
     if (req.file) {
       try {
         // Check if Cloudinary is configured
-        const cloudinaryConfig = process.env.CLOUDINARY_CLOUD_NAME && 
-                                 process.env.CLOUDINARY_API_KEY && 
-                                 process.env.CLOUDINARY_API_SECRET;
-        
+        const cloudinaryConfig = process.env.CLOUDINARY_CLOUD_NAME &&
+          process.env.CLOUDINARY_API_KEY &&
+          process.env.CLOUDINARY_API_SECRET;
+
         if (!cloudinaryConfig) {
           console.warn('Cloudinary not configured, skipping screenshot upload');
         } else {
           const uploadResult = await uploadToCloudinary(req.file, 'projects/conversions');
-          
+
           // Check if upload was successful
           if (uploadResult.success && uploadResult.data) {
             const result = uploadResult.data;
@@ -4041,9 +4042,9 @@ const convertLeadToClient = async (req, res) => {
     // Create automatic incentive record for conversion (if incentivePerClient is set)
     const Incentive = require('../models/Incentive');
     const incentivePerClient = Number(sales?.incentivePerClient || 0);
-    
+
     let teamMemberIncentive = null;
-    
+
     if (incentivePerClient > 0) {
       try {
         // Calculate split: 50% current, 50% pending
@@ -4082,7 +4083,7 @@ const convertLeadToClient = async (req, res) => {
           // Auto-calculate team lead incentive as 50% of team member's incentive
           const teamMemberIncentiveAmount = Number(teamMemberIncentive.amount || incentivePerClient || 0);
           const teamLeadIncentiveAmount = teamMemberIncentiveAmount * 0.5; // 50% of team member's incentive
-          
+
           if (teamLeadIncentiveAmount > 0) {
             // Split 50/50: half current, half pending (same as team member)
             const teamLeadCurrentBalance = teamLeadIncentiveAmount * 0.5;
@@ -4127,18 +4128,18 @@ const convertLeadToClient = async (req, res) => {
     if (totalCost && totalCost > 0) {
       try {
         const { findSharedCPLead, calculateCommission, distributeCommission } = require('../services/cpCommissionService');
-        
+
         // Find if there's a CPLead that was shared with this Sales employee
         const sharedCPLeadInfo = await findSharedCPLead(phoneNumber, req.sales.id);
-        
+
         if (sharedCPLeadInfo && sharedCPLeadInfo.cpLead) {
           // Calculate commission for shared conversion scenario
           const commissionResult = await calculateCommission('shared', totalCost);
-          
+
           if (commissionResult.amount > 0) {
             // Distribute commission to the CP who shared the lead
             const description = `Commission for shared lead conversion by Sales: ${client.name || 'Client'} (${commissionResult.percentage}% of ₹${totalCost})`;
-            
+
             await distributeCommission(
               sharedCPLeadInfo.channelPartnerId,
               commissionResult.amount,
@@ -4149,13 +4150,13 @@ const convertLeadToClient = async (req, res) => {
               },
               commissionResult.percentage
             );
-            
+
             // Mark the CPLead as converted (since Sales converted it)
             sharedCPLeadInfo.cpLead.status = 'converted';
             sharedCPLeadInfo.cpLead.convertedToClient = client._id;
             sharedCPLeadInfo.cpLead.convertedAt = new Date();
             await sharedCPLeadInfo.cpLead.save();
-            
+
             cpCommissionData = {
               channelPartnerId: sharedCPLeadInfo.channelPartnerId,
               channelPartnerName: sharedCPLeadInfo.channelPartnerName,
@@ -4216,9 +4217,9 @@ const requestDemo = async (req, res) => {
     const { clientName, description, reference, mobileNumber } = req.body;
 
     // Find lead and verify ownership
-    const lead = await Lead.findOne({ 
-      _id: leadId, 
-      assignedTo: salesId 
+    const lead = await Lead.findOne({
+      _id: leadId,
+      assignedTo: salesId
     });
 
     if (!lead) {
@@ -4291,9 +4292,9 @@ const transferLead = async (req, res) => {
     }
 
     // Find lead and verify ownership
-    const lead = await Lead.findOne({ 
-      _id: leadId, 
-      assignedTo: salesId 
+    const lead = await Lead.findOne({
+      _id: leadId,
+      assignedTo: salesId
     });
 
     if (!lead) {
@@ -4318,7 +4319,7 @@ const transferLead = async (req, res) => {
     // Update both sales employees' lead statistics
     const fromSales = await Sales.findById(salesId);
     const toSales = await Sales.findById(toSalesId);
-    
+
     await fromSales.updateLeadStats();
     await toSales.updateLeadStats();
 
@@ -4368,9 +4369,9 @@ const addNoteToLead = async (req, res) => {
     }
 
     // Find lead and verify ownership
-    const lead = await Lead.findOne({ 
-      _id: leadId, 
-      assignedTo: salesId 
+    const lead = await Lead.findOne({
+      _id: leadId,
+      assignedTo: salesId
     }).populate('leadProfile');
 
     if (!lead) {
@@ -4390,7 +4391,7 @@ const addNoteToLead = async (req, res) => {
     // Add note to lead profile
     const LeadProfile = require('../models/LeadProfile');
     const leadProfile = await LeadProfile.findById(lead.leadProfile._id);
-    
+
     await leadProfile.addNote(content.trim(), salesId);
 
     // Add activity log
@@ -4454,7 +4455,7 @@ const getClientProfile = async (req, res) => {
 
     // Use primary project (most recent or first one)
     let primaryProject = projects[0] || null;
-    
+
     // Reload project with fresh data to ensure financialDetails are up-to-date
     if (primaryProject) {
       primaryProject = await Project.findById(primaryProject._id)
@@ -4471,7 +4472,7 @@ const getClientProfile = async (req, res) => {
     let projectType = 'N/A';
     let startDate = null;
     let expectedCompletion = null;
-    
+
     // Variables for detailed breakdown
     let initialAdvance = 0;
     let totalApprovedPayments = 0;
@@ -4480,30 +4481,30 @@ const getClientProfile = async (req, res) => {
 
     if (primaryProject) {
       totalCost = primaryProject.financialDetails?.totalCost || primaryProject.budget || 0;
-      
+
       // Use shared utility to recalculate financials for consistency
       const { recalculateProjectFinancials, calculateInstallmentTotals } = require('../utils/projectFinancialHelper');
-      
+
       // Recalculate project financials using shared utility
       await recalculateProjectFinancials(primaryProject);
-      
+
       // Get calculated values from project (now updated by recalculateProjectFinancials)
       advanceReceived = Number(primaryProject.financialDetails?.advanceReceived || 0);
       pending = Number(primaryProject.financialDetails?.remainingAmount || 0);
-      
+
       // Calculate breakdown for display
       const PaymentReceipt = require('../models/PaymentReceipt');
       const approvedReceipts = await PaymentReceipt.find({
         project: primaryProject._id,
         status: 'approved'
       }).select('amount');
-      
+
       totalApprovedPayments = approvedReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
-      
+
       // Calculate paid installments
       const installmentTotals = calculateInstallmentTotals(primaryProject.installmentPlan || []);
       paidInstallmentAmount = Number(installmentTotals.paid || 0);
-      
+
       // Calculate initial advance (if any)
       const totalFromReceiptsAndInstallments = totalApprovedPayments + paidInstallmentAmount;
       if (advanceReceived > totalFromReceiptsAndInstallments) {
@@ -4511,18 +4512,18 @@ const getClientProfile = async (req, res) => {
       } else {
         initialAdvance = 0;
       }
-      
+
       // Save project to persist the recalculated financials
       try {
-          await primaryProject.save();
-        } catch (updateError) {
+        await primaryProject.save();
+      } catch (updateError) {
         console.error('Error saving project financials in getClientProfile:', updateError);
-          // Continue with calculated values even if save fails
+        // Continue with calculated values even if save fails
       }
-      
+
       workProgress = primaryProject.progress || 0;
       status = primaryProject.status || 'N/A';
-      
+
       // Format project type - use category first, then fall back to legacy projectType
       if (primaryProject.category) {
         // If category is populated, use its name
@@ -4656,14 +4657,14 @@ const createClientPayment = async (req, res) => {
 
     // Get current remaining amount (including pending receipts)
     const currentRemaining = Number(project.financialDetails.remainingAmount || 0);
-    
+
     // Calculate sum of pending receipts for this project
     const pendingReceipts = await PaymentReceipt.find({
       project: project._id,
       status: 'pending'
     }).select('amount');
     const totalPendingAmount = pendingReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
-    
+
     // Available amount = remainingAmount - pending receipts
     const availableAmount = currentRemaining - totalPendingAmount;
 
@@ -4710,7 +4711,7 @@ const createClientPayment = async (req, res) => {
         // Get sales person name for description
         const salesPerson = await Sales.findById(salesId).select('name');
         const salesName = salesPerson?.name || 'Sales Employee';
-        
+
         const Request = require('../models/Request');
         await Request.create({
           module: 'sales',
@@ -5278,27 +5279,27 @@ const getWalletSummary = async (req, res) => {
     let totalIncentive = 0;
     let current = 0;
     let pending = 0;
-    
+
     // Team lead incentive totals (separate)
     let teamLeadTotalIncentive = 0;
     let teamLeadCurrent = 0;
     let teamLeadPending = 0;
-    
+
     const breakdown = [];
 
     // Populate team member and team lead names
     const teamMemberIds = [...new Set(conversionIncentives.filter(inc => inc.teamMemberId).map(inc => inc.teamMemberId.toString()))];
     const teamLeadIds = [...new Set(conversionIncentives.filter(inc => inc.teamLeadId).map(inc => inc.teamLeadId.toString()))];
-    
+
     const teamMembers = await Sales.find({ _id: { $in: teamMemberIds } }).select('name').lean();
     const teamLeads = await Sales.find({ _id: { $in: teamLeadIds } }).select('name').lean();
-    
+
     const teamMemberMap = new Map(teamMembers.map(tm => [tm._id.toString(), tm.name]));
     const teamLeadMap = new Map(teamLeads.map(tl => [tl._id.toString(), tl.name]));
 
     conversionIncentives.forEach(incentive => {
       const isTeamLeadIncentive = incentive.isTeamLeadIncentive || false;
-      
+
       if (isTeamLeadIncentive) {
         // Team lead incentives - separate totals
         teamLeadTotalIncentive += incentive.amount;
@@ -5317,8 +5318,8 @@ const getWalletSummary = async (req, res) => {
         clientName: incentive.clientId?.name || 'Unknown Client',
         projectId: incentive.projectId?._id || null,
         projectName: incentive.projectId?.name || null,
-        isNoDues: incentive.projectId?.status === 'completed' && 
-                  Number(incentive.projectId?.financialDetails?.remainingAmount || 0) === 0,
+        isNoDues: incentive.projectId?.status === 'completed' &&
+          Number(incentive.projectId?.financialDetails?.remainingAmount || 0) === 0,
         convertedAt: incentive.dateAwarded || null,
         amount: incentive.amount,
         currentBalance: incentive.currentBalance || 0,
@@ -5359,7 +5360,7 @@ const getWalletSummary = async (req, res) => {
         teamLeadName: b.teamLeadName || null
       }))
       .sort((a, b) => new Date(b.date) - new Date(a.date));
-    
+
     // Salary credit for this month (computed record)
     const salaryTxDate = new Date(now.getFullYear(), now.getMonth(), 1);
     if (fixedSalary > 0) {
@@ -5490,7 +5491,7 @@ const resetPassword = asyncHandler(async (req, res, next) => {
 const getMyTeam = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
-    
+
     // Find the sales employee and check if they are a team lead
     const sales = await Sales.findById(salesId);
     if (!sales) {
@@ -5540,7 +5541,7 @@ const getMyTeam = async (req, res) => {
             conversionRate: totalLeads > 0 ? ((convertedLeads / totalLeads) * 100).toFixed(2) : 0,
             totalValue,
             convertedValue,
-            targetAchievement: member.salesTarget > 0 ? 
+            targetAchievement: member.salesTarget > 0 ?
               ((member.currentSales / member.salesTarget) * 100).toFixed(2) : 0,
             // Performance score is now based on revenue generated from converting clients
             performanceScore: convertedValue || 0
@@ -5558,7 +5559,7 @@ const getMyTeam = async (req, res) => {
       return totals;
     }, { totalLeads: 0, convertedLeads: 0, totalValue: 0, convertedValue: 0 });
 
-    const teamConversionRate = teamTotals.totalLeads > 0 
+    const teamConversionRate = teamTotals.totalLeads > 0
       ? ((teamTotals.convertedLeads / teamTotals.totalLeads) * 100).toFixed(2)
       : 0;
 

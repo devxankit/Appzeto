@@ -2,14 +2,19 @@ import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDCABaZBQkyM6tQSxKPbtkVTfbbhE-xfvo',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'appzeto-afa29.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'appzeto-afa29',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'appzeto-afa29.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '761563654142',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:761563654142:web:e83be0c6cebb08623f42af',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-XDE5YPP55W'
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ? import.meta.env.VITE_FIREBASE_API_KEY.trim() : '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? import.meta.env.VITE_FIREBASE_AUTH_DOMAIN.trim() : '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ? import.meta.env.VITE_FIREBASE_PROJECT_ID.trim() : '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ? import.meta.env.VITE_FIREBASE_STORAGE_BUCKET.trim() : '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ? import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID.trim() : '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID ? import.meta.env.VITE_FIREBASE_APP_ID.trim() : '',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID ? import.meta.env.VITE_FIREBASE_MEASUREMENT_ID.trim() : ''
 };
+
+// Ensure critical config is present
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  console.error('❌ Firebase Configuration is missing! Check your .env file.');
+}
 
 // Log Firebase config (without sensitive data)
 if (import.meta.env.DEV) {

@@ -10,7 +10,7 @@ const ErrorResponse = require('../utils/errorResponse');
 
 // Generate JWT Token
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+  return jwt.sign({ id, role: 'project-manager' }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '7d'
   });
 };
@@ -32,7 +32,7 @@ const loginPM = async (req, res) => {
 
     // Check if PM exists and include password for comparison
     const pm = await PM.findOne({ email }).select('+password');
-    
+
     if (!pm) {
       return res.status(401).json({
         success: false,
@@ -58,11 +58,11 @@ const loginPM = async (req, res) => {
 
     // Check password
     const isPasswordValid = await pm.comparePassword(password);
-    
+
     if (!isPasswordValid) {
       // Increment login attempts
       await pm.incLoginAttempts();
-      
+
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -121,7 +121,7 @@ const loginPM = async (req, res) => {
 const getPMProfile = async (req, res) => {
   try {
     const pm = await PM.findById(req.pm.id);
-    
+
     if (!pm) {
       return res.status(404).json({
         success: false,
@@ -190,7 +190,7 @@ const createDemoPM = async (req, res) => {
   try {
     // Check if demo PM already exists
     const existingPM = await PM.findOne({ email: 'pm@demo.com' });
-    
+
     if (existingPM) {
       return res.status(400).json({
         success: false,
