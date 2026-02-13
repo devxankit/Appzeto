@@ -22,14 +22,44 @@ const createTask = asyncHandler(async (req, res, next) => {
     estimatedHours
   } = req.body;
 
-  // Verify project exists and user is the project manager
+  // Verify project exists
   const projectDoc = await Project.findById(project);
   if (!projectDoc) {
     return next(new ErrorResponse('Project not found', 404));
   }
 
-  if (!projectDoc.projectManager.equals(req.user.id)) {
-    return next(new ErrorResponse('Not authorized to create tasks for this project', 403));
+  // Check if user is PM or Team Lead
+  const isPM = projectDoc.projectManager.equals(req.user.id);
+  let isTeamLead = false;
+  let teamLeadData = null;
+
+  // If not PM, check if user is a Team Lead assigned to this project
+  if (!isPM) {
+    // Check if user is an employee (has Employee model)
+    const Employee = require('../models/Employee');
+    teamLeadData = await Employee.findById(req.user.id).select('isTeamLead teamMembers');
+
+    if (!teamLeadData || !teamLeadData.isTeamLead) {
+      return next(new ErrorResponse('Not authorized to create tasks for this project', 403));
+    }
+
+    // Verify Team Lead is assigned to the project
+    const isAssignedToProject = projectDoc.assignedTeam.some(member => member.equals(req.user.id));
+    if (!isAssignedToProject) {
+      return next(new ErrorResponse('You are not assigned to this project', 403));
+    }
+
+    isTeamLead = true;
+
+    // Verify all assignedTo employees are in the Team Lead's team
+    if (assignedTo && assignedTo.length > 0) {
+      const teamMemberIds = teamLeadData.teamMembers.map(id => id.toString());
+      const invalidAssignees = assignedTo.filter(empId => !teamMemberIds.includes(empId.toString()));
+
+      if (invalidAssignees.length > 0) {
+        return next(new ErrorResponse('You can only assign tasks to members of your team', 403));
+      }
+    }
   }
 
   // Verify milestone exists and belongs to project
@@ -67,13 +97,14 @@ const createTask = asyncHandler(async (req, res, next) => {
   ]);
 
   // Log activity
+  const userRole = isPM ? 'PM' : 'Employee';
   await Activity.logTaskActivity(
     task._id,
     'created',
     req.user.id,
-    'PM',
-    `Task "${task.title}" was created in milestone "${milestoneDoc.title}"`,
-    { taskTitle: task.title, milestoneTitle: milestoneDoc.title }
+    userRole,
+    `Task "${task.title}" was created in milestone "${milestoneDoc.title}"${isTeamLead ? ' by Team Lead' : ''}`,
+    { taskTitle: task.title, milestoneTitle: milestoneDoc.title, createdByTeamLead: isTeamLead }
   );
 
   // Emit WebSocket events
@@ -259,14 +290,14 @@ const getAllTasks = asyncHandler(async (req, res, next) => {
 
   // Build filter object - only tasks from PM's projects
   const filter = {};
-  
+
   // Get all projects managed by this PM
   const pmProjects = await Project.find({ projectManager: req.user.id }).select('_id');
   const projectIds = pmProjects.map(p => p._id);
-  
+
   // Filter tasks by PM's projects
   filter.project = { $in: projectIds };
-  
+
   // Apply additional filters
   if (status) filter.status = status;
   if (priority) filter.priority = priority;
@@ -384,7 +415,7 @@ const getTaskById = asyncHandler(async (req, res, next) => {
 
 // @desc    Update task
 // @route   PUT /api/tasks/:id
-// @access  PM only
+// @access  PM, Team Lead (if they created it)
 const updateTask = asyncHandler(async (req, res, next) => {
   let task = await Task.findById(req.params.id);
 
@@ -392,10 +423,42 @@ const updateTask = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Task not found', 404));
   }
 
-  // Verify user is the project manager
+  // Verify user is the project manager or Team Lead who created the task
   const project = await Project.findById(task.project);
-  if (!project.projectManager.equals(req.user.id)) {
-    return next(new ErrorResponse('Not authorized to update this task', 403));
+  const isPM = project.projectManager.equals(req.user.id);
+  let isTeamLead = false;
+
+  if (!isPM) {
+    // Check if user is a Team Lead who created this task OR is assigned to project and task is assigned to their team
+    const Employee = require('../models/Employee');
+    const teamLeadData = await Employee.findById(req.user.id).select('isTeamLead teamMembers');
+
+    if (!teamLeadData || !teamLeadData.isTeamLead) {
+      return next(new ErrorResponse('Not authorized to update this task', 403));
+    }
+
+    const isCreator = task.createdBy.equals(req.user.id);
+    const isProjectAssigned = project.assignedTeam.some(member => member.equals(req.user.id));
+
+    // Check if task is assigned to any of the team lead's members
+    const teamMemberIds = teamLeadData.teamMembers.map(id => id.toString());
+    const isTeamTask = task.assignedTo.some(assigneeId => teamMemberIds.includes(assigneeId.toString()) || assigneeId.toString() === req.user.id);
+
+    if (!isCreator && !(isProjectAssigned && isTeamTask)) {
+      return next(new ErrorResponse('Not authorized to update this task. You must be the creator or it must be assigned to your team.', 403));
+    }
+
+    isTeamLead = true;
+
+    // If reassigning, verify all new assignees are in the Team Lead's team
+    if (req.body.assignedTo && req.body.assignedTo.length > 0) {
+      const teamMemberIds = teamLeadData.teamMembers.map(id => id.toString());
+      const invalidAssignees = req.body.assignedTo.filter(empId => !teamMemberIds.includes(empId.toString()));
+
+      if (invalidAssignees.length > 0) {
+        return next(new ErrorResponse('You can only assign tasks to members of your team', 403));
+      }
+    }
   }
 
   const {
@@ -427,12 +490,13 @@ const updateTask = asyncHandler(async (req, res, next) => {
   ]);
 
   // Log activity
+  const userRole = isPM ? 'PM' : 'Employee';
   await Activity.logTaskActivity(
     task._id,
     'updated',
     req.user.id,
-    'PM',
-    `Task "${task.title}" was updated`,
+    userRole,
+    `Task "${task.title}" was updated${isTeamLead ? ' by Team Lead' : ''}`,
     { taskTitle: task.title }
   );
 
@@ -444,7 +508,7 @@ const updateTask = asyncHandler(async (req, res, next) => {
 
 // @desc    Delete task
 // @route   DELETE /api/tasks/:id
-// @access  PM only
+// @access  PM, Team Lead (if they created it)
 const deleteTask = asyncHandler(async (req, res, next) => {
   const task = await Task.findById(req.params.id);
 
@@ -452,30 +516,37 @@ const deleteTask = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Task not found', 404));
   }
 
-  // Verify user is the project manager
+  // Verify user is the project manager or Team Lead who created the task
   const project = await Project.findById(task.project);
-  if (!project.projectManager.equals(req.user.id)) {
-    return next(new ErrorResponse('Not authorized to delete this task', 403));
+  const isPM = project.projectManager.equals(req.user.id);
+  let isTeamLead = false;
+
+  if (!isPM) {
+    // Check if user is a Team Lead who created this task OR is assigned to project and task is assigned to their team
+    const Employee = require('../models/Employee');
+    const teamLeadData = await Employee.findById(req.user.id).select('isTeamLead teamMembers');
+
+    if (!teamLeadData || !teamLeadData.isTeamLead) {
+      return next(new ErrorResponse('Not authorized to delete this task', 403));
+    }
+
+    const isCreator = task.createdBy.equals(req.user.id);
+    const isProjectAssigned = project.assignedTeam.some(member => member.equals(req.user.id));
+
+    // Check if task is assigned to any of the team lead's members
+    const teamMemberIds = teamLeadData.teamMembers.map(id => id.toString());
+    const isTeamTask = task.assignedTo.some(assigneeId => teamMemberIds.includes(assigneeId.toString()) || assigneeId.toString() === req.user.id);
+
+    if (!isCreator && !(isProjectAssigned && isTeamTask)) {
+      return next(new ErrorResponse('Not authorized to delete this task. You must be the creator or it must be assigned to your team.', 403));
+    }
+
+    isTeamLead = true;
   }
 
-  // Remove task from milestone
-  const milestone = await Milestone.findById(task.milestone);
-  if (milestone) {
-    await milestone.removeTask(task._id);
-  }
-
-  // Delete task
+  // Delete task - side effects (milestone removal, progress update, employee stats)
+  // are now handled by Task.post('findOneAndDelete') hook
   await Task.findByIdAndDelete(req.params.id);
-
-  // Log activity
-  await Activity.logTaskActivity(
-    task._id,
-    'deleted',
-    req.user.id,
-    'PM',
-    `Task "${task.title}" was deleted from milestone "${milestone.title}"`,
-    { taskTitle: task.title, milestoneTitle: milestone.title }
-  );
 
   res.json({
     success: true,
@@ -564,7 +635,7 @@ const updateTaskStatus = asyncHandler(async (req, res, next) => {
 
 // @desc    Assign/reassign task
 // @route   PATCH /api/tasks/:id/assign
-// @access  PM only
+// @access  PM, Team Lead (if they created it)
 const assignTask = asyncHandler(async (req, res, next) => {
   const { assignedTo } = req.body;
   const task = await Task.findById(req.params.id);
@@ -573,10 +644,42 @@ const assignTask = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Task not found', 404));
   }
 
-  // Verify user is the project manager
+  // Verify user is the project manager or Team Lead who created the task
   const project = await Project.findById(task.project);
-  if (!project.projectManager.equals(req.user.id)) {
-    return next(new ErrorResponse('Not authorized to assign this task', 403));
+  const isPM = project.projectManager.equals(req.user.id);
+  let isTeamLead = false;
+
+  if (!isPM) {
+    // Check if user is a Team Lead who created this task OR is assigned to project and task is assigned to their team
+    const Employee = require('../models/Employee');
+    const teamLeadData = await Employee.findById(req.user.id).select('isTeamLead teamMembers');
+
+    if (!teamLeadData || !teamLeadData.isTeamLead) {
+      return next(new ErrorResponse('Not authorized to assign this task', 403));
+    }
+
+    const isCreator = task.createdBy.equals(req.user.id);
+    const isProjectAssigned = project.assignedTeam.some(member => member.equals(req.user.id));
+
+    // Check if task is assigned to any of the team lead's members
+    const teamMemberIds = teamLeadData.teamMembers.map(id => id.toString());
+    const isTeamTask = task.assignedTo.some(assigneeId => teamMemberIds.includes(assigneeId.toString()) || assigneeId.toString() === req.user.id);
+
+    if (!isCreator && !(isProjectAssigned && isTeamTask)) {
+      return next(new ErrorResponse('Not authorized to manage assignments for this task', 403));
+    }
+
+    isTeamLead = true;
+
+    // Verify all new assignees are in the Team Lead's team
+    if (assignedTo && assignedTo.length > 0) {
+      const teamMemberIds = teamLeadData.teamMembers.map(id => id.toString());
+      const invalidAssignees = assignedTo.filter(empId => !teamMemberIds.includes(empId.toString()));
+
+      if (invalidAssignees.length > 0) {
+        return next(new ErrorResponse('You can only assign tasks to members of your team', 403));
+      }
+    }
   }
 
   // Update assignment
@@ -591,12 +694,13 @@ const assignTask = asyncHandler(async (req, res, next) => {
   ]);
 
   // Log activity
+  const userRole = isPM ? 'PM' : 'Employee';
   await Activity.logTaskActivity(
     task._id,
     'assigned',
     req.user.id,
-    'PM',
-    `Task "${task.title}" was assigned to team members`,
+    userRole,
+    `Task "${task.title}" was assigned to team members${isTeamLead ? ' by Team Lead' : ''}`,
     { taskTitle: task.title, assignedTo }
   );
 

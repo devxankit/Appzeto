@@ -7,10 +7,10 @@ import { Input } from '../../../components/ui/input'
 import { Textarea } from '../../../components/ui/textarea'
 import { Combobox } from '../../../components/ui/combobox'
 import { DatePicker } from '../../../components/ui/date-picker'
-import { teamService, projectService, milestoneService, taskService, tokenUtils } from '../DEV-services'
+import { teamService, projectService, milestoneService, taskService, tokenUtils, employeeService } from '../DEV-services'
 import { useToast } from '../../../contexts/ToastContext'
 
-const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => {
+const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTeamLead = false, teamMembers: teamLeadMembers = [], availableProjects = [], initialData = null }) => {
   const { toast } = useToast()
   const isSubmittingRef = useRef(false)
   const [formData, setFormData] = useState({
@@ -37,26 +37,48 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
   // Load data when form opens
   useEffect(() => {
     if (isOpen) {
-      if (projectId) {
-        // Load the specific project data
+      if (initialData) {
+        // Edit Mode
+        setFormData({
+          title: initialData.title || '',
+          description: initialData.description || '',
+          dueDate: initialData.dueDate ? new Date(initialData.dueDate).toISOString().split('T')[0] : '',
+          assignedTo: (initialData.assignedTo && initialData.assignedTo.length > 0)
+            ? (typeof initialData.assignedTo[0] === 'object' ? initialData.assignedTo[0]._id : initialData.assignedTo[0])
+            : '',
+          status: initialData.status || 'pending',
+          priority: initialData.priority || 'normal',
+          milestone: initialData.milestone || '',
+          project: initialData.project || '',
+          attachments: [] // Attachments are handled via specialized APIs, keeping empty for edit
+        })
+
+        const currentProjectId = initialData.project?._id || initialData.project
+        const currentMilestoneId = initialData.milestone?._id || initialData.milestone
+
+        if (currentProjectId) {
+          loadSingleProject(currentProjectId)
+          loadMilestones(currentProjectId)
+        }
+
+        if (currentProjectId && currentMilestoneId) {
+          loadTeamMembers(currentProjectId, currentMilestoneId)
+        }
+      } else if (projectId) {
+        // Create Mode - with Project
         loadSingleProject(projectId)
-        // Pre-select the project
-        setFormData(prev => ({ ...prev, project: projectId }))
-        // Load milestones for the project
+        setFormData(prev => ({ ...prev, project: projectId, milestone: milestoneId || '' }))
         loadMilestones(projectId)
-        
-        // If milestoneId is provided, pre-select it and load its team members
+
         if (milestoneId) {
-          setFormData(prev => ({ ...prev, milestone: milestoneId }))
           loadTeamMembers(projectId, milestoneId)
         }
-        // DO NOT load team members here - wait for milestone selection
       } else {
-        // Load all projects if no specific project is provided (PM tasks page)
+        // Create Mode - generic
         loadProjects()
       }
     }
-  }, [isOpen, projectId, milestoneId])
+  }, [isOpen, projectId, milestoneId, initialData])
 
   useEffect(() => {
     if (formData.project) {
@@ -79,19 +101,39 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
   const loadProjects = async () => {
     try {
       setIsLoadingProjects(true)
-      
+
+      // Team Lead Logic
+      if (isTeamLead) {
+        if (availableProjects && availableProjects.length > 0) {
+          setProjects(availableProjects)
+        } else {
+          // Fallback if availableProjects not provided
+          try {
+            // In backend, getMyTeam returns projects with _id
+            const response = await employeeService.getMyTeam()
+            const teamProjects = response?.data?.projects || response?.projects || []
+            setProjects(teamProjects)
+          } catch (err) {
+            console.error('Error loading team projects', err)
+            setProjects([])
+          }
+        }
+        setIsLoadingProjects(false)
+        return
+      }
+
       // Check if PM is authenticated (same method as PM_tasks page)
       if (!tokenUtils.isAuthenticated()) {
         setProjects([])
         return
       }
-      
+
       // Get all projects for this PM (automatically filtered by backend)
       const response = await projectService.getAllProjects({
         limit: 100,
         status: 'all' // Get all projects regardless of status
       })
-      
+
       const projectsData = response?.data || []
       setProjects(Array.isArray(projectsData) ? projectsData : [])
     } catch (error) {
@@ -106,12 +148,16 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
     if (!pid) return
     try {
       setIsLoadingProjects(true)
-      const response = await projectService.getProjectById(pid)
-      
-      // Handle both response.data and response directly
-      const projectData = response?.data || response
-      // Set as array with single project
-      setProjects(projectData ? [projectData] : [])
+
+      if (isTeamLead) {
+        const response = await employeeService.getEmployeeProjectById(pid)
+        const projectData = response?.data || response
+        setProjects(projectData ? [projectData] : [])
+      } else {
+        const response = await projectService.getProjectById(pid)
+        const projectData = response?.data || response
+        setProjects(projectData ? [projectData] : [])
+      }
     } catch (error) {
       console.error('Error loading single project:', error)
       setProjects([])
@@ -124,10 +170,16 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
     if (!pid) { setMilestones([]); return }
     try {
       setIsLoadingMilestones(true)
-      const response = await milestoneService.getMilestonesByProject(pid)
-      // Handle both response.data and response directly
-      const milestonesData = response?.data || response || []
-      setMilestones(Array.isArray(milestonesData) ? milestonesData : [])
+
+      if (isTeamLead) {
+        const response = await employeeService.getEmployeeProjectMilestones(pid)
+        const milestonesData = response?.data || response || []
+        setMilestones(Array.isArray(milestonesData) ? milestonesData : [])
+      } else {
+        const response = await milestoneService.getMilestonesByProject(pid)
+        const milestonesData = response?.data || response || []
+        setMilestones(Array.isArray(milestonesData) ? milestonesData : [])
+      }
     } catch (error) {
       console.error('Error loading milestones:', error)
       setMilestones([])
@@ -138,10 +190,34 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
 
   const loadTeamMembers = async (pid, mid = null) => {
     if (!pid) { setTeamMembers([]); return }
+
+    // If Team Lead mode, use the provided team members instead of loading from API
+    if (isTeamLead && teamLeadMembers && teamLeadMembers.length > 0) {
+      // Fetch full employee details for team members
+      try {
+        setIsLoadingTeamMembers(true)
+        const response = await teamService.getEmployeesForTask(pid, mid)
+        const teamData = response?.data || response || []
+
+        // Filter to only include Team Lead's team members
+        const teamMemberIds = teamLeadMembers.map(id => id.toString())
+        const filteredTeam = teamData.filter(emp => teamMemberIds.includes(emp._id.toString()))
+
+        setTeamMembers(Array.isArray(filteredTeam) ? filteredTeam : [])
+      } catch (error) {
+        console.error('Error loading team members:', error)
+        setTeamMembers([])
+      } finally {
+        setIsLoadingTeamMembers(false)
+      }
+      return
+    }
+
+    // Original PM logic
     try {
       setIsLoadingTeamMembers(true)
       const response = await teamService.getEmployeesForTask(pid, mid)
-      
+
       // Handle both response.data and response directly
       const teamData = response?.data || response || []
       setTeamMembers(Array.isArray(teamData) ? teamData : [])
@@ -199,33 +275,49 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
   }
 
   const resetForm = () => {
-    setFormData({
-      title: '',
-      description: '',
-      dueDate: '',
-      assignedTo: '',
-      status: 'pending',
-      priority: 'normal',
-      milestone: milestoneId || '',
-      project: projectId || '',
-      attachments: []
-    })
+    if (initialData) {
+      setFormData({
+        title: initialData.title || '',
+        description: initialData.description || '',
+        dueDate: initialData.dueDate ? new Date(initialData.dueDate).toISOString().split('T')[0] : '',
+        assignedTo: (initialData.assignedTo && initialData.assignedTo.length > 0)
+          ? (typeof initialData.assignedTo[0] === 'object' ? initialData.assignedTo[0]._id : initialData.assignedTo[0])
+          : '',
+        status: initialData.status || 'pending',
+        priority: initialData.priority || 'normal',
+        milestone: initialData.milestone || '',
+        project: initialData.project || '',
+        attachments: []
+      })
+    } else {
+      setFormData({
+        title: '',
+        description: '',
+        dueDate: '',
+        assignedTo: '',
+        status: 'pending',
+        priority: 'normal',
+        milestone: milestoneId || '',
+        project: projectId || '',
+        attachments: []
+      })
+    }
     setErrors({})
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     // Prevent double submission using ref
     if (isSubmittingRef.current) {
       return;
     }
-    
+
     if (!validateForm()) return
-    
+
     isSubmittingRef.current = true
     setIsSubmitting(true)
-    
+
     try {
       // Prepare task data
       const taskData = {
@@ -241,17 +333,17 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
 
       // Call parent callback with task data (let parent handle API call)
       onSubmit && onSubmit(taskData)
-      
+
       // Close form
       handleClose()
-      
+
     } catch (error) {
       console.error('Error preparing task data:', error)
-      
+
       // Show specific error message
       const errorMessage = error.message || 'Failed to prepare task data. Please try again.'
       toast.error(errorMessage)
-      
+
     } finally {
       isSubmittingRef.current = false
       setIsSubmitting(false)
@@ -281,11 +373,11 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
   const projectOptions = (projects || []).map(p => ({ value: p._id, label: p.name }))
   const milestoneOptions = (milestones || []).map(m => ({ value: m._id, label: m.title }))
   const teamMemberOptions = (teamMembers || []).map(m => ({ value: m._id, label: m.position ? `${m.name} - ${m.position}` : m.name }))
-  
+
   // Get selected project and milestone names for display
   const selectedProject = (projects || []).find(p => p._id === formData.project)
   const selectedMilestone = (milestones || []).find(m => m._id === formData.milestone)
-  
+
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -293,8 +385,12 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
         {/* Header */}
         <div className="bg-gradient-to-r from-primary to-primary-dark p-6 text-white">
           <DialogHeader className="space-y-2">
-            <DialogTitle className="text-2xl font-bold">Create New Task</DialogTitle>
-            <DialogDescription className="text-primary-foreground/80">Fill in the task details below. Fields marked with * are required.</DialogDescription>
+            <DialogTitle className="text-2xl font-bold">
+              {initialData ? 'Edit Task' : (isTeamLead ? 'Create Team Task' : 'Create New Task')}
+            </DialogTitle>
+            <DialogDescription className="text-primary-foreground/80">
+              {initialData ? 'Update the task details below.' : (isTeamLead ? 'Assign a task to your team members. Fields marked with * are required.' : 'Fill in the task details below. Fields marked with * are required.')}
+            </DialogDescription>
             {selectedProject && (
               <div className="mt-3 p-3 bg-white/10 rounded-lg">
                 <div className="text-sm text-primary-foreground/90">
@@ -472,7 +568,11 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId }) => 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }} className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-200">
             <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting} className="flex-1 h-12 rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-50">Cancel</Button>
             <Button type="submit" disabled={isSubmitting} className="flex-1 h-12 rounded-xl bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white hover:shadow-lg transition-all duration-200 disabled:opacity-50">
-              {isSubmitting ? (<><Loader2 className="h-4 w-4 animate-spin mr-2" />Creating Task...</>) : (<><Save className="h-4 w-4 mr-2" />Create Task</>)}
+              {isSubmitting ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" />{initialData ? 'Updating Task...' : 'Creating Task...'}</>
+              ) : (
+                <><Save className="h-4 w-4 mr-2" />{initialData ? 'Update Task' : 'Create Task'}</>
+              )}
             </Button>
           </motion.div>
         </form>

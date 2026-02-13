@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
-import { employeeService, socketService } from '../../DEV-services'
-import { CheckSquare, Search, Filter, Calendar, User, MoreVertical, Loader2, Clock, AlertTriangle } from 'lucide-react'
+import PM_task_form from '../../DEV-components/PM_task_form'
+import { employeeService, taskService, socketService } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
+import { CheckSquare, Search, Filter, Calendar, User, MoreVertical, Loader2, Clock, AlertTriangle, Plus } from 'lucide-react'
 
 const Employee_tasks = () => {
   const [searchParams] = useSearchParams()
@@ -11,33 +13,55 @@ const Employee_tasks = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const navigate = useNavigate()
+  const toast = useToast()
 
+  // Team Lead states
+  const [isTeamLead, setIsTeamLead] = useState(false)
+  const [teamMembers, setTeamMembers] = useState([])
+  const [teamProjects, setTeamProjects] = useState([])
+  const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
 
   useEffect(() => {
     loadTasks()
+    loadTeamLeadStatus()
     setupWebSocket()
-    
+
     // Check for filter parameter in URL
     const urlFilter = searchParams.get('filter')
     if (urlFilter) {
       setFilter(urlFilter)
     }
-    
+
     return () => {
       socketService.disconnect()
     }
   }, [searchParams])
 
+  const loadTeamLeadStatus = async () => {
+    try {
+      const teamData = await employeeService.getMyTeam()
+      const team = teamData?.data || teamData
+      if (team?.isTeamLead) {
+        setIsTeamLead(true)
+        setTeamMembers(team.teamMembers || [])
+        setTeamProjects(team.projects || [])
+      }
+    } catch (error) {
+      // User is not a team lead, silently continue
+      console.log('User is not a team lead')
+    }
+  }
+
   const setupWebSocket = () => {
     const token = localStorage.getItem('employeeToken')
     if (token) {
       socketService.connect(token)
-      
+
       // Listen for real-time updates
       socketService.on('task_updated', () => {
         loadTasks()
       })
-      
+
       socketService.on('task_assigned', () => {
         loadTasks()
       })
@@ -48,14 +72,14 @@ const Employee_tasks = () => {
     try {
       setIsLoading(true)
       setError(null)
-      
+
       // Use employeeService.getEmployeeTasks which automatically uses the logged-in employee's ID
       const response = await employeeService.getEmployeeTasks({
         limit: 100,
         sortBy: 'dueDate',
         sortOrder: 'asc'
       })
-      
+
       // employeeService.getEmployeeTasks returns response.data which is the tasks array
       setTasks(Array.isArray(response) ? response : [])
     } catch (err) {
@@ -99,7 +123,7 @@ const Employee_tasks = () => {
     const diffMs = due.getTime() - now.getTime()
     const diffHours = Math.ceil(diffMs / (1000 * 60 * 60))
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-    
+
     if (diffMs < 0) return { text: `${Math.abs(diffDays)}d overdue`, color: 'text-red-600' }
     if (diffHours <= 1) return { text: '1h left', color: 'text-red-600' }
     if (diffHours <= 4) return { text: `${diffHours}h left`, color: 'text-orange-600' }
@@ -110,7 +134,7 @@ const Employee_tasks = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
       <Employee_navbar />
-      
+
       <main className="pt-16 pb-24 md:pt-20 md:pb-8">
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
           {/* Error Display */}
@@ -149,6 +173,15 @@ const Employee_tasks = () => {
                   <Filter className="h-4 w-4 text-gray-600" />
                   <span className="text-sm font-medium text-gray-700">Filter</span>
                 </button>
+                {isTeamLead && (
+                  <button
+                    onClick={() => setIsTaskFormOpen(true)}
+                    className="flex items-center space-x-2 bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="text-sm font-semibold">Add Task</span>
+                  </button>
+                )}
               </div>
               <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl p-4 border border-primary/20">
                 <div className="flex items-center space-x-4">
@@ -177,13 +210,12 @@ const Employee_tasks = () => {
                 <button
                   key={key}
                   onClick={() => setFilter(key)}
-                  className={`flex-1 px-2 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    filter === key
-                      ? key === 'urgent'
-                        ? 'bg-red-500 text-white shadow-sm'
-                        : 'bg-teal-500 text-white shadow-sm'
-                      : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
-                  }`}
+                  className={`flex-1 px-2 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${filter === key
+                    ? key === 'urgent'
+                      ? 'bg-red-500 text-white shadow-sm'
+                      : 'bg-teal-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                    }`}
                 >
                   <div className="flex flex-col items-center space-y-0.5">
                     <span className="text-sm font-bold">{count}</span>
@@ -207,13 +239,12 @@ const Employee_tasks = () => {
                 <button
                   key={key}
                   onClick={() => setFilter(key)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                    filter === key
-                      ? key === 'urgent'
-                        ? 'bg-red-500 text-white shadow-sm'
-                        : 'bg-teal-500 text-white shadow-sm'
-                      : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
-                  }`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${filter === key
+                    ? key === 'urgent'
+                      ? 'bg-red-500 text-white shadow-sm'
+                      : 'bg-teal-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                    }`}
                 >
                   {label} ({count})
                 </button>
@@ -237,8 +268,8 @@ const Employee_tasks = () => {
               {filteredTasks.map((task) => {
                 const timeInfo = getTimeRemaining(task.dueDate)
                 return (
-                  <div 
-                    key={task._id} 
+                  <div
+                    key={task._id}
                     onClick={() => navigate(`/employee-task/${task._id}`)}
                     className="group relative bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer overflow-hidden"
                   >
@@ -256,7 +287,7 @@ const Employee_tasks = () => {
                           </h3>
                         </div>
                       </div>
-                      <button 
+                      <button
                         onClick={(e) => { e.stopPropagation() }}
                         className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-md transition-all duration-200 flex-shrink-0"
                       >
@@ -329,6 +360,40 @@ const Employee_tasks = () => {
           )}
         </div>
       </main>
+
+      {/* Task Form for Team Leads */}
+      {isTeamLead && (
+        <PM_task_form
+          isOpen={isTaskFormOpen}
+          onClose={() => setIsTaskFormOpen(false)}
+          onSubmit={async (taskData) => {
+            try {
+              // Create task using employee auth
+              const createdTask = await taskService.createTask(taskData)
+
+              // Handle attachments if any
+              if (taskData.attachments && taskData.attachments.length > 0) {
+                const taskId = createdTask?.data?._id || createdTask?._id
+                for (const attachment of taskData.attachments) {
+                  await taskService.uploadTaskAttachment(taskId, attachment.file)
+                }
+              }
+
+              setIsTaskFormOpen(false)
+              toast.success('Task created successfully!')
+              loadTasks() // Reload tasks
+            } catch (error) {
+              console.error('Error creating task:', error)
+              toast.error(error.message || 'Failed to create task')
+            }
+          }}
+          projectId={null}
+          milestoneId={null}
+          isTeamLead={true}
+          teamMembers={teamMembers}
+          availableProjects={teamProjects}
+        />
+      )}
     </div>
   )
 }

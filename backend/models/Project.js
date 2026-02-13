@@ -334,13 +334,9 @@ projectSchema.methods.updateProgress = async function () {
       this.progress = 0;
     } else {
       // For completed projects, always set progress to 100%
-      if (this.status === 'completed') {
-        this.progress = 100;
-      } else {
-        // Calculate progress as percentage of completed milestones
-        const completedMilestones = milestones.filter(m => m.status === 'completed').length;
-        this.progress = Math.round((completedMilestones / milestones.length) * 100);
-      }
+      // Calculate progress based on number of completed milestones
+      const completedMilestones = milestones.filter(m => m.status === 'completed').length;
+      this.progress = Math.round((completedMilestones / milestones.length) * 100);
     }
 
     await this.save();
@@ -550,15 +546,14 @@ projectSchema.pre('save', async function (next) {
   if (this.isModified('milestones') && !this.isNew) {
     try {
       // Calculate progress based on milestones without calling save again
-      const milestones = await this.constructor.model('Milestone').find({
-        project: this._id
-      });
+      const milestones = await this.constructor.model('Milestone').find({ project: this._id });
 
-      if (milestones.length === 0) {
+      if (!milestones || milestones.length === 0) {
         this.progress = 0;
       } else {
-        const totalProgress = milestones.reduce((sum, milestone) => sum + milestone.progress, 0);
-        this.progress = Math.round(totalProgress / milestones.length);
+        // Calculate progress based on number of completed milestones
+        const completedMilestones = milestones.filter(m => m.status === 'completed').length;
+        this.progress = Math.round((completedMilestones / milestones.length) * 100);
       }
     } catch (error) {
       console.error('Error calculating project progress:', error.message);

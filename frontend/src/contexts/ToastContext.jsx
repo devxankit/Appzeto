@@ -22,7 +22,7 @@ export const ToastProvider = ({ children }) => {
       duration: 4000,
       ...toast
     }
-    
+
     setToasts(prev => [...prev, newToast])
     return id
   }, [])
@@ -36,34 +36,35 @@ export const ToastProvider = ({ children }) => {
   }, [])
 
   // Convenience methods for different toast types
-  const toast = {
-    success: (message, options = {}) => 
+  // Convenience methods for different toast types
+  const toast = React.useMemo(() => ({
+    success: (message, options = {}) =>
       addToast({ type: 'success', message, ...options }),
-    
-    error: (message, options = {}) => 
+
+    error: (message, options = {}) =>
       addToast({ type: 'error', message, ...options }),
-    
-    warning: (message, options = {}) => 
+
+    warning: (message, options = {}) =>
       addToast({ type: 'warning', message, ...options }),
-    
-    info: (message, options = {}) => 
+
+    info: (message, options = {}) =>
       addToast({ type: 'info', message, ...options }),
-    
-    logout: (message, options = {}) => 
+
+    logout: (message, options = {}) =>
       addToast({ type: 'logout', message, ...options }),
-    
-    login: (message, options = {}) => 
+
+    login: (message, options = {}) =>
       addToast({ type: 'login', message, ...options }),
-    
+
     custom: (toastData) => addToast(toastData),
-    
+
     clear: clearAllToasts
-  }
+  }), [addToast, clearAllToasts])
 
   return (
     <ToastContext.Provider value={{ toast, addToast, removeToast, clearAllToasts }}>
       {children}
-      
+
       {/* Toast Container */}
       <div className="fixed top-3 right-3 z-[9999] space-y-1">
         {toasts.map((toastItem) => (

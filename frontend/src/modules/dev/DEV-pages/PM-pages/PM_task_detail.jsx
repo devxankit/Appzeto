@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import PM_navbar from '../../DEV-components/PM_navbar'
-import { ArrowLeft, CheckSquare, Calendar, User, Clock, FileText, Download, Eye, Users, Paperclip, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, CheckSquare, Calendar, User, Clock, FileText, Download, Eye, Users, Paperclip, AlertCircle, CheckCircle, Loader2, Edit, Trash2, Plus } from 'lucide-react'
 import { taskService } from '../../DEV-services'
 import { useToast } from '../../../../contexts/ToastContext'
+import PM_task_form from '../../DEV-components/PM_task_form'
 
 const PM_task_detail = () => {
   const { id } = useParams()
@@ -12,12 +13,13 @@ const PM_task_detail = () => {
   const projectId = searchParams.get('projectId')
   const [task, setTask] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isEditTaskFormOpen, setIsEditTaskFormOpen] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
     const loadTask = async () => {
       if (!id) return
-      
+
       setIsLoading(true)
       try {
         const taskData = await taskService.getTaskById(id)
@@ -30,7 +32,7 @@ const PM_task_detail = () => {
         setIsLoading(false)
       }
     }
-    
+
     loadTask()
   }, [id, toast, navigate])
 
@@ -52,9 +54,34 @@ const PM_task_detail = () => {
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
-  const formatStatus = (s) => s === 'in-progress' ? 'In Progress' : s.charAt(0).toUpperCase()+s.slice(1)
-  const formatPriority = (p) => p.charAt(0).toUpperCase()+p.slice(1)
-  const formatFileSize = (b) => `${(b/1024/1024).toFixed(2)} MB`
+  const formatStatus = (s) => s === 'in-progress' ? 'In Progress' : s.charAt(0).toUpperCase() + s.slice(1)
+  const formatPriority = (p) => p.charAt(0).toUpperCase() + p.slice(1)
+  const formatFileSize = (b) => `${(b / 1024 / 1024).toFixed(2)} MB`
+
+  const handleDeleteTask = async () => {
+    if (!window.confirm('Are you sure you want to delete this task?')) return
+
+    try {
+      await taskService.deleteTask(id)
+      toast.success('Task deleted successfully')
+      navigate(-1)
+    } catch (error) {
+      console.error('Error deleting task:', error)
+      toast.error(error.message || 'Failed to delete task')
+    }
+  }
+
+  const handleUpdateTask = async (taskData) => {
+    try {
+      const updatedTask = await taskService.updateTask(id, taskData)
+      setTask(updatedTask)
+      toast.success('Task updated successfully')
+      setIsEditTaskFormOpen(false)
+    } catch (error) {
+      console.error('Error updating task:', error)
+      toast.error(error.message || 'Failed to update task')
+    }
+  }
 
   if (isLoading || !task) {
     return (
@@ -76,6 +103,22 @@ const PM_task_detail = () => {
                   <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(task.status)}`}>{formatStatus(task.status)}</span>
                   <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getPriorityColor(task.priority)}`}>{formatPriority(task.priority)}</span>
                 </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setIsEditTaskFormOpen(true)}
+                  className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors border border-primary/20"
+                  title="Edit Task"
+                >
+                  <Edit className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={handleDeleteTask}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-100"
+                  title="Delete Task"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
               </div>
             </div>
           </div>
@@ -121,6 +164,15 @@ const PM_task_detail = () => {
           </div>
         </div>
       </div>
+
+      <PM_task_form
+        isOpen={isEditTaskFormOpen}
+        onClose={() => setIsEditTaskFormOpen(false)}
+        onSubmit={handleUpdateTask}
+        projectId={task.project?._id || task.project}
+        milestoneId={task.milestone?._id || task.milestone}
+        initialData={task}
+      />
     </div>
   )
 }

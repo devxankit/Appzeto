@@ -8,7 +8,9 @@ const {
   getWalletTransactions,
   forgotPassword,
   resetPassword,
-  getMyTeam
+  getMyTeam,
+  getMilestoneById,
+  getMilestoneTasks
 } = require('../controllers/employeeController');
 const {
   getPublishedNoticesForEmployee,
@@ -38,6 +40,10 @@ router.post('/notices/:id/view', incrementNoticeViews);
 // Employee wallet routes
 router.get('/wallet/summary', getWalletSummary);
 router.get('/wallet/transactions', getWalletTransactions);
+
+// Milestone routes
+router.get('/milestones/:id', getMilestoneById);
+router.get('/milestones/:id/tasks', getMilestoneTasks);
 
 // Future Employee-specific routes can be added here
 // router.get('/projects', getEmployeeProjects);

@@ -13,13 +13,13 @@ import {
   FiCreditCard
 } from 'react-icons/fi'
 import { colors, gradients } from '../../../lib/colors'
-import { 
-  employeeWalletService, 
-  getEmployeeProfile, 
-  getStoredEmployeeData, 
-  storeEmployeeData, 
-  clearEmployeeData, 
-  logoutEmployee 
+import {
+  employeeWalletService,
+  getEmployeeProfile,
+  getStoredEmployeeData,
+  storeEmployeeData,
+  clearEmployeeData,
+  logoutEmployee
 } from '../DEV-services'
 
 const Employee_sideBar = ({ isOpen, onClose }) => {
@@ -95,11 +95,11 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
 
         if (profileResponse.status === 'fulfilled') {
           const response = profileResponse.value
-          const rawProfile = response?.data?.employee 
-            || response?.data?.profile 
-            || response?.data?.user 
-            || response?.data 
-            || response?.profile 
+          const rawProfile = response?.data?.employee
+            || response?.data?.profile
+            || response?.data?.user
+            || response?.data
+            || response?.profile
             || null
 
           const normalizedApiProfile = normalizeProfileData(rawProfile)
@@ -151,7 +151,7 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
     { path: '/employee-dashboard', label: 'Home', icon: FiHome },
     { path: '/employee-projects', label: 'Projects', icon: FiFolder },
     { path: '/employee-tasks', label: 'Tasks', icon: FiCheckSquare },
-    ...(isTeamLead ? [{ path: '/employee-my-team', label: 'My Team', icon: FiUsers }] : []),
+    ...(isTeamLead ? [{ path: '/employee-team-management', label: 'Team Management', icon: FiUsers }] : []),
     { path: '/employee-leaderboard', label: 'Leaderboard', icon: FiTrendingUp },
     { path: '/employee-profile', label: 'Profile', icon: FiUser }
   ]
@@ -217,10 +217,10 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
                 </motion.div>
               </div>
 
-              <motion.button 
-                initial={{ opacity: 0 }} 
-                animate={{ opacity: 1 }} 
-                transition={{ delay: 0.3, duration: 0.6, ease: 'easeOut' }} 
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3, duration: 0.6, ease: 'easeOut' }}
                 onClick={handleWalletClick}
                 disabled={isLoading}
                 className={`w-full bg-white rounded-lg p-3 shadow-xl transition-all duration-200 ${isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-2xl'}`}
@@ -253,7 +253,7 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
                   const isActive = location.pathname === item.path
                   return (
                     <motion.div key={item.path} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 + index * 0.05, duration: 0.3, ease: 'easeOut' }}>
-                      <Link to={item.path} onClick={onClose} className={`flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200 ${isActive ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'text-gray-700 hover:bg-gray-50 hover:text-teal-600'}` }>
+                      <Link to={item.path} onClick={onClose} className={`flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200 ${isActive ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'text-gray-700 hover:bg-gray-50 hover:text-teal-600'}`}>
                         <IconComponent className={`w-4 h-4 ${isActive ? 'text-teal-600' : 'text-gray-500'}`} />
                         <span className="font-medium text-sm">{item.label}</span>
                       </Link>

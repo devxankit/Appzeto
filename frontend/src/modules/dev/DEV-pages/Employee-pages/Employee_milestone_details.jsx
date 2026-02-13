@@ -16,8 +16,14 @@ import {
   FiCheckSquare as CheckSquare,
   FiFolder as FolderKanban,
   FiBarChart2 as BarChart3,
-  FiTrendingUp as TrendingUp
+  FiTrendingUp as TrendingUp,
+  FiPlus as Plus,
+  FiEdit as Edit,
+  FiTrash2 as Trash2
 } from 'react-icons/fi'
+import PM_task_form from '../../DEV-components/PM_task_form'
+import { employeeService, taskService } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
 
 const Employee_milestone_details = () => {
   const { id } = useParams()
@@ -27,20 +33,62 @@ const Employee_milestone_details = () => {
   const [project, setProject] = useState(null)
   const [tasks, setTasks] = useState([])
   const [newComment, setNewComment] = useState('')
+  const { toast } = useToast()
+
+  // Team Lead states
+  const [isTeamLead, setIsTeamLead] = useState(false)
+  const [teamMembers, setTeamMembers] = useState([])
+  const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
+  const [isEditTaskFormOpen, setIsEditTaskFormOpen] = useState(false)
+  const [selectedTask, setSelectedTask] = useState(null)
 
   useEffect(() => {
     const load = async () => {
+      if (!id) return
       setLoading(true)
-      await new Promise(r => setTimeout(r, 400))
-      const mockProject = { _id: 'p1', name: 'Website Revamp' }
-      const mockMilestone = { _id: id, title: 'Auth & Users', description: 'Implement authentication', status: 'in-progress', progress: 60, dueDate: new Date(Date.now()+5*24*60*60*1000).toISOString(), assignedTo: { fullName: 'You' }, attachments: [], comments: [] }
-      const mockTasks = [ { _id:'t1', title:'Implement login', description:'form & API', status:'in-progress' }, { _id:'t2', title:'Forgot password', description:'email OTP', status:'pending' } ]
-      setProject(mockProject)
-      setMilestone(mockMilestone)
-      setTasks(mockTasks)
-      setLoading(false)
+      try {
+        // Fetch real milestone data
+        const response = await employeeService.getEmployeeMilestoneById(id)
+        const milestoneData = response?.data?.milestone || response?.milestone
+        const projectData = response?.data?.project || response?.project
+
+        if (milestoneData) {
+          setMilestone(milestoneData)
+          setProject(projectData)
+
+          // Load tasks for this milestone
+          try {
+            const tasksResponse = await employeeService.getEmployeeMilestoneTasks(id)
+            const tasksData = tasksResponse?.data || tasksResponse || []
+            setTasks(Array.isArray(tasksData) ? tasksData : [])
+          } catch (taskErr) {
+            console.error('Error loading tasks:', taskErr)
+            setTasks([])
+          }
+        } else {
+          toast.error('Milestone not found')
+          navigate('/employee/team-management') // Redirect to safe page
+        }
+
+        // Check Team Lead status
+        try {
+          const teamData = await employeeService.getMyTeam()
+          const team = teamData?.data || teamData
+          if (team?.isTeamLead) {
+            setIsTeamLead(true)
+            setTeamMembers(team.teamMembers || [])
+          }
+        } catch (teamError) {
+          console.log('User is not a team lead')
+        }
+      } catch (err) {
+        console.error('Error loading milestone:', err)
+        toast.error('Failed to load milestone details')
+      } finally {
+        setLoading(false)
+      }
     }
-    if (id) load()
+    load()
   }, [id])
 
   const getStatusColor = (status) => {
@@ -50,6 +98,39 @@ const Employee_milestone_details = () => {
       case 'pending': return 'bg-gray-100 text-gray-800 border-gray-200'
       case 'cancelled': return 'bg-red-100 text-red-800 border-red-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
+    }
+  }
+
+
+  const handleEditTask = (e, task) => {
+    e.stopPropagation()
+    setSelectedTask(task)
+    setIsEditTaskFormOpen(true)
+  }
+
+  const handleDeleteTask = async (e, taskId) => {
+    e.stopPropagation()
+    if (!window.confirm('Are you sure you want to delete this task?')) return
+
+    try {
+      await taskService.deleteTask(taskId)
+      toast.success('Task deleted successfully')
+      window.location.reload()
+    } catch (error) {
+      console.error('Error deleting task:', error)
+      toast.error(error.message || 'Failed to delete task')
+    }
+  }
+
+  const handleUpdateTask = async (taskData) => {
+    try {
+      await taskService.updateTask(selectedTask._id, taskData)
+      toast.success('Task updated successfully')
+      setIsEditTaskFormOpen(false)
+      window.location.reload()
+    } catch (error) {
+      console.error('Error updating task:', error)
+      toast.error(error.message || 'Failed to update task')
     }
   }
 
@@ -118,11 +199,11 @@ const Employee_milestone_details = () => {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">Progress</h2>
                 <div className="flex items-center space-x-2">
-                  <button onClick={() => {}} className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-1">
+                  <button onClick={() => { }} className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-1">
                     <BarChart3 className="h-4 w-4" />
                     <span>Refresh</span>
                   </button>
-                  <button onClick={() => {}} className="px-3 py-1 text-sm bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors flex items-center space-x-1">
+                  <button onClick={() => { }} className="px-3 py-1 text-sm bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors flex items-center space-x-1">
                     <TrendingUp className="h-4 w-4" />
                     <span>Recalculate</span>
                   </button>
@@ -141,20 +222,60 @@ const Employee_milestone_details = () => {
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Tasks ({tasks.length})</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Tasks ({tasks.length})</h2>
+                {isTeamLead && (
+                  <button
+                    onClick={() => setIsTaskFormOpen(true)}
+                    className="flex items-center space-x-2 bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-1.5 rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="text-sm font-semibold">Add Task</span>
+                  </button>
+                )}
+              </div>
               {tasks.length > 0 ? (
                 <div className="space-y-3">
-                  {tasks.map(task => (
-                    <div key={task._id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-medium text-gray-900">{task.title}</h3>
-                          <p className="text-sm text-gray-600">{task.description}</p>
+                  {tasks.map(task => {
+                    const currentUserId = localStorage.getItem('employeeId')
+                    const canManageTask = isTeamLead && (task.createdBy?._id === currentUserId || task.createdBy === currentUserId)
+
+                    return (
+                      <div
+                        key={task._id}
+                        onClick={() => navigate(`/employee-task/${task._id}?projectId=${project?._id}`)}
+                        className="group border border-gray-200 rounded-lg p-4 hover:border-primary/20 hover:shadow-sm transition-all duration-200 cursor-pointer bg-white"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 truncate mr-4">
+                            <h3 className="font-medium text-gray-900 group-hover:text-primary transition-colors truncate">{task.title}</h3>
+                            <p className="text-sm text-gray-600 truncate">{task.description}</p>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(task.status)}`}>{task.status}</span>
+                            {canManageTask && (
+                              <>
+                                <button
+                                  onClick={(e) => handleEditTask(e, task)}
+                                  className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                                  title="Edit Task"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => handleDeleteTask(e, task._id)}
+                                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete Task"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>{task.status}</span>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8">
@@ -192,7 +313,7 @@ const Employee_milestone_details = () => {
               </div>
               <div className="border-t border-gray-200 pt-6">
                 <div className="space-y-4">
-                  <textarea value={newComment} onChange={(e)=>setNewComment(e.target.value)} placeholder="Add a comment to this milestone..." rows={3} className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors resize-none" />
+                  <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Add a comment to this milestone..." rows={3} className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors resize-none" />
                   <div className="flex justify-end">
                     <button disabled={!newComment.trim()} className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Add Comment</button>
                   </div>
@@ -202,6 +323,48 @@ const Employee_milestone_details = () => {
           </div>
         </div>
       </main>
+
+      {/* Task Form for Team Leads */}
+      {isTeamLead && (
+        <PM_task_form
+          isOpen={isTaskFormOpen}
+          onClose={() => setIsTaskFormOpen(false)}
+          onSubmit={async (taskData) => {
+            try {
+              const createdTask = await taskService.createTask(taskData)
+              if (taskData.attachments && taskData.attachments.length > 0) {
+                const taskId = createdTask?.data?._id || createdTask?._id
+                for (const attachment of taskData.attachments) {
+                  await taskService.uploadTaskAttachment(taskId, attachment.file)
+                }
+              }
+              setIsTaskFormOpen(false)
+              toast.success('Task created successfully!')
+              window.location.reload()
+            } catch (error) {
+              console.error('Error creating task:', error)
+              toast.error(error.message || 'Failed to create task')
+            }
+          }}
+          projectId={project?._id}
+          milestoneId={milestone?._id}
+          isTeamLead={true}
+          teamMembers={teamMembers}
+        />
+      )}
+
+      {isTeamLead && (
+        <PM_task_form
+          isOpen={isEditTaskFormOpen}
+          onClose={() => setIsEditTaskFormOpen(false)}
+          onSubmit={handleUpdateTask}
+          projectId={selectedTask?.project?._id || selectedTask?.project || project?._id}
+          milestoneId={selectedTask?.milestone?._id || selectedTask?.milestone || milestone?._id}
+          initialData={selectedTask}
+          isTeamLead={true}
+          teamMembers={teamMembers}
+        />
+      )}
     </div>
   )
 }

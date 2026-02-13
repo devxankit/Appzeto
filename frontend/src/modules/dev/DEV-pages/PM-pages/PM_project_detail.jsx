@@ -7,7 +7,7 @@ import PM_project_form from '../../DEV-components/PM_project_form'
 import { projectService, milestoneService, taskService } from '../../DEV-services'
 import socketService from '../../DEV-services/socketService'
 import { useToast } from '../../../../contexts/ToastContext'
-import { FolderKanban, Calendar, Users, CheckSquare, TrendingUp, Clock, Target, User, Plus, Loader2, FileText, Paperclip, Upload, Eye, Download, X, Edit } from 'lucide-react'
+import { FolderKanban, Calendar, Users, CheckSquare, TrendingUp, Clock, Target, User, Plus, Loader2, FileText, Paperclip, Upload, Eye, Download, X, Edit, Trash2 } from 'lucide-react'
 
 const PM_project_detail = () => {
   const { id } = useParams()
@@ -26,6 +26,8 @@ const PM_project_detail = () => {
   const [showRevisionDialog, setShowRevisionDialog] = useState(false)
   const [selectedRevision, setSelectedRevision] = useState(null)
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false)
+  const [isEditTaskFormOpen, setIsEditTaskFormOpen] = useState(false)
+  const [selectedTask, setSelectedTask] = useState(null)
 
   useEffect(() => {
     if (id && id !== 'null' && id !== null) {
@@ -181,6 +183,38 @@ const PM_project_detail = () => {
       setTasks(response.data || response || [])
     } catch (error) {
       console.error('Error loading tasks:', error)
+    }
+  }
+
+  const handleEditTask = (e, task) => {
+    e.stopPropagation()
+    setSelectedTask(task)
+    setIsEditTaskFormOpen(true)
+  }
+
+  const handleDeleteTask = async (e, taskId) => {
+    e.stopPropagation()
+    if (!window.confirm('Are you sure you want to delete this task?')) return
+
+    try {
+      await taskService.deleteTask(taskId)
+      toast.success('Task deleted successfully')
+      loadProjectData()
+    } catch (error) {
+      console.error('Error deleting task:', error)
+      toast.error(error.message || 'Failed to delete task')
+    }
+  }
+
+  const handleUpdateTask = async (taskData) => {
+    try {
+      await taskService.updateTask(selectedTask._id, taskData)
+      toast.success('Task updated successfully')
+      setIsEditTaskFormOpen(false)
+      loadProjectData()
+    } catch (error) {
+      console.error('Error updating task:', error)
+      toast.error(error.message || 'Failed to update task')
     }
   }
 
@@ -678,16 +712,34 @@ const PM_project_detail = () => {
       ) : (
         tasks.map((task) => (
           <div key={task._id} onClick={() => navigate(`/pm-task/${task._id}?projectId=${id}`)} className="group bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200 cursor-pointer">
-            <div className="flex items-center space-x-4">
-              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${task.status === 'completed' ? 'bg-primary border-primary' : 'border-gray-300 group-hover:border-primary'}`}>{task.status === 'completed' && (<CheckSquare className="h-3 w-3 text-white" />)}</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className={`text-base font-semibold ${task.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-900 group-hover:text-primary'}`}>{task.title}</h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4 flex-1 truncate">
+                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${task.status === 'completed' ? 'bg-primary border-primary' : 'border-gray-300 group-hover:border-primary'}`}>{task.status === 'completed' && (<CheckSquare className="h-3 w-3 text-white" />)}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className={`text-base font-semibold truncate ${task.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-900 group-hover:text-primary'}`}>{task.title}</h3>
+                  </div>
+                  <div className="flex items-center space-x-4 text-sm text-gray-500">
+                    <div className="flex items-center space-x-1.5"><User className="h-3.5 w-3.5" /><span>{task.assignedTo?.[0]?.name || 'Unassigned'}</span></div>
+                    <div className="flex items-center space-x-1.5"><Calendar className="h-3.5 w-3.5" /><span>{task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No date'}</span></div>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
-                  <div className="flex items-center space-x-1.5"><User className="h-3.5 w-3.5" /><span>{task.assignedTo?.[0]?.fullName || 'Unassigned'}</span></div>
-                  <div className="flex items-center space-x-1.5"><Calendar className="h-3.5 w-3.5" /><span>{task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No date'}</span></div>
-                </div>
+              </div>
+              <div className="flex items-center space-x-2 ml-4">
+                <button
+                  onClick={(e) => handleEditTask(e, task)}
+                  className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors border border-transparent hover:border-primary/20"
+                  title="Edit Task"
+                >
+                  <Edit className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => handleDeleteTask(e, task._id)}
+                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                  title="Delete Task"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             </div>
           </div>
@@ -954,6 +1006,14 @@ const PM_project_detail = () => {
         }}
         projectId={project?._id}
         milestoneId={null} // Let user select milestone
+      />
+      <PM_task_form
+        isOpen={isEditTaskFormOpen}
+        onClose={() => setIsEditTaskFormOpen(false)}
+        onSubmit={handleUpdateTask}
+        projectId={selectedTask?.project?._id || selectedTask?.project || id}
+        milestoneId={selectedTask?.milestone?._id || selectedTask?.milestone}
+        initialData={selectedTask}
       />
 
       {/* Revision Status Dialog */}

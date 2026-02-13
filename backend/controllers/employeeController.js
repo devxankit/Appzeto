@@ -108,7 +108,8 @@ const loginEmployee = async (req, res) => {
             salary: employee.salary,
             lastLogin: employee.lastLogin,
             experience: employee.experience,
-            skills: employee.skills
+            skills: employee.skills,
+            isTeamLead: employee.isTeamLead
           },
           token
         }
@@ -263,9 +264,22 @@ const getWalletSummary = async (req, res) => {
   try {
     const employeeId = safeObjectId(req.employee.id);
 
-    // Load Employee for fixed salary
-    const employee = await Employee.findById(employeeId).select('fixedSalary name');
-    const fixedSalary = Number(employee?.fixedSalary || 0);
+    // Load Employee for fixed salary and rewards progress
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    // Update statistics to ensure latest completionRate is available
+    await employee.updateStatistics();
+
+    const fixedSalary = Number(employee.fixedSalary || 0);
+    const completionRate = employee.statistics?.completionRate || 0;
+    const tasksCompleted = employee.statistics?.tasksCompleted || 0;
+
+    // Calculate total tasks from analytics logic
+    const Task = mongoose.model('Task');
+    const totalTasks = await Task.countDocuments({ assignedTo: employeeId });
 
     // Get current month dates
     const now = new Date();
@@ -343,7 +357,13 @@ const getWalletSummary = async (req, res) => {
         monthlySalary: fixedSalary,
         monthlyRewards: monthlyRewardsAmount,
         totalEarnings: totalEarnings,
-        salaryStatus: salaryStatus
+        salaryStatus: salaryStatus,
+        rewardProgress: {
+          completionRate: completionRate,
+          tasksCompleted: tasksCompleted,
+          totalTasks: totalTasks,
+          rewardTarget: 90 // Target completion ratio to win reward
+        }
       }
     });
   } catch (error) {
@@ -523,6 +543,7 @@ const resetPassword = asyncHandler(async (req, res, next) => {
 // @access  Private (Employee - Team Lead only)
 const getMyTeam = async (req, res) => {
   try {
+    const Project = mongoose.model('Project');
     const employee = await Employee.findById(req.employee.id)
       .select('name email position department isTeamLead teamMembers')
       .populate('teamMembers', 'name email phone position department experience skills');
@@ -552,9 +573,22 @@ const getMyTeam = async (req, res) => {
       skills: m.skills || []
     }));
 
+    const memberIds = teamMembers.map(m => m.id);
+    memberIds.push(employee._id);
+
+    // Find all projects where any team member (or lead) is assigned
+    const projects = await Project.find({
+      assignedTeam: { $in: memberIds },
+      status: { $ne: 'cancelled' }
+    }).populate('client', 'name email company')
+      .populate('projectManager', 'name email')
+      .populate('assignedTeam', 'name email department position')
+      .sort({ createdAt: -1 });
+
     res.status(200).json({
       success: true,
       data: {
+        isTeamLead: true, // Explicitly confirm lead status for frontend
         teamLead: {
           id: employee._id,
           name: employee.name,
@@ -563,8 +597,24 @@ const getMyTeam = async (req, res) => {
           department: employee.department
         },
         teamMembers,
+        projects: projects.map(p => ({
+          _id: p._id, // Adding _id for compatibility
+          id: p._id,
+          name: p.name,
+          description: p.description,
+          status: p.status,
+          priority: p.priority,
+          progress: p.progress,
+          dueDate: p.dueDate,
+          endDate: p.dueDate, // Adding for compatibility with Employee_projects layout
+          client: p.client,
+          pm: p.projectManager,
+          teamSize: p.assignedTeam?.length || 0,
+          assignedTeam: p.assignedTeam?.map(tm => tm._id)
+        })),
         teamStats: {
-          totalMembers: teamMembers.length
+          totalMembers: teamMembers.length,
+          activeProjects: projects.filter(p => !['completed', 'cancelled'].includes(p.status)).length
         }
       }
     });
@@ -573,6 +623,149 @@ const getMyTeam = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while fetching team'
+    });
+  }
+};
+
+// @desc    Get milestone details by ID
+// @route   GET /api/employee/milestones/:id
+// @access  Private
+const getMilestoneById = async (req, res) => {
+  try {
+    const Milestone = require('../models/Milestone');
+    const Project = require('../models/Project');
+    const milestoneId = req.params.id;
+
+    // Validate ID format
+    if (!mongoose.Types.ObjectId.isValid(milestoneId)) {
+      return res.status(400).json({ success: false, message: 'Invalid milestone ID' });
+    }
+
+    const milestone = await Milestone.findById(milestoneId)
+      .populate('assignedTo', 'name email position');
+
+    if (!milestone) {
+      return res.status(404).json({
+        success: false,
+        message: 'Milestone not found'
+      });
+    }
+
+    // Verify access rights
+    // 1. Employee is assigned to the project
+    // 2. Employee is a Team Lead of a member assigned to the project
+    const project = await Project.findById(milestone.project);
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project for this milestone not found'
+      });
+    }
+
+    const employeeId = req.employee.id;
+    // Check if employee is assigned to the project team
+    let isAuthorized = project.assignedTeam.some(id => id.toString() === employeeId.toString());
+
+    // If not directly assigned, check if they are a Team Lead
+    if (!isAuthorized) {
+      const employee = await Employee.findById(employeeId);
+      if (employee.isTeamLead) {
+        // Check if any of their team members are on the project
+        const teamMemberIds = (employee.teamMembers || []).map(id => id.toString());
+        // Filter assignedTeam to see if any match the team members
+        const hasTeamMemberOnProject = project.assignedTeam.some(id => teamMemberIds.includes(id.toString()));
+        if (hasTeamMemberOnProject) {
+          isAuthorized = true;
+        }
+      }
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view this milestone'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        milestone,
+        project: {
+          _id: project._id,
+          name: project.name
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get milestone details error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching milestone details'
+    });
+  }
+};
+
+// @desc    Get tasks for a milestone
+// @route   GET /api/employee/milestones/:id/tasks
+// @access  Private
+const getMilestoneTasks = async (req, res) => {
+  try {
+    const Milestone = require('../models/Milestone');
+    const Task = require('../models/Task');
+    const Project = require('../models/Project');
+    const milestoneId = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(milestoneId)) {
+      return res.status(400).json({ success: false, message: 'Invalid milestone ID' });
+    }
+
+    const milestone = await Milestone.findById(milestoneId);
+    if (!milestone) {
+      return res.status(404).json({ success: false, message: 'Milestone not found' });
+    }
+
+    // Verify access rights (reuse logic from getMilestoneById)
+    const project = await Project.findById(milestone.project);
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+
+    const employeeId = req.employee.id;
+    let isAuthorized = project.assignedTeam.some(id => id.toString() === employeeId.toString());
+
+    if (!isAuthorized) {
+      const employee = await Employee.findById(employeeId);
+      if (employee.isTeamLead) {
+        const teamMemberIds = (employee.teamMembers || []).map(id => id.toString());
+        const hasTeamMemberOnProject = project.assignedTeam.some(id => teamMemberIds.includes(id.toString()));
+        if (hasTeamMemberOnProject) {
+          isAuthorized = true;
+        }
+      }
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    // Fetch tasks
+    const tasks = await Task.find({ milestone: milestoneId })
+      .populate('assignedTo', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: tasks
+    });
+
+  } catch (error) {
+    console.error('Get milestone tasks error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching milestone tasks'
     });
   }
 };
@@ -586,5 +779,7 @@ module.exports = {
   getWalletTransactions,
   forgotPassword,
   resetPassword,
-  getMyTeam
+  getMyTeam,
+  getMilestoneById,
+  getMilestoneTasks
 };

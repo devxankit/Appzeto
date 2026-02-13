@@ -137,13 +137,13 @@ taskSchema.index({ createdBy: 1 });
 taskSchema.index({ project: 1, status: 1 }); // Compound index for filtering
 
 // Virtual for checking if task is overdue
-taskSchema.virtual('isOverdue').get(function() {
+taskSchema.virtual('isOverdue').get(function () {
   if (!this.dueDate) return false;
   return new Date() > this.dueDate && this.status !== 'completed';
 });
 
 // Method to mark task as complete
-taskSchema.methods.markComplete = function() {
+taskSchema.methods.markComplete = function () {
   this.status = 'completed';
   this.completedDate = new Date();
   return this.save();
@@ -156,7 +156,7 @@ taskSchema.methods.markComplete = function() {
 // };
 
 // Method to add comment
-taskSchema.methods.addComment = function(userId, userModel, message) {
+taskSchema.methods.addComment = function (userId, userModel, message) {
   this.comments.push({
     user: userId,
     commentUserModel: userModel,
@@ -166,13 +166,13 @@ taskSchema.methods.addComment = function(userId, userModel, message) {
 };
 
 // Method to assign task to employees
-taskSchema.methods.assignTo = function(employeeIds) {
+taskSchema.methods.assignTo = function (employeeIds) {
   this.assignedTo = employeeIds;
   return this.save();
 };
 
 // Method to add assignee
-taskSchema.methods.addAssignee = function(employeeId) {
+taskSchema.methods.addAssignee = function (employeeId) {
   if (!this.assignedTo.includes(employeeId)) {
     this.assignedTo.push(employeeId);
     return this.save();
@@ -181,72 +181,72 @@ taskSchema.methods.addAssignee = function(employeeId) {
 };
 
 // Method to remove assignee
-taskSchema.methods.removeAssignee = function(employeeId) {
+taskSchema.methods.removeAssignee = function (employeeId) {
   this.assignedTo = this.assignedTo.filter(id => !id.equals(employeeId));
   return this.save();
 };
 
 // Method to add attachment
-taskSchema.methods.addAttachment = function(attachmentData) {
+taskSchema.methods.addAttachment = function (attachmentData) {
   this.attachments.push(attachmentData);
   return this.save();
 };
 
 // Method to remove attachment
-taskSchema.methods.removeAttachment = function(attachmentId) {
+taskSchema.methods.removeAttachment = function (attachmentId) {
   this.attachments = this.attachments.filter(att => att._id.toString() !== attachmentId);
   return this.save();
 };
 
 // Method to update status
-taskSchema.methods.updateStatus = function(newStatus) {
+taskSchema.methods.updateStatus = function (newStatus) {
   this.status = newStatus;
-  
+
   if (newStatus === 'completed') {
     this.completedDate = new Date();
   } else if (newStatus === 'in-progress' && !this.startDate) {
     this.startDate = new Date();
   }
-  
+
   return this.save();
 };
 
 // Helper method to calculate days overdue
-taskSchema.methods.calculateDaysOverdue = function() {
+taskSchema.methods.calculateDaysOverdue = function () {
   if (!this.dueDate) return 0;
   const now = new Date();
   const dueDate = new Date(this.dueDate);
-  
+
   // Reset time to midnight for accurate day calculation
   const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-  
+
   if (nowDate <= dueDateOnly) return 0;
-  
+
   const diffTime = nowDate - dueDateOnly;
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  
+
   return diffDays;
 };
 
 // Method to calculate and set points for task completion
-taskSchema.methods.calculatePoints = function() {
+taskSchema.methods.calculatePoints = function () {
   if (this.status !== 'completed' || !this.completedDate || !this.dueDate) {
     return { points: 0, reason: 'not_completed' };
   }
-  
+
   const completedDate = new Date(this.completedDate);
   const dueDate = new Date(this.dueDate);
-  
+
   // Reset time to midnight for accurate day calculation
   const completedDateOnly = new Date(completedDate.getFullYear(), completedDate.getMonth(), completedDate.getDate());
   const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-  
+
   const isOnTime = completedDateOnly <= dueDateOnly;
-  
+
   let points = 0;
   let reason = '';
-  
+
   if (isOnTime) {
     // Completed on time: +1 point
     points = 1;
@@ -260,65 +260,50 @@ taskSchema.methods.calculatePoints = function() {
     points = -daysOverdue;
     reason = `task_completed_overdue_${daysOverdue}_days`;
   }
-  
+
   this.pointsAwarded = points;
   this.completionStatus = isOnTime ? 'on-time' : 'overdue';
-  
+
   return { points, reason, daysOverdue: isOnTime ? 0 : Math.floor((completedDateOnly - dueDateOnly) / (1000 * 60 * 60 * 24)) };
 };
 
 // Method to deduct daily points for overdue tasks
-taskSchema.methods.deductDailyPoints = async function() {
+taskSchema.methods.deductDailyPoints = async function () {
   if (this.status === 'completed') return { deducted: 0, message: 'task_already_completed' };
   if (!this.dueDate) return { deducted: 0, message: 'no_due_date' };
-  
+
   const daysOverdue = this.calculateDaysOverdue();
   if (daysOverdue <= 0) return { deducted: 0, message: 'task_not_overdue' };
-  
+
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
+
   // Check if we already deducted points today
   if (this.lastPointsDeductionDate) {
     const lastDeduction = new Date(this.lastPointsDeductionDate);
     const lastDeductionDate = new Date(lastDeduction.getFullYear(), lastDeduction.getMonth(), lastDeduction.getDate());
-    
+
     if (lastDeductionDate.getTime() === today.getTime()) {
       return { deducted: 0, message: 'points_already_deducted_today' };
     }
   }
-  
+
   // Deduct 1 point per day overdue
   const pointsToDeduct = 1;
   this.lastPointsDeductionDate = now;
   this.pointsDeducted = (this.pointsDeducted || 0) + pointsToDeduct;
-  
+
   await this.save();
-  
-  return { 
-    deducted: pointsToDeduct, 
+
+  return {
+    deducted: pointsToDeduct,
     message: `deducted_${pointsToDeduct}_point_for_${daysOverdue}_days_overdue`,
-    daysOverdue 
+    daysOverdue
   };
 };
 
-// Pre-save middleware to update milestone progress when task status changes
-taskSchema.pre('save', async function(next) {
-  if (this.isModified('status')) {
-    try {
-      const milestone = await this.constructor.model('Milestone').findById(this.milestone);
-      if (milestone) {
-        await milestone.updateProgress();
-      }
-    } catch (error) {
-      return next(error);
-    }
-  }
-  next();
-});
-
-// Pre-save middleware to set start date when status changes to in-progress
-taskSchema.pre('save', function(next) {
+// Set start date when status changes to in-progress
+taskSchema.pre('save', function (next) {
   if (this.isModified('status') && this.status === 'in-progress' && !this.startDate) {
     this.startDate = new Date();
   }
@@ -326,7 +311,7 @@ taskSchema.pre('save', function(next) {
 });
 
 // Pre-save middleware to set completed date when status changes to completed
-taskSchema.pre('save', function(next) {
+taskSchema.pre('save', function (next) {
   if (this.isModified('status') && this.status === 'completed' && !this.completedDate) {
     this.completedDate = new Date();
   }
@@ -334,10 +319,70 @@ taskSchema.pre('save', function(next) {
 });
 
 // Remove sensitive data from JSON output
-taskSchema.methods.toJSON = function() {
+taskSchema.methods.toJSON = function () {
   const task = this.toObject();
   return task;
 };
 
-module.exports = mongoose.model('Task', taskSchema);
+// Post-save middleware to update related progress and statistics
+taskSchema.post('save', async function (doc) {
+  try {
+    // 1. Update Milestone Progress (if status modified)
+    // Note: In post('save'), we use the saved document 'doc'
+    // This ensures Milestone.updateProgress() queries the updated status from DB
+    const Milestone = mongoose.model('Milestone');
+    const milestone = await Milestone.findById(doc.milestone);
+    if (milestone) {
+      await milestone.updateProgress();
+    }
 
+    // 2. Update employee statistics
+    if (doc.assignedTo && doc.assignedTo.length > 0) {
+      const Employee = mongoose.model('Employee');
+      for (const employeeId of doc.assignedTo) {
+        const employee = await Employee.findById(employeeId);
+        if (employee) {
+          await employee.updateStatistics();
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error in Task post-save hook:', error.message);
+  }
+});
+
+// Post-deletion hook to handle all side effects atomically
+taskSchema.post('findOneAndDelete', async function (doc) {
+  if (!doc) return;
+
+  try {
+    const mongoose = require('mongoose');
+
+    // 1. Remove task from milestone array and trigger recalculation
+    const Milestone = mongoose.model('Milestone');
+    const milestone = await Milestone.findById(doc.milestone);
+    if (milestone) {
+      // Manually remove from array to ensure it's gone for pre-save hooks
+      milestone.tasks = milestone.tasks.filter(id => id.toString() !== doc._id.toString());
+
+      // updateProgress() will handle the save and the cascading project update
+      // It also recalculates from the database, ensuring 0 progress for 0 tasks
+      await milestone.updateProgress();
+    }
+
+    // 3. Update employee statistics for formerly assigned members
+    if (doc.assignedTo && doc.assignedTo.length > 0) {
+      const Employee = mongoose.model('Employee');
+      for (const employeeId of doc.assignedTo) {
+        const employee = await Employee.findById(employeeId);
+        if (employee) {
+          await employee.updateStatistics();
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error in Task post-delete hook:', error.message);
+  }
+});
+
+module.exports = mongoose.model('Task', taskSchema);

@@ -77,44 +77,54 @@ milestoneSchema.index({ dueDate: 1 });
 milestoneSchema.index({ project: 1, sequence: 1 }); // Compound index for sorting
 
 // Virtual for task completion percentage
-milestoneSchema.virtual('taskCompletionPercentage').get(function() {
+milestoneSchema.virtual('taskCompletionPercentage').get(function () {
   if (!this.tasks || this.tasks.length === 0) {
     return 0;
   }
-  
+
   // This will be calculated when tasks are populated
   return this.progress;
 });
 
 // Virtual for checking if milestone is overdue
-milestoneSchema.virtual('isOverdue').get(function() {
+milestoneSchema.virtual('isOverdue').get(function () {
   if (!this.dueDate) return false;
   return new Date() > this.dueDate && this.status !== 'completed';
 });
 
 // Method to update milestone progress based on tasks
-milestoneSchema.methods.updateProgress = async function() {
+milestoneSchema.methods.updateProgress = async function () {
   try {
     // Calculate progress based on tasks
-    const tasks = await this.constructor.model('Task').find({ 
-      milestone: this._id 
+    const tasks = await this.constructor.model('Task').find({
+      milestone: this._id
     });
-    
+
     if (tasks.length === 0) {
       this.progress = 0;
     } else {
       const completedTasks = tasks.filter(task => task.status === 'completed').length;
       this.progress = Math.round((completedTasks / tasks.length) * 100);
     }
-    
+
+    // Auto-update status based on progress
+    if (this.progress === 100 && tasks.length > 0) {
+      this.status = 'completed';
+    } else if (this.status === 'completed' || this.progress < 100) {
+      // If progress drops OR there are no tasks, it cannot be completed
+      if (this.status === 'completed') {
+        this.status = 'in-progress';
+      }
+    }
+
     await this.save();
-    
+
     // Update parent project progress
     const project = await this.constructor.model('Project').findById(this.project);
     if (project) {
       await project.updateProgress();
     }
-    
+
     return this.progress;
   } catch (error) {
     throw new Error('Failed to update milestone progress');
@@ -128,7 +138,7 @@ milestoneSchema.methods.updateProgress = async function() {
 // };
 
 // Method to add team member
-milestoneSchema.methods.addAssignee = function(employeeId) {
+milestoneSchema.methods.addAssignee = function (employeeId) {
   if (!this.assignedTo.includes(employeeId)) {
     this.assignedTo.push(employeeId);
     return this.save();
@@ -137,17 +147,17 @@ milestoneSchema.methods.addAssignee = function(employeeId) {
 };
 
 // Method to remove team member
-milestoneSchema.methods.removeAssignee = function(employeeId) {
+milestoneSchema.methods.removeAssignee = function (employeeId) {
   this.assignedTo = this.assignedTo.filter(id => !id.equals(employeeId));
   return this.save();
 };
 
 // Method to add task
-milestoneSchema.methods.addTask = async function(taskId) {
+milestoneSchema.methods.addTask = async function (taskId) {
   if (!this.tasks.includes(taskId)) {
     this.tasks.push(taskId);
     await this.save();
-    
+
     // Update progress after adding task
     try {
       await this.updateProgress();
@@ -160,35 +170,26 @@ milestoneSchema.methods.addTask = async function(taskId) {
 };
 
 // Method to remove task
-milestoneSchema.methods.removeTask = async function(taskId) {
+milestoneSchema.methods.removeTask = async function (taskId) {
   this.tasks = this.tasks.filter(id => !id.equals(taskId));
   await this.save();
-  
-  // Update progress after removing task
-  try {
-    await this.updateProgress();
-  } catch (error) {
-    console.error('Error updating milestone progress:', error.message);
-    // Don't throw error, just log it
-  }
-  
   return this;
 };
 
 // Method to add attachment
-milestoneSchema.methods.addAttachment = function(attachmentData) {
+milestoneSchema.methods.addAttachment = function (attachmentData) {
   this.attachments.push(attachmentData);
   return this.save();
 };
 
 // Method to remove attachment
-milestoneSchema.methods.removeAttachment = function(attachmentId) {
+milestoneSchema.methods.removeAttachment = function (attachmentId) {
   this.attachments = this.attachments.filter(att => att._id.toString() !== attachmentId);
   return this.save();
 };
 
 // Pre-save middleware to ensure unique sequence within project
-milestoneSchema.pre('save', async function(next) {
+milestoneSchema.pre('save', async function (next) {
   if (this.isNew || this.isModified('sequence') || this.isModified('project')) {
     try {
       // Only auto-assign sequence if none provided or invalid
@@ -197,7 +198,7 @@ milestoneSchema.pre('save', async function(next) {
         const lastMilestone = await this.constructor.findOne({
           project: this.project
         }).sort({ sequence: -1 });
-        
+
         this.sequence = lastMilestone ? lastMilestone.sequence + 1 : 1;
       } else {
         // Check if the provided sequence number already exists
@@ -206,7 +207,7 @@ milestoneSchema.pre('save', async function(next) {
           sequence: this.sequence,
           _id: { $ne: this._id }
         });
-        
+
         if (existingMilestone) {
           // If sequence conflicts, throw an error instead of auto-assigning
           const error = new Error(`Sequence number ${this.sequence} already exists for this project`);
@@ -222,14 +223,14 @@ milestoneSchema.pre('save', async function(next) {
 });
 
 // Pre-save middleware to update progress if tasks are modified
-milestoneSchema.pre('save', async function(next) {
+milestoneSchema.pre('save', async function (next) {
   if (this.isModified('tasks') && !this.isNew) {
     try {
       // Calculate progress based on tasks without calling save again
-      const tasks = await this.constructor.model('Task').find({ 
-        milestone: this._id 
+      const tasks = await this.constructor.model('Task').find({
+        milestone: this._id
       });
-      
+
       if (tasks.length === 0) {
         this.progress = 0;
       } else {
@@ -245,7 +246,7 @@ milestoneSchema.pre('save', async function(next) {
 });
 
 // Remove sensitive data from JSON output
-milestoneSchema.methods.toJSON = function() {
+milestoneSchema.methods.toJSON = function () {
   const milestone = this.toObject();
   return milestone;
 };

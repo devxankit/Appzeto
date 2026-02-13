@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
-import { employeeService } from '../../DEV-services'
+import PM_task_form from '../../DEV-components/PM_task_form'
+import { employeeService, taskService } from '../../DEV-services'
+import { useToast } from '../../../../contexts/ToastContext'
 import {
   FiFolder as FolderKanban,
   FiCalendar as Calendar,
@@ -13,36 +15,54 @@ import {
   FiCheckSquare as CheckSquare,
   FiTrendingUp as TrendingUp,
   FiFileText as FileText,
-  FiBarChart2 as BarChart3
+  FiBarChart2 as BarChart3,
+  FiPlus as Plus,
+  FiEdit as Edit,
+  FiTrash2 as Trash2
 } from 'react-icons/fi'
 
 const Employee_project_detail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [project, setProject] = useState(null)
   const [milestones, setMilestones] = useState([])
   const [activeTab, setActiveTab] = useState('overview')
+  const [isTeamLead, setIsTeamLead] = useState(false)
+  const [teamMembers, setTeamMembers] = useState([])
+  const [isTaskFormOpen, setIsTaskFormOpen] = useState(false)
+  const [isEditTaskFormOpen, setIsEditTaskFormOpen] = useState(false)
+  const [selectedTask, setSelectedTask] = useState(null)
+  const [tasks, setTasks] = useState([])
 
   useEffect(() => {
     const load = async () => {
       if (!id) return
-      
+
+      // Validate MongoDB ObjectId format (24 hex characters)
+      const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(id)
+      if (!isValidObjectId) {
+        setError('Invalid project ID. Please navigate to this page from the projects list.')
+        setLoading(false)
+        return
+      }
+
       try {
         setLoading(true)
         setError(null)
-        
+
         // Load project details
         const projectData = await employeeService.getEmployeeProjectById(id)
-        
+
         // Handle case where response might be wrapped in data property
         const project = projectData?.data || projectData
-        
+
         if (!project) {
           throw new Error('Project data not found in response')
         }
-        
+
         // Transform project data to match component expectations
         const transformedProject = {
           ...project,
@@ -69,23 +89,46 @@ const Employee_project_detail = () => {
           myTasks: project.milestones ? project.milestones.reduce((sum, m) => sum + (m.employeeTasks || 0), 0) : 0,
           myCompletedTasks: project.milestones ? project.milestones.reduce((sum, m) => sum + (m.employeeCompletedTasks || 0), 0) : 0
         }
-        
+
         // Transform milestones data
         const transformedMilestones = (project.milestones || []).map(milestone => ({
           ...milestone,
           // Use employeeProgress if available, otherwise calculate from employeeTasks
-          progress: milestone.employeeProgress !== undefined 
-            ? milestone.employeeProgress 
-            : (milestone.employeeTasks > 0 
-                ? Math.round((milestone.employeeCompletedTasks / milestone.employeeTasks) * 100) 
-                : 0),
+          progress: milestone.employeeProgress !== undefined
+            ? milestone.employeeProgress
+            : (milestone.employeeTasks > 0
+              ? Math.round((milestone.employeeCompletedTasks / milestone.employeeTasks) * 100)
+              : 0),
           // Map employeeTasks to myTasks for consistency
           myTasks: milestone.employeeTasks || 0,
           myCompletedTasks: milestone.employeeCompletedTasks || 0
         }))
-        
+
         setProject(transformedProject)
         setMilestones(transformedMilestones)
+
+        // Check if current user is a Team Lead by calling getMyTeam
+        try {
+          const teamData = await employeeService.getMyTeam()
+          // Check for isTeamLead explicitly, or assume true if request succeeds (since it's a lead-only endpoint)
+          const team = teamData?.data || teamData
+          if (team?.isTeamLead || teamData?.success) {
+            setIsTeamLead(true)
+            setTeamMembers(team.teamMembers || [])
+          }
+        } catch (teamError) {
+          // User is not a team lead or doesn't have team access, silently continue
+          console.log('User is not a team lead or team data unavailable')
+        }
+
+        // Load project tasks
+        try {
+          const tasksResponse = await taskService.getTasksByProject(id)
+          setTasks(tasksResponse.data || tasksResponse || [])
+        } catch (taskErr) {
+          console.error('Error loading tasks:', taskErr)
+          setTasks([])
+        }
       } catch (error) {
         console.error('Error loading project details:', error)
         setError(error.message || 'Failed to load project details. Please try again.')
@@ -95,7 +138,7 @@ const Employee_project_detail = () => {
         setLoading(false)
       }
     }
-    
+
     load()
   }, [id])
 
@@ -113,10 +156,42 @@ const Employee_project_detail = () => {
   const getPriorityColor = (priority) => {
     switch (priority) {
       case 'urgent':
-      case 'high': return 'bg-red-100 text-red-800'
-      case 'normal': return 'bg-yellow-100 text-yellow-800'
-      case 'low': return 'bg-green-100 text-green-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'high': return 'bg-red-100 text-red-800 border-red-200'
+      case 'normal': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      case 'low': return 'bg-green-100 text-green-800 border-green-200'
+      default: return 'bg-gray-100 text-gray-800 border-gray-200'
+    }
+  }
+
+  const handleEditTask = (e, task) => {
+    e.stopPropagation()
+    setSelectedTask(task)
+    setIsEditTaskFormOpen(true)
+  }
+
+  const handleDeleteTask = async (e, taskId) => {
+    e.stopPropagation()
+    if (!window.confirm('Are you sure you want to delete this task?')) return
+
+    try {
+      await taskService.deleteTask(taskId)
+      toast.success('Task deleted successfully')
+      window.location.reload()
+    } catch (error) {
+      console.error('Error deleting task:', error)
+      toast.error(error.message || 'Failed to delete task')
+    }
+  }
+
+  const handleUpdateTask = async (taskData) => {
+    try {
+      await taskService.updateTask(selectedTask._id, taskData)
+      toast.success('Task updated successfully')
+      setIsEditTaskFormOpen(false)
+      window.location.reload()
+    } catch (error) {
+      console.error('Error updating task:', error)
+      toast.error(error.message || 'Failed to update task')
     }
   }
 
@@ -142,7 +217,7 @@ const Employee_project_detail = () => {
             <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-red-100">
               <div className="text-center">
                 <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FiFileText className="h-8 w-8 text-red-600" />
+                  <FileText className="h-8 w-8 text-red-600" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Project</h3>
                 <p className="text-gray-600 mb-4">{error}</p>
@@ -184,6 +259,7 @@ const Employee_project_detail = () => {
   const tabs = [
     { key: 'overview', label: 'Overview', icon: BarChart3 },
     { key: 'milestones', label: 'Milestones', icon: Target },
+    { key: 'tasks', label: 'Tasks', icon: CheckSquare },
     { key: 'team', label: 'Team', icon: Users }
   ]
 
@@ -286,7 +362,7 @@ const Employee_project_detail = () => {
         <div key={member._id} className="group bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200">
           <div className="flex items-center space-x-4">
             <div className="w-12 h-12 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full flex items-center justify-center group-hover:from-primary/20 group-hover:to-primary/30 transition-all duration-200">
-              <span className="text-base font-bold text-primary">{member.fullName.split(' ').map(w=>w[0]).join('').substring(0,2)}</span>
+              <span className="text-base font-bold text-primary">{member.fullName.split(' ').map(w => w[0]).join('').substring(0, 2)}</span>
             </div>
             <div className="flex-1">
               <h3 className="text-base font-bold text-gray-900 group-hover:text-primary transition-colors duration-200">{member.fullName}</h3>
@@ -295,6 +371,66 @@ const Employee_project_detail = () => {
           </div>
         </div>
       ))}
+    </div>
+  )
+
+  const renderTasks = () => (
+    <div className="space-y-3">
+      {tasks.length > 0 ? tasks.map((task) => {
+        // Simple permission check: Team Leads can edit tasks they created
+        const currentUserId = localStorage.getItem('employeeId') // Basic way to get ID, ideally from a context/store
+        const canManageTask = isTeamLead && (task.createdBy?._id === currentUserId || task.createdBy === currentUserId)
+
+        return (
+          <div key={task._id} onClick={() => navigate(`/employee-task/${task._id}?projectId=${id}`)} className="group bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200 cursor-pointer">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4 flex-1 truncate">
+                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${task.status === 'completed' ? 'bg-primary border-primary' : 'border-gray-300 group-hover:border-primary'}`}>
+                  {task.status === 'completed' && (<CheckSquare className="h-3 w-3 text-white" />)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className={`text-base font-semibold truncate ${task.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-900 group-hover:text-primary'}`}>{task.title}</h3>
+                  </div>
+                  <div className="flex items-center space-x-4 text-sm text-gray-500">
+                    <div className="flex items-center space-x-1.5"><User className="h-3.5 w-3.5" /><span>{task.assignedTo?.[0]?.name || task.assignedTo?.[0]?.fullName || 'Unassigned'}</span></div>
+                    <div className="flex items-center space-x-1.5"><Calendar className="h-3.5 w-3.5" /><span>{task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No date'}</span></div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2 ml-4">
+                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(task.status)}`}>{task.status}</span>
+                {canManageTask && (
+                  <>
+                    <button
+                      onClick={(e) => handleEditTask(e, task)}
+                      className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors border border-transparent hover:border-primary/20"
+                      title="Edit Task"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteTask(e, task._id)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                      title="Delete Task"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      }) : (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckSquare className="h-8 w-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No tasks yet</h3>
+          <p className="text-gray-600">Tasks for this project will appear here</p>
+        </div>
+      )}
     </div>
   )
 
@@ -317,11 +453,20 @@ const Employee_project_detail = () => {
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(project.priority)}`}>{project.priority}</span>
                 </div>
               </div>
-              {project.dueDate && (
-                <div className="text-right">
-                  <div className="text-xs md:text-sm text-gray-500 mt-1">Due: {new Date(project.dueDate).toLocaleDateString()}</div>
-                </div>
-              )}
+              <div className="flex flex-col items-end space-y-2">
+                {isTeamLead && (
+                  <button
+                    onClick={() => setIsTaskFormOpen(true)}
+                    className="flex items-center space-x-2 bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="text-sm font-semibold">Add Task</span>
+                  </button>
+                )}
+                {project.dueDate && (
+                  <div className="text-xs md:text-sm text-gray-500">Due: {new Date(project.dueDate).toLocaleDateString()}</div>
+                )}
+              </div>
             </div>
             {project.description && (
               <div className="mb-6">
@@ -364,10 +509,65 @@ const Employee_project_detail = () => {
           <div className="min-h-[400px]">
             {activeTab === 'overview' && renderOverview()}
             {activeTab === 'milestones' && renderMilestones()}
+            {activeTab === 'tasks' && renderTasks()}
             {activeTab === 'team' && renderTeam()}
           </div>
         </div>
       </main>
+
+      {/* Task Form for Team Leads */}
+      {isTeamLead && (
+        <PM_task_form
+          isOpen={isTaskFormOpen}
+          onClose={() => setIsTaskFormOpen(false)}
+          onSubmit={async (taskData) => {
+            try {
+              // Create task using employee auth
+              const createdTask = await taskService.createTask(taskData)
+
+              // Upload attachments if any
+              if (taskData.attachments && taskData.attachments.length > 0) {
+                toast.info(`Uploading ${taskData.attachments.length} attachment(s)...`)
+
+                for (const attachment of taskData.attachments) {
+                  try {
+                    const file = attachment.file || attachment
+                    await taskService.uploadTaskAttachment(createdTask._id, file)
+                    toast.success(`Attachment ${attachment.name} uploaded successfully`)
+                  } catch (error) {
+                    console.error('Attachment upload error:', error)
+                    toast.error(`Failed to upload ${attachment.name}`)
+                  }
+                }
+              }
+
+              setIsTaskFormOpen(false)
+              toast.success('Task created successfully!')
+              // Reload project data to refresh task counts
+              window.location.reload()
+            } catch (error) {
+              console.error('Error creating task:', error)
+              toast.error(error.message || 'Failed to create task')
+            }
+          }}
+          projectId={project?._id}
+          milestoneId={null}
+          isTeamLead={true}
+          teamMembers={teamMembers}
+        />
+      )}
+      {isTeamLead && (
+        <PM_task_form
+          isOpen={isEditTaskFormOpen}
+          onClose={() => setIsEditTaskFormOpen(false)}
+          onSubmit={handleUpdateTask}
+          projectId={selectedTask?.project?._id || selectedTask?.project || id}
+          milestoneId={selectedTask?.milestone?._id || selectedTask?.milestone}
+          initialData={selectedTask}
+          isTeamLead={true}
+          teamMembers={teamMembers}
+        />
+      )}
     </div>
   )
 }

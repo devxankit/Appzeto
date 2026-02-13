@@ -8,7 +8,7 @@ const asyncHandler = require('../middlewares/asyncHandler');
 // @access  Private (Employee)
 const getEmployeeDashboardStats = asyncHandler(async (req, res) => {
   const employeeId = req.employee?.id || req.user?.id;
-  
+
   if (!employeeId) {
     return res.status(401).json({
       success: false,
@@ -18,18 +18,18 @@ const getEmployeeDashboardStats = asyncHandler(async (req, res) => {
 
   // Get employee's assigned tasks (assignedTo is an array)
   const tasks = await Task.find({ assignedTo: { $in: [employeeId] } });
-  
+
   // Get projects where employee is in assignedTeam
   const teamProjects = await Project.find({ assignedTeam: { $in: [employeeId] } }).select('_id');
   const teamProjectIds = teamProjects.map(p => p._id);
-  
+
   // Get projects where employee has tasks assigned (since every task belongs to a project)
   const tasksWithProjects = await Task.find({ assignedTo: { $in: [employeeId] } }).select('project').distinct('project');
   const taskProjectIds = tasksWithProjects.filter(Boolean);
-  
+
   // Combine and deduplicate project IDs
   const allProjectIds = [...new Set([...teamProjectIds.map(id => id.toString()), ...taskProjectIds.map(id => id.toString())])];
-  
+
   // Get all assigned projects (from team or tasks)
   const projects = await Project.find({ _id: { $in: allProjectIds } });
 
@@ -37,19 +37,19 @@ const getEmployeeDashboardStats = asyncHandler(async (req, res) => {
   const now = new Date();
   const threeDaysFromNow = new Date();
   threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
-  
+
   const taskStats = {
     total: tasks.length,
     completed: tasks.filter(t => t.status === 'completed').length,
     'in-progress': tasks.filter(t => t.status === 'in-progress').length,
     pending: tasks.filter(t => t.status === 'pending').length,
-    urgent: tasks.filter(t => 
-      (t.isUrgent || t.priority === 'urgent' || t.priority === 'high') && 
+    urgent: tasks.filter(t =>
+      (t.isUrgent || t.priority === 'urgent' || t.priority === 'high') &&
       t.status !== 'completed'
     ).length,
-    overdue: tasks.filter(t => 
-      t.dueDate && 
-      new Date(t.dueDate) < now && 
+    overdue: tasks.filter(t =>
+      t.dueDate &&
+      new Date(t.dueDate) < now &&
       t.status !== 'completed'
     ).length,
     dueSoon: tasks.filter(t => {
@@ -96,7 +96,7 @@ const getEmployeeDashboardStats = asyncHandler(async (req, res) => {
 // @access  Private (Employee)
 const getEmployeePerformanceStats = asyncHandler(async (req, res) => {
   const employeeId = req.employee?.id || req.user?.id;
-  
+
   if (!employeeId) {
     return res.status(401).json({
       success: false,
@@ -142,7 +142,7 @@ const getEmployeePerformanceStats = asyncHandler(async (req, res) => {
 const getEmployeeLeaderboard = asyncHandler(async (req, res) => {
   const { page = 1, limit = 50, period = 'month' } = req.query;
   const employeeId = req.employee?.id || req.user?.id;
-  
+
   if (!employeeId) {
     return res.status(401).json({
       success: false,
@@ -152,28 +152,52 @@ const getEmployeeLeaderboard = asyncHandler(async (req, res) => {
 
   // Calculate date range based on period
   const dateRange = getDateRange(period);
-  
-  // Get all employees with their statistics
-  const employees = await Employee.find({ role: 'employee' })
-    .select('name email points statistics department position pointsHistory')
+
+  // Get current employee to check for Team Lead status
+  const requester = await Employee.findById(employeeId).select('isTeamLead teamMembers');
+
+  if (!requester) {
+    return res.status(404).json({
+      success: false,
+      message: 'Requester not found'
+    });
+  }
+
+  const { viewScope = 'self' } = req.query;
+  let filter = { _id: employeeId };
+
+  if (viewScope === 'team' && requester.isTeamLead) {
+    // Include both lead and their members
+    const teamIds = [employeeId, ...(requester.teamMembers || [])];
+    filter = { _id: { $in: teamIds } };
+  } else if (viewScope === 'team' && !requester.isTeamLead) {
+    // If regular employee tries to see "team", still only show self
+    filter = { _id: employeeId };
+  }
+
+  // Get employees based on filter
+  const employees = await Employee.find({ ...filter, role: 'employee' })
+    .select('name email points statistics department position pointsHistory updatedAt')
     .sort({ points: -1 })
     .skip((page - 1) * limit)
     .limit(parseInt(limit));
+
+  const totalFilteredEmployees = await Employee.countDocuments({ ...filter, role: 'employee' });
 
   // Transform data for leaderboard
   const leaderboard = employees.map((emp, index) => ({
     _id: emp._id,
     name: emp.name,
     points: emp.points || 0,
-    rank: index + 1,
-      statistics: {
-        tasksCompleted: emp.statistics?.tasksCompleted || 0,
-        tasksOnTime: emp.statistics?.tasksOnTime || 0,
-        tasksOverdue: emp.statistics?.tasksOverdue || 0,
-        tasksMissed: emp.statistics?.tasksMissed || 0,
-        averageCompletionTime: emp.statistics?.averageCompletionTime || 0,
-        completionRate: emp.statistics?.completionRate || 0
-      },
+    rank: (page - 1) * limit + index + 1,
+    statistics: {
+      tasksCompleted: emp.statistics?.tasksCompleted || 0,
+      tasksOnTime: emp.statistics?.tasksOnTime || 0,
+      tasksOverdue: emp.statistics?.tasksOverdue || 0,
+      tasksMissed: emp.statistics?.tasksMissed || 0,
+      averageCompletionTime: emp.statistics?.averageCompletionTime || 0,
+      completionRate: emp.statistics?.completionRate || 0
+    },
     department: emp.department || 'Development',
     position: emp.position || 'Developer',
     isCurrentEmployee: emp._id.toString() === employeeId.toString(),
@@ -182,20 +206,35 @@ const getEmployeeLeaderboard = asyncHandler(async (req, res) => {
     lastActive: emp.updatedAt
   }));
 
-  // Get current employee data
-  const currentEmployee = leaderboard.find(emp => emp.isCurrentEmployee);
+  // Get current employee data from the results or separate query if needed
+  const currentEmployeeData = await Employee.findById(employeeId).select('name points statistics department position pointsHistory updatedAt');
+  const currentRank = await getEmployeeRank(employeeId); // Global rank relative to all employees
 
-  // Get team statistics
+  const currentEmployee = {
+    _id: currentEmployeeData._id,
+    name: currentEmployeeData.name,
+    points: currentEmployeeData.points || 0,
+    rank: currentRank,
+    statistics: currentEmployeeData.statistics,
+    department: currentEmployeeData.department,
+    position: currentEmployeeData.position,
+    isCurrentEmployee: true,
+    trend: calculateTrend(currentEmployeeData.pointsHistory, period),
+    trendValue: calculateTrendValue(currentEmployeeData.pointsHistory, period),
+    lastActive: currentEmployeeData.updatedAt
+  };
+
+  // Get team statistics (scoped to the filtered list)
   const teamStats = {
-    totalEmployees: employees.length,
-    avgCompletionRate: Math.round(
-      employees.reduce((sum, emp) => sum + (emp.statistics?.completionRate || 0), 0) / employees.length
-    ),
+    totalEmployees: totalFilteredEmployees,
+    avgCompletionRate: totalFilteredEmployees > 0
+      ? Math.round(employees.reduce((sum, emp) => sum + (emp.statistics?.completionRate || 0), 0) / employees.length)
+      : 0,
     totalTasksCompleted: employees.reduce((sum, emp) => sum + (emp.statistics?.tasksCompleted || 0), 0),
     totalOverdue: employees.reduce((sum, emp) => sum + (emp.statistics?.tasksOverdue || 0), 0),
     topPerformer: leaderboard[0] || null,
-    avgProjectProgress: 0, // This would need project data
-    totalProjects: 0 // This would need project data
+    avgProjectProgress: 0,
+    totalProjects: 0
   };
 
   res.json({
@@ -204,10 +243,11 @@ const getEmployeeLeaderboard = asyncHandler(async (req, res) => {
       leaderboard,
       currentEmployee,
       teamStats,
+      isTeamLead: requester.isTeamLead,
       pagination: {
         current: parseInt(page),
-        pages: Math.ceil(await Employee.countDocuments({ role: 'employee' }) / limit),
-        total: await Employee.countDocuments({ role: 'employee' })
+        pages: Math.ceil(totalFilteredEmployees / limit),
+        total: totalFilteredEmployees
       }
     }
   });
@@ -218,7 +258,7 @@ const getEmployeeLeaderboard = asyncHandler(async (req, res) => {
 // @access  Private (Employee)
 const getEmployeePointsHistory = asyncHandler(async (req, res) => {
   const employeeId = req.employee?.id || req.user?.id;
-  
+
   if (!employeeId) {
     return res.status(401).json({
       success: false,
