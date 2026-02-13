@@ -186,7 +186,7 @@ const Employee_milestone_details = () => {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-600">Assigned To</label>
-                  <p className="text-base font-medium text-gray-900 mt-1">{milestone.assignedTo?.fullName || 'Unassigned'}</p>
+                  <p className="text-base font-medium text-gray-900 mt-1">{(() => { const a = Array.isArray(milestone.assignedTo) ? milestone.assignedTo[0] : milestone.assignedTo; return a?.name || a?.fullName || 'Unassigned'; })()}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-600">Project</label>

@@ -125,7 +125,7 @@ const createTransaction = asyncHandler(async (req, res, next) => {
   if (projectId) transactionData.project = projectId;
   if (employeeId) transactionData.employee = employeeId;
   if (vendor) transactionData.vendor = vendor;
-  
+
   // Handle account ID if provided (only for incoming transactions)
   if (account && type === 'incoming') {
     // Check if account is a valid ObjectId
@@ -169,12 +169,12 @@ const createTransaction = asyncHandler(async (req, res, next) => {
       message: error.message,
       stack: error.stack
     });
-    
+
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((errItem) => errItem.message).join(', ');
       return next(new ErrorResponse(messages, 400));
     }
-    
+
     // Return more detailed error message
     const errorMessage = error.message || 'Failed to create transaction';
     return next(new ErrorResponse(errorMessage, 500));
@@ -480,13 +480,13 @@ const getTransactionStats = asyncHandler(async (req, res, next) => {
 // @route   GET /api/admin/finance/statistics
 // @access  Admin only
 const getFinanceStatistics = asyncHandler(async (req, res, next) => {
-  const { timeFilter = 'all' } = req.query;
+  const { timeFilter = 'all', startDate, endDate } = req.query;
 
   const now = new Date();
   let dateFilter = {};
   let todayStart, todayEnd;
   let currentMonthStart, lastMonthStart, lastMonthEnd;
-  
+
   // Calculate current year and month once (used in multiple places)
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1; // 1-12
@@ -500,30 +500,36 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-  switch (timeFilter) {
-    case 'today':
-      dateFilter = {
-        $gte: todayStart,
-        $lte: todayEnd
-      };
-      break;
-    case 'week':
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      dateFilter = { $gte: weekAgo };
-      break;
-    case 'month':
-      dateFilter = { $gte: currentMonthStart };
-      break;
-    case 'year':
-      const yearStart = new Date(now.getFullYear(), 0, 1);
-      dateFilter = { $gte: yearStart };
-      break;
+  if (timeFilter === 'custom' && startDate) {
+    const sDate = new Date(startDate);
+    sDate.setHours(0, 0, 0, 0);
+    const eDate = endDate ? new Date(endDate) : new Date();
+    eDate.setHours(23, 59, 59, 999);
+    dateFilter = { $gte: sDate, $lte: eDate };
+  } else {
+    switch (timeFilter) {
+      case 'day':
+      case 'today':
+        dateFilter = { $gte: todayStart, $lte: todayEnd };
+        break;
+      case 'week':
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        dateFilter = { $gte: weekAgo, $lte: todayEnd };
+        break;
+      case 'month':
+        dateFilter = { $gte: currentMonthStart, $lte: todayEnd };
+        break;
+      case 'year':
+        const yearStart = new Date(now.getFullYear(), 0, 1);
+        dateFilter = { $gte: yearStart, $lte: todayEnd };
+        break;
+    }
   }
 
   // ========== REVENUE SOURCES - Query Actual Data ==========
-  
+
   // 1. Completed Payments
-  const paymentDateFilter = timeFilter !== 'all' 
+  const paymentDateFilter = timeFilter !== 'all'
     ? { paidAt: dateFilter, status: 'completed' }
     : { status: 'completed' };
   const paymentRevenue = await Payment.aggregate([
@@ -559,12 +565,12 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       'installmentPlan.status': 'paid'
     };
   }
-  
+
   const projectInstallmentRevenue = await Project.aggregate([
     { $match: projectInstallmentFilter },
     { $unwind: '$installmentPlan' },
-    { 
-      $match: timeFilter !== 'all' 
+    {
+      $match: timeFilter !== 'all'
         ? { 'installmentPlan.status': 'paid', 'installmentPlan.paidDate': dateFilter }
         : { 'installmentPlan.status': 'paid' }
     },
@@ -575,54 +581,78 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // 4. Other Finance incoming transactions (excluding payments and installments to avoid double counting)
   // These are manual transactions created by Admin or other incoming transactions not from payments/installments
   // Payments and installments are counted directly from their source models above
-  const transactionFilter = timeFilter !== 'all' 
-    ? { 
-        transactionDate: dateFilter, 
-        recordType: 'transaction', 
-        transactionType: 'incoming', 
-        status: 'completed',
-        'metadata.sourceType': { $nin: ['payment', 'projectInstallment'] }
-      }
-    : { 
-        recordType: 'transaction', 
-        transactionType: 'incoming', 
-        status: 'completed',
-        'metadata.sourceType': { $nin: ['payment', 'projectInstallment'] }
-      };
+  const transactionFilter = timeFilter !== 'all'
+    ? {
+      transactionDate: dateFilter,
+      recordType: 'transaction',
+      transactionType: 'incoming',
+      status: 'completed',
+      'metadata.sourceType': { $nin: ['payment', 'projectInstallment'] }
+    }
+    : {
+      recordType: 'transaction',
+      transactionType: 'incoming',
+      status: 'completed',
+      'metadata.sourceType': { $nin: ['payment', 'projectInstallment'] }
+    };
   const transactionRevenue = await AdminFinance.aggregate([
     { $match: transactionFilter },
     { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
   ]);
   const transactionRevenueAmount = transactionRevenue[0]?.totalAmount || 0;
 
-  // Total Revenue - ALL incoming amounts are treated as revenue
+  // 5. Total Sales (Project costs in period)
+  // Sales represents the value of all projects sold/created within the selected period
+  const salesDateFilter = timeFilter !== 'all'
+    ? { createdAt: dateFilter }
+    : {};
+  const totalSales = await Project.aggregate([
+    { $match: salesDateFilter },
+    { $group: { _id: null, totalAmount: { $sum: '$financialDetails.totalCost' } } }
+  ]);
+  const totalSalesAmount = totalSales[0]?.totalAmount || 0;
+
+  // Total Revenue - ALL incoming amounts are treated as revenue (Earnings)
   // 1. Completed Payments (from Payment model)
   // 2. Approved Payment Receipts
   // 3. Paid Installments (collected installment amounts)
   // 4. Other incoming transactions (manual transactions, etc.)
   // Note: Project Advances (advanceReceived) is NOT included to avoid double counting
   // since it already includes receipts and installments
-  const totalRevenue = paymentRevenueAmount + paymentReceiptRevenueAmount + 
-                       projectInstallmentRevenueAmount + transactionRevenueAmount;
+  const totalRevenue = paymentRevenueAmount + paymentReceiptRevenueAmount +
+    projectInstallmentRevenueAmount + transactionRevenueAmount;
 
   // ========== EXPENSE SOURCES - Query Actual Data ==========
 
   // 1. Paid Salaries
-  // Use 'month' field instead of 'paidDate' to match HR Management's month-based view
-  // HR Management shows salaries based on the month they belong to, not when they were paid
+  // Salary Management uses 'month' (YYYY-MM) as primary key/filter
   let salaryMonthFilter = { status: 'paid' };
   if (timeFilter !== 'all') {
-    switch (timeFilter) {
-      case 'today':
-      case 'week':
-      case 'month':
-        // For today/week/month, show salaries for current month (matches HR Management)
-        salaryMonthFilter = { month: currentMonthStr, status: 'paid' };
-        break;
-      case 'year':
-        // For year, show salaries for current year
-        salaryMonthFilter = { month: { $regex: `^${currentYear}-` }, status: 'paid' };
-        break;
+    if (timeFilter === 'custom' && startDate) {
+      const sDate = new Date(startDate);
+      const eDate = endDate ? new Date(endDate) : new Date();
+
+      const startMonthStr = `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, '0')}`;
+      const endMonthStr = `${eDate.getFullYear()}-${String(eDate.getMonth() + 1).padStart(2, '0')}`;
+
+      salaryMonthFilter = {
+        month: { $gte: startMonthStr, $lte: endMonthStr },
+        status: 'paid'
+      };
+    } else {
+      switch (timeFilter) {
+        case 'day':
+        case 'today':
+        case 'week':
+        case 'month':
+          // For shorter periods, use current month
+          salaryMonthFilter = { month: currentMonthStr, status: 'paid' };
+          break;
+        case 'year':
+          // For year, show all months in current year
+          salaryMonthFilter = { month: { $regex: `^${currentYear}-` }, status: 'paid' };
+          break;
+      }
     }
   }
   // For 'all' time filter, show all paid salaries (no month restriction)
@@ -634,29 +664,16 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
 
   // 2. Paid Recurring Expenses
   // Query from ExpenseEntry records (primary source of truth)
-  // Note: AdminFinance transactions are created from ExpenseEntry, so we only count ExpenseEntry to avoid double counting
   let expenseDateFilter;
   if (timeFilter !== 'all') {
-    if (dateFilter.$gte && dateFilter.$lte) {
-      expenseDateFilter = {
-        status: 'paid',
-        paidDate: { $exists: true, $ne: null, $gte: dateFilter.$gte, $lte: dateFilter.$lte }
-      };
-    } else if (dateFilter.$gte) {
-      expenseDateFilter = {
-        status: 'paid',
-        paidDate: { $exists: true, $ne: null, $gte: dateFilter.$gte }
-      };
-    } else {
-      expenseDateFilter = {
-        status: 'paid',
-        paidDate: { $exists: true, $ne: null }
-      };
-    }
+    expenseDateFilter = {
+      status: 'paid',
+      paidDate: dateFilter
+    };
   } else {
     expenseDateFilter = { status: 'paid' };
   }
-  
+
   const expenseEntries = await ExpenseEntry.aggregate([
     { $match: expenseDateFilter },
     { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
@@ -670,7 +687,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   if (timeFilter !== 'all') {
     // For filtered periods, get month-wise breakdown
     const monthlyBreakdown = await ExpenseEntry.aggregate([
-      { 
+      {
         $match: {
           ...expenseDateFilter,
           paidDate: { $exists: true, $ne: null } // Only include entries with valid paidDate
@@ -686,7 +703,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       },
       { $sort: { _id: 1 } }
     ]);
-    
+
     monthlyBreakdown.forEach(item => {
       if (item._id) { // Only add if _id exists (paidDate was valid)
         monthlyRecurringExpensesBreakdown[item._id] = item.totalAmount;
@@ -695,11 +712,11 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   } else {
     // For all time, get month-wise breakdown from all paid entries
     const monthlyBreakdown = await ExpenseEntry.aggregate([
-      { 
-        $match: { 
-          status: 'paid', 
+      {
+        $match: {
+          status: 'paid',
           paidDate: { $exists: true, $ne: null } // Only include entries with valid paidDate
-        } 
+        }
       },
       {
         $group: {
@@ -712,7 +729,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       { $sort: { _id: -1 } },
       { $limit: 12 } // Show last 12 months
     ]);
-    
+
     monthlyBreakdown.forEach(item => {
       if (item._id) { // Only add if _id exists (paidDate was valid)
         monthlyRecurringExpensesBreakdown[item._id] = item.totalAmount;
@@ -729,39 +746,16 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // This ensures all incentive payments are counted, regardless of how they were paid
   let incentiveTransactionFilter;
   if (timeFilter !== 'all') {
-    if (dateFilter.$gte && dateFilter.$lte) {
-      incentiveTransactionFilter = {
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        status: 'completed',
-        $or: [
-          { category: 'Incentive Payment' },
-          { 'metadata.sourceType': 'incentive' }
-        ],
-        transactionDate: { $gte: dateFilter.$gte, $lte: dateFilter.$lte }
-      };
-    } else if (dateFilter.$gte) {
-      incentiveTransactionFilter = {
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        status: 'completed',
-        $or: [
-          { category: 'Incentive Payment' },
-          { 'metadata.sourceType': 'incentive' }
-        ],
-        transactionDate: { $gte: dateFilter.$gte }
-      };
-    } else {
-      incentiveTransactionFilter = {
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        status: 'completed',
-        $or: [
-          { category: 'Incentive Payment' },
-          { 'metadata.sourceType': 'incentive' }
-        ]
-      };
-    }
+    incentiveTransactionFilter = {
+      recordType: 'transaction',
+      transactionType: 'outgoing',
+      status: 'completed',
+      $or: [
+        { category: 'Incentive Payment' },
+        { 'metadata.sourceType': 'incentive' }
+      ],
+      transactionDate: dateFilter
+    };
   } else {
     incentiveTransactionFilter = {
       recordType: 'transaction',
@@ -784,39 +778,16 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // This ensures all reward payments are counted, regardless of how they were paid
   let rewardTransactionFilter;
   if (timeFilter !== 'all') {
-    if (dateFilter.$gte && dateFilter.$lte) {
-      rewardTransactionFilter = {
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        status: 'completed',
-        $or: [
-          { category: 'Reward Payment' },
-          { 'metadata.sourceType': 'reward' }
-        ],
-        transactionDate: { $gte: dateFilter.$gte, $lte: dateFilter.$lte }
-      };
-    } else if (dateFilter.$gte) {
-      rewardTransactionFilter = {
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        status: 'completed',
-        $or: [
-          { category: 'Reward Payment' },
-          { 'metadata.sourceType': 'reward' }
-        ],
-        transactionDate: { $gte: dateFilter.$gte }
-      };
-    } else {
-      rewardTransactionFilter = {
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        status: 'completed',
-        $or: [
-          { category: 'Reward Payment' },
-          { 'metadata.sourceType': 'reward' }
-        ]
-      };
-    }
+    rewardTransactionFilter = {
+      recordType: 'transaction',
+      transactionType: 'outgoing',
+      status: 'completed',
+      $or: [
+        { category: 'Reward Payment' },
+        { 'metadata.sourceType': 'reward' }
+      ],
+      transactionDate: dateFilter
+    };
   } else {
     rewardTransactionFilter = {
       recordType: 'transaction',
@@ -838,27 +809,28 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // Aggregate all expenses from all projects' expenses arrays
   let projectExpenseDateFilter = {};
   if (timeFilter !== 'all') {
-    if (dateFilter.$gte && dateFilter.$lte) {
-      projectExpenseDateFilter = {
-        'expenses.expenseDate': { $gte: dateFilter.$gte, $lte: dateFilter.$lte }
-      };
-    } else if (dateFilter.$gte) {
-      projectExpenseDateFilter = {
-        'expenses.expenseDate': { $gte: dateFilter.$gte }
-      };
-    }
+    projectExpenseDateFilter = {
+      'expenses.expenseDate': dateFilter
+    };
   }
-  
+
   // Get all projects with expenses matching the date filter
   const projectsWithExpenses = await Project.find(projectExpenseDateFilter).select('expenses');
-  
+
   // Calculate total project expenses
-  // Note: Date filtering is already done in MongoDB query, no need for redundant JavaScript filtering
   let projectExpensesAmount = 0;
   projectsWithExpenses.forEach(project => {
     if (project.expenses && project.expenses.length > 0) {
       project.expenses.forEach(expense => {
-        projectExpensesAmount += expense.amount || 0;
+        // Double check individual expense date if filtered
+        if (timeFilter !== 'all') {
+          const eDate = new Date(expense.expenseDate);
+          if (eDate >= dateFilter.$gte && eDate <= dateFilter.$lte) {
+            projectExpensesAmount += expense.amount || 0;
+          }
+        } else {
+          projectExpensesAmount += expense.amount || 0;
+        }
       });
     }
   });
@@ -867,37 +839,18 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // Exclude expenseEntry, incentive, and reward transactions since they're already counted separately
   let otherExpenseFilter;
   if (timeFilter !== 'all') {
-    if (dateFilter.$gte && dateFilter.$lte) {
-      otherExpenseFilter = { 
-        transactionDate: { $gte: dateFilter.$gte, $lte: dateFilter.$lte }, 
-        recordType: 'transaction', 
-        transactionType: 'outgoing', 
-        status: 'completed',
-        'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry'] },
-        category: { $nin: ['Salary Payment', 'Employee Allowance', 'Incentive Payment', 'Reward Payment', 'Sales Incentive', 'PM Reward'] }
-      };
-    } else if (dateFilter.$gte) {
-      otherExpenseFilter = { 
-        transactionDate: { $gte: dateFilter.$gte }, 
-        recordType: 'transaction', 
-        transactionType: 'outgoing', 
-        status: 'completed',
-        'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry'] },
-        category: { $nin: ['Salary Payment', 'Employee Allowance', 'Incentive Payment', 'Reward Payment', 'Sales Incentive', 'PM Reward'] }
-      };
-    } else {
-      otherExpenseFilter = { 
-        recordType: 'transaction', 
-        transactionType: 'outgoing', 
-        status: 'completed',
-        'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry'] },
-        category: { $nin: ['Salary Payment', 'Employee Allowance', 'Incentive Payment', 'Reward Payment', 'Sales Incentive', 'PM Reward'] }
-      };
-    }
+    otherExpenseFilter = {
+      transactionDate: dateFilter,
+      recordType: 'transaction',
+      transactionType: 'outgoing',
+      status: 'completed',
+      'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry'] },
+      category: { $nin: ['Salary Payment', 'Employee Allowance', 'Incentive Payment', 'Reward Payment', 'Sales Incentive', 'PM Reward'] }
+    };
   } else {
-    otherExpenseFilter = { 
-      recordType: 'transaction', 
-      transactionType: 'outgoing', 
+    otherExpenseFilter = {
+      recordType: 'transaction',
+      transactionType: 'outgoing',
       status: 'completed',
       'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry'] },
       category: { $nin: ['Salary Payment', 'Employee Allowance', 'Incentive Payment', 'Reward Payment', 'Sales Incentive', 'PM Reward'] }
@@ -910,8 +863,8 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   const otherExpensesAmount = otherExpenses[0]?.totalAmount || 0;
 
   // Total Expenses
-  const totalExpenses = salaryExpensesAmount + recurringExpensesAmount + 
-                        incentiveExpensesAmount + rewardExpensesAmount + projectExpensesAmount + otherExpensesAmount;
+  const totalExpenses = salaryExpensesAmount + recurringExpensesAmount +
+    incentiveExpensesAmount + rewardExpensesAmount + projectExpensesAmount + otherExpensesAmount;
 
   // ========== PENDING AMOUNTS ==========
 
@@ -922,10 +875,11 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
 
   // Pending Salaries
   let pendingSalaryFilter = { status: 'pending' };
-  
+
   // Apply time filter if needed
   if (timeFilter !== 'all') {
     switch (timeFilter) {
+      case 'day':
       case 'today':
       case 'week':
       case 'month':
@@ -935,7 +889,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       case 'year':
         // For year, show pending salaries for current year (from Jan to current month, exclude future months)
         const yearStartStr = `${currentYear}-01`;
-        pendingSalaryFilter.month = { 
+        pendingSalaryFilter.month = {
           $gte: yearStartStr,  // From start of year
           $lte: currentMonthStr // Up to current month (exclude future months)
         };
@@ -943,7 +897,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
     }
   }
   // For 'all' time filter, show all pending salaries (no month restriction)
-  
+
   const pendingSalaries = await Salary.aggregate([
     { $match: pendingSalaryFilter },
     { $group: { _id: null, totalAmount: { $sum: '$fixedSalary' } } }
@@ -963,16 +917,16 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // Calculation includes:
   // 1. Project remainingAmount (Total Cost - Advance - Paid Installments)
   // 2. Pending installments (scheduled but not paid)
-  
+
   // Calculate pending outstanding from project remainingAmount
   // remainingAmount = totalCost - advanceReceived (which includes all paid installments and receipts)
   // This is the most accurate source as it reflects the actual remaining balance
   const pendingProjectOutstanding = await Project.aggregate([
-    { 
-      $match: { 
+    {
+      $match: {
         'financialDetails.remainingAmount': { $gt: 0 },
         'financialDetails.totalCost': { $gt: 0 }
-      } 
+      }
     },
     { $group: { _id: null, totalAmount: { $sum: '$financialDetails.remainingAmount' } } }
   ]);
@@ -987,7 +941,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // Today's Earnings
   // Note: Project Advances (advanceReceived) is NOT counted separately to avoid double counting
   // with Payment Receipts and Installments, which are already included in advanceReceived
-  
+
   // Today's Payments (completed today)
   const todayPayments = await Payment.aggregate([
     { $match: { paidAt: { $gte: todayStart, $lte: todayEnd }, status: 'completed' } },
@@ -1005,11 +959,11 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // Today's Paid Installments
   const todayInstallments = await Project.aggregate([
     { $unwind: '$installmentPlan' },
-    { 
-      $match: { 
+    {
+      $match: {
         'installmentPlan.status': 'paid',
         'installmentPlan.paidDate': { $gte: todayStart, $lte: todayEnd }
-      } 
+      }
     },
     { $group: { _id: null, totalAmount: { $sum: '$installmentPlan.amount' } } }
   ]);
@@ -1017,22 +971,22 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
 
   // Today's Other Incoming Transactions (excluding payments and installments to avoid double counting)
   const todayOtherTransactions = await AdminFinance.aggregate([
-    { 
-      $match: { 
+    {
+      $match: {
         transactionDate: { $gte: todayStart, $lte: todayEnd },
         recordType: 'transaction',
         transactionType: 'incoming',
         status: 'completed',
         'metadata.sourceType': { $nin: ['payment', 'projectInstallment'] }
-      } 
+      }
     },
     { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
   ]);
   const todayOtherTransactionsAmount = todayOtherTransactions[0]?.totalAmount || 0;
 
   // Today's Earnings - ALL incoming amounts
-  const todayEarnings = todayPaymentsAmount + todayPaymentReceiptsAmount + 
-                        todayInstallmentsAmount + todayOtherTransactionsAmount;
+  const todayEarnings = todayPaymentsAmount + todayPaymentReceiptsAmount +
+    todayInstallmentsAmount + todayOtherTransactionsAmount;
 
   // Today's Expenses
   // Use 'month' field to match HR Management - salaries paid today belong to current month
@@ -1052,7 +1006,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   const todayProjectsWithExpenses = await Project.find({
     'expenses.expenseDate': { $gte: todayStart, $lte: todayEnd }
   }).select('expenses');
-  
+
   let todayProjectExpensesAmount = 0;
   todayProjectsWithExpenses.forEach(project => {
     if (project.expenses && project.expenses.length > 0) {
@@ -1075,11 +1029,11 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // Today's Rewards (paid today)
   // Use only paidAt to match Incentives logic and ensure we only count actual payments, not awards
   const todayRewards = await PMReward.aggregate([
-    { 
-      $match: { 
+    {
+      $match: {
         status: 'paid',
         paidAt: { $gte: todayStart, $lte: todayEnd }
-      } 
+      }
     },
     { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
   ]);
@@ -1087,15 +1041,15 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
 
   // Today's Other Expenses (other outgoing transactions not from above sources)
   const todayOtherExpenses = await AdminFinance.aggregate([
-    { 
-      $match: { 
+    {
+      $match: {
         transactionDate: { $gte: todayStart, $lte: todayEnd },
         recordType: 'transaction',
         transactionType: 'outgoing',
         status: 'completed',
         'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'pmReward', 'expenseEntry'] },
         category: { $nin: ['Salary Payment', 'Employee Allowance', 'Sales Incentive', 'PM Reward'] }
-      } 
+      }
     },
     { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
   ]);
@@ -1106,9 +1060,9 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // However, to match the total expenses calculation better, we should note that allowances
   // in total expenses are all active ones, not filtered by date. For today's calculation,
   // we're using issueDate which is more accurate for "today's expenses"
-  
-  const todayExpenses = todaySalariesAmount + todayExpenseEntriesAmount + 
-                        todayProjectExpensesAmount + todayIncentivesAmount + todayRewardsAmount + todayOtherExpensesAmount;
+
+  const todayExpenses = todaySalariesAmount + todayExpenseEntriesAmount +
+    todayProjectExpensesAmount + todayIncentivesAmount + todayRewardsAmount + todayOtherExpensesAmount;
   const todayProfit = todayEarnings - todayExpenses;
 
   // ========== OTHER METRICS ==========
@@ -1117,17 +1071,17 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // This represents the total sales made, regardless of payment status
   // Includes all projects: sales team created, admin created, all clients
   const totalSalesAggregation = await Project.aggregate([
-    { 
-      $match: { 
+    {
+      $match: {
         'financialDetails.totalCost': { $gt: 0 }
-      } 
+      }
     },
     { $group: { _id: null, totalAmount: { $sum: '$financialDetails.totalCost' } } }
   ]);
-  const totalSales = totalSalesAggregation[0]?.totalAmount || 0;
+  const totalSalesAllTime = totalSalesAggregation[0]?.totalAmount || 0;
 
   // Get active projects
-  const activeProjects = await Project.countDocuments({ 
+  const activeProjects = await Project.countDocuments({
     status: { $in: ['active', 'started', 'in-progress'] }
   });
 
@@ -1156,11 +1110,11 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
     ]);
     const lastMonthInstallmentRevenue = await Project.aggregate([
       { $unwind: '$installmentPlan' },
-      { 
-        $match: { 
+      {
+        $match: {
           'installmentPlan.status': 'paid',
           'installmentPlan.paidDate': { $gte: lastMonthStart, $lte: lastMonthEnd }
-        } 
+        }
       },
       { $group: { _id: null, totalAmount: { $sum: '$installmentPlan.amount' } } }
     ]);
@@ -1169,10 +1123,10 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
     ]);
     // Last month revenue - ALL incoming amounts (excluding project advances to avoid double counting)
-    const lastMonthRevenue = (lastMonthPayments[0]?.totalAmount || 0) + 
-                             (lastMonthReceiptRevenue[0]?.totalAmount || 0) +
-                             (lastMonthInstallmentRevenue[0]?.totalAmount || 0) + 
-                             (lastMonthTransactionRevenue[0]?.totalAmount || 0);
+    const lastMonthRevenue = (lastMonthPayments[0]?.totalAmount || 0) +
+      (lastMonthReceiptRevenue[0]?.totalAmount || 0) +
+      (lastMonthInstallmentRevenue[0]?.totalAmount || 0) +
+      (lastMonthTransactionRevenue[0]?.totalAmount || 0);
 
     // Use 'month' field to match HR Management - calculate last month's month string
     const lastMonthYear = now.getFullYear();
@@ -1186,13 +1140,13 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       { $match: { paidDate: { $gte: lastMonthStart, $lte: lastMonthEnd }, status: 'paid' } },
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
     ]);
-    
+
     // Last Month Project Expenses
     // Note: Date filtering is already done in MongoDB query, no need for redundant JavaScript filtering
     const lastMonthProjectsWithExpenses = await Project.find({
       'expenses.expenseDate': { $gte: lastMonthStart, $lte: lastMonthEnd }
     }).select('expenses');
-    
+
     let lastMonthProjectExpensesAmount = 0;
     lastMonthProjectsWithExpenses.forEach(project => {
       if (project.expenses && project.expenses.length > 0) {
@@ -1201,7 +1155,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
         });
       }
     });
-    
+
     // Note: Allowances are physical assets, not expenses, so we don't count them
     const lastMonthIncentives = await Incentive.aggregate([
       { $match: { paidAt: { $gte: lastMonthStart, $lte: lastMonthEnd }, status: 'paid' } },
@@ -1212,22 +1166,24 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
     ]);
     const lastMonthOtherExpenses = await AdminFinance.aggregate([
-      { $match: { 
-        transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }, 
-        recordType: 'transaction', 
-        transactionType: 'outgoing', 
-        status: 'completed',
-        'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry'] },
-        category: { $nin: ['Salary Payment', 'Employee Allowance', 'Incentive Payment', 'Reward Payment', 'Sales Incentive', 'PM Reward'] }
-      } },
+      {
+        $match: {
+          transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd },
+          recordType: 'transaction',
+          transactionType: 'outgoing',
+          status: 'completed',
+          'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry'] },
+          category: { $nin: ['Salary Payment', 'Employee Allowance', 'Incentive Payment', 'Reward Payment', 'Sales Incentive', 'PM Reward'] }
+        }
+      },
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
     ]);
-    const lastMonthExpenses = (lastMonthSalary[0]?.totalAmount || 0) + 
-                             (lastMonthExpenseEntries[0]?.totalAmount || 0) + 
-                             lastMonthProjectExpensesAmount +
-                             (lastMonthIncentives[0]?.totalAmount || 0) + 
-                             (lastMonthRewards[0]?.totalAmount || 0) + 
-                             (lastMonthOtherExpenses[0]?.totalAmount || 0);
+    const lastMonthExpenses = (lastMonthSalary[0]?.totalAmount || 0) +
+      (lastMonthExpenseEntries[0]?.totalAmount || 0) +
+      lastMonthProjectExpensesAmount +
+      (lastMonthIncentives[0]?.totalAmount || 0) +
+      (lastMonthRewards[0]?.totalAmount || 0) +
+      (lastMonthOtherExpenses[0]?.totalAmount || 0);
 
     const lastMonthProfit = lastMonthRevenue - lastMonthExpenses;
 
@@ -1246,6 +1202,8 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
     success: true,
     data: {
       totalRevenue,
+      totalSales: totalSalesAmount,
+      totalSalesAllTime,
       totalExpenses,
       netProfit,
       profitMargin: profitMargin.toFixed(2),
@@ -1279,7 +1237,6 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       revenueChange: revenueChange.toFixed(1),
       expensesChange: expensesChange.toFixed(1),
       profitChange: profitChange.toFixed(1),
-      totalSales, // Total sales value (sum of all project costs)
       activeProjects,
       totalClients,
       // Legacy fields for backward compatibility
@@ -1298,7 +1255,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
 // @access  Admin only
 const getAccounts = asyncHandler(async (req, res, next) => {
   const { isActive } = req.query;
-  
+
   const filter = {};
   if (isActive !== undefined) {
     filter.isActive = isActive === 'true';
@@ -2055,7 +2012,7 @@ const recordSalesIncentivePayment = async (salesEmployeeId, amount, transactionD
 // @access  Admin only
 const getSalesIncentiveMonthlySummary = asyncHandler(async (req, res, next) => {
   const { year, month } = req.query;
-  
+
   if (!year || !month) {
     return next(new ErrorResponse('Year and month are required', 400));
   }
@@ -2095,7 +2052,7 @@ const getSalesIncentiveMonthlySummary = asyncHandler(async (req, res, next) => {
 
     incentives.forEach(incentive => {
       const salesId = incentive.salesEmployee._id.toString();
-      
+
       if (!employeeMap.has(salesId)) {
         employeeMap.set(salesId, {
           salesEmployee: {

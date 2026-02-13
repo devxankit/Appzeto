@@ -211,7 +211,7 @@ const Employee_task_detail = () => {
     try {
       await taskService.deleteTask(id)
       toast.success('Task deleted successfully')
-      navigate(-1)
+      navigate(projectId ? `/employee-project/${projectId}` : -1)
     } catch (error) {
       console.error('Error deleting task:', error)
       toast.error(error.message || 'Failed to delete task')
@@ -250,6 +250,9 @@ const Employee_task_detail = () => {
     )
   }
 
+  const backUrl = projectId ? `/employee-project/${projectId}` : '/employee-tasks'
+  const backLabel = projectId ? 'Back to Project' : 'Back to Tasks'
+
   if (error || !task) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -257,10 +260,10 @@ const Employee_task_detail = () => {
         <div className="pt-16 pb-24 md:pt-20 md:pb-8">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <button
-              onClick={() => navigate('/employee-tasks')}
+              onClick={() => navigate(backUrl)}
               className="mb-4 text-gray-600 hover:text-gray-900 flex items-center"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />Back to Tasks
+              <ArrowLeft className="h-4 w-4 mr-2" />{backLabel}
             </button>
             <div className="bg-red-50 border border-red-200 rounded-xl p-6">
               <div className="flex items-center space-x-3">
@@ -285,11 +288,11 @@ const Employee_task_detail = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24 md:pt-20 md:pb-8">
         <div className="mb-6 sm:mb-8">
           <button
-            onClick={() => navigate('/employee-tasks')}
+            onClick={() => navigate(backUrl)}
             className="mb-4 text-gray-600 hover:text-gray-900 flex items-center transition-colors group"
           >
             <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-            Back to Tasks
+            {backLabel}
           </button>
 
           {/* Urgent Task Warning */}

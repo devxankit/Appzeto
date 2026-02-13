@@ -11,15 +11,20 @@ import {
   FiUserCheck,
   FiFileText,
   FiX,
-  FiTag
+  FiTag,
+  FiShare2
 } from 'react-icons/fi'
 import { salesLeadService } from '../SL-services'
+import { getStoredSalesData } from '../SL-services/salesAuthService'
 import { useToast } from '../../../contexts/ToastContext'
 import SL_navbar from '../SL-components/SL_navbar'
 
 const SL_newLeads = () => {
   const { toast } = useToast()
   
+  // Team lead flag (only team leads can share leads with CP)
+  const [isTeamLead, setIsTeamLead] = useState(false)
+
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
@@ -52,6 +57,13 @@ const SL_newLeads = () => {
   // Total count for statistics (not affected by pagination)
   const [totalNewLeads, setTotalNewLeads] = useState(0)
 
+  // Share with CP modal state
+  const [showShareCpModal, setShowShareCpModal] = useState(false)
+  const [leadToShare, setLeadToShare] = useState(null)
+  const [assignedCPs, setAssignedCPs] = useState([])
+  const [shareSelectedCPId, setShareSelectedCPId] = useState('')
+  const [shareSubmitting, setShareSubmitting] = useState(false)
+
   // Fetch categories from API
   const fetchCategories = async () => {
     try {
@@ -61,6 +73,29 @@ const SL_newLeads = () => {
       console.error('Error fetching categories:', error)
     }
   }
+
+  // Load team lead flag from stored sales data
+  useEffect(() => {
+    try {
+      const stored = getStoredSalesData?.()
+      setIsTeamLead(!!stored?.isTeamLead)
+    } catch (error) {
+      console.error('Failed to read stored sales data', error)
+      setIsTeamLead(false)
+    }
+  }, [])
+
+  // Load assigned channel partners (for team leads)
+  const loadAssignedCPs = useCallback(async () => {
+    try {
+      const cps = await salesLeadService.getAssignedChannelPartners()
+      setAssignedCPs(Array.isArray(cps) ? cps : [])
+    } catch (error) {
+      console.error('Error fetching assigned channel partners:', error)
+      toast.error('Failed to load channel partners')
+      setAssignedCPs([])
+    }
+  }, [toast])
 
   // Fetch leads from API
   const fetchLeads = useCallback(async () => {
@@ -309,7 +344,7 @@ const SL_newLeads = () => {
   }
 
   // Mobile Lead Card Component - Simplified
-  const MobileLeadCard = ({ lead }) => {
+  const MobileLeadCard = ({ lead, isTeamLead, onShareWithCP }) => {
     const categoryInfo = getCategoryInfo(lead.category)
     
     return (
@@ -409,6 +444,19 @@ const SL_newLeads = () => {
                   >
                     Not Interested
                   </button>
+                  {isTeamLead && onShareWithCP && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setShowActionsMenu(null)
+                        onShareWithCP(lead)
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors duration-200 flex items-center gap-2"
+                    >
+                      <FiShare2 className="text-xs" />
+                      Share with CP
+                    </button>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -604,7 +652,19 @@ const SL_newLeads = () => {
                   transition={{ duration: 0.3, delay: index * 0.05 }}
                   className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
                 >
-                  <MobileLeadCard lead={lead} />
+                  <MobileLeadCard 
+                    lead={lead} 
+                    isTeamLead={isTeamLead} 
+                    onShareWithCP={(selectedLead) => {
+                      if (!isTeamLead) return
+                      setLeadToShare(selectedLead)
+                      setShareSelectedCPId('')
+                      setShowShareCpModal(true)
+                      if (assignedCPs.length === 0) {
+                        loadAssignedCPs()
+                      }
+                    }}
+                  />
                 </motion.div>
               ))
               )}
@@ -661,6 +721,133 @@ const SL_newLeads = () => {
           </motion.div>
         </div>
       </main>
+
+      {/* Share lead with CP modal (for team leads) */}
+      <AnimatePresence>
+        {showShareCpModal && leadToShare && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => !shareSubmitting && setShowShareCpModal(false)}
+            />
+
+            {/* Modal Content */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 max-h-[90vh] overflow-y-auto"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+                <div>
+                  <h2 className="text-lg font-bold text-purple-900">Share lead with CP</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Only sales team leads can share leads with channel partners.</p>
+                </div>
+                <button
+                  onClick={() => !shareSubmitting && setShowShareCpModal(false)}
+                  className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors duration-200"
+                >
+                  <FiX className="text-base" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-4 space-y-4">
+                {/* Lead summary */}
+                <div className="p-3 bg-purple-50 border border-purple-100 rounded-xl">
+                  <p className="text-xs text-purple-700 font-medium mb-1">Lead to share</p>
+                  <p className="text-sm font-semibold text-purple-900">
+                    {leadToShare.phone || 'Unknown phone'}
+                  </p>
+                  {leadToShare.name && (
+                    <p className="text-xs text-purple-800 mt-0.5">
+                      {leadToShare.name}
+                    </p>
+                  )}
+                </div>
+
+                {/* Channel partner select */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Channel partner</label>
+                  <select
+                    value={shareSelectedCPId}
+                    onChange={e => setShareSelectedCPId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
+                  >
+                    <option value="">Select channel partner</option>
+                    {assignedCPs.map(cp => (
+                      <option key={cp._id} value={cp._id}>
+                        {cp.name || cp.companyName || 'Channel Partner'}{cp.companyName ? ` (${cp.companyName})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {assignedCPs.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      No channel partners assigned to you. Contact admin to assign CPs before sharing leads.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-200">
+                <button
+                  onClick={() => !shareSubmitting && setShowShareCpModal(false)}
+                  className="px-3 py-2 text-xs sm:text-sm text-gray-700 hover:text-gray-900 transition-colors duration-200"
+                  disabled={shareSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!leadToShare || !shareSelectedCPId) {
+                      toast.error('Please select a channel partner')
+                      return
+                    }
+                    setShareSubmitting(true)
+                    try {
+                      const res = await salesLeadService.shareLeadWithCP(leadToShare._id, shareSelectedCPId)
+                      if (res?.success) {
+                        toast.success(res.message || 'Lead shared with channel partner')
+                        setShowShareCpModal(false)
+                        const sharedId = leadToShare._id || leadToShare.id
+                        setLeadToShare(null)
+                        setShareSelectedCPId('')
+                        // Remove shared lead from New Leads list so it disappears immediately; it will show under Channel Partner Leads > Shared with CP
+                        setLeadsData(prev => prev.filter(l => (l._id || l.id) !== sharedId))
+                        setTotalNewLeads(prev => Math.max(0, prev - 1))
+                        fetchLeads()
+                      } else {
+                        toast.error(res?.message || 'Failed to share lead')
+                      }
+                    } catch (error) {
+                      toast.error(error?.message || 'Failed to share lead with channel partner')
+                    } finally {
+                      setShareSubmitting(false)
+                    }
+                  }}
+                  disabled={shareSubmitting || !shareSelectedCPId}
+                  className="px-3 py-2 text-xs sm:text-sm rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-1.5"
+                >
+                  {shareSubmitting ? 'Sharing…' : (
+                    <>
+                      <FiShare2 className="text-xs" />
+                      Share lead
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Connected Form Dialog */}
       <AnimatePresence>

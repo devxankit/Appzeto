@@ -1826,6 +1826,18 @@ const getMyLeads = async (req, res) => {
     if (status && status !== 'all') {
       filter.status = status;
     }
+    // Exclude leads shared with CP from "new" list – they appear under Channel Partner Leads > Shared with CP
+    if (filter.status === 'new') {
+      filter.$and = (filter.$and || []).concat([
+        { $or: [{ sharedWithCP: { $exists: false } }, { sharedWithCP: { $size: 0 } }] }
+      ]);
+      const sharedLeadIds = await CPLead.distinct('sharedFromSales.leadId', {
+        'sharedFromSales.sharedBy': new mongoose.Types.ObjectId(salesId)
+      });
+      if (sharedLeadIds && sharedLeadIds.length > 0) {
+        filter._id = { $nin: sharedLeadIds };
+      }
+    }
 
     if (category && category !== 'all') {
       filter.category = category;
@@ -1990,6 +2002,20 @@ const getLeadsByStatus = async (req, res) => {
         assignedTo: assignedToValue,
         status: actualStatus
       };
+    }
+
+    // Exclude leads shared with CP from "new" list – they appear under Channel Partner Leads > Shared with CP
+    if (actualStatus === 'new') {
+      filter.$and = (filter.$and || []).concat([
+        { $or: [{ sharedWithCP: { $exists: false } }, { sharedWithCP: { $size: 0 } }] }
+      ]);
+      // Also exclude leads that appear in CPLead.sharedFromSales (covers leads shared before sharedWithCP was added to Lead)
+      const sharedLeadIds = await CPLead.distinct('sharedFromSales.leadId', {
+        'sharedFromSales.sharedBy': new mongoose.Types.ObjectId(salesId)
+      });
+      if (sharedLeadIds && sharedLeadIds.length > 0) {
+        filter._id = { $nin: sharedLeadIds };
+      }
     }
 
     if (category && category !== 'all') {
@@ -2990,6 +3016,10 @@ const shareLeadWithCP = async (req, res) => {
         sharedAt: new Date()
       });
       await cpLead.save();
+      // Mark lead as shared so it is excluded from New Leads list and appears under Channel Partner Leads > Shared with CP
+      lead.sharedWithCP = lead.sharedWithCP || [];
+      lead.sharedWithCP.push({ cpId: cpObjectId, sharedAt: new Date() });
+      await lead.save();
       await cpLead.populate('assignedTo', 'name email phoneNumber companyName');
       await cpLead.populate('sharedFromSales.leadId', 'name phone email company');
       await cpLead.populate('sharedFromSales.sharedBy', 'name email phoneNumber');
@@ -3028,6 +3058,10 @@ const shareLeadWithCP = async (req, res) => {
         sharedAt: new Date()
       }]
     });
+    // Mark lead as shared so it is excluded from New Leads list and appears under Channel Partner Leads > Shared with CP
+    lead.sharedWithCP = lead.sharedWithCP || [];
+    lead.sharedWithCP.push({ cpId: cpObjectId, sharedAt: new Date() });
+    await lead.save();
     await cpLead.populate('assignedTo', 'name email phoneNumber companyName');
     await cpLead.populate('sharedFromSales.leadId', 'name phone email company');
     await cpLead.populate('sharedFromSales.sharedBy', 'name email phoneNumber');

@@ -139,20 +139,29 @@ const getEmployeeProjectById = asyncHandler(async (req, res, next) => {
     }
   });
 
-  // Calculate employee's task count per milestone
+  // Per milestone: progress from all tasks completed; plus employee-specific counts
   const milestonesWithEmployeeTasks = project.milestones.map(milestone => {
-    const employeeTasks = milestone.tasks.filter(task => 
-      task.assignedTo.some(assignee => assignee._id.toString() === employeeId)
+    const tasksList = milestone.tasks || [];
+    const totalTasks = tasksList.length;
+    const completedTasks = tasksList.filter(t => (t.status || '').toLowerCase() === 'completed').length;
+    const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    const employeeTasks = tasksList.filter(task =>
+      (task.assignedTo || []).some(assignee => assignee && (assignee._id?.toString() === employeeId || assignee.toString() === employeeId))
     );
-    const employeeCompletedTasks = employeeTasks.filter(task => task.status === 'completed').length;
-    
+    const employeeCompletedTasks = employeeTasks.filter(t => (t.status || '').toLowerCase() === 'completed').length;
+    const employeeProgress = employeeTasks.length > 0
+      ? Math.round((employeeCompletedTasks / employeeTasks.length) * 100)
+      : 0;
+
     return {
       ...milestone.toObject(),
+      totalTasks,
+      completedTasks,
+      progress,
       employeeTasks: employeeTasks.length,
       employeeCompletedTasks,
-      employeeProgress: employeeTasks.length > 0 
-        ? Math.round((employeeCompletedTasks / employeeTasks.length) * 100) 
-        : 0
+      employeeProgress
     };
   });
 

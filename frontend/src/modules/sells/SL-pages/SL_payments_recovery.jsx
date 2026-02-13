@@ -39,7 +39,7 @@ const SL_payments_recovery = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // Fetch data
+  // Fetch data: receivables + payment receipts for each project so "available amount" is correct from the start
   React.useEffect(() => {
     const run = async () => {
       try {
@@ -53,13 +53,32 @@ const SL_payments_recovery = () => {
             band: selectedFilter === 'all' ? undefined : selectedFilter
           })
         ])
+        const receivablesList = Array.isArray(list) ? list : []
         setStats({ totalDues: st.totalDue || 0, overdueCount: st.overdueCount || 0, overdueAmount: st.overdueAmount || 0 })
-        setReceivables(Array.isArray(list) ? list : [])
+        setReceivables(receivablesList)
+
+        // Preload payment receipts for every project so pending amount (remaining - pending receipts) is correct immediately
+        const receiptsByProject = {}
+        await Promise.all(
+          receivablesList.map(async (p) => {
+            const projectId = p.projectId
+            if (!projectId) return
+            try {
+              const receipts = await salesPaymentsService.getPaymentReceipts(projectId)
+              receiptsByProject[projectId] = Array.isArray(receipts) ? receipts : []
+            } catch (err) {
+              console.error('Failed to fetch receipts for project', projectId, err)
+              receiptsByProject[projectId] = []
+            }
+          })
+        )
+        setProjectPaymentReceipts(receiptsByProject)
       } catch (e) {
         console.error('Payments fetch error', e)
         setError(e.message || 'Failed to load payment recovery data')
         setReceivables([])
         setStats({ totalDues: 0, overdueCount: 0, overdueAmount: 0 })
+        setProjectPaymentReceipts({})
       } finally {
         setIsLoading(false)
       }

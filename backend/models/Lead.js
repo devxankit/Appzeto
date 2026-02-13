@@ -121,6 +121,11 @@ const leadSchema = new mongoose.Schema({
     transferredAt: { type: Date, default: Date.now },
     reason: String
   }],
+  // When this sales lead was shared with channel partner(s) – used to exclude from New Leads list
+  sharedWithCP: [{
+    cpId: { type: mongoose.Schema.Types.ObjectId, ref: 'ChannelPartner' },
+    sharedAt: { type: Date, default: Date.now }
+  }],
   // Activity/interaction log
   activities: [{
     type: { type: String, enum: ['call', 'email', 'whatsapp', 'meeting', 'note', 'status_change', 'followup_added', 'followup_completed', 'followup_cancelled', 'followup_rescheduled'] },

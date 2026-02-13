@@ -317,7 +317,7 @@ const Employee_tasks = () => {
                           <span className="text-primary font-semibold">{task.project?.name || 'No Project'}</span>
                         </div>
                         <div className="flex items-center space-x-1 text-gray-600">
-                          <span className="text-primary font-semibold">{task.milestone?.name || 'No Milestone'}</span>
+                          <span className="text-primary font-semibold">{task.milestone?.title || 'No Milestone'}</span>
                         </div>
                       </div>
                     </div>
@@ -327,7 +327,7 @@ const Employee_tasks = () => {
                       <div className="flex items-center space-x-3">
                         <div className="flex items-center space-x-1.5 text-gray-500">
                           <User className="h-3.5 w-3.5" />
-                          <span className="text-xs">{task.assignedTo?.[0]?.fullName || 'Unassigned'}</span>
+                          <span className="text-xs">{task.assignedTo?.[0]?.name || task.assignedTo?.[0]?.fullName || 'Unassigned'}</span>
                         </div>
                         <div className="flex items-center space-x-1.5 text-gray-500">
                           <Calendar className="h-3.5 w-3.5" />

@@ -37,109 +37,96 @@ const Employee_project_detail = () => {
   const [selectedTask, setSelectedTask] = useState(null)
   const [tasks, setTasks] = useState([])
 
-  useEffect(() => {
-    const load = async () => {
-      if (!id) return
+  const loadProjectData = async () => {
+    if (!id) return
 
-      // Validate MongoDB ObjectId format (24 hex characters)
-      const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(id)
-      if (!isValidObjectId) {
-        setError('Invalid project ID. Please navigate to this page from the projects list.')
-        setLoading(false)
-        return
-      }
-
-      try {
-        setLoading(true)
-        setError(null)
-
-        // Load project details
-        const projectData = await employeeService.getEmployeeProjectById(id)
-
-        // Handle case where response might be wrapped in data property
-        const project = projectData?.data || projectData
-
-        if (!project) {
-          throw new Error('Project data not found in response')
-        }
-
-        // Transform project data to match component expectations
-        const transformedProject = {
-          ...project,
-          // Map client to customer for backward compatibility
-          customer: project.client ? {
-            company: project.client.company || project.client.companyName || 'N/A'
-          } : null,
-          // Map assignedTeam members to have fullName
-          assignedTeam: (project.assignedTeam || []).map(member => ({
-            ...member,
-            fullName: member.name || `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown'
-          })),
-          // Calculate overall progress from milestones based on completed milestones vs total milestones
-          progress: (() => {
-            if (project.milestones && project.milestones.length > 0) {
-              const totalMilestones = project.milestones.length
-              const completedMilestones = project.milestones.filter(m => m.status === 'completed').length
-              return totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0
-            }
-            // Fallback to project progress if no milestones
-            return project.progress || 0
-          })(),
-          // Calculate myTasks and myCompletedTasks from milestones
-          myTasks: project.milestones ? project.milestones.reduce((sum, m) => sum + (m.employeeTasks || 0), 0) : 0,
-          myCompletedTasks: project.milestones ? project.milestones.reduce((sum, m) => sum + (m.employeeCompletedTasks || 0), 0) : 0
-        }
-
-        // Transform milestones data
-        const transformedMilestones = (project.milestones || []).map(milestone => ({
-          ...milestone,
-          // Use employeeProgress if available, otherwise calculate from employeeTasks
-          progress: milestone.employeeProgress !== undefined
-            ? milestone.employeeProgress
-            : (milestone.employeeTasks > 0
-              ? Math.round((milestone.employeeCompletedTasks / milestone.employeeTasks) * 100)
-              : 0),
-          // Map employeeTasks to myTasks for consistency
-          myTasks: milestone.employeeTasks || 0,
-          myCompletedTasks: milestone.employeeCompletedTasks || 0
-        }))
-
-        setProject(transformedProject)
-        setMilestones(transformedMilestones)
-
-        // Check if current user is a Team Lead by calling getMyTeam
-        try {
-          const teamData = await employeeService.getMyTeam()
-          // Check for isTeamLead explicitly, or assume true if request succeeds (since it's a lead-only endpoint)
-          const team = teamData?.data || teamData
-          if (team?.isTeamLead || teamData?.success) {
-            setIsTeamLead(true)
-            setTeamMembers(team.teamMembers || [])
-          }
-        } catch (teamError) {
-          // User is not a team lead or doesn't have team access, silently continue
-          console.log('User is not a team lead or team data unavailable')
-        }
-
-        // Load project tasks
-        try {
-          const tasksResponse = await taskService.getTasksByProject(id)
-          setTasks(tasksResponse.data || tasksResponse || [])
-        } catch (taskErr) {
-          console.error('Error loading tasks:', taskErr)
-          setTasks([])
-        }
-      } catch (error) {
-        console.error('Error loading project details:', error)
-        setError(error.message || 'Failed to load project details. Please try again.')
-        setProject(null)
-        setMilestones([])
-      } finally {
-        setLoading(false)
-      }
+    const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(id)
+    if (!isValidObjectId) {
+      setError('Invalid project ID. Please navigate to this page from the projects list.')
+      setLoading(false)
+      return
     }
 
-    load()
+    try {
+      setLoading(true)
+      setError(null)
+
+      const projectData = await employeeService.getEmployeeProjectById(id)
+      const project = projectData?.data || projectData
+
+      if (!project) {
+        throw new Error('Project data not found in response')
+      }
+
+      const transformedProject = {
+        ...project,
+        customer: project.client ? {
+          company: project.client.company || project.client.companyName || 'N/A'
+        } : null,
+        assignedTeam: (project.assignedTeam || []).map(member => ({
+          ...member,
+          fullName: member.name || `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown'
+        })),
+        // Project Progress = % of milestones with status 'completed' (or API progress if no milestones)
+        progress: (() => {
+          if (project.milestones && project.milestones.length > 0) {
+            const totalMilestones = project.milestones.length
+            const completedMilestones = project.milestones.filter(m => (m.status || '').toLowerCase() === 'completed').length
+            return totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0
+          }
+          return project.progress != null ? Number(project.progress) : 0
+        })(),
+        myTasks: project.milestones ? project.milestones.reduce((sum, m) => sum + (m.employeeTasks || 0), 0) : 0,
+        myCompletedTasks: project.milestones ? project.milestones.reduce((sum, m) => sum + (m.employeeCompletedTasks || 0), 0) : 0
+      }
+
+      // Milestone progress = % of tasks completed in that milestone (from backend or computed)
+      const transformedMilestones = (project.milestones || []).map(milestone => {
+        const totalTasks = milestone.totalTasks ?? (milestone.tasks || []).length
+        const completedTasks = milestone.completedTasks ?? (milestone.tasks || []).filter(t => (t.status || '').toLowerCase() === 'completed').length
+        const progress = milestone.progress != null
+          ? Number(milestone.progress)
+          : (totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0)
+        return {
+          ...milestone,
+          progress,
+          myTasks: milestone.employeeTasks ?? 0,
+          myCompletedTasks: milestone.employeeCompletedTasks ?? 0
+        }
+      })
+
+      setProject(transformedProject)
+      setMilestones(transformedMilestones)
+
+      // Derive tasks from project milestones (employee API already includes them; PM task API uses wrong auth for employees)
+      const tasksFromMilestones = (project.milestones || []).flatMap(m => m.tasks || []).filter(Boolean)
+      const tasksById = new Map()
+      tasksFromMilestones.forEach(t => { if (t._id) tasksById.set(t._id, t) })
+      setTasks(Array.from(tasksById.values()))
+
+      try {
+        const teamData = await employeeService.getMyTeam()
+        const team = teamData?.data || teamData
+        if (team?.isTeamLead || teamData?.success) {
+          setIsTeamLead(true)
+          setTeamMembers(team.teamMembers || [])
+        }
+      } catch (teamError) {
+        console.log('User is not a team lead or team data unavailable')
+      }
+    } catch (error) {
+      console.error('Error loading project details:', error)
+      setError(error.message || 'Failed to load project details. Please try again.')
+      setProject(null)
+      setMilestones([])
+      setTasks([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadProjectData()
   }, [id])
 
   const getStatusColor = (status) => {
@@ -176,7 +163,7 @@ const Employee_project_detail = () => {
     try {
       await taskService.deleteTask(taskId)
       toast.success('Task deleted successfully')
-      window.location.reload()
+      await loadProjectData()
     } catch (error) {
       console.error('Error deleting task:', error)
       toast.error(error.message || 'Failed to delete task')
@@ -188,7 +175,7 @@ const Employee_project_detail = () => {
       await taskService.updateTask(selectedTask._id, taskData)
       toast.success('Task updated successfully')
       setIsEditTaskFormOpen(false)
-      window.location.reload()
+      await loadProjectData()
     } catch (error) {
       console.error('Error updating task:', error)
       toast.error(error.message || 'Failed to update task')
@@ -477,14 +464,14 @@ const Employee_project_detail = () => {
           </div>
 
           <div className="md:hidden mb-6">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-2">
               {tabs.map(tab => {
                 const Icon = tab.icon
                 return (
-                  <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={`p-4 rounded-2xl shadow-sm border transition-all ${activeTab === tab.key ? 'bg-primary text-white border-primary shadow-md' : 'bg-white text-gray-600 border-gray-200 active:scale-95'}`}>
-                    <div className="flex flex-col items-center space-y-2">
-                      <Icon className="h-6 w-6" />
-                      <span className="text-sm font-medium">{tab.label}</span>
+                  <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={`p-2.5 rounded-xl shadow-sm border transition-all min-w-0 ${activeTab === tab.key ? 'bg-primary text-white border-primary shadow-md' : 'bg-white text-gray-600 border-gray-200 active:scale-95'}`}>
+                    <div className="flex flex-col items-center space-y-1">
+                      <Icon className="h-5 w-5 shrink-0" />
+                      <span className="text-xs font-medium truncate w-full text-center">{tab.label}</span>
                     </div>
                   </button>
                 )
@@ -543,8 +530,7 @@ const Employee_project_detail = () => {
 
               setIsTaskFormOpen(false)
               toast.success('Task created successfully!')
-              // Reload project data to refresh task counts
-              window.location.reload()
+              await loadProjectData()
             } catch (error) {
               console.error('Error creating task:', error)
               toast.error(error.message || 'Failed to create task')

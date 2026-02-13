@@ -10,10 +10,11 @@ import {
   FiFileText,
   FiX,
   FiUsers,
-  FiShare2
+  FiClock
 } from 'react-icons/fi'
 import { Link, useNavigate } from 'react-router-dom'
 import { salesLeadService } from '../SL-services'
+const { getStatusDisplayName, getStatusColor } = salesLeadService
 import { useToast } from '../../../contexts/ToastContext'
 import SL_navbar from '../SL-components/SL_navbar'
 
@@ -30,14 +31,6 @@ const SL_channelPartnerLeads = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
-  
-  // Share with CP modal
-  const [showShareModal, setShowShareModal] = useState(false)
-  const [myLeadsForShare, setMyLeadsForShare] = useState([])
-  const [assignedCPs, setAssignedCPs] = useState([])
-  const [shareSelectedLeadId, setShareSelectedLeadId] = useState('')
-  const [shareSelectedCPId, setShareSelectedCPId] = useState('')
-  const [shareSubmitting, setShareSubmitting] = useState(false)
   
   // Real lead data state
   const [leadsData, setLeadsData] = useState([])
@@ -103,51 +96,6 @@ const SL_channelPartnerLeads = () => {
     fetchLeads()
   }, [fetchLeads])
 
-  // Open Share modal: load my new/connected leads and assigned CPs
-  const openShareModal = useCallback(async () => {
-    setShowShareModal(true)
-    setShareSelectedLeadId('')
-    setShareSelectedCPId('')
-    try {
-      const leadsPromise = salesLeadService.getMyLeads({ status: 'new', limit: 100 }).catch(() => ({ data: [] }))
-      const cpsPromise = salesLeadService.getAssignedChannelPartners()
-      const [leadsRes, cps] = await Promise.all([leadsPromise, cpsPromise])
-      const allLeads = leadsRes?.data || []
-      const connectedRes = await salesLeadService.getMyLeads({ status: 'connected', limit: 100 }).catch(() => ({ data: [] }))
-      const connectedLeads = connectedRes?.data || []
-      const combined = [...(allLeads || []), ...(connectedLeads || [])]
-      const uniqueById = Array.from(new Map(combined.map(l => [l._id || l.id, l])).values())
-      setMyLeadsForShare(Array.from(uniqueById))
-      setAssignedCPs(Array.isArray(cps) ? cps : [])
-    } catch (err) {
-      toast.error('Failed to load leads or channel partners')
-      setMyLeadsForShare([])
-      setAssignedCPs([])
-    }
-  }, [toast])
-
-  const handleShareWithCP = async () => {
-    if (!shareSelectedLeadId || !shareSelectedCPId) {
-      toast.error('Please select a lead and a channel partner')
-      return
-    }
-    setShareSubmitting(true)
-    try {
-      const res = await salesLeadService.shareLeadWithCP(shareSelectedLeadId, shareSelectedCPId)
-      if (res?.success) {
-        toast.success(res.message || 'Lead shared with channel partner')
-        setShowShareModal(false)
-        fetchLeads()
-      } else {
-        toast.error(res?.message || 'Failed to share lead')
-      }
-    } catch (err) {
-      toast.error(err?.message || 'Failed to share lead with channel partner')
-    } finally {
-      setShareSubmitting(false)
-    }
-  }
-
   const filters = [
     { id: 'today', label: 'Today' },
     { id: 'yesterday', label: 'Yesterday' },
@@ -198,7 +146,79 @@ const SL_channelPartnerLeads = () => {
     navigate(`/channel-partner-lead-profile/${leadId}`)
   }
 
-  // Mobile Lead Card Component
+  // Format relative time for "Shared at"
+  const formatSharedAt = (date) => {
+    if (!date) return '—'
+    const d = new Date(date)
+    const now = new Date()
+    const diffMs = now - d
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined })
+  }
+
+  // Shared with CP card – same design as MobileLeadCard, with extra line for CP status & shared info
+  const SharedWithCPCard = ({ lead }) => {
+    const categoryInfo = getCategoryInfo(lead.category)
+    const channelPartner = lead.channelPartner || lead.assignedTo
+    const cpName = channelPartner?.name || channelPartner?.companyName || 'Channel Partner'
+    const statusLabel = getStatusDisplayName(lead.status || 'new')
+    const statusColor = getStatusColor(lead.status || 'new')
+    const sharedAt = lead.sharedAt || lead.createdAt
+
+    return (
+      <div
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => handleProfile(lead._id)}
+      >
+        {/* Left Section - Avatar & Phone (same as MobileLeadCard) */}
+        <div className="flex items-center space-x-3 flex-1 min-w-0">
+          <div className="flex-shrink-0">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center">
+              <FiUser className="text-white text-sm" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.phone}</h3>
+            <div className="flex items-center space-x-2 mt-1">
+              <span className="text-xs text-black">{categoryInfo.name}</span>
+              <span className="text-xs text-purple-600 font-medium">• {cpName}</span>
+            </div>
+            <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 mt-1 text-xs text-gray-500">
+              <span className={`inline-flex px-1.5 py-0.5 rounded font-medium ${statusColor}`}>{statusLabel}</span>
+              <span>·</span>
+              <span className="flex items-center gap-0.5"><FiClock className="w-3 h-3" /> {formatSharedAt(sharedAt)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions (same as MobileLeadCard) */}
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={(e) => { e.stopPropagation(); handleCall(lead.phone) }}
+            className="bg-white text-purple-600 border border-purple-200 px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-all duration-200 text-xs font-medium"
+          >
+            Call
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleWhatsApp(lead.phone) }}
+            className="bg-green-500 text-white p-1.5 rounded-lg hover:bg-green-600 transition-all duration-200"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Mobile Lead Card Component (for "Received from CP" tab)
   const MobileLeadCard = ({ lead }) => {
     const categoryInfo = getCategoryInfo(lead.category)
     const channelPartner = lead.channelPartner || lead.assignedTo
@@ -290,35 +310,27 @@ const SL_channelPartnerLeads = () => {
             transition={{ duration: 0.6 }}
             className="mb-4"
           >
-            <div className="bg-gradient-to-br from-purple-50 via-purple-100 to-purple-200 rounded-xl p-4 shadow-lg border border-purple-300/40">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center space-x-3 flex-1">
-                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
-                    <FiUsers className="text-white text-lg" />
+            <div className="relative overflow-hidden bg-gradient-to-br from-purple-50 via-white to-purple-100/80 rounded-2xl p-5 sm:p-6 shadow-lg border border-purple-200/60">
+              {/* Subtle pattern */}
+              <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #7c3aed 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+              <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-start sm:items-center gap-4">
+                  <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-700 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/25 ring-2 ring-white/50">
+                    <FiUsers className="text-white text-xl" />
                   </div>
-                  <div>
-                    <h1 className="text-lg font-bold text-purple-900">Channel Partner Leads</h1>
-                    <p className="text-purple-700 text-xs">
+                  <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold text-purple-900 tracking-tight">Channel Partner Leads</h1>
+                    <p className="text-purple-600/90 text-sm mt-1">
                       {activeTab === TAB_RECEIVED ? 'Leads received from channel partners' : 'Leads you shared with channel partners'}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="bg-white/70 backdrop-blur-sm rounded-lg px-3 py-2 shadow-sm border border-white/30">
-                    <div className="text-center">
-                      <p className="text-xs text-purple-600 font-medium mb-0.5">Total</p>
-                      <p className="text-xl font-bold text-purple-900">{totalLeads}</p>
-                      <p className="text-xs text-purple-600 font-medium">Leads</p>
-                    </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="bg-white rounded-xl px-4 py-2.5 shadow-sm border border-purple-200/50 min-w-[4.5rem]">
+                    <p className="text-[10px] sm:text-xs uppercase tracking-wider text-purple-600 font-semibold">Total</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-purple-900 leading-none mt-0.5">{totalLeads}</p>
+                    <p className="text-[10px] sm:text-xs text-purple-500 font-medium mt-0.5">Leads</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={openShareModal}
-                    className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-md transition-colors"
-                  >
-                    <FiShare2 className="text-base" />
-                    Share lead with CP
-                  </button>
                 </div>
               </div>
             </div>
@@ -498,7 +510,11 @@ const SL_channelPartnerLeads = () => {
                   transition={{ duration: 0.3, delay: index * 0.05 }}
                   className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
                 >
-                  <MobileLeadCard lead={lead} />
+                  {activeTab === TAB_SHARED ? (
+                    <SharedWithCPCard lead={lead} />
+                  ) : (
+                    <MobileLeadCard lead={lead} />
+                  )}
                 </motion.div>
               ))
               )}
@@ -554,93 +570,6 @@ const SL_channelPartnerLeads = () => {
             )}
           </motion.div>
 
-          {/* Share lead with CP modal */}
-          <AnimatePresence>
-            {showShareModal && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-                onClick={() => !shareSubmitting && setShowShareModal(false)}
-              >
-                <motion.div
-                  initial={{ scale: 0.95, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.95, opacity: 0 }}
-                  onClick={e => e.stopPropagation()}
-                  className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-gray-200"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-purple-900">Share lead with Channel Partner</h2>
-                    <button
-                      type="button"
-                      onClick={() => !shareSubmitting && setShowShareModal(false)}
-                      className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-                    >
-                      <FiX className="text-lg" />
-                    </button>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-4">Select one of your new or connected leads and a channel partner assigned to you.</p>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Your lead</label>
-                      <select
-                        value={shareSelectedLeadId}
-                        onChange={e => setShareSelectedLeadId(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      >
-                        <option value="">Select lead</option>
-                        {myLeadsForShare.map(l => (
-                          <option key={l._id || l.id} value={l._id || l.id}>
-                            {l.name || l.company || l.phone || 'Unnamed'} {l.phone ? `(${l.phone})` : ''} – {l.status || 'new'}
-                          </option>
-                        ))}
-                      </select>
-                      {myLeadsForShare.length === 0 && (
-                        <p className="text-xs text-amber-600 mt-1">No new or connected leads. Add leads from the main Leads page.</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Channel partner</label>
-                      <select
-                        value={shareSelectedCPId}
-                        onChange={e => setShareSelectedCPId(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      >
-                        <option value="">Select channel partner</option>
-                        {assignedCPs.map(cp => (
-                          <option key={cp._id} value={cp._id}>
-                            {cp.name || cp.companyName || 'CP'} {cp.companyName ? `(${cp.companyName})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                      {assignedCPs.length === 0 && (
-                        <p className="text-xs text-amber-600 mt-1">No channel partners assigned to you. Contact admin to get CPs assigned.</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-6">
-                    <button
-                      type="button"
-                      onClick={() => !shareSubmitting && setShowShareModal(false)}
-                      className="flex-1 py-2 px-4 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleShareWithCP}
-                      disabled={shareSubmitting || !shareSelectedLeadId || !shareSelectedCPId}
-                      className="flex-1 py-2 px-4 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {shareSubmitting ? 'Sharing…' : 'Share lead'}
-                    </button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       </main>
     </div>

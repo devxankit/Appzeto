@@ -340,7 +340,7 @@ const PM_urgent_tasks = () => {
                             {(() => {
                               const member = task.assignedTo?.[0]
                               if (!member) return 'Unassigned'
-                              return member.fullName || member.name || `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member'
+                              return member.name || member.fullName || `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member'
                             })()}
                           </span>
                         </div>

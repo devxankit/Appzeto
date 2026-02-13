@@ -8,6 +8,7 @@ const asyncHandler = require('../middlewares/asyncHandler');
 // @access  Private (Employee)
 const getEmployeeDashboardStats = asyncHandler(async (req, res) => {
   const employeeId = req.employee?.id || req.user?.id;
+  const { timeFilter = 'all' } = req.query;
 
   if (!employeeId) {
     return res.status(401).json({
@@ -16,35 +17,77 @@ const getEmployeeDashboardStats = asyncHandler(async (req, res) => {
     });
   }
 
-  // Get employee's assigned tasks (assignedTo is an array)
-  const tasks = await Task.find({ assignedTo: { $in: [employeeId] } });
+  const now = new Date();
+  let dateFilter = {};
 
-  // Get projects where employee is in assignedTeam
-  const teamProjects = await Project.find({ assignedTeam: { $in: [employeeId] } }).select('_id');
-  const teamProjectIds = teamProjects.map(p => p._id);
+  if (timeFilter !== 'all') {
+    switch (timeFilter) {
+      case 'day':
+      case 'today':
+        const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        dateFilter = { $gte: dayStart, $lte: dayEnd };
+        break;
+      case 'week':
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        dateFilter = { $gte: weekAgo };
+        break;
+      case 'month':
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        dateFilter = { $gte: monthStart };
+        break;
+      case 'year':
+        const yearStart = new Date(now.getFullYear(), 0, 1);
+        dateFilter = { $gte: yearStart };
+        break;
+    }
+  }
 
-  // Get projects where employee has tasks assigned (since every task belongs to a project)
-  const tasksWithProjects = await Task.find({ assignedTo: { $in: [employeeId] } }).select('project').distinct('project');
-  const taskProjectIds = tasksWithProjects.filter(Boolean);
+  // Build task filter
+  const taskQueryFilter = { assignedTo: { $in: [employeeId] } };
+  if (Object.keys(dateFilter).length > 0) {
+    taskQueryFilter.createdAt = dateFilter;
+  }
+
+  // Get employee's assigned tasks based on filter
+  const tasks = await Task.find(taskQueryFilter);
+
+  // For projects, we filter projects created or associated with tasks in that period
+  const teamProjects = await Project.find({ assignedTeam: { $in: [employeeId] } }).select('_id createdAt');
+
+  // Filter projects by date if applicable
+  const filteredTeamProjects = Object.keys(dateFilter).length > 0
+    ? teamProjects.filter(p => {
+      // Here we use createdAt for projects as well if we want to show "New Projects" in the period
+      // Or we stick to projects that have tasks in this period.
+      // Usually for dashboard stats, we show "Ongoing/Active" tasks in that period.
+      return true; // We'll keep projects global but tasks filtered
+    })
+    : teamProjects;
+
+  const teamProjectIds = filteredTeamProjects.map(p => p._id);
+
+  // Get projects where employee has tasks assigned in this period
+  const tasksWithProjects = tasks.map(t => t.project).filter(Boolean);
+  const taskProjectIds = [...new Set(tasksWithProjects.map(id => id.toString()))];
 
   // Combine and deduplicate project IDs
-  const allProjectIds = [...new Set([...teamProjectIds.map(id => id.toString()), ...taskProjectIds.map(id => id.toString())])];
+  const allProjectIds = [...new Set([...teamProjectIds.map(id => id.toString()), ...taskProjectIds])];
 
-  // Get all assigned projects (from team or tasks)
+  // Get projects
   const projects = await Project.find({ _id: { $in: allProjectIds } });
 
   // Calculate task statistics
-  const now = new Date();
   const threeDaysFromNow = new Date();
   threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
 
   const taskStats = {
     total: tasks.length,
     completed: tasks.filter(t => t.status === 'completed').length,
-    'in-progress': tasks.filter(t => t.status === 'in-progress').length,
-    pending: tasks.filter(t => t.status === 'pending').length,
+    'in-progress': tasks.filter(t => t.status === 'in-progress' || t.status === 'In Progress').length,
+    pending: tasks.filter(t => t.status === 'pending' || t.status === 'Pending').length,
     urgent: tasks.filter(t =>
-      (t.isUrgent || t.priority === 'urgent' || t.priority === 'high') &&
+      (t.isUrgent || t.priority === 'urgent' || t.priority === 'Urgent' || t.priority === 'high' || t.priority === 'High') &&
       t.status !== 'completed'
     ).length,
     overdue: tasks.filter(t =>

@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
-import { employeeService, socketService, employeeRequestService } from '../../DEV-services'
-import { 
+import { employeeService, socketService, employeeRequestService, getStoredEmployeeData } from '../../DEV-services'
+import {
   FiCheckSquare as CheckSquare,
   FiClock as Clock,
   FiAlertTriangle as AlertTriangle,
@@ -47,13 +47,17 @@ const Employee_dashboard = () => {
     },
     recentPointsHistory: []
   })
-  const [filter, setFilter] = useState('all')
+  const [timeFilter, setTimeFilter] = useState('all')
+  const [taskStatusFilter, setTaskStatusFilter] = useState('all')
   const [requestsCount, setRequestsCount] = useState(0)
 
   useEffect(() => {
     loadDashboardData()
+  }, [timeFilter])
+
+  useEffect(() => {
     setupWebSocket()
-    
+
     return () => {
       socketService.disconnect()
     }
@@ -63,18 +67,18 @@ const Employee_dashboard = () => {
     const token = localStorage.getItem('employeeToken')
     if (token) {
       socketService.connect(token)
-      
+
       // Listen for real-time updates
       socketService.on('task_status_updated', () => {
         loadDashboardData()
       })
-      
+
       socketService.on('employee_points_updated', (data) => {
         loadDashboardData()
         // Show points notification
         console.log(`Points updated: ${data.pointsAwarded > 0 ? '+' : ''}${data.pointsAwarded} points`)
       })
-      
+
       socketService.on('leaderboard_updated', () => {
         loadDashboardData()
       })
@@ -85,17 +89,18 @@ const Employee_dashboard = () => {
     try {
       setLoading(true)
       setError(null)
-      
+
       // Load dashboard statistics, tasks, and requests count
       const [dashboardResponse, tasksResponse, requestsResponse] = await Promise.all([
-        employeeService.getEmployeeDashboardStats(),
-        employeeService.getEmployeeTasks({ limit: 10 }),
+        employeeService.getEmployeeDashboardStats({ timeFilter }),
+        employeeService.getEmployeeTasks({ limit: 100 }), // Fetch more tasks to allow frontend filtering too
         employeeRequestService.getRequests({ direction: 'outgoing', limit: 1 }).catch(() => ({ pagination: { total: 0 } }))
       ])
-      
-      // Ensure dashboardResponse has the correct structure
-      if (dashboardResponse && dashboardResponse.tasks) {
-        setDashboardStats(dashboardResponse)
+
+      // Handle stats
+      const stats = dashboardResponse?.data || dashboardResponse
+      if (stats && stats.tasks) {
+        setDashboardStats(stats)
       } else {
         // Fallback to default structure
         setDashboardStats({
@@ -105,27 +110,17 @@ const Employee_dashboard = () => {
           recentPointsHistory: []
         })
       }
-      
+
       // Handle tasks response - could be { data: [...] } or just [...]
       const tasksData = tasksResponse?.data || tasksResponse || []
       setTasks(Array.isArray(tasksData) ? tasksData : [])
-      
+
       // Handle requests count - get total from pagination
-      // The service returns the full response object, so pagination is at the top level
       const requestsTotal = requestsResponse?.pagination?.total || 0
       setRequestsCount(requestsTotal)
     } catch (error) {
       console.error('Error loading dashboard data:', error)
       setError('Failed to load dashboard data. Please try again.')
-      // Set default values on error
-      setDashboardStats({
-        tasks: { total: 0, completed: 0, 'in-progress': 0, pending: 0, urgent: 0, overdue: 0, dueSoon: 0 },
-        projects: { total: 0, active: 0, completed: 0 },
-        points: { current: 0, rank: 0, totalEmployees: 0, tasksCompleted: 0, tasksOnTime: 0, tasksOverdue: 0 },
-        recentPointsHistory: []
-      })
-      setTasks([])
-      setRequestsCount(0)
     } finally {
       setLoading(false)
     }
@@ -153,10 +148,10 @@ const Employee_dashboard = () => {
 
   const filteredTasks = useMemo(() => {
     if (!tasks || !tasks.length) return []
-    switch (filter) {
+    switch (taskStatusFilter) {
       case 'due-soon':
         return tasks.filter(task => {
-          const diffDays = Math.ceil((new Date(task.dueDate) - new Date())/(1000*60*60*24))
+          const diffDays = Math.ceil((new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24))
           return diffDays <= 3 && diffDays >= 0 && task.status !== 'completed'
         })
       case 'overdue':
@@ -164,15 +159,15 @@ const Employee_dashboard = () => {
       case 'done':
         return tasks.filter(task => task.status === 'completed')
       case 'high-priority':
-        return tasks.filter(task => (task.priority === 'high' || task.priority === 'urgent') && task.status !== 'completed')
+        return tasks.filter(task => (task.priority === 'high' || task.priority === 'urgent' || task.priority === 'High' || task.priority === 'Urgent') && task.status !== 'completed')
       default:
         return tasks
     }
-  }, [tasks, filter])
+  }, [tasks, taskStatusFilter])
 
   // Calculate overall progress
-  const overallProgress = dashboardStats.tasks.total > 0 
-    ? Math.round((dashboardStats.tasks.completed / dashboardStats.tasks.total) * 100) 
+  const overallProgress = dashboardStats.tasks.total > 0
+    ? Math.round((dashboardStats.tasks.completed / dashboardStats.tasks.total) * 100)
     : 0
 
   if (loading) {
@@ -203,7 +198,7 @@ const Employee_dashboard = () => {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
               <div className="flex items-center">
                 <div className="text-red-600 text-sm">{error}</div>
-                <button 
+                <button
                   onClick={() => setError(null)}
                   className="ml-auto text-red-400 hover:text-red-600"
                 >
@@ -213,9 +208,26 @@ const Employee_dashboard = () => {
             </div>
           )}
 
-          <div className="mb-6 md:mb-8">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Welcome, Employee!</h1>
-            <p className="text-sm text-gray-600 mt-1">Appzeto loves you!</p>
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 md:mb-8 gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Welcome, {getStoredEmployeeData()?.name || 'Employee'}!</h1>
+              <p className="text-sm text-gray-600 mt-1">Appzeto loves you!</p>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium text-gray-600">Filter:</span>
+              <select
+                value={timeFilter}
+                onChange={(e) => setTimeFilter(e.target.value)}
+                className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+              >
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
@@ -263,7 +275,7 @@ const Employee_dashboard = () => {
 
           {/* Urgent Tasks Card */}
           <div className="mb-6 md:mb-8">
-            <div 
+            <div
               onClick={() => navigate('/employee-tasks?filter=urgent')}
               className="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-4 shadow-sm border border-red-200 cursor-pointer hover:shadow-md hover:border-red-300 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
             >
@@ -277,16 +289,16 @@ const Employee_dashboard = () => {
                     <p className="text-xs text-red-700">Critical tasks need immediate attention</p>
                   </div>
                 </div>
-                 <div className="bg-red-300 text-red-800 px-4 py-2 rounded-xl shadow-sm animate-pulse">
-                   <p className="text-2xl font-bold">{dashboardStats.tasks.urgent}</p>
-                 </div>
+                <div className="bg-red-300 text-red-800 px-4 py-2 rounded-xl shadow-sm animate-pulse">
+                  <p className="text-2xl font-bold">{dashboardStats.tasks.urgent}</p>
+                </div>
               </div>
             </div>
           </div>
 
           {/* My Requests Card */}
           <div className="mb-6 md:mb-8">
-            <div 
+            <div
               onClick={() => navigate('/employee-requests')}
               className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-2xl p-4 shadow-sm border border-teal-200 cursor-pointer hover:shadow-md hover:border-teal-300 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
             >
@@ -300,9 +312,9 @@ const Employee_dashboard = () => {
                     <p className="text-xs text-teal-700">Send requests to PM and clients</p>
                   </div>
                 </div>
-                 <div className="bg-teal-300 text-teal-800 px-4 py-2 rounded-xl shadow-sm">
-                   <p className="text-2xl font-bold">{requestsCount}</p>
-                 </div>
+                <div className="bg-teal-300 text-teal-800 px-4 py-2 rounded-xl shadow-sm">
+                  <p className="text-2xl font-bold">{requestsCount}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -326,12 +338,12 @@ const Employee_dashboard = () => {
           <div className="md:hidden mb-6">
             <div className="grid grid-cols-2 gap-3">
               {[
-                { key: 'all', label: 'All', count: dashboardStats.tasks.total },
+                { key: 'all', label: 'All Tasks', count: dashboardStats.tasks.total },
                 { key: 'done', label: 'Done', count: dashboardStats.tasks.completed },
                 { key: 'due-soon', label: 'Due Soon', count: dashboardStats.tasks.dueSoon },
                 { key: 'overdue', label: 'Overdue', count: dashboardStats.tasks.overdue }
               ].map(({ key, label, count }) => (
-                <button key={key} onClick={() => setFilter(key)} className={`p-4 rounded-2xl shadow-sm border transition-all ${filter === key ? 'bg-primary text-white border-primary shadow-md' : 'bg-white text-gray-600 border-gray-200 active:scale-95'}`}>
+                <button key={key} onClick={() => setTaskStatusFilter(key)} className={`p-4 rounded-2xl shadow-sm border transition-all ${taskStatusFilter === key ? 'bg-primary text-white border-primary shadow-md' : 'bg-white text-gray-600 border-gray-200 active:scale-95'}`}>
                   <div className="flex flex-col items-center space-y-1">
                     <span className="text-sm font-medium">{label}</span>
                     <span className="text-lg font-bold">{count}</span>
@@ -344,12 +356,12 @@ const Employee_dashboard = () => {
           <div className="hidden md:block mb-8">
             <div className="flex gap-2 flex-wrap">
               {[
-                { key: 'all', label: 'All', count: dashboardStats.tasks.total },
+                { key: 'all', label: 'All Tasks', count: dashboardStats.tasks.total },
                 { key: 'done', label: 'Done', count: dashboardStats.tasks.completed },
                 { key: 'due-soon', label: 'Due Soon', count: dashboardStats.tasks.dueSoon },
                 { key: 'overdue', label: 'Overdue', count: dashboardStats.tasks.overdue }
               ].map(({ key, label, count }) => (
-                <button key={key} onClick={() => setFilter(key)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${filter === key ? 'bg-primary text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+                <button key={key} onClick={() => setTaskStatusFilter(key)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${taskStatusFilter === key ? 'bg-primary text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
                   {label} ({count})
                 </button>
               ))}
@@ -397,7 +409,7 @@ const Employee_dashboard = () => {
                     <div className="flex items-center space-x-3">
                       <div className="flex items-center space-x-1 text-gray-500">
                         <User className="h-3.5 w-3.5" />
-                        <span className="text-xs font-medium">{task.assignedTo?.[0]?.fullName || 'Unassigned'}</span>
+                        <span className="text-xs font-medium">{task.assignedTo?.[0]?.name || task.assignedTo?.[0]?.fullName || 'Unassigned'}</span>
                       </div>
                       <div className="flex items-center space-x-1 text-gray-500">
                         <Calendar className="h-3.5 w-3.5" />

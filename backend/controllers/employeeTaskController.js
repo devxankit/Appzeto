@@ -60,30 +60,38 @@ const getEmployeeTasks = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Get task details (Employee view - only assigned tasks)
+// @desc    Get task details (Employee view - assigned tasks OR tasks in projects they're on)
 // @route   GET /api/employee/tasks/:id
 // @access  Employee only
 const getEmployeeTaskById = asyncHandler(async (req, res, next) => {
   const employeeId = req.employee?.id || req.user?.id;
-  
+
   if (!employeeId) {
     return res.status(401).json({
       success: false,
       message: 'Employee ID not found'
     });
   }
-  
-  const task = await Task.findOne({
-    _id: req.params.id,
-    assignedTo: { $in: [employeeId] }
-  })
-    .populate('project', 'name status description')
+
+  const task = await Task.findOne({ _id: req.params.id })
+    .populate('project', 'name status description assignedTeam')
     .populate('milestone', 'title status description')
     .populate('assignedTo', 'name email department position')
     .populate('createdBy', 'name email');
 
   if (!task) {
-    return next(new ErrorResponse('Task not found or you are not assigned to this task', 404));
+    return next(new ErrorResponse('Task not found', 404));
+  }
+
+  const isAssignedToTask = task.assignedTo && task.assignedTo.some(
+    a => (a && (a._id?.toString() === employeeId || a.toString() === employeeId))
+  );
+  const isOnProjectTeam = task.project && task.project.assignedTeam && task.project.assignedTeam.some(
+    id => (id && (id.toString() === employeeId || (id._id && id._id.toString() === employeeId)))
+  );
+
+  if (!isAssignedToTask && !isOnProjectTeam) {
+    return next(new ErrorResponse('Task not found or you do not have access to this task', 404));
   }
 
   res.json({

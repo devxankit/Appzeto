@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
-import { 
-  Users, 
-  FolderOpen, 
-  DollarSign, 
+import {
+  Users,
+  FolderOpen,
+  DollarSign,
   TrendingUp,
   Activity,
   Award,
@@ -57,13 +57,13 @@ import { MagicCard } from '../../../components/ui/magic-card'
 import { BorderBeam } from '../../../components/ui/border-beam'
 import { SparklesText } from '../../../components/ui/sparkles-text'
 import { AuroraText } from '../../../components/ui/aurora-text'
-import { 
-  LineChart as RechartsLineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  LineChart as RechartsLineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart as RechartsPieChart,
   Pie,
@@ -118,7 +118,7 @@ const Admin_dashboard = () => {
       newThisMonth: 0,
       growth: 0
     },
-    
+
     // Project Statistics
     projects: {
       total: 0,
@@ -130,7 +130,7 @@ const Admin_dashboard = () => {
       avgProjectValue: 0,
       completionRate: 0
     },
-    
+
     // Sales Statistics
     sales: {
       totalLeads: 0,
@@ -140,7 +140,7 @@ const Admin_dashboard = () => {
       avgDealSize: 0,
       growth: 0
     },
-    
+
     // Financial Statistics
     finance: {
       totalRevenue: 0,
@@ -268,13 +268,13 @@ const Admin_dashboard = () => {
     try {
       // Get date range based on current filter
       const dateRange = getDateRange();
-      
+
       // Build query params with date filters for ALL filter types
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate
       };
-      
+
       const response = await adminSalesService.getCategoryAnalytics(params);
       if (response.success && response.data) {
         // Map and sort categories - show ALL categories (backend now returns all categories)
@@ -296,7 +296,7 @@ const Admin_dashboard = () => {
             }
             return b.totalLeads - a.totalLeads;
           });
-        
+
         setProjectCategoryPerformance(sortedCategories);
       } else {
         setProjectCategoryPerformance([]);
@@ -332,7 +332,7 @@ const Admin_dashboard = () => {
       orange: 'text-orange-600'
     }
     const iconClass = `h-3 w-3 ${colorClasses[color] || 'text-gray-600'}`
-    
+
     switch (iconName) {
       case 'trending-up':
         return <TrendingUp className={iconClass} />
@@ -355,7 +355,7 @@ const Admin_dashboard = () => {
     const date = new Date(dateString)
     const now = new Date()
     const diffInSeconds = Math.floor((now - date) / 1000)
-    
+
     if (diffInSeconds < 60) return 'Just now'
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`
@@ -374,12 +374,12 @@ const Admin_dashboard = () => {
         endISO: null
       }
     }
-    
+
     const today = new Date()
     today.setHours(23, 59, 59, 999) // End of today
-    
+
     let start, end
-    
+
     switch (filterType) {
       case 'day':
         start = new Date(today)
@@ -420,7 +420,7 @@ const Admin_dashboard = () => {
         start.setHours(0, 0, 0, 0)
         end = today
     }
-    
+
     return {
       startDate: start.toISOString().split('T')[0],
       endDate: end.toISOString().split('T')[0],
@@ -474,7 +474,7 @@ const Admin_dashboard = () => {
 
       const financeParams = {}
       const dashboardParams = {}
-      
+
       // Build dashboard params with date filters
       if (filterType === 'all') {
         // For 'all' filter, don't pass any timeFilter or date params
@@ -502,114 +502,114 @@ const Admin_dashboard = () => {
       ])
 
       if (dashboardResponse && dashboardResponse.success && dashboardResponse.data) {
-          let dashboardData = { ...dashboardResponse.data }
-          
-          // Override financial data with comprehensive finance statistics if available
-          const financeData = financeResponse?.success && financeResponse?.data ? financeResponse.data : null
-          
-          if (financeData) {
-            // Update finance section with filtered data
-            dashboardData.finance = {
-              totalRevenue: financeData.totalRevenue || 0,
-              monthlyRevenue: financeData.totalRevenue || 0, // Use filtered revenue
-              outstandingPayments: financeData.pendingAmounts?.totalPendingReceivables || 0,
-              expenses: financeData.totalExpenses || 0,
-              profit: financeData.netProfit || 0,
-              profitMargin: parseFloat(financeData.profitMargin || 0),
-              growth: parseFloat(financeData.revenueChange || 0)
-            }
-            
-            // Update financial metrics with filtered data (not "today" but filtered period)
-            dashboardData.today = {
-              ...dashboardData.today,
-              earnings: financeData.totalRevenue || financeData.todayEarnings || 0,
-              expenses: financeData.totalExpenses || 0,
-              sales: financeData.totalRevenue || 0,
-              pendingAmount: financeData.pendingAmounts?.totalPendingReceivables || 0,
-              profit: financeData.netProfit || 0,
-              loss: (financeData.totalExpenses || 0) > (financeData.totalRevenue || 0) 
-                ? (financeData.totalExpenses - financeData.totalRevenue) 
-                : 0,
-              earningsGrowth: parseFloat(financeData.revenueChange || 0),
-              expensesGrowth: parseFloat(financeData.expenseChange || 0),
-              salesGrowth: parseFloat(financeData.revenueChange || 0),
-              profitGrowth: parseFloat(financeData.profitChange || 0),
-              lossGrowth: 0
-            }
+        let dashboardData = { ...dashboardResponse.data }
+
+        // Override financial data with comprehensive finance statistics if available
+        const financeData = financeResponse?.success && financeResponse?.data ? financeResponse.data : null
+
+        if (financeData) {
+          // Update finance section with filtered data
+          dashboardData.finance = {
+            totalRevenue: financeData.totalRevenue || 0,
+            monthlyRevenue: financeData.totalRevenue || 0, // Use filtered revenue
+            outstandingPayments: financeData.pendingAmounts?.totalPendingReceivables || 0,
+            expenses: financeData.totalExpenses || 0,
+            profit: financeData.netProfit || 0,
+            profitMargin: parseFloat(financeData.profitMargin || 0),
+            growth: parseFloat(financeData.revenueChange || 0)
           }
-          
-          setDashboardData(dashboardData)
-          
-          // Update notifications with real data
-          const updatedNotifications = [
-            {
-              id: 1,
-              type: 'warning',
-              title: 'Payment Overdue',
-              message: `${dashboardData.projects.overdue || 0} projects have overdue payments`,
-              time: 'Just now',
-              icon: AlertTriangle
-            },
-            {
-              id: 2,
-              type: 'success',
-              title: 'Project Completed',
-              message: `${dashboardData.projects.completed || 0} projects completed successfully`,
-              time: 'Just now',
-              icon: CheckCircle
-            },
-            {
-              id: 3,
-              type: 'info',
-              title: 'New User Registration',
-              message: `${dashboardData.users.newThisMonth || 0} new users registered this month`,
-              time: 'Just now',
-              icon: Users
-            },
-            {
-              id: 4,
-              type: 'error',
-              title: 'System Alert',
-              message: `Server load: ${dashboardData.system.serverLoad || 0}%`,
-              time: 'Just now',
-              icon: Server
-            }
-          ]
-          setNotifications(updatedNotifications)
-        } else {
-          throw new Error('Failed to load dashboard data')
+
+          // Update financial metrics with filtered data (not "today" but filtered period)
+          dashboardData.today = {
+            ...dashboardData.today,
+            earnings: financeData.totalRevenue || financeData.todayEarnings || 0,
+            expenses: financeData.totalExpenses || 0,
+            sales: financeData.totalSales || 0,
+            pendingAmount: financeData.pendingAmounts?.totalPendingReceivables || 0,
+            profit: financeData.netProfit || 0,
+            loss: (financeData.totalExpenses || 0) > (financeData.totalRevenue || 0)
+              ? (financeData.totalExpenses - financeData.totalRevenue)
+              : 0,
+            earningsGrowth: parseFloat(financeData.revenueChange || 0),
+            expensesGrowth: parseFloat(financeData.expenseChange || 0),
+            salesGrowth: parseFloat(financeData.revenueChange || 0),
+            profitGrowth: parseFloat(financeData.profitChange || 0),
+            lossGrowth: 0
+          }
         }
-        
-        // Fetch top channel partners, category performance, and financial details separately
-        await Promise.all([
-          fetchTopChannelPartners(),
-          fetchProjectCategoryPerformance(),
-          fetchCategoryFinancialDetails()
-        ])
-      } catch (err) {
-        console.error('Error loading dashboard data:', err)
-        
-        // Check if it's a connection error
-        const errorMessage = err.message || 'Failed to load dashboard data'
-        const isConnectionError = err.name === 'ConnectionError' ||
-                                  errorMessage.includes('Backend server is not running') ||
-                                  errorMessage.includes('Failed to fetch') || 
-                                  errorMessage.includes('ERR_CONNECTION_REFUSED') ||
-                                  errorMessage.includes('NetworkError') ||
-                                  String(err).includes('ERR_CONNECTION_REFUSED')
-        
-        if (isConnectionError) {
-          setError('Backend server is not running. Please start the backend server on port 5000.')
-        } else {
-          setError(errorMessage)
-        }
-        
-        // Set notifications with mock data on error
-        setNotifications(mockNotifications)
-      } finally {
-        setIsLoading(false)
+
+        setDashboardData(dashboardData)
+
+        // Update notifications with real data
+        const updatedNotifications = [
+          {
+            id: 1,
+            type: 'warning',
+            title: 'Payment Overdue',
+            message: `${dashboardData.projects.overdue || 0} projects have overdue payments`,
+            time: 'Just now',
+            icon: AlertTriangle
+          },
+          {
+            id: 2,
+            type: 'success',
+            title: 'Project Completed',
+            message: `${dashboardData.projects.completed || 0} projects completed successfully`,
+            time: 'Just now',
+            icon: CheckCircle
+          },
+          {
+            id: 3,
+            type: 'info',
+            title: 'New User Registration',
+            message: `${dashboardData.users.newThisMonth || 0} new users registered this month`,
+            time: 'Just now',
+            icon: Users
+          },
+          {
+            id: 4,
+            type: 'error',
+            title: 'System Alert',
+            message: `Server load: ${dashboardData.system.serverLoad || 0}%`,
+            time: 'Just now',
+            icon: Server
+          }
+        ]
+        setNotifications(updatedNotifications)
+      } else {
+        throw new Error('Failed to load dashboard data')
       }
+
+      // Fetch top channel partners, category performance, and financial details separately
+      await Promise.all([
+        fetchTopChannelPartners(),
+        fetchProjectCategoryPerformance(),
+        fetchCategoryFinancialDetails()
+      ])
+    } catch (err) {
+      console.error('Error loading dashboard data:', err)
+
+      // Check if it's a connection error
+      const errorMessage = err.message || 'Failed to load dashboard data'
+      const isConnectionError = err.name === 'ConnectionError' ||
+        errorMessage.includes('Backend server is not running') ||
+        errorMessage.includes('Failed to fetch') ||
+        errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+        errorMessage.includes('NetworkError') ||
+        String(err).includes('ERR_CONNECTION_REFUSED')
+
+      if (isConnectionError) {
+        setError('Backend server is not running. Please start the backend server on port 5000.')
+      } else {
+        setError(errorMessage)
+      }
+
+      // Set notifications with mock data on error
+      setNotifications(mockNotifications)
+    } finally {
+      setIsLoading(false)
     }
+  }
 
   useEffect(() => {
     // Load dashboard data when filter changes
@@ -627,7 +627,7 @@ const Admin_dashboard = () => {
         setShowFilterDropdown(false)
       }
     }
-    
+
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showFilterDropdown])
@@ -661,10 +661,10 @@ const Admin_dashboard = () => {
   }
 
   if (error) {
-    const isConnectionError = error.includes('Backend server is not running') || 
-                              error.includes('ERR_CONNECTION_REFUSED') ||
-                              error.includes('Failed to fetch');
-    
+    const isConnectionError = error.includes('Backend server is not running') ||
+      error.includes('ERR_CONNECTION_REFUSED') ||
+      error.includes('Failed to fetch');
+
     return (
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
@@ -689,7 +689,7 @@ const Admin_dashboard = () => {
                   </ol>
                 </div>
               )}
-              <Button 
+              <Button
                 onClick={loadDashboardData}
                 variant="outline"
                 className={isConnectionError ? 'border-yellow-300 text-yellow-700 hover:bg-yellow-100' : ''}
@@ -707,10 +707,10 @@ const Admin_dashboard = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       {/* Navbar */}
       <Admin_navbar />
-      
+
       {/* Sidebar */}
       <Admin_sidebar />
-      
+
       {/* Main Content */}
       <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-6">
         <div className="max-w-7xl mx-auto space-y-6">
@@ -733,9 +733,9 @@ const Admin_dashboard = () => {
             <div className="flex items-center gap-3 flex-wrap">
               {/* Filter Dropdown */}
               <div className="relative filter-dropdown-container">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="gap-2 shadow-sm hover:shadow border-gray-200 bg-white hover:bg-gray-50"
                   onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                 >
@@ -743,7 +743,7 @@ const Admin_dashboard = () => {
                   <span className="font-medium text-gray-700">{getFilterLabel()}</span>
                   <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${showFilterDropdown ? 'rotate-180' : ''}`} />
                 </Button>
-                
+
                 {/* Filter Dropdown Menu */}
                 {showFilterDropdown && (
                   <motion.div
@@ -773,11 +773,10 @@ const Admin_dashboard = () => {
                               setFilterType(type)
                               setShowFilterDropdown(false)
                             }}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                              filterType === type
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${filterType === type
                                 ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
                                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                            }`}
+                              }`}
                           >
                             <div className={`p-1.5 rounded-lg ${filterType === type ? 'bg-blue-100' : 'bg-gray-100'}`}>
                               <Icon className={`h-3.5 w-3.5 ${filterType === type ? 'text-blue-600' : 'text-gray-500'}`} />
@@ -791,16 +790,15 @@ const Admin_dashboard = () => {
                     <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
                       <button
                         onClick={() => {
-                            setTempStartDate(startDate)
-                            setTempEndDate(endDate)
-                            setFilterType('custom')
-                            setShowDateRangePicker(true)
-                          }}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                          filterType === 'custom'
+                          setTempStartDate(startDate)
+                          setTempEndDate(endDate)
+                          setFilterType('custom')
+                          setShowDateRangePicker(true)
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${filterType === 'custom'
                             ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
                             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }`}
+                          }`}
                       >
                         <div className={`p-1.5 rounded-lg ${filterType === 'custom' ? 'bg-blue-100' : 'bg-gray-100'}`}>
                           <CalendarDays className={`h-3.5 w-3.5 ${filterType === 'custom' ? 'text-blue-600' : 'text-gray-500'}`} />
@@ -840,7 +838,7 @@ const Admin_dashboard = () => {
                         <X className="h-5 w-5 text-gray-500" />
                       </button>
                     </div>
-                    
+
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -854,7 +852,7 @@ const Admin_dashboard = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           End Date
@@ -868,7 +866,7 @@ const Admin_dashboard = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
-                      
+
                       <div className="flex gap-3 pt-4">
                         <Button
                           onClick={() => {
@@ -903,9 +901,9 @@ const Admin_dashboard = () => {
                 </motion.div>
               )}
 
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="gap-2"
                 onClick={loadDashboardData}
               >
@@ -920,7 +918,7 @@ const Admin_dashboard = () => {
           </motion.div>
 
           {/* Today's Financial Metrics Grid */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
@@ -1024,7 +1022,7 @@ const Admin_dashboard = () => {
           </motion.div>
 
           {/* Performance Metrics Section */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
@@ -1102,7 +1100,7 @@ const Admin_dashboard = () => {
           </motion.div>
 
           {/* Analytics Section */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
@@ -1124,23 +1122,23 @@ const Admin_dashboard = () => {
                   <AreaChart data={revenueData}>
                     <defs>
                       <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                    <XAxis 
-                      dataKey="month" 
+                    <XAxis
+                      dataKey="month"
                       axisLine={false}
                       tickLine={false}
                       tick={{ fill: '#6B7280', fontSize: 11 }}
                     />
-                    <YAxis 
+                    <YAxis
                       axisLine={false}
                       tickLine={false}
                       tick={{ fill: '#6B7280', fontSize: 11 }}
                     />
-                    <Tooltip 
+                    <Tooltip
                       contentStyle={{
                         backgroundColor: 'white',
                         border: 'none',
@@ -1148,17 +1146,17 @@ const Admin_dashboard = () => {
                         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                         fontSize: '12px'
                       }}
-                      formatter={(value) => [formatCurrency(value), 'Revenue']} 
-                  />
-                  <Area 
-                    type="monotone" 
+                      formatter={(value) => [formatCurrency(value), 'Revenue']}
+                    />
+                    <Area
+                      type="monotone"
                       dataKey="revenue"
-                    stroke="#10B981" 
+                      stroke="#10B981"
                       strokeWidth={2}
                       fill="url(#revenueGradient)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
             </div>
 
@@ -1190,7 +1188,7 @@ const Admin_dashboard = () => {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip 
+                      <Tooltip
                         contentStyle={{
                           backgroundColor: 'white',
                           border: 'none',
@@ -1205,8 +1203,8 @@ const Admin_dashboard = () => {
                 <div className="flex-1 flex flex-col justify-center space-y-3 pl-6">
                   {projectStatusData.map((item, index) => (
                     <div key={index} className="flex items-center space-x-3">
-                      <div 
-                        className="w-3 h-3 rounded-full shadow-sm" 
+                      <div
+                        className="w-3 h-3 rounded-full shadow-sm"
                         style={{ backgroundColor: item.color }}
                       ></div>
                       <div>
@@ -1221,7 +1219,7 @@ const Admin_dashboard = () => {
           </motion.div>
 
           {/* Project Category Performance & Top Performing Channel Partners */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
@@ -1247,7 +1245,7 @@ const Admin_dashboard = () => {
                         <div className="flex items-center gap-2">
                           <Trophy className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                           <span className="text-xs font-medium text-emerald-900 leading-tight">
-                            Best: <span className="font-bold">{projectCategoryPerformance[0].name}</span> 
+                            Best: <span className="font-bold">{projectCategoryPerformance[0].name}</span>
                             {' '}({projectCategoryPerformance[0].convertedLeads} leads, {projectCategoryPerformance[0].conversionRate.toFixed(1)}%)
                           </span>
                         </div>
@@ -1256,14 +1254,14 @@ const Admin_dashboard = () => {
                     {/* Column Chart */}
                     <div className="flex-1 min-h-[280px] max-h-[400px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart 
+                        <BarChart
                           data={projectCategoryPerformance}
                           margin={{ top: 10, right: 10, left: 5, bottom: 50 }}
                           barCategoryGap="15%"
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                          <XAxis 
-                            dataKey="name" 
+                          <XAxis
+                            dataKey="name"
                             angle={-45}
                             textAnchor="end"
                             height={50}
@@ -1272,13 +1270,13 @@ const Admin_dashboard = () => {
                             tick={{ fill: '#6B7280', fontSize: 9, fontWeight: 500 }}
                             interval={0}
                           />
-                          <YAxis 
+                          <YAxis
                             axisLine={false}
                             tickLine={false}
                             tick={{ fill: '#9CA3AF', fontSize: 9 }}
                             width={35}
                           />
-                          <Tooltip 
+                          <Tooltip
                             contentStyle={{
                               backgroundColor: 'white',
                               border: '1px solid #E5E7EB',
@@ -1295,14 +1293,14 @@ const Admin_dashboard = () => {
                               return [value, name];
                             }}
                           />
-                          <Bar 
-                            dataKey="convertedLeads" 
+                          <Bar
+                            dataKey="convertedLeads"
                             radius={[3, 3, 0, 0]}
                             maxBarSize={40}
                           >
                             {projectCategoryPerformance.map((entry, index) => (
-                              <Cell 
-                                key={`cell-${index}`} 
+                              <Cell
+                                key={`cell-${index}`}
                                 fill={entry.color || '#6366f1'}
                                 style={{ transition: 'opacity 0.2s' }}
                               />
@@ -1380,7 +1378,7 @@ const Admin_dashboard = () => {
 
           {/* Category Financial Details Cards */}
           {categoryFinancialDetails.length > 0 && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.6 }}
@@ -1401,7 +1399,7 @@ const Admin_dashboard = () => {
                   >
                     {/* Category Header */}
                     <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
-                      <div 
+                      <div
                         className="w-8 h-8 rounded-md flex items-center justify-center text-white font-semibold text-xs shrink-0"
                         style={{ backgroundColor: category.categoryColor || '#6366f1' }}
                       >
@@ -1467,8 +1465,8 @@ const Admin_dashboard = () => {
             </motion.div>
           )}
 
-          </div>
         </div>
+      </div>
     </div>
   )
 }
