@@ -8,15 +8,19 @@ export const salesDemoService = {
     if (params.category && params.category !== 'all') qs.append('category', params.category)
     const url = `/sales/demo-requests${qs.toString() ? `?${qs.toString()}` : ''}`
     const res = await apiRequest(url, { method: 'GET' })
-    return res.data || { items: [], stats: { total: 0, pending: 0, scheduled: 0, completed: 0 } }
+    const data = res?.data || res
+    return {
+      items: Array.isArray(data?.items) ? data.items : (data?.data ?? []),
+      stats: data?.stats && typeof data.stats === 'object' ? data.stats : { total: 0, pending: 0, scheduled: 0, completed: 0 }
+    }
   },
 
-  async updateStatus(leadId, status) {
-    const res = await apiRequest(`/sales/demo-requests/${leadId}/status`, {
+  async updateStatus(demoRequestIdOrLeadId, status) {
+    const res = await apiRequest(`/sales/demo-requests/${demoRequestIdOrLeadId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status })
     })
-    return res.data
+    return res?.data ?? res
   }
 }
 

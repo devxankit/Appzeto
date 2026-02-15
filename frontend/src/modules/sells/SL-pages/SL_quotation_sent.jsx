@@ -44,9 +44,11 @@ const SL_quotation_sent = () => {
   const [conversionFormData, setConversionFormData] = useState({
     projectName: '',
     categoryId: '',
-    estimatedBudget: '',
-    startDate: '',
-    notes: ''
+    totalCost: '',
+    finishedDays: '',
+    advanceReceived: '',
+    includeGST: false,
+    description: ''
   })
 
   // Fetch categories and leads on component mount
@@ -164,10 +166,25 @@ const SL_quotation_sent = () => {
   }
 
   // Handle conversion form submission
+  const parseAmount = (val) => Math.round(Number(String(val || '').replace(/,/g, '')) || 0)
   const handleConversionFormSubmit = async (e) => {
     e.preventDefault()
+    const totalCostNum = parseAmount(conversionFormData.totalCost)
+    if (!conversionFormData.totalCost || totalCostNum <= 0) {
+      toast.error('Please enter a valid project cost (greater than zero)')
+      return
+    }
     try {
-      const result = await salesLeadService.convertLeadToClient(selectedLeadForConversion, conversionFormData)
+      const payload = {
+        projectName: conversionFormData.projectName.trim(),
+        categoryId: conversionFormData.categoryId,
+        totalCost: totalCostNum,
+        finishedDays: conversionFormData.finishedDays ? parseInt(conversionFormData.finishedDays, 10) : undefined,
+        advanceReceived: parseAmount(conversionFormData.advanceReceived),
+        includeGST: conversionFormData.includeGST || false,
+        description: (conversionFormData.description || '').trim()
+      }
+      await salesLeadService.convertLeadToClient(selectedLeadForConversion, payload)
       
       toast.success('Lead converted to client successfully')
       
@@ -183,9 +200,11 @@ const SL_quotation_sent = () => {
       setConversionFormData({
         projectName: '',
         categoryId: '',
-        estimatedBudget: '',
-        startDate: '',
-        notes: ''
+        totalCost: '',
+        finishedDays: '',
+        advanceReceived: '',
+        includeGST: false,
+        description: ''
       })
       setShowConversionForm(false)
       setSelectedLeadForConversion(null)
@@ -627,42 +646,72 @@ const SL_quotation_sent = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Estimated Budget *
+                    Total Cost (₹) *
                   </label>
                   <input
                     type="number"
-                    value={conversionFormData.estimatedBudget}
-                    onChange={(e) => setConversionFormData(prev => ({ ...prev, estimatedBudget: e.target.value }))}
+                    min="1"
+                    step="1"
+                    value={conversionFormData.totalCost}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, totalCost: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
-                    placeholder="Enter estimated budget"
+                    placeholder="Enter project total cost"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date *
+                    Advance Received (₹)
                   </label>
                   <input
-                    type="date"
-                    value={conversionFormData.startDate}
-                    onChange={(e) => setConversionFormData(prev => ({ ...prev, startDate: e.target.value }))}
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={conversionFormData.advanceReceived}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, advanceReceived: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                    min={new Date().toISOString().split('T')[0]}
+                    placeholder="0"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
+                    Finished Days
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={conversionFormData.finishedDays}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, finishedDays: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Optional"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="includeGST-quotation"
+                    checked={conversionFormData.includeGST}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, includeGST: e.target.checked }))}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="includeGST-quotation" className="text-sm font-medium text-gray-700">
+                    Include GST
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
                   </label>
                   <textarea
-                    value={conversionFormData.notes}
-                    onChange={(e) => setConversionFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    value={conversionFormData.description}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, description: e.target.value }))}
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Add any notes about this conversion..."
+                    placeholder="Add project description..."
                   />
                 </div>
 

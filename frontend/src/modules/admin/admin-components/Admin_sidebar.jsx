@@ -15,7 +15,8 @@ import {
   Handshake,
   Activity,
   Home,
-  Receipt
+  Receipt,
+  Settings
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { adminStorage } from '../admin-services/baseApiService'
@@ -144,6 +145,12 @@ const Admin_sidebar = ({ isOpen, onClose }) => {
       label: 'Recent Activities',
       path: '/admin-recent-activities',
       icon: Activity
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      path: '/admin-settings',
+      icon: Settings
     }
   ]
 
@@ -161,7 +168,9 @@ const Admin_sidebar = ({ isOpen, onClose }) => {
       return menuItems.filter(item => item.id === 'project-expenses-management')
     }
     
-    // Admin and other roles see all items
+    // HR does not see sidebar (returns null above)
+    // Admin sees all items including Settings
+    // Settings is admin-only - exclude from accountant/pem (already filtered above)
     return menuItems
   }
 

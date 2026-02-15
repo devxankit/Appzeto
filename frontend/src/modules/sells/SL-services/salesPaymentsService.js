@@ -33,6 +33,7 @@ export const salesPaymentsService = {
         amount: payload.amount,
         accountId: payload.accountId,
         method: payload.method,
+        referenceId: payload.referenceId || undefined,
         notes: payload.notes
       })
     })

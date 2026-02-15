@@ -122,11 +122,16 @@ const SL_followup = () => {
     })
     
     // Sort by date and time (earliest first)
-    return items.sort((a, b) => {
-      const dateA = new Date(`${a.scheduledDate}T${a.scheduledTime || '00:00'}`)
-      const dateB = new Date(`${b.scheduledDate}T${b.scheduledTime || '00:00'}`)
-      return dateA - dateB
-    })
+    const toSortDate = (item) => {
+      const d = item.scheduledDate
+      const t = item.scheduledTime
+      if (typeof d === 'string' && d.includes('T')) {
+        return new Date(d)
+      }
+      const dateStr = typeof d === 'string' ? d : (d ? new Date(d).toISOString().split('T')[0] : '')
+      return new Date(`${dateStr}T${t || '00:00'}`)
+    }
+    return items.sort((a, b) => toSortDate(a) - toSortDate(b))
   }, [leadsData])
 
   // Filter follow-up items

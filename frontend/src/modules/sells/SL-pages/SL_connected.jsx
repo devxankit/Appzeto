@@ -341,12 +341,6 @@ const SL_connected = () => {
                     Send Quotation
                   </button>
                   <button
-                    onClick={() => handleStatusChange(lead._id, 'dq_sent')}
-                    className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors duration-200"
-                  >
-                    Send D&Q
-                  </button>
-                  <button
                     onClick={() => handleStatusChange(lead._id, 'not_interested')}
                     className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
                   >
@@ -491,24 +485,6 @@ const SL_connected = () => {
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
                   >
                     Send Quotation
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(lead._id, 'dq_sent')}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors duration-200"
-                  >
-                    Send D&Q
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(lead._id, 'app_client')}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors duration-200"
-                  >
-                    App Client
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(lead._id, 'web')}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-cyan-50 hover:text-cyan-700 transition-colors duration-200"
-                  >
-                    Web Client
                   </button>
                   <button
                     onClick={() => handleStatusChange(lead._id, 'not_interested')}

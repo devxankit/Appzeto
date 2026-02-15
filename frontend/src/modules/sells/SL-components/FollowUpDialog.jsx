@@ -179,7 +179,7 @@ const FollowUpDialog = ({
                       ? 'border-red-300 bg-red-50' 
                       : 'border-gray-300 focus:border-amber-500'
                   }`}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()}
                 />
                 {errors.followupDate && (
                   <p className="mt-1 text-sm text-red-600">{errors.followupDate}</p>

@@ -60,3 +60,13 @@ temp/
 # Firebase Service Account (sensitive)
 config/firebase-service-account.json
 *.firebase-service-account.json
+
+# Google Service Account (sensitive)
+config/google-key.json
+*.google-key.json
+
+# Backup temp files (deleted after upload; ignore if orphaned)
+backup/*.gz
+backup/local/
+backup/backup.pid
+backup/backup.log

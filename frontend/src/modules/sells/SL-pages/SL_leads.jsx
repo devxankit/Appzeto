@@ -311,15 +311,13 @@ const LeadDashboard = () => {
     }
   }
 
-  // Dynamic tile data based on dashboard statistics
+  // Dynamic tile data based on dashboard statistics (App Client and Web pages removed)
   const tileData = [
     { title: "Connected", count: dashboardStats.statusCounts.connected, icon: FiPhone, bgClass: "bg-emerald-50", textClass: "text-emerald-800", iconBgClass: "bg-emerald-100", iconClass: "text-emerald-600", borderClass: "border-emerald-200/30", status: "connected" },
     { title: "Not Picked", count: dashboardStats.statusCounts.not_picked, icon: FiPhoneOff, bgClass: "bg-rose-50", textClass: "text-rose-800", iconBgClass: "bg-rose-100", iconClass: "text-rose-600", borderClass: "border-rose-200/30", status: "not_picked" },
     { title: "Follow Up", count: dashboardStats.statusCounts.followup, icon: FiCalendar, bgClass: "bg-amber-50", textClass: "text-amber-800", iconBgClass: "bg-amber-100", iconClass: "text-amber-600", borderClass: "border-amber-200/30", status: "followup" },
     { title: "Quotation Sent", count: dashboardStats.statusCounts.quotation_sent, icon: FiFileText, bgClass: "bg-blue-50", textClass: "text-blue-800", iconBgClass: "bg-blue-100", iconClass: "text-blue-600", borderClass: "border-blue-200/30", status: "quotation_sent" },
     { title: "Demo Sent", count: dashboardStats.statusCounts.demo_sent || 0, icon: FiVideo, bgClass: "bg-teal-50", textClass: "text-teal-800", iconBgClass: "bg-teal-100", iconClass: "text-teal-600", borderClass: "border-teal-200/30", status: "demo_sent" },
-    { title: "App Client", count: dashboardStats.statusCounts.app_client, icon: FiSmartphone, bgClass: "bg-indigo-50", textClass: "text-indigo-800", iconBgClass: "bg-indigo-100", iconClass: "text-indigo-600", borderClass: "border-indigo-200/30", status: "app_client" },
-    { title: "Web", count: dashboardStats.statusCounts.web, icon: FiGlobe, bgClass: "bg-cyan-50", textClass: "text-cyan-800", iconBgClass: "bg-cyan-100", iconClass: "text-cyan-600", borderClass: "border-cyan-200/30", status: "web" },
     { title: "Converted", count: dashboardStats.statusCounts.converted, icon: FiCheckCircle, bgClass: "bg-green-50", textClass: "text-green-800", iconBgClass: "bg-green-100", iconClass: "text-green-600", borderClass: "border-green-200/30", status: "converted" }
   ]
 
@@ -413,8 +411,6 @@ const LeadDashboard = () => {
                     tile.title === "Follow Up" ? "/followup" :
                     tile.title === "Quotation Sent" ? "/quotation-sent" :
                     tile.title === "Demo Sent" ? "/demo-sent" :
-                    tile.title === "App Client" ? "/app-client" :
-                    tile.title === "Web" ? "/web" :
                     tile.title === "Converted" ? "/converted" : "#"
                   }
                   className={`${tile.bgClass} rounded-xl p-4 ${tile.textClass} transition-all duration-300 cursor-pointer border ${tile.borderClass} block`}
@@ -580,9 +576,7 @@ const LeadDashboard = () => {
                         tile.title === "Not Picked" ? "/not-picked" :
                         tile.title === "Follow Up" ? "/followup" :
                         tile.title === "Quotation Sent" ? "/quotation-sent" :
-                        tile.title === "D&Q Sent" ? "/dq-sent" :
-                        tile.title === "App Client" ? "/app-client" :
-                        tile.title === "Web" ? "/web" :
+                        tile.title === "Demo Sent" ? "/demo-sent" :
                         tile.title === "Converted" ? "/converted" : "#"
                       }
                       className={`${tile.bgClass} rounded-xl p-6 ${tile.textClass} transition-all duration-300 cursor-pointer border ${tile.borderClass} block`}

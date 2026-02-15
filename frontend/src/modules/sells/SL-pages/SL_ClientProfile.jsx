@@ -138,10 +138,8 @@ const SL_ClientProfile = () => {
 
   const fetchAccounts = async () => {
     try {
-      const response = await salesClientService.getAccounts()
-      if (response.success && response.data) {
-        setAccounts(response.data || [])
-      }
+      const accounts = await salesClientService.getAccounts()
+      setAccounts(Array.isArray(accounts) ? accounts : [])
     } catch (err) {
       console.error('Error fetching accounts:', err)
     }
@@ -189,6 +187,7 @@ const SL_ClientProfile = () => {
         amount: amountValue,
         accountId: selectedAccountId,
         method: paymentMethod,
+        referenceId: referenceId?.trim() || undefined,
         notes: paymentNotes || undefined
       })
       toast.success('Payment receipt created successfully. Pending admin approval.')
@@ -351,8 +350,9 @@ const SL_ClientProfile = () => {
       return
     }
 
-    const amountValue = parseFloat(increaseAmount)
-    if (isNaN(amountValue) || amountValue <= 0) {
+    const parseAmount = (val) => Math.round(Number(String(val || '').replace(/,/g, '')) || 0)
+    const amountValue = parseAmount(increaseAmount)
+    if (amountValue <= 0) {
       toast.error('Please enter a valid positive amount')
       return
     }

@@ -26,11 +26,12 @@ export const createPayment = async (clientId, paymentData) => {
 
 /**
  * Get accounts list (for payment dropdown)
- * @returns {Promise} List of active accounts
+ * @returns {Promise<Array>} List of active accounts (same shape as salesPaymentsService.getAccounts)
  */
 export const getAccounts = async () => {
   const url = `/sales/accounts`;
-  return apiRequest(url, { method: 'GET' });
+  const res = await apiRequest(url, { method: 'GET' });
+  return res?.data ?? [];
 };
 
 /**

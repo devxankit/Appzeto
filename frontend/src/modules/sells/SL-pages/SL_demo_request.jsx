@@ -128,7 +128,8 @@ const SL_demo_request = () => {
 
   // Get category info for a request
   const getCategoryInfo = (categoryId) => {
-    return leadCategories.find(cat => cat.id === categoryId) || leadCategories[0]
+    const cat = leadCategories.find(cat => (cat._id || cat.id)?.toString() === String(categoryId))
+    return cat || (leadCategories[0] ?? null)
   }
 
   const getStatusColor = (status) => {
@@ -317,23 +318,26 @@ const SL_demo_request = () => {
                 >
                   All Categories
                 </button>
-                {leadCategories.map((category) => (
+                {leadCategories.map((category) => {
+                  const catId = (category._id || category.id)?.toString()
+                  return (
                   <button
-                    key={category.id}
-                    onClick={() => setSelectedCategory(category.id.toString())}
+                    key={catId || category.name}
+                    onClick={() => setSelectedCategory(catId || '')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
-                      selectedCategory === category.id.toString()
+                      selectedCategory === catId
                         ? 'text-white shadow-md'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                     style={{
-                      backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                      backgroundColor: selectedCategory === catId ? category.color : undefined
                     }}
                   >
                     <span>{category.icon}</span>
                     <span>{category.name}</span>
                   </button>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </motion.div>

@@ -196,18 +196,6 @@ const SL_dashboard = () => {
   const [showAllTargetsModal, setShowAllTargetsModal] = useState(false)
 
   useEffect(() => {
-    // Check for duplicate instances in DOM after a short delay
-    setTimeout(() => {
-      const allDashboards = document.querySelectorAll('.min-h-screen.bg-gray-50')
-      
-      if (allDashboards.length > 1) {
-        console.error(`WARNING: Found ${allDashboards.length} dashboard containers in DOM!`)
-        allDashboards.forEach((el, idx) => {
-          console.error(`Dashboard ${idx + 1}:`, el)
-        })
-      }
-    }, 100)
-    
     let active = true
     const load = async () => {
       // Load all API calls in PARALLEL for faster loading
@@ -1136,7 +1124,7 @@ const SL_dashboard = () => {
                      <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
                      <p className="text-xs font-semibold text-emerald-700">Conversion Rate</p>
                    </div>
-                   <p className="text-base font-bold text-emerald-900">{totalLeads ? Math.round(((Number((funnelData.find(f=>f.key==='converted')?.amount||'0').split(' ')[0]))/totalLeads)*100) : 0}%</p>
+                   <p className="text-base font-bold text-emerald-900">{(funnelData.find(f=>f.key==='converted')?.value ?? 0)}%</p>
                    <p className="text-xs text-emerald-600">{(funnelData.find(f=>f.key==='converted')?.amount)||'0 leads'} converted</p>
                  </div>
                  
@@ -1145,7 +1133,7 @@ const SL_dashboard = () => {
                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                      <p className="text-xs font-semibold text-blue-700">Connected Rate</p>
                    </div>
-                   <p className="text-base font-bold text-blue-900">{totalLeads ? Math.round(((Number((funnelData.find(f=>f.key==='connected')?.amount||'0').split(' ')[0]))/totalLeads)*100) : 0}%</p>
+                   <p className="text-base font-bold text-blue-900">{(funnelData.find(f=>f.key==='connected')?.value ?? 0)}%</p>
                    <p className="text-xs text-blue-600">{(funnelData.find(f=>f.key==='connected')?.amount)||'0 leads'} connected</p>
                  </div>
                </motion.div>

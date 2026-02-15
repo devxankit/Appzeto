@@ -1,4 +1,5 @@
 import { apiRequest } from './baseApiService';
+import { getApiUrl } from '../../../config/env';
 
 // Dashboard & Statistics
 export const getDashboardStatistics = async () => {
@@ -60,14 +61,7 @@ export const getMyLeads = async (params = {}) => {
     return response;
   } catch (error) {
     console.error('Error fetching leads:', error);
-    // Return empty response if API fails
-    return {
-      data: [],
-      count: 0,
-      total: 0,
-      page: 1,
-      pages: 0
-    };
+    throw error;
   }
 };
 
@@ -92,15 +86,7 @@ export const getLeadsByStatus = async (status, params = {}) => {
     return response;
   } catch (error) {
     console.error('Error fetching leads by status:', error);
-    // Return empty response if API fails
-    return {
-      data: [],
-      count: 0,
-      total: 0,
-      page: 1,
-      pages: 0,
-      status: status
-    };
+    throw error;
   }
 };
 
@@ -109,7 +95,7 @@ export const getLeadDetail = async (leadId) => {
     const response = await apiRequest(`/sales/leads/${leadId}`, {
       method: 'GET'
     });
-    return response.data;
+    return response?.data ?? response?.lead ?? null;
   } catch (error) {
     console.error('Error fetching lead detail:', error);
     throw error;
@@ -201,10 +187,9 @@ export const rescheduleFollowUp = async (leadId, followUpId, followUpData) => {
     let scheduledDate = followUpData.date || followUpData.followupDate || followUpData.scheduledDate;
     let scheduledTime = followUpData.time || followUpData.followupTime || followUpData.scheduledTime;
     
-    // Format date if needed (ensure it's in ISO format)
-    if (scheduledDate && typeof scheduledDate === 'string' && !scheduledDate.includes('T')) {
-      // If it's just a date string (YYYY-MM-DD), convert to ISO
-      scheduledDate = new Date(scheduledDate).toISOString();
+    // Keep date-only strings (YYYY-MM-DD) as-is to avoid timezone shift; only convert Date objects
+    if (scheduledDate instanceof Date) {
+      scheduledDate = scheduledDate.toISOString();
     }
     
     const requestBody = {
@@ -256,7 +241,7 @@ export const updateLeadProfile = async (leadId, profileData) => {
 export const convertLeadToClient = async (leadId, projectData) => {
   try {
     const token = localStorage.getItem('salesToken');
-    const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/sales/leads/${leadId}/convert`;
+    const apiUrl = getApiUrl(`/sales/leads/${leadId}/convert`);
     
     // Check if screenshot file exists
     if (projectData.screenshot && projectData.screenshot instanceof File) {
@@ -380,19 +365,20 @@ export const getStatusColor = (status) => {
 export const getValidStatusTransitions = (currentStatus) => {
   const transitions = {
     'new': ['connected', 'not_picked', 'not_interested', 'lost'],
-    'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'],
+    'connected': ['hot', 'followup', 'quotation_sent', 'demo_requested', 'not_interested', 'lost'],
     'not_picked': ['connected', 'followup', 'not_interested', 'lost'],
-    'followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'],
-    'today_followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'], // Backward compatibility
-    'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
-    'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
-    'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
-    'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'not_interested', 'lost'],
-    'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'not_interested', 'lost'],
-    'hot': ['connected', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'followup': ['connected', 'hot', 'quotation_sent', 'demo_requested', 'not_interested', 'lost'],
+    'today_followup': ['connected', 'hot', 'quotation_sent', 'demo_requested', 'not_interested', 'lost'], // Backward compatibility
+    'quotation_sent': ['connected', 'hot', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'demo_requested': ['connected', 'hot', 'quotation_sent', 'converted', 'not_interested', 'lost'],
+    'hot': ['connected', 'followup', 'quotation_sent', 'demo_requested', 'converted', 'not_interested', 'lost'],
     'converted': [],
     'lost': ['connected'],
-    'not_interested': ['connected']
+    'not_interested': ['connected'],
+    // Backward compat: existing leads with removed statuses can still transition out
+    'dq_sent': ['connected', 'hot', 'quotation_sent', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'app_client': ['connected', 'hot', 'quotation_sent', 'demo_requested', 'converted', 'not_interested', 'lost'],
+    'web': ['connected', 'hot', 'quotation_sent', 'demo_requested', 'converted', 'not_interested', 'lost']
   };
   return transitions[currentStatus] || [];
 };

@@ -221,7 +221,7 @@ const SL_lost = () => {
         businessName: contactedFormData.name, // Using name as business name
         email: '', // Will be filled later if available
         categoryId: contactedFormData.categoryId,
-        estimatedCost: parseInt(contactedFormData.estimatedPrice) || 0,
+        estimatedCost: Math.round(Number(String(contactedFormData.estimatedPrice || '').replace(/,/g, '')) || 0),
         description: contactedFormData.description,
         quotationSent: contactedFormData.quotationSent,
         demoSent: contactedFormData.demoSent

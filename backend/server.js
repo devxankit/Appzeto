@@ -45,6 +45,7 @@ const adminProjectExpenseCategoryRoutes = require('./routes/adminProjectExpenseC
 const adminProjectCredentialRoutes = require('./routes/adminProjectCredentialRoutes');
 const adminRewardRoutes = require('./routes/adminRewardRoutes');
 const adminNoticeRoutes = require('./routes/adminNoticeRoutes');
+const adminBackupRoutes = require('./routes/adminBackupRoutes');
 const adminClientTagRoutes = require('./routes/adminClientTagRoutes');
 const channelPartnerRoutes = require('./routes/channelPartnerRoutes');
 const quotationRoutes = require('./routes/quotationRoutes');
@@ -70,6 +71,8 @@ const socketService = require('./services/socketService');
 const { startDailyScheduler } = require('./services/dailyPointsScheduler');
 // Import recurring expense auto-pay scheduler
 const { startRecurringExpenseAutoPayScheduler } = require('./services/recurringExpenseAutoPayScheduler');
+// Import daily backup scheduler (runs at 2 AM - no crontab needed)
+const { startBackupScheduler } = require('./services/backupScheduler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -269,6 +272,7 @@ app.use('/api/admin/project-expense-categories', adminProjectExpenseCategoryRout
 app.use('/api/admin/project-credentials', adminProjectCredentialRoutes);
 app.use('/api/admin/rewards', adminRewardRoutes);
 app.use('/api/admin/notices', adminNoticeRoutes);
+app.use('/api/admin/backup', adminBackupRoutes);
 app.use('/api/admin/client-tags', adminClientTagRoutes);
 app.use('/api/admin/channel-partners', channelPartnerRoutes);
 app.use('/api/admin/quotations', quotationRoutes);
@@ -299,6 +303,7 @@ app.use('/admin/project-expense-categories', adminProjectExpenseCategoryRoutes);
 app.use('/admin/project-credentials', adminProjectCredentialRoutes);
 app.use('/admin/rewards', adminRewardRoutes);
 app.use('/admin/notices', adminNoticeRoutes);
+app.use('/admin/backup', adminBackupRoutes);
 app.use('/admin/client-tags', adminClientTagRoutes);
 app.use('/admin/channel-partners', channelPartnerRoutes);
 app.use('/admin/quotations', quotationRoutes);
@@ -594,6 +599,8 @@ const startServer = async () => {
     // Start daily points scheduler
     startDailyScheduler();
     startRecurringExpenseAutoPayScheduler();
+    // Start daily backup scheduler (2 AM - runs when GOOGLE_DRIVE_FOLDER_ID is set)
+    startBackupScheduler();
 
     // Graceful shutdown handling
     process.on('SIGINT', () => {

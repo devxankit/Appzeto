@@ -698,8 +698,9 @@ const SL_leadProfile = () => {
       toast.error('Please enter project name')
       return
     }
-    if (!conversionData.totalCost.trim() || parseFloat(conversionData.totalCost) < 0) {
-      toast.error('Please enter a valid total cost')
+    const totalCostNum = parseFloat(String(conversionData.totalCost).replace(/,/g, '')) || 0
+    if (!conversionData.totalCost.trim() || totalCostNum <= 0) {
+      toast.error('Total cost must be greater than 0')
       return
     }
     // Project type = lead category (e.g. Apps, Web, Taxi)
@@ -710,9 +711,10 @@ const SL_leadProfile = () => {
 
     setIsLoading(true)
     try {
-      // Prepare project data (whole-number amounts)
-      const totalCostValue = Math.round(Number(conversionData.totalCost) || 0)
-      const advanceValue = Math.round(Number(conversionData.advanceReceived) || 0)
+      // Prepare project data (whole-number amounts), handle comma-separated numbers
+      const parseAmount = (val) => Math.round(Number(String(val || '').replace(/,/g, '')) || 0);
+      const totalCostValue = parseAmount(conversionData.totalCost)
+      const advanceValue = parseAmount(conversionData.advanceReceived)
       const projectData = {
         projectName: conversionData.projectName.trim(),
         categoryId: conversionData.categoryId,

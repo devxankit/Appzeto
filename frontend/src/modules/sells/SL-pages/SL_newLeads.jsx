@@ -296,7 +296,7 @@ const SL_newLeads = () => {
         businessName: connectedForm.name, // Using name as business name for now
         email: '', // Will be filled later if available
         categoryId: connectedForm.categoryId, // Use category (preferred)
-        estimatedCost: parseInt(connectedForm.estimatedPrice) || 0,
+        estimatedCost: Math.round(Number(String(connectedForm.estimatedPrice || '').replace(/,/g, '')) || 0),
         description: connectedForm.description,
         quotationSent: connectedForm.quotationSent,
         demoSent: connectedForm.demoSent

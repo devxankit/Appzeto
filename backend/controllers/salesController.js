@@ -45,6 +45,12 @@ const safeObjectId = (value) => {
   try { return new mongoose.Types.ObjectId(value); } catch { return value; }
 };
 
+// Helper to parse amount strings (handles comma-separated numbers e.g. "10,000")
+const parseAmount = (val) => {
+  const n = Number(String(val || '').replace(/,/g, ''));
+  return isNaN(n) ? 0 : n;
+};
+
 // Helper: build last N months labels (ending current month)
 const getLastNMonths = (n) => {
   const months = [];
@@ -213,8 +219,8 @@ const createPaymentReceipt = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Amount and account are required' });
     }
 
-    const amountValue = Math.round(parseFloat(amount));
-    if (isNaN(amountValue) || amountValue <= 0) {
+    const amountValue = Math.round(parseAmount(amount));
+    if (amountValue <= 0) {
       return res.status(400).json({ success: false, message: 'Amount must be a positive number' });
     }
 
@@ -641,7 +647,7 @@ const listSalesMeetings = async (req, res) => {
     const { search = '', filter = 'all' } = req.query;
     const q = { $or: [{ assignee: salesId }, { createdBy: salesId }] };
     if (search) {
-      q.$or = [{ location: new RegExp(search, 'i') }];
+      q.$and = (q.$and || []).concat([{ location: new RegExp(search, 'i') }]);
     }
     const items = await SalesMeeting.find(q)
       .populate('client', 'name phoneNumber')
@@ -653,7 +659,11 @@ const listSalesMeetings = async (req, res) => {
       if (d === todayStr) return 'today';
       return (new Date(m.meetingDate) >= new Date()) ? 'upcoming' : 'completed';
     };
-    const filtered = items.filter(m => filter === 'all' || classify(m) === filter);
+    const filtered = items.filter(m => {
+      if (filter === 'all') return true;
+      if (filter === 'scheduled') return m.status === 'scheduled';
+      return classify(m) === filter;
+    });
     const stats = {
       total: items.length,
       today: items.filter(m => classify(m) === 'today').length,
@@ -670,6 +680,7 @@ const createSalesMeeting = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
     const payload = { ...req.body, createdBy: salesId };
+    if (!payload.assignee) payload.assignee = salesId;
     const meeting = await SalesMeeting.create(payload);
     res.status(201).json({ success: true, data: meeting, message: 'Meeting created' });
   } catch (error) {
@@ -1712,6 +1723,20 @@ const getSalesDashboardStats = async (req, res) => {
       }
     });
 
+    // Override "new" count to match New Leads page: exclude leads shared with CP
+    const newLeadsFilter = {
+      assignedTo: new mongoose.Types.ObjectId(salesId),
+      status: 'new',
+      $or: [{ sharedWithCP: { $exists: false } }, { sharedWithCP: { $size: 0 } }]
+    };
+    const sharedLeadIds = await CPLead.distinct('sharedFromSales.leadId', {
+      'sharedFromSales.sharedBy': new mongoose.Types.ObjectId(salesId)
+    });
+    if (sharedLeadIds && sharedLeadIds.length > 0) {
+      newLeadsFilter._id = { $nin: sharedLeadIds };
+    }
+    statusCounts.new = await Lead.countDocuments(newLeadsFilter);
+
     // Calculate connected count: all leads with leadProfile that are not converted/lost/not_interested/not_picked
     const connectedCount = await Lead.countDocuments({
       assignedTo: new mongoose.Types.ObjectId(salesId),
@@ -1720,8 +1745,8 @@ const getSalesDashboardStats = async (req, res) => {
     });
     statusCounts.connected = connectedCount;
 
-    // Calculate total leads
-    const totalLeads = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
+    // Use actual lead count (sum of statusCounts can double-count when connected is broad)
+    const totalLeads = await Lead.countDocuments({ assignedTo: new mongoose.Types.ObjectId(salesId) });
 
     res.status(200).json({
       success: true,
@@ -1917,7 +1942,7 @@ const getLeadsByStatus = async (req, res) => {
     } = req.query;
 
     // Validate status (with backward compatibility for today_followup)
-    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested', 'demo_sent', 'not_interested'];
+    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'converted', 'lost', 'hot', 'demo_requested', 'demo_sent', 'not_interested'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -2091,8 +2116,6 @@ const getLeadsByStatus = async (req, res) => {
       filter.followUps = {
         $elemMatch: followUpFilter
       };
-
-      console.log('Followup query filter:', JSON.stringify(filter, null, 2));
     } else if (timeFrame && timeFrame !== 'all') {
       // For status-specific queries, determine which date field to use for filtering
       // - 'new' status: Use createdAt (leads are created as new, not updated to new)
@@ -2203,10 +2226,6 @@ const getLeadsByStatus = async (req, res) => {
       // For followup status, get all leads matching the filter (which includes followUps filter)
       // The followUps are already in the lead document, no need for post-filtering
       leads = await query.skip(skip).limit(limitNum);
-      console.log(`Found ${leads.length} leads with follow-ups`);
-      if (leads.length > 0) {
-        console.log('Sample lead followUps:', leads[0].followUps?.length || 0, 'follow-ups');
-      }
     } else {
       leads = await query.skip(skip).limit(limitNum);
     }
@@ -3128,7 +3147,7 @@ const updateLeadStatus = async (req, res) => {
     const { status, notes, followupDate, followupTime, priority, lostReason } = req.body;
 
     // Validate status (with backward compatibility for today_followup)
-    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'lost', 'hot', 'demo_requested', 'not_interested'];
+    const validStatuses = ['new', 'connected', 'not_picked', 'followup', 'today_followup', 'quotation_sent', 'converted', 'lost', 'hot', 'demo_requested', 'not_interested'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -3158,18 +3177,19 @@ const updateLeadStatus = async (req, res) => {
     // Validate status transition
     const validTransitions = {
       'new': ['connected', 'not_picked', 'not_interested', 'lost'],
-      'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'],
+      'connected': ['hot', 'followup', 'quotation_sent', 'demo_requested', 'not_interested', 'lost'],
       'not_picked': ['connected', 'followup', 'not_interested', 'lost'],
-      'followup': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'],
-      'quotation_sent': ['connected', 'hot', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
-      'dq_sent': ['connected', 'hot', 'quotation_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
-      'app_client': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
-      'web': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'demo_requested', 'converted', 'not_interested', 'lost'],
-      'demo_requested': ['connected', 'hot', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'converted', 'not_interested', 'lost'],
-      'hot': ['connected', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
+      'followup': ['connected', 'hot', 'quotation_sent', 'demo_requested', 'not_interested', 'lost'],
+      'quotation_sent': ['connected', 'hot', 'demo_requested', 'converted', 'not_interested', 'lost'],
+      'demo_requested': ['connected', 'hot', 'quotation_sent', 'converted', 'not_interested', 'lost'],
+      'hot': ['connected', 'followup', 'quotation_sent', 'demo_requested', 'converted', 'not_interested', 'lost'],
       'converted': [],
       'lost': ['connected'],
-      'not_interested': ['connected']
+      'not_interested': ['connected'],
+      // Backward compat: existing leads with removed statuses can still transition out
+      'dq_sent': ['connected', 'hot', 'quotation_sent', 'demo_requested', 'converted', 'not_interested', 'lost'],
+      'app_client': ['connected', 'hot', 'quotation_sent', 'demo_requested', 'converted', 'not_interested', 'lost'],
+      'web': ['connected', 'hot', 'quotation_sent', 'demo_requested', 'converted', 'not_interested', 'lost']
     };
 
     if (!validTransitions[lead.status].includes(actualStatus)) {
@@ -3812,13 +3832,26 @@ const convertLeadToClient = async (req, res) => {
         projectName: req.body.projectName,
         categoryId: req.body.categoryId || req.body.category,
         projectType: req.body.projectType ? (typeof req.body.projectType === 'string' ? JSON.parse(req.body.projectType) : req.body.projectType) : null, // Legacy support
-        totalCost: req.body.totalCost ? parseFloat(req.body.totalCost) : 0,
+        totalCost: req.body.totalCost ? Math.round(Number(String(req.body.totalCost).replace(/,/g, '')) || 0) : 0,
         finishedDays: req.body.finishedDays ? parseInt(req.body.finishedDays) : undefined,
-        advanceReceived: req.body.advanceReceived ? parseFloat(req.body.advanceReceived) : 0,
+        advanceReceived: req.body.advanceReceived ? Math.round(Number(String(req.body.advanceReceived).replace(/,/g, '')) || 0) : 0,
         includeGST: req.body.includeGST === 'true' || req.body.includeGST === true,
         description: req.body.description || ''
       };
     }
+
+    // Normalize projectData: support legacy field names, round amounts for consistency
+    const parseAmount = (v) => Math.round(Number(String(v || '').replace(/,/g, '')) || 0);
+    const totalCost = parseAmount(projectData?.totalCost ?? projectData?.estimatedBudget);
+    const advanceReceived = parseAmount(projectData?.advanceReceived);
+    let description = (projectData?.description ?? projectData?.notes ?? '').trim();
+    if (totalCost <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project total cost is required and must be greater than zero. Please enter a valid project cost.'
+      });
+    }
+    projectData = { ...projectData, totalCost, advanceReceived, description };
 
     const { uploadToCloudinary } = require('../services/cloudinaryService');
     const lead = await Lead.findById(id).populate('leadProfile').populate('category');
@@ -3914,14 +3947,12 @@ const convertLeadToClient = async (req, res) => {
       }
     }
 
-    // Prepare project fields
-    const totalCost = projectData?.totalCost ? Number(projectData.totalCost) : (lead.leadProfile.estimatedCost || 0);
-    const advanceReceived = projectData?.advanceReceived ? Number(projectData.advanceReceived) : 0;
+    // Prepare project fields (totalCost and advanceReceived already set in normalize step above)
     const includeGST = projectData?.includeGST || false;
     const remainingAmount = totalCost; // No advance applied until finance approves
 
     const name = projectData?.projectName || 'Sales Converted Project';
-    const description = projectData?.description || lead.leadProfile.description || 'Created from sales conversion';
+    if (!description) description = lead.leadProfile.description || 'Created from sales conversion';
     // Use category from request, lead's category, or leadProfile's category (in that order)
     const categoryId = projectData?.categoryId || lead.category?._id || lead.category || lead.leadProfile?.category || null;
     // Legacy: Keep projectType for backward compatibility
@@ -4081,10 +4112,10 @@ const convertLeadToClient = async (req, res) => {
 
     if (incentivePerClient > 0) {
       try {
-        // Calculate split: 50% current, 50% pending
+        // Calculate split: 50% current, 50% pending (use Math.round to avoid floating point drift)
         const totalAmount = incentivePerClient;
-        const currentBalance = totalAmount * 0.5;
-        const pendingBalance = totalAmount * 0.5;
+        const currentBalance = Math.round(totalAmount * 0.5);
+        const pendingBalance = totalAmount - currentBalance;
 
         // Create conversion-based incentive for team member
         teamMemberIncentive = await Incentive.create({
@@ -4116,12 +4147,12 @@ const convertLeadToClient = async (req, res) => {
         if (teamLead && teamMemberIncentive) {
           // Auto-calculate team lead incentive as 50% of team member's incentive
           const teamMemberIncentiveAmount = Number(teamMemberIncentive.amount || incentivePerClient || 0);
-          const teamLeadIncentiveAmount = teamMemberIncentiveAmount * 0.5; // 50% of team member's incentive
+          const teamLeadIncentiveAmount = Math.round(teamMemberIncentiveAmount * 0.5); // 50% of team member's incentive
 
           if (teamLeadIncentiveAmount > 0) {
-            // Split 50/50: half current, half pending (same as team member)
-            const teamLeadCurrentBalance = teamLeadIncentiveAmount * 0.5;
-            const teamLeadPendingBalance = teamLeadIncentiveAmount * 0.5;
+            // Split 50/50: half current, half pending (use Math.round to avoid floating point drift)
+            const teamLeadCurrentBalance = Math.round(teamLeadIncentiveAmount * 0.5);
+            const teamLeadPendingBalance = teamLeadIncentiveAmount - teamLeadCurrentBalance;
 
             // Create team lead incentive
             await Incentive.create({
@@ -4644,8 +4675,8 @@ const createClientPayment = async (req, res) => {
       });
     }
 
-    const amountValue = parseFloat(amount);
-    if (isNaN(amountValue) || amountValue <= 0) {
+    const amountValue = Math.round(parseAmount(amount));
+    if (amountValue <= 0) {
       return res.status(400).json({
         success: false,
         message: 'Amount must be a positive number'
@@ -4966,8 +4997,8 @@ const increaseProjectCost = async (req, res) => {
       });
     }
 
-    const increaseAmount = parseFloat(amount);
-    if (isNaN(increaseAmount) || increaseAmount <= 0) {
+    const increaseAmount = Math.round(parseAmount(amount));
+    if (increaseAmount <= 0) {
       return res.status(400).json({
         success: false,
         message: 'Amount must be a positive number'

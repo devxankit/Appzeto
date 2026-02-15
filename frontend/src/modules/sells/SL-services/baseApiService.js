@@ -15,13 +15,16 @@ const removeAuthToken = () => {
   localStorage.removeItem('salesToken');
 };
 
-// Helper function to get auth headers
-const getAuthHeaders = () => {
+// Helper function to get auth headers (omit Content-Type for FormData - browser sets multipart boundary)
+const getAuthHeaders = (options = {}) => {
   const token = getAuthToken();
-  return {
-    'Content-Type': 'application/json',
+  const headers = {
     ...(token && { Authorization: `Bearer ${token}` })
   };
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+  return headers;
 };
 
 // Base API request helper
@@ -43,7 +46,7 @@ export const apiRequest = async (url, options = {}) => {
     const response = await fetch(primaryUrl, {
       ...options,
       headers: {
-        ...getAuthHeaders(),
+        ...getAuthHeaders(options),
         ...options.headers
       },
       credentials: 'include' // Include cookies for CORS
@@ -89,7 +92,7 @@ export const apiRequest = async (url, options = {}) => {
       const response = await fetch(sameOriginUrl, {
         ...options,
         headers: {
-          ...getAuthHeaders(),
+          ...getAuthHeaders(options),
           ...options.headers
         },
         credentials: 'include'

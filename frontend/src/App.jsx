@@ -46,8 +46,6 @@ import SL_not_picked from './modules/sells/SL-pages/SL_not_picked'
 import SL_followup from './modules/sells/SL-pages/SL_followup'
 import SL_quotation_sent from './modules/sells/SL-pages/SL_quotation_sent'
 import SL_demo_sent from './modules/sells/SL-pages/SL_demo_sent'
-import SL_app_client from './modules/sells/SL-pages/SL_app_client'
-import SL_web from './modules/sells/SL-pages/SL_web'
 import SL_lost from './modules/sells/SL-pages/SL_lost'
 import SL_notification from './modules/sells/SL-pages/SL_notification'
 import SL_requests from './modules/sells/SL-pages/SL_requests'
@@ -139,6 +137,7 @@ import Admin_client_management from './modules/admin/admin-pages/Admin_client_ma
 import Admin_notice_board from './modules/admin/admin-pages/Admin_notice_board'
 import Admin_recent_activities from './modules/admin/admin-pages/Admin_recent_activities'
 import Admin_project_expenses_management from './modules/admin/admin-pages/Admin_project_expenses_management'
+import Admin_settings from './modules/admin/admin-pages/Admin_settings'
 import ResetPassword from './components/auth/ResetPassword'
 import RootRedirect from './components/auth/RootRedirect'
 import { AdminSidebarProvider } from './modules/admin/admin-contexts/AdminSidebarContext'
@@ -286,16 +285,6 @@ function App() {
               <Route path="/demo-sent" element={
                 <SalesProtectedRoute>
                   <SL_demo_sent />
-                </SalesProtectedRoute>
-              } />
-              <Route path="/app-client" element={
-                <SalesProtectedRoute>
-                  <SL_app_client />
-                </SalesProtectedRoute>
-              } />
-              <Route path="/web" element={
-                <SalesProtectedRoute>
-                  <SL_web />
                 </SalesProtectedRoute>
               } />
               <Route path="/lost" element={
@@ -707,6 +696,11 @@ function App() {
               <Route path="/admin-recent-activities" element={
                 <ProtectedRoute>
                   <Admin_recent_activities />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin-settings" element={
+                <ProtectedRoute requiredRole="admin">
+                  <Admin_settings />
                 </ProtectedRoute>
               } />
 

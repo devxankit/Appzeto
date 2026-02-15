@@ -48,6 +48,12 @@ const Admin_sales_management = () => {
     return String(value)
   }
 
+  // Helper to parse amount strings (handles comma-separated numbers e.g. "10,000")
+  const parseAmount = (val) => {
+    const n = Number(String(val || '').replace(/,/g, ''))
+    return isNaN(n) ? 0 : n
+  }
+
   // Skeleton Loader Component
   const SkeletonLoader = ({ className = '', rounded = 'rounded' }) => (
     <div className={`animate-pulse bg-gray-200 ${rounded} ${className}`}></div>
@@ -685,7 +691,6 @@ const Admin_sales_management = () => {
       'not_picked': 'notPicked',
       'followup': 'todayFollowUp',
       'quotation_sent': 'quotationSent',
-      'dq_sent': 'dqSent',
       'app_client': 'appClient',
       'web': 'web',
       'converted': 'converted',
@@ -1228,7 +1233,6 @@ const Admin_sales_management = () => {
     'notPicked': 'not_picked',
     'todayFollowUp': 'followup',
     'quotationSent': 'quotation_sent',
-    'dqSent': 'dq_sent',
     'appClient': 'app_client',
     'web': 'web',
     'converted': 'converted',
@@ -1756,8 +1760,8 @@ const Admin_sales_management = () => {
       return
     }
     
-    const newIncentive = parseFloat(incentiveAmount)
-    if (isNaN(newIncentive) || newIncentive < 0) {
+    const newIncentive = Math.round(parseAmount(incentiveAmount))
+    if (newIncentive < 0) {
       toast.error('Please enter a valid incentive amount')
       return
     }
@@ -3646,7 +3650,6 @@ const Admin_sales_management = () => {
                         { key: 'notPicked', label: 'Not Picked', color: 'bg-red-50 text-red-700 border-red-200', icon: '📵' },
                         { key: 'todayFollowUp', label: 'Today Follow Up', color: 'bg-yellow-50 text-yellow-700 border-yellow-200', icon: '📅' },
                         { key: 'quotationSent', label: 'Quotation Sent', color: 'bg-purple-50 text-purple-700 border-purple-200', icon: '📄' },
-                        { key: 'dqSent', label: 'D&Q Sent', color: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: '📤' },
                         { key: 'appClient', label: 'App Client', color: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: '📱' },
                         { key: 'web', label: 'Web', color: 'bg-teal-50 text-teal-700 border-teal-200', icon: '🌐' },
                         { key: 'converted', label: 'Converted', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✅' },
@@ -3673,7 +3676,6 @@ const Admin_sales_management = () => {
                             notPicked: 0,
                             todayFollowUp: 0,
                             quotationSent: 0,
-                            dqSent: 0,
                             appClient: 0,
                             web: 0,
                             converted: 0,
@@ -4319,7 +4321,6 @@ const Admin_sales_management = () => {
                         notPicked: 'Not Picked',
                         todayFollowUp: 'Today Follow Up',
                         quotationSent: 'Quotation Sent',
-                        dqSent: 'D&Q Sent',
                         appClient: 'App Client',
                         web: 'Web',
                         converted: 'Converted',
@@ -4525,7 +4526,7 @@ const Admin_sales_management = () => {
                 </button>
                 <button
                   onClick={handleSaveIncentive}
-                  disabled={!incentiveAmount || parseFloat(incentiveAmount) < 0 || loadingIncentive}
+                  disabled={!incentiveAmount || parseAmount(incentiveAmount) < 0 || loadingIncentive}
                   className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
                   {loadingIncentive ? (

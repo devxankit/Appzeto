@@ -145,9 +145,12 @@ const SL_meetings = () => {
 
   const handleEditMeeting = (meeting) => {
     setEditingMeeting(meeting)
+    const meetingDateNorm = meeting.meetingDate
+      ? new Date(meeting.meetingDate).toISOString().split('T')[0]
+      : ''
     setMeetingForm({
       clientName: meeting.client?.name || meeting.clientName || '',
-      meetingDate: meeting.meetingDate || '',
+      meetingDate: meetingDateNorm,
       meetingTime: meeting.meetingTime || '',
       meetingType: meeting.meetingType || 'in-person',
       location: meeting.location || '',
@@ -221,10 +224,12 @@ const SL_meetings = () => {
     setShowAssigneeDropdown(false)
   }
 
+  const todayStr = new Date().toISOString().split('T')[0]
+  const getMeetingDateStr = (m) => m.meetingDate ? new Date(m.meetingDate).toISOString().split('T')[0] : ''
   const computedStats = {
     total: meetings.length,
-    today: meetings.filter(m => m.meetingDate === new Date().toISOString().split('T')[0]).length,
-    upcoming: meetings.filter(m => m.meetingDate >= new Date().toISOString().split('T')[0]).length
+    today: meetings.filter(m => getMeetingDateStr(m) === todayStr).length,
+    upcoming: meetings.filter(m => getMeetingDateStr(m) >= todayStr && m.status !== 'completed').length
   }
 
   return (

@@ -33,6 +33,7 @@ const SL_payments_recovery = () => {
     amount: '',
     accountId: '',
     method: 'upi',
+    referenceId: '',
     notes: ''
   })
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false)
@@ -122,7 +123,7 @@ const SL_payments_recovery = () => {
 
 Payment Request Details:
 • Remaining Amount: ₹${remainingAmount.toLocaleString()}
-• Requested Amount: ₹${parseInt(requestAmount).toLocaleString()}
+• Requested Amount: ₹${Math.round(Number(String(requestAmount || '').replace(/,/g, '')) || 0).toLocaleString()}
 
 Please make the payment at your earliest convenience. If you have any questions, feel free to contact us.
 
@@ -168,6 +169,7 @@ Thank you!`
       amount: '',
       accountId: '',
       method: 'upi',
+      referenceId: '',
       notes: ''
     })
     setShowAddPaymentDialog(true)
@@ -176,7 +178,7 @@ Thank you!`
   const handleSubmitRecoveryPayment = async () => {
     if (!selectedProjectForPayment) return
 
-    const amountValue = parseFloat(paymentForm.amount)
+    const amountValue = Math.round(Number(String(paymentForm.amount || '').replace(/,/g, '')) || 0)
     if (!amountValue || amountValue <= 0) {
       alert('Please enter a valid amount greater than 0')
       return
@@ -203,6 +205,7 @@ Thank you!`
         amount: amountValue,
         accountId: paymentForm.accountId,
         method: paymentForm.method,
+        referenceId: paymentForm.referenceId?.trim() || undefined,
         notes: paymentForm.notes || undefined
       })
 
@@ -242,6 +245,7 @@ Thank you!`
         amount: '',
         accountId: '',
         method: 'upi',
+        referenceId: '',
         notes: ''
       })
       alert('Payment receipt created successfully. Pending admin approval.')
@@ -260,6 +264,7 @@ Thank you!`
       amount: '',
       accountId: '',
       method: 'upi',
+      referenceId: '',
       notes: ''
     })
   }
@@ -719,6 +724,18 @@ Thank you!`
                   <option value="cash">Cash</option>
                   <option value="other">Other</option>
                 </select>
+              </div>
+
+              {/* Reference ID (Optional) */}
+              <div className="space-y-1.5 sm:space-y-2">
+                <label className="text-xs sm:text-sm font-medium text-gray-700">Reference ID (Optional)</label>
+                <input
+                  type="text"
+                  value={paymentForm.referenceId || ''}
+                  onChange={(e) => setPaymentForm(prev => ({ ...prev, referenceId: e.target.value }))}
+                  placeholder="Transaction / UTR reference"
+                  className="w-full px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                />
               </div>
 
               {/* Notes Field */}

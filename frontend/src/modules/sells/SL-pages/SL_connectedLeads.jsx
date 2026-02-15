@@ -125,7 +125,8 @@ const SL_connectedLeads = () => {
     if (typeof category === 'object' && category._id) {
       return category
     }
-    return leadCategories.find(cat => cat.id === category) || leadCategories[0]
+    const cat = leadCategories.find(cat => (cat._id || cat.id)?.toString() === String(category))
+    return cat || (leadCategories[0] ?? null)
   }
 
   const getPriorityColor = (priority) => {
@@ -195,7 +196,7 @@ const SL_connectedLeads = () => {
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs text-black">
-              {categoryInfo.name}
+              {categoryInfo?.name ?? 'Unknown'}
             </span>
             {lead.leadProfile && (
               <span className="text-xs text-green-600 font-medium">✓ Profile</span>
@@ -325,22 +326,25 @@ const SL_connectedLeads = () => {
                       >
                         All
                       </button>
-                      {leadCategories.map((category) => (
+                      {leadCategories.map((category) => {
+                        const catId = (category._id || category.id)?.toString()
+                        return (
                         <button
-                          key={category.id}
-                          onClick={() => setSelectedCategory(category.id.toString())}
+                          key={catId || category.name}
+                          onClick={() => setSelectedCategory(catId || '')}
                           className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${
-                            selectedCategory === category.id.toString()
+                            selectedCategory === catId
                               ? 'text-white shadow-md'
                               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
                           style={{
-                            backgroundColor: selectedCategory === category.id.toString() ? category.color : undefined
+                            backgroundColor: selectedCategory === catId ? category.color : undefined
                           }}
                         >
                           {category.icon} {category.name}
                         </button>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
