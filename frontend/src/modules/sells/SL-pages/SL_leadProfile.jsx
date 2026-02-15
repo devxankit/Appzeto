@@ -1865,18 +1865,18 @@ const SL_leadProfile = () => {
                         exit={{ opacity: 0, y: -10 }}
                         className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto"
                       >
-                        {assignees.map((assignee) => (
+                        {salesTeam.map((member) => (
                           <button
-                            key={assignee}
+                            key={member._id || member.name}
                             type="button"
-                            onClick={() => handleAssigneeSelect(assignee)}
+                            onClick={() => handleAssigneeSelect(member.name)}
                             className={`w-full px-4 py-3 text-left hover:bg-teal-50 transition-colors duration-200 flex items-center space-x-3 ${
-                              meetingForm.assignee === assignee ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
+                              meetingForm.assignee === member.name ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
                             }`}
                           >
                             <FiUser className="text-sm" />
-                            <span>{assignee}</span>
-                            {meetingForm.assignee === assignee && (
+                            <span>{member.name}</span>
+                            {meetingForm.assignee === member.name && (
                               <FiCheck className="ml-auto text-teal-600" />
                             )}
                           </button>
