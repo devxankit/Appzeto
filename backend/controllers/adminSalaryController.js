@@ -86,8 +86,15 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
     });
   }
 
-  // Update fixed salary
-  employee.fixedSalary = fixedSalary;
+  // Update fixed salary (ensure number for Mongoose)
+  const amount = Number(fixedSalary);
+  if (isNaN(amount) || amount < 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Valid fixed salary amount is required'
+    });
+  }
+  employee.fixedSalary = amount;
   await employee.save();
 
   // Auto-generate salary records for current and next 3 months
@@ -134,7 +141,7 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
         department,
         role,
         month,
-        fixedSalary,
+        fixedSalary: amount,
         paymentDate,
         paymentDay,
         status: 'pending',
@@ -153,7 +160,7 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: `Fixed salary set to ₹${fixedSalary.toLocaleString()} and salary records generated`,
+    message: `Fixed salary set to ₹${amount.toLocaleString()} and salary records generated`,
     data: {
       employeeId: employee._id,
       employeeName: employee.name,
@@ -339,6 +346,13 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
     console.log('Updating fixedSalary from', salary.fixedSalary, 'to', parsedSalary);
     salary.fixedSalary = parsedSalary;
     console.log('Salary after update:', salary.fixedSalary);
+
+    // Sync fixedSalary to underlying Employee/Sales/PM/Admin so wallet and profile show correct value
+    const employee = await getEmployee(salary.employeeId, salary.employeeModel);
+    if (employee && typeof employee.fixedSalary !== 'undefined') {
+      employee.fixedSalary = parsedSalary;
+      await employee.save();
+    }
   }
 
   // Update fields

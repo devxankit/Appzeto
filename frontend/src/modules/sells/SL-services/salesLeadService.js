@@ -261,6 +261,7 @@ export const convertLeadToClient = async (leadId, projectData) => {
       formData.append('totalCost', projectData.totalCost || 0);
       if (projectData.finishedDays) formData.append('finishedDays', projectData.finishedDays);
       formData.append('advanceReceived', projectData.advanceReceived || 0);
+      if (projectData.advanceAccount) formData.append('advanceAccount', projectData.advanceAccount);
       formData.append('includeGST', projectData.includeGST || false);
       formData.append('description', projectData.description || '');
       formData.append('screenshot', projectData.screenshot);

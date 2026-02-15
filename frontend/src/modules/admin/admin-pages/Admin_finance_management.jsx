@@ -420,6 +420,7 @@ const Admin_finance_management = () => {
           accountName: req.metadata?.accountName || '',
           category: req.category || '',
           amount: req.amount,
+          screenshotUrl: req.metadata?.screenshotUrl || null,
           response: req.response ? { type: req.response.type, message: req.response.message, respondedDate: req.response.respondedDate, respondedBy: req.response.respondedBy?.name } : null,
           _full: req
         }))
@@ -4536,6 +4537,24 @@ const Admin_finance_management = () => {
                   <p className="font-semibold text-teal-600 mt-1">Amount: {formatCurrency(selectedPaymentRequest.amount)}</p>
                 )}
               </div>
+              {(selectedPaymentRequest.screenshotUrl || selectedPaymentRequest._full?.metadata?.screenshotUrl) && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-2">Payment screenshot (from sales)</p>
+                  <a
+                    href={selectedPaymentRequest.screenshotUrl || selectedPaymentRequest._full?.metadata?.screenshotUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg border border-gray-200 overflow-hidden bg-gray-50"
+                  >
+                    <img
+                      src={selectedPaymentRequest.screenshotUrl || selectedPaymentRequest._full?.metadata?.screenshotUrl}
+                      alt="Payment screenshot"
+                      className="w-full max-h-64 object-contain"
+                    />
+                  </a>
+                  <p className="text-xs text-gray-500 mt-1">Click image to open full size</p>
+                </div>
+              )}
               <div>
                 <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getRequestStatusColor(selectedPaymentRequest.status)}`}>{selectedPaymentRequest.status}</span>
               </div>

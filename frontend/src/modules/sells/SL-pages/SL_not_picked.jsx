@@ -251,7 +251,7 @@ const SL_not_picked = () => {
     setContactedFormData({
       name: '',
       description: '',
-      projectType: 'web',
+      categoryId: '',
       estimatedPrice: '50000',
       quotationSent: false,
       demoSent: false
@@ -271,146 +271,56 @@ const SL_not_picked = () => {
     navigate(`/lead-profile/${leadId}`)
   }
 
-  const handleProfileClick = (lead) => {
+  const handleCardClick = (lead) => {
     if (lead.leadProfile) {
       handleProfile(lead._id)
     } else {
-      toast.error('This lead doesn\'t have a profile. Please connect to the lead first to create a profile.')
+      setSelectedLeadForForm(lead._id)
+      setShowContactedForm(true)
     }
   }
 
-  // Mobile Lead Card Component
+  // Mobile Lead Card Component - same style as New Leads: phone-first, Connect form like New Leads
   const MobileLeadCard = ({ lead }) => {
     const categoryInfo = getCategoryInfo(lead.category)
-    
     return (
-      <div 
-        className="p-4 space-y-3 cursor-pointer hover:bg-gray-50 transition-colors duration-200"
-        onClick={() => handleProfileClick(lead)}
+      <div
+        className="flex items-center justify-between cursor-pointer p-4 hover:bg-gray-50 transition-colors duration-200"
+        onClick={() => handleCardClick(lead)}
       >
-        {/* Header Section */}
-        <div className="flex items-center space-x-3">
-          {/* Avatar */}
+        {/* Left: Avatar & Phone (like New Leads - no profile so show number) */}
+        <div className="flex items-center space-x-3 flex-1 min-w-0">
           <div className="flex-shrink-0">
-            <div className="w-10 h-10 bg-gradient-to-br from-rose-500 to-rose-600 rounded-full flex items-center justify-center shadow-sm">
+            <div className="w-10 h-10 bg-gradient-to-br from-rose-500 to-rose-600 rounded-full flex items-center justify-center">
               <FiPhoneOff className="text-white text-sm" />
             </div>
           </div>
-
-          {/* Lead Info & Category */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-gray-900 truncate">
-              {lead.leadProfile?.name || lead.name || 'Unknown'}
-            </h3>
-            <p className="text-sm text-gray-600 truncate">
-              {lead.leadProfile?.businessName || lead.company || 'No company'}
-            </p>
-            {/* Category Tag */}
-            <div className="flex items-center space-x-1 mt-1">
-              <span className="text-xs text-black">
-                {categoryInfo.name}
-              </span>
+            <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.phone}</h3>
+            <div className="flex items-center space-x-1 mt-1 flex-wrap gap-x-2">
+              <span className="text-xs text-gray-600">{categoryInfo.name}</span>
+              {lead.attempts != null && <span className="text-xs text-rose-600">{lead.attempts} attempts</span>}
+              {lead.lastAttempt && <span className="text-xs text-gray-500">{lead.lastAttempt}</span>}
             </div>
           </div>
-
-        {/* Attempts Badge */}
-        <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-rose-600">{lead.attempts} attempts</p>
         </div>
-      </div>
-
-      {/* Last Attempt & Phone */}
-      <div className="flex justify-between items-center">
-        <span className="text-xs text-gray-500">Last attempt: {lead.lastAttempt}</span>
-        <span className="text-xs text-gray-500">{lead.phone}</span>
-      </div>
-
-      {/* Actions Section */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <span className="text-xs text-gray-500">Not picked</span>
-        
-        <div className="flex items-center space-x-1">
+        {/* Actions: Call, WhatsApp, Connect, More */}
+        <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
           {/* Call Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              handleCall(lead.phone)
-            }}
-            className="p-2 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200"
-            title="Call"
-          >
-            <FiPhone className="w-4 h-4" />
+          <button onClick={() => handleCall(lead.phone)} className="bg-white text-teal-600 border border-teal-200 px-2.5 py-1.5 rounded-lg hover:bg-teal-50 text-xs font-medium">Call</button>
+          <button onClick={() => handleWhatsApp(lead.phone)} className="bg-green-500 text-white p-1.5 rounded-lg hover:bg-green-600">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/></svg>
           </button>
-
-          {/* WhatsApp Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              handleWhatsApp(lead.phone)
-            }}
-            className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
-            title="WhatsApp"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/>
-            </svg>
-          </button>
-
-          {/* Profile Button - Only show if lead has profile */}
-          {lead.leadProfile && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleProfile(lead._id)
-              }}
-              className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
-              title="Profile"
-            >
-              <FiUser className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* More Options */}
+          <button onClick={() => { setSelectedLeadForForm(lead._id); setShowContactedForm(true) }} className="bg-teal-500 text-white px-2.5 py-1.5 rounded-lg hover:bg-teal-600 text-xs font-medium">Connect</button>
           <div className="relative">
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)
-              }}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all duration-200"
-            >
-              <FiMoreVertical className="w-4 h-4" />
-            </button>
-
-            {/* Actions Dropdown */}
+            <button onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)} className="text-gray-400 hover:text-gray-600 p-1"><FiMoreVertical className="w-4 h-4" /></button>
             <AnimatePresence>
               {showActionsMenu === lead._id && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  transition={{ duration: 0.2}}
-                  className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-200 z-50"
-                >
-                  <div className="py-1">
-                    <button
-                      onClick={() => handleStatusChange(lead._id, 'connected')}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
-                    >
-                      Contacted
-                    </button>
-                    <button
-                      onClick={() => handleFollowUp(lead._id)}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
-                    >
-                      Follow Up
-                    </button>
-                    <button
-                      onClick={() => handleStatusChange(lead._id, 'not_interested')}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
-                    >
-                      Not Interested
-                    </button>
+                <motion.div initial={{ opacity: 0, scale: 0.95, y: -10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} transition={{ duration: 0.2 }} className="absolute right-0 top-full mt-2 w-36 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                  <div className="py-1.5">
+                    <button onClick={() => handleStatusChange(lead._id, 'connected')} className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700">Mark Contacted</button>
+                    <button onClick={() => handleFollowUp(lead._id)} className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700">Follow Up</button>
+                    <button onClick={() => handleStatusChange(lead._id, 'not_interested')} className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700">Not Interested</button>
                   </div>
                 </motion.div>
               )}
@@ -418,131 +328,45 @@ const SL_not_picked = () => {
           </div>
         </div>
       </div>
-    </div>
     )
   }
 
-  // Desktop Lead Card Component
+  // Desktop Lead Card Component - same style: phone-first, Connect button
   const DesktopLeadCard = ({ lead }) => {
     const categoryInfo = getCategoryInfo(lead.category)
-    
     return (
-      <div className="p-4 space-y-3">
-        {/* Header Section */}
-        <div className="flex items-center space-x-3">
-          {/* Avatar */}
+      <div className="p-4 flex items-center justify-between border-b border-gray-100 last:border-b-0">
+        <div className="flex items-center space-x-3 flex-1 min-w-0" onClick={() => handleCardClick(lead)}>
           <div className="flex-shrink-0">
-            <div className="w-12 h-12 bg-gradient-to-br from-rose-500 to-rose-600 rounded-full flex items-center justify-center shadow-sm">
+            <div className="w-12 h-12 bg-gradient-to-br from-rose-500 to-rose-600 rounded-full flex items-center justify-center">
               <FiPhoneOff className="text-white text-lg" />
             </div>
           </div>
-
-          {/* Lead Info & Category */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 truncate">
-              {lead.leadProfile?.name || lead.name || 'Unknown'}
-            </h3>
-            <p className="text-sm text-gray-600 truncate">
-              {lead.leadProfile?.businessName || lead.company || 'No company'}
-            </p>
-            {/* Category Tag */}
+            <h3 className="text-lg font-semibold text-gray-900 truncate">{lead.phone}</h3>
             <div className="flex items-center space-x-2 mt-1">
-              <span className="text-xs text-black">
-                {categoryInfo.name}
-              </span>
+              <span className="text-xs text-gray-600">{categoryInfo.name}</span>
+              {lead.attempts != null && <span className="text-xs text-rose-600">{lead.attempts} attempts</span>}
+              {lead.lastAttempt && <span className="text-xs text-gray-500">{lead.lastAttempt}</span>}
             </div>
           </div>
-
-        {/* Attempts & Last Attempt */}
-        <div className="text-right flex-shrink-0">
-          <p className="text-lg font-bold text-rose-600">{lead.attempts} attempts</p>
-          <p className="text-xs text-gray-500">{lead.lastAttempt}</p>
         </div>
-      </div>
-
-      {/* Phone */}
-      <div className="flex justify-between items-center">
-        <span className="text-sm text-gray-500">{lead.phone}</span>
-      </div>
-
-      {/* Actions Section */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <span className="text-sm text-gray-500"></span>
-        
-        <div className="flex items-center space-x-2">
-          {/* Call Button */}
-          <button
-            onClick={() => handleCall(lead.phone)}
-            className="px-3 py-1.5 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200 text-sm font-medium flex items-center space-x-1"
-          >
-            <FiPhone className="w-4 h-4" />
-            <span>Call</span>
-          </button>
-          
-          <button
-            onClick={() => handleWhatsApp(lead.phone)}
-            className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200 flex items-center space-x-1"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.87 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/>
-            </svg>
+        <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => handleCall(lead.phone)} className="px-3 py-1.5 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 text-sm font-medium flex items-center space-x-1"><FiPhone className="w-4 h-4" /><span>Call</span></button>
+          <button onClick={() => handleWhatsApp(lead.phone)} className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center space-x-1">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/></svg>
             <span>WhatsApp</span>
           </button>
-
-          {/* Profile Button - Only show if lead has profile */}
-          {lead.leadProfile && (
-            <button
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                console.log('Lead object:', lead)
-                console.log('Lead _id:', lead._id)
-                handleProfile(lead._id)
-              }}
-              className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200 flex items-center space-x-1"
-            >
-              <FiUser className="w-4 h-4" />
-              <span>Profile</span>
-            </button>
-          )}
-
+          <button onClick={() => { setSelectedLeadForForm(lead._id); setShowContactedForm(true) }} className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 text-sm font-medium">Connect</button>
           <div className="relative">
-            <button
-              onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)}
-              className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all duration-200"
-            >
-              <FiMoreVertical className="w-4 h-4" />
-            </button>
-
-            {/* Actions Dropdown */}
+            <button onClick={() => setShowActionsMenu(showActionsMenu === lead._id ? null : lead._id)} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"><FiMoreVertical className="w-4 h-4" /></button>
             <AnimatePresence>
               {showActionsMenu === lead._id && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  transition={{ duration: 0.2}}
-                  className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-xl border border-gray-200 z-50"
-                >
-                  <div className="py-1">
-                    <button
-                      onClick={() => handleStatusChange(lead._id, 'connected')}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors duration-200"
-                    >
-                      Contacted
-                    </button>
-                    <button
-                      onClick={() => handleFollowUp(lead._id)}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
-                    >
-                      Follow Up
-                    </button>
-                    <button
-                      onClick={() => handleStatusChange(lead._id, 'not_interested')}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
-                    >
-                      Not Interested
-                    </button>
+                <motion.div initial={{ opacity: 0, scale: 0.95, y: -10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} transition={{ duration: 0.2 }} className="absolute right-0 top-full mt-2 w-40 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                  <div className="py-1.5">
+                    <button onClick={() => handleStatusChange(lead._id, 'connected')} className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700">Mark Contacted</button>
+                    <button onClick={() => handleFollowUp(lead._id)} className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700">Follow Up</button>
+                    <button onClick={() => handleStatusChange(lead._id, 'not_interested')} className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700">Not Interested</button>
                   </div>
                 </motion.div>
               )}
@@ -550,7 +374,6 @@ const SL_not_picked = () => {
           </div>
         </div>
       </div>
-    </div>
     )
   }
 

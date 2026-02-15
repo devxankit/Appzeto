@@ -3835,6 +3835,7 @@ const convertLeadToClient = async (req, res) => {
         totalCost: req.body.totalCost ? Math.round(Number(String(req.body.totalCost).replace(/,/g, '')) || 0) : 0,
         finishedDays: req.body.finishedDays ? parseInt(req.body.finishedDays) : undefined,
         advanceReceived: req.body.advanceReceived ? Math.round(Number(String(req.body.advanceReceived).replace(/,/g, '')) || 0) : 0,
+        advanceAccount: req.body.advanceAccount || undefined,
         includeGST: req.body.includeGST === 'true' || req.body.includeGST === true,
         description: req.body.description || ''
       };
@@ -4045,44 +4046,56 @@ const convertLeadToClient = async (req, res) => {
         const Request = require('../models/Request');
         const Admin = require('../models/Admin');
         const PaymentReceipt = require('../models/PaymentReceipt');
+        const Account = require('../models/Account');
 
-        // Create a pending payment receipt tied to the selected account
-        const receipt = await PaymentReceipt.create({
-          client: client._id,
-          project: newProject._id,
-          amount: advanceReceived,
-          account: projectData?.advanceAccount,
-          method: 'other',
-          notes: `Advance payment from sales conversion for project "${newProject.name}"`,
-          status: 'pending',
-          createdBy: req.sales.id
-        });
-
-        const admin = await Admin.findOne({ isActive: true }).select('_id');
-        if (admin && admin._id) {
-          await Request.create({
-            module: 'sales',
-            type: 'payment-recovery',
-            title: `Advance payment request for project "${newProject.name}"`,
-            description: `Advance payment of ₹${advanceReceived} requested from sales conversion.`,
-            category: 'Advance Payment',
-            priority: 'high',
-            requestedBy: req.sales.id,
-            requestedByModel: 'Sales',
-            recipient: admin._id,
-            recipientModel: 'Admin',
-            project: newProject._id,
-            client: client._id,
-            amount: advanceReceived,
-            metadata: {
-              source: 'sales-conversion',
-              leadId: lead._id.toString(),
-              projectId: newProject._id.toString(),
-              paymentReceiptId: receipt._id
-            }
-          });
+        // Resolve account: use selected advance account or first active account so receipt can be created
+        let accountId = projectData?.advanceAccount;
+        if (!accountId) {
+          const firstAccount = await Account.findOne({ isActive: true }).select('_id');
+          accountId = firstAccount?._id;
+        }
+        if (!accountId) {
+          console.warn('No account available for advance receipt; skipping receipt/request creation');
         } else {
-          console.warn('No active admin found to create advance payment request');
+          // Create a pending payment receipt tied to the selected account
+          const receipt = await PaymentReceipt.create({
+            client: client._id,
+            project: newProject._id,
+            amount: advanceReceived,
+            account: accountId,
+            method: 'other',
+            notes: `Advance payment from sales conversion for project "${newProject.name}"`,
+            status: 'pending',
+            createdBy: req.sales.id
+          });
+
+          const admin = await Admin.findOne({ isActive: true }).select('_id');
+          if (admin && admin._id) {
+            await Request.create({
+              module: 'sales',
+              type: 'payment-recovery',
+              title: `Advance payment request for project "${newProject.name}"`,
+              description: `Advance payment of ₹${advanceReceived.toLocaleString()} requested from sales conversion.`,
+              category: 'Advance Payment',
+              priority: 'high',
+              requestedBy: req.sales.id,
+              requestedByModel: 'Sales',
+              recipient: admin._id,
+              recipientModel: 'Admin',
+              project: newProject._id,
+              client: client._id,
+              amount: advanceReceived,
+              metadata: {
+                source: 'sales-conversion',
+                leadId: lead._id.toString(),
+                projectId: newProject._id.toString(),
+                paymentReceiptId: receipt._id.toString(),
+                screenshotUrl: screenshotAttachment?.secure_url || null
+              }
+            });
+          } else {
+            console.warn('No active admin found to create advance payment request');
+          }
         }
       } catch (error) {
         console.error('Error creating advance payment request:', error);
