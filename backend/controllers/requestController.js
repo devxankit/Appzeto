@@ -232,6 +232,8 @@ const getRequests = asyncHandler(async (req, res, next) => {
     status,
     priority,
     search,
+    startDate,
+    endDate,
     page = 1,
     limit = 20,
     paymentApprovalOnly, // 'true' = only payment-related approval requests (from sales / channel flow)
@@ -240,6 +242,17 @@ const getRequests = asyncHandler(async (req, res, next) => {
 
   // Build filter
   const filter = {};
+
+  // Date range filter (by request createdAt)
+  if (startDate || endDate) {
+    filter.createdAt = {};
+    if (startDate) filter.createdAt.$gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      filter.createdAt.$lte = end;
+    }
+  }
 
   // Filter by direction
   if (direction === 'incoming') {

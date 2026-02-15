@@ -9,7 +9,8 @@ import {
   FiUsers,
   FiLoader,
   FiAlertCircle,
-  FiTarget
+  FiTarget,
+  FiArrowUp
 } from 'react-icons/fi'
 import { FaRupeeSign } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
@@ -52,10 +53,11 @@ const SL_wallet = () => {
       const teamLeadIncentiveCurrent = Number(data?.teamLeadIncentive?.current || 0)
       const teamLeadIncentivePending = Number(data?.teamLeadIncentive?.pending || 0)
 
-      // Team target reward (for team leads only)
+      // Team target reward (for team leads only) - currentReward is 0 when paid, status: 'paid' | 'pending'
       const teamTargetReward = data?.teamTargetReward || null
-      const teamTargetRewardAmount = teamTargetReward ? Number(teamTargetReward.reward || 0) : 0
+      const teamTargetRewardAmount = teamTargetReward ? Number(teamTargetReward.currentReward ?? teamTargetReward.reward ?? 0) : 0
       const teamTarget = teamTargetReward ? Number(teamTargetReward.target || 0) : 0
+      const teamTargetRewardStatus = teamTargetReward?.status || 'pending'
 
       // Check if user is a team lead
       const isTeamLead = data?.isTeamLead || false
@@ -78,15 +80,16 @@ const SL_wallet = () => {
         },
         teamTargetReward: teamTargetReward ? {
           target: teamTarget,
-          reward: teamTargetRewardAmount
+          reward: teamTargetRewardAmount, // Current display value (0 when paid)
+          status: teamTargetRewardStatus
         } : null,
         transactions: (data?.transactions || []).map(t => ({
           id: t.id || `${t.type}-${t.date}`,
           amount: Number(t.amount || 0),
           type: 'income',
           date: new Date(t.date).toLocaleDateString(),
-          category: t.type === 'salary' ? 'Salary' : 'Reward',
-          description: t.type === 'salary' ? 'Monthly Salary' : (t.clientName ? `Incentive - ${t.clientName}` : 'Incentive'),
+          category: t.type === 'salary' ? 'Salary' : t.type === 'incentive_payment' ? 'Incentive Payment' : t.type === 'reward_payment' ? 'Reward Payment' : 'Reward',
+          description: t.type === 'salary' ? 'Monthly Salary' : t.type === 'incentive_payment' ? 'Incentive Paid' : t.type === 'reward_payment' ? 'Reward Paid' : (t.clientName ? `Incentive - ${t.clientName}` : 'Incentive'),
           isTeamLeadIncentive: t.isTeamLeadIncentive || false,
           teamMemberName: t.teamMemberName || null
         }))
@@ -133,6 +136,8 @@ const SL_wallet = () => {
     switch(category) {
       case 'Salary': return FiCreditCard
       case 'Reward': return FiTrendingUp
+      case 'Incentive Payment': return FiTrendingUp
+      case 'Reward Payment': return FiTarget
       case 'Withdrawal': return FiArrowUp
       default: return FiActivity
     }
@@ -424,10 +429,17 @@ const SL_wallet = () => {
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-emerald-800 text-xs font-semibold">Team Target Reward</span>
-                    <FiTarget className="text-emerald-600 text-xs" />
+                    <div className="flex items-center gap-1">
+                      {wallet.teamTargetReward.status === 'paid' && (
+                        <span className="text-emerald-700 text-[10px] font-medium bg-emerald-100 px-1.5 py-0.5 rounded">Paid</span>
+                      )}
+                      <FiTarget className="text-emerald-600 text-xs" />
+                    </div>
                   </div>
                   <p className="text-gray-900 text-sm font-bold">{formatCurrency(wallet.teamTargetReward.reward)}</p>
-                  <p className="text-emerald-600 text-xs mt-0.5">Reward for achieving team target</p>
+                  <p className="text-emerald-600 text-xs mt-0.5">
+                    {wallet.teamTargetReward.status === 'paid' ? 'Reward paid with salary' : 'Reward for achieving team target'}
+                  </p>
                   {wallet.teamTargetReward.target > 0 && (
                     <p className="text-emerald-700 text-xs mt-1">Target: ₹{wallet.teamTargetReward.target.toLocaleString()}</p>
                   )}

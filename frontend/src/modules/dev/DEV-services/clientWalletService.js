@@ -15,12 +15,13 @@ const buildQueryString = (params = {}) => {
 const normalizeSummaryResponse = (response) => {
   if (!response) return { summary: null, projects: [] };
 
-  const payload = response.data || response; // Handle { success, data } shape or direct payload
-  const data = payload.data || payload;
+  // Handle { success, data: { summary, projects } } or { data: { summary, projects } }
+  const payload = response.data ?? response;
+  const data = (payload && typeof payload === 'object' && payload.data) ? payload.data : payload;
 
   return {
-    summary: data.summary || null,
-    projects: Array.isArray(data.projects) ? data.projects : []
+    summary: (data && data.summary) || null,
+    projects: Array.isArray(data?.projects) ? data.projects : []
   };
 };
 

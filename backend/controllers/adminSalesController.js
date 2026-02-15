@@ -784,17 +784,22 @@ const setSalesTarget = asyncHandler(async (req, res, next) => {
       const existingIndex = member.salesTargets.findIndex(
         t => t.targetNumber === newTarget.targetNumber
       );
+      const rewardAmount = newTarget.reward !== undefined && newTarget.reward !== null
+        ? Math.max(0, Number(newTarget.reward))
+        : 0;
 
       if (existingIndex >= 0) {
         // Update existing target
         member.salesTargets[existingIndex].amount = newTarget.amount;
         member.salesTargets[existingIndex].targetDate = new Date(newTarget.targetDate);
+        member.salesTargets[existingIndex].reward = rewardAmount;
         member.salesTargets[existingIndex].updatedAt = new Date();
       } else {
         // Add new target
         member.salesTargets.push({
           targetNumber: newTarget.targetNumber,
           amount: newTarget.amount,
+          reward: rewardAmount,
           targetDate: new Date(newTarget.targetDate),
           createdAt: new Date(),
           updatedAt: new Date()

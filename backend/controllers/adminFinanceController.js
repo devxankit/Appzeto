@@ -578,22 +578,22 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   ]);
   const projectInstallmentRevenueAmount = projectInstallmentRevenue[0]?.totalAmount || 0;
 
-  // 4. Other Finance incoming transactions (excluding payments and installments to avoid double counting)
-  // These are manual transactions created by Admin or other incoming transactions not from payments/installments
-  // Payments and installments are counted directly from their source models above
+  // 4. Other Finance incoming transactions (excluding payments, installments, and payment receipts to avoid double counting)
+  // Payments, payment receipts, and installments are counted directly from their source models above
+  // Payment receipts create AdminFinance transactions with sourceType 'paymentReceipt' - exclude to avoid double count
   const transactionFilter = timeFilter !== 'all'
     ? {
       transactionDate: dateFilter,
       recordType: 'transaction',
       transactionType: 'incoming',
       status: 'completed',
-      'metadata.sourceType': { $nin: ['payment', 'projectInstallment'] }
+      'metadata.sourceType': { $nin: ['payment', 'projectInstallment', 'paymentReceipt'] }
     }
     : {
       recordType: 'transaction',
       transactionType: 'incoming',
       status: 'completed',
-      'metadata.sourceType': { $nin: ['payment', 'projectInstallment'] }
+      'metadata.sourceType': { $nin: ['payment', 'projectInstallment', 'paymentReceipt'] }
     };
   const transactionRevenue = await AdminFinance.aggregate([
     { $match: transactionFilter },
@@ -773,9 +773,9 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   ]);
   const incentiveExpensesAmount = incentiveTransactions[0]?.totalAmount || 0;
 
-  // 5. Paid Rewards (Sales & Dev team rewards)
-  // Count from finance transactions (created when reward payments are made through salary management)
-  // This ensures all reward payments are counted, regardless of how they were paid
+  // 5. Paid Rewards (Sales & Dev team rewards + PM Rewards)
+  // Count from finance transactions - includes employee rewards and PM rewards
+  // Excludes from otherExpenses to avoid double counting
   let rewardTransactionFilter;
   if (timeFilter !== 'all') {
     rewardTransactionFilter = {
@@ -784,7 +784,9 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       status: 'completed',
       $or: [
         { category: 'Reward Payment' },
-        { 'metadata.sourceType': 'reward' }
+        { category: 'PM Reward' },
+        { 'metadata.sourceType': 'reward' },
+        { 'metadata.sourceType': 'pmReward' }
       ],
       transactionDate: dateFilter
     };
@@ -795,7 +797,9 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       status: 'completed',
       $or: [
         { category: 'Reward Payment' },
-        { 'metadata.sourceType': 'reward' }
+        { category: 'PM Reward' },
+        { 'metadata.sourceType': 'reward' },
+        { 'metadata.sourceType': 'pmReward' }
       ]
     };
   }
@@ -977,7 +981,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
         recordType: 'transaction',
         transactionType: 'incoming',
         status: 'completed',
-        'metadata.sourceType': { $nin: ['payment', 'projectInstallment'] }
+        'metadata.sourceType': { $nin: ['payment', 'projectInstallment', 'paymentReceipt'] }
       }
     },
     { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
@@ -1119,7 +1123,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       { $group: { _id: null, totalAmount: { $sum: '$installmentPlan.amount' } } }
     ]);
     const lastMonthTransactionRevenue = await AdminFinance.aggregate([
-      { $match: { transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }, recordType: 'transaction', transactionType: 'incoming', status: 'completed', 'metadata.sourceType': { $nin: ['payment', 'projectInstallment'] } } },
+      { $match: { transactionDate: { $gte: lastMonthStart, $lte: lastMonthEnd }, recordType: 'transaction', transactionType: 'incoming', status: 'completed', 'metadata.sourceType': { $nin: ['payment', 'projectInstallment', 'paymentReceipt'] } } },
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
     ]);
     // Last month revenue - ALL incoming amounts (excluding project advances to avoid double counting)
@@ -2141,11 +2145,25 @@ const getSalesIncentiveMonthlySummary = asyncHandler(async (req, res, next) => {
 // @route   GET /api/admin/finance/pending-recovery
 // @access  Private (Admin/Finance)
 const getPendingRecovery = asyncHandler(async (req, res, next) => {
-  const projects = await Project.find({
+  const { startDate, endDate } = req.query;
+
+  const filter = {
     'financialDetails.remainingAmount': { $gt: 0 },
     'financialDetails.totalCost': { $gt: 0 },
     status: { $nin: ['cancelled'] }
-  })
+  };
+
+  if (startDate || endDate) {
+    filter.createdAt = {};
+    if (startDate) filter.createdAt.$gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      filter.createdAt.$lte = end;
+    }
+  }
+
+  const projects = await Project.find(filter)
     .populate('client', 'name companyName convertedBy')
     .populate('submittedBy', 'name')
     .select('name status progress financialDetails submittedBy client')
@@ -2168,6 +2186,72 @@ const getPendingRecovery = asyncHandler(async (req, res, next) => {
       totalCost,
       relatedSalesOrCp: salesName || '—',
       progress: Math.min(100, Math.max(0, progress))
+    };
+  });
+
+  res.status(200).json({
+    success: true,
+    data
+  });
+});
+
+// @desc    Get all GST projects (projects with includeGST = true) for finance management
+// @route   GET /api/admin/finance/gst-projects
+// @access  Private (Admin/Finance)
+const getGstProjects = asyncHandler(async (req, res, next) => {
+  const { startDate, endDate } = req.query;
+
+  const filter = {
+    'financialDetails.includeGST': true,
+    status: { $nin: ['cancelled'] }
+  };
+
+  if (startDate || endDate) {
+    filter.createdAt = {};
+    if (startDate) filter.createdAt.$gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      filter.createdAt.$lte = end;
+    }
+  }
+
+  const projects = await Project.find(filter)
+    .populate('client', 'name companyName phone email convertedBy')
+    .populate('submittedBy', 'name')
+    .populate('projectManager', 'name')
+    .select('name status progress financialDetails submittedBy client projectManager dueDate')
+    .sort({ 'financialDetails.remainingAmount': -1, createdAt: -1 })
+    .lean();
+
+  const data = projects.map((p) => {
+    const totalCost = Number(p.financialDetails?.totalCost || p.budget || 0);
+    const advanceReceived = Number(p.financialDetails?.advanceReceived || 0);
+    const remainingAmount = Number(p.financialDetails?.remainingAmount || 0);
+    const includeGST = !!p.financialDetails?.includeGST;
+    // When includeGST: totalCost = base * 1.18, so base = totalCost/1.18, gstAmount = totalCost - base
+    const baseCost = includeGST ? totalCost / 1.18 : totalCost;
+    const gstAmount = includeGST ? Math.round(totalCost - baseCost) : 0;
+    const progress = Number(p.progress) || 0;
+    const salesName = p.submittedBy?.name || null;
+    const client = p.client;
+    const clientName = client?.companyName || client?.name || 'N/A';
+    const clientPhone = client?.phone || null;
+    const clientEmail = client?.email || null;
+    return {
+      projectId: p._id,
+      projectName: p.name,
+      projectStatus: p.status,
+      progress: Math.min(100, Math.max(0, progress)),
+      clientName,
+      clientPhone,
+      clientEmail,
+      recoveredAmount: advanceReceived,
+      pendingRecovery: remainingAmount,
+      totalCost,
+      gstApplied: gstAmount,
+      baseCost: Math.round(baseCost),
+      relatedSalesOrCp: salesName || '—'
     };
   });
 
@@ -2204,4 +2288,5 @@ module.exports = {
   recordSalesIncentivePayment,
   getSalesIncentiveMonthlySummary,
   getPendingRecovery,
+  getGstProjects,
 };

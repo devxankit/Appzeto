@@ -99,8 +99,8 @@ const SL_demo_request = () => {
           })
         ])
         setCategories(cats)
-        setDemoRequestsData(res.items || [])
-        setStats(res.stats || { total: 0, pending: 0, scheduled: 0, completed: 0 })
+        setDemoRequestsData(res?.items || [])
+        setStats(res?.stats || { total: 0, pending: 0, scheduled: 0, completed: 0 })
       } catch (e) {
         console.error('Fetch demo requests failed', e)
         toast.error('Failed to fetch demo requests')
@@ -178,8 +178,8 @@ const SL_demo_request = () => {
         status: selectedFilter, 
         category: selectedCategory 
       })
-      setDemoRequestsData(res.items || [])
-      setStats(res.stats || stats)
+      setDemoRequestsData(res?.items || [])
+      setStats(res?.stats || stats)
       setShowActionsMenu(null)
     } catch (e) {
       console.error('Update demo status failed', e)

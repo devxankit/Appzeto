@@ -120,11 +120,11 @@ const SL_newLeads = () => {
       }
 
       const response = await salesLeadService.getLeadsByStatus('new', params)
-      const data = Array.isArray(response.data) ? response.data : []
-      const page = response.page || params.page || 1
-      const limit = response.limit || params.limit || 12
-      const total = typeof response.total === 'number' ? response.total : data.length
-      const pages = response.pages || Math.max(1, Math.ceil(total / limit))
+      const data = Array.isArray(response?.data) ? response?.data : []
+      const page = response?.page || params?.page || 1
+      const limit = response?.limit || params?.limit || 12
+      const total = typeof response?.total === 'number' ? response.total : data.length
+      const pages = response?.pages ?? Math.max(1, Math.ceil(total / limit))
 
       setLeadsData(data)
       setPagination({

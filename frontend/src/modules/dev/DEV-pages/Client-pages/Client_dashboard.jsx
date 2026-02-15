@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import Client_navbar from '../../DEV-components/Client_navbar'
 import { clientProjectService, clientAnalyticsService, socketService } from '../../DEV-services'
+import clientRequestService from '../../DEV-services/clientRequestService'
+import { useToast } from '../../../../contexts/ToastContext'
 import { 
   FiFolder, 
   FiFileText, 
@@ -27,6 +29,7 @@ import {
 } from 'react-icons/fi'
 
 const Client_dashboard = () => {
+  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedRequest, setSelectedRequest] = useState(null)
@@ -44,12 +47,12 @@ const Client_dashboard = () => {
         completed: 0,
         awaitingApproval: 0
       },
-      requests: {
-        total: 0,
-        pendingResponse: 0,
-        responded: 0,
-        urgent: 0
-      },
+          requests: {
+            total: recentRequests.length,
+            pendingResponse: recentRequests.filter(r => r.status === 'pending').length,
+            responded: recentRequests.filter(r => r.status !== 'pending').length,
+            urgent: 0
+          },
       tasks: {
         total: 0,
         completed: 0,
@@ -101,20 +104,33 @@ const Client_dashboard = () => {
       setLoading(true)
       setError(null)
       
-      // Client ID is not needed - backend automatically uses authenticated client from token
-      // Load client project statistics and recent projects
-      const [clientStatsResponse, projectsResponse] = await Promise.all([
+      // Load client project statistics, recent projects, and incoming requests
+      const [clientStatsResponse, projectsResponse, requestsResponse] = await Promise.all([
         clientAnalyticsService.getClientProjectStats(),
-        clientProjectService.getProjectsByClient(null, { limit: 5 })
+        clientProjectService.getProjectsByClient(null, { limit: 5 }),
+        clientRequestService.getRequests({ direction: 'incoming', limit: 5 }).catch(() => ({ data: [] }))
       ])
       
       // Handle response structure from backend
       // Statistics endpoint returns: { success: true, data: { totalProjects, activeProjects, ... } }
       // Projects endpoint returns: { success: true, data: [...], count, total }
-      const clientStats = clientStatsResponse.data || clientStatsResponse
-      const recentProjects = Array.isArray(projectsResponse.data) 
+      const clientStats = clientStatsResponse?.data || clientStatsResponse || {}
+      const recentProjects = Array.isArray(projectsResponse?.data) 
         ? projectsResponse.data 
         : (Array.isArray(projectsResponse) ? projectsResponse : [])
+      const requestsList = Array.isArray(requestsResponse?.data) 
+        ? requestsResponse.data 
+        : (Array.isArray(requestsResponse) ? requestsResponse : [])
+      const recentRequests = requestsList.map(r => ({
+        id: r._id || r.id,
+        title: r.title,
+        description: r.description,
+        status: r.status,
+        type: r.type,
+        priority: r.priority || 'normal',
+        submittedBy: r.requestedBy?.name || 'Team',
+        submittedDate: r.createdAt
+      }))
       
       // Transform the statistics to match expected format
       // Backend returns: { totalProjects, activeProjects, completedProjects, avgProgress, ... }
@@ -187,8 +203,8 @@ const Client_dashboard = () => {
           overallProgress: transformedStats.projects.avgProgress
         },
         recentProjects: transformedProjects,
-        recentRequests: [], // This would need to be implemented
-        recentActivities: [] // This would need to be implemented
+        recentRequests,
+        recentActivities: [] // TODO: implement activity feed
       }))
     } catch (error) {
       console.error('Error loading dashboard data:', error)
@@ -264,41 +280,38 @@ const Client_dashboard = () => {
   }
 
   const handleConfirmResponse = async () => {
+    if (!selectedRequest?.id) return
     setIsSubmitting(true)
     
-    // Simulate API call
-    setTimeout(() => {
-      console.log('Response submitted:', {
-        requestId: selectedRequest.id,
+    try {
+      await clientRequestService.respondToRequest(
+        selectedRequest.id,
         responseType,
-        responseText,
-        timestamp: new Date().toISOString()
-      })
+        responseText?.trim() || ''
+      )
+      toast.success('Response submitted successfully', { title: 'Success', duration: 3000 })
       
-      // Update the request status in the dashboard data
       setDashboardData(prevData => ({
         ...prevData,
         recentRequests: prevData.recentRequests.map(req => 
-          req.id === selectedRequest.id 
-            ? { ...req, status: 'responded' }
-            : req
+          String(req.id) === String(selectedRequest.id) ? { ...req, status: 'responded' } : req
         ),
         statistics: {
           ...prevData.statistics,
           requests: {
             ...prevData.statistics.requests,
-            pendingResponse: prevData.statistics.requests.pendingResponse - 1,
-            responded: prevData.statistics.requests.responded + 1
+            pendingResponse: Math.max(0, (prevData.statistics.requests.pendingResponse || 0) - 1),
+            responded: (prevData.statistics.requests.responded || 0) + 1
           }
         }
       }))
-      
-      setIsSubmitting(false)
       handleCloseDialog()
-      
-      // Show success message (you could add a toast notification here)
-      console.log('Request status updated to responded')
-    }, 1000)
+    } catch (err) {
+      console.error('Error responding to request:', err)
+      toast.error(err?.message || 'Failed to submit response', { title: 'Error', duration: 4000 })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleCancelConfirmation = () => {
@@ -402,10 +415,10 @@ const Client_dashboard = () => {
 
                     {/* Footer */}
                     <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                      <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2">
                         <div className="flex items-center space-x-1 text-gray-500">
                           <FiUsers className="h-3 w-3" />
-                          <span className="text-xs font-medium">{project.assignedTeam.length}</span>
+                          <span className="text-xs font-medium">{project.assignedTeam?.length ?? 0}</span>
                         </div>
                         <div className="flex items-center space-x-1 text-gray-500">
                           <FiCalendar className="h-3 w-3" />
@@ -504,7 +517,7 @@ const Client_dashboard = () => {
                       <div className="flex items-center space-x-4">
                         <div className="flex items-center space-x-1 text-gray-500">
                           <FiUsers className="h-3.5 w-3.5" />
-                          <span className="text-xs font-medium">{project.assignedTeam.length}</span>
+                          <span className="text-xs font-medium">{project.assignedTeam?.length ?? 0}</span>
                         </div>
                         <div className="flex items-center space-x-1 text-gray-500">
                           <FiCalendar className="h-3.5 w-3.5" />

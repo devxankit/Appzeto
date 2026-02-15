@@ -93,12 +93,12 @@ const SL_connectedLeads = () => {
       }
 
       const response = await salesLeadService.getLeadsByStatus('connected', params)
-      setLeadsData(response.data)
+      setLeadsData(response?.data || [])
       setPagination({
-        page: response.page,
-        limit: response.limit,
-        total: response.total,
-        pages: response.pages
+        page: response?.page ?? 1,
+        limit: response?.limit ?? 10,
+        total: response?.total ?? 0,
+        pages: response?.pages ?? 1
       })
     } catch (error) {
       console.error('Error fetching leads:', error)

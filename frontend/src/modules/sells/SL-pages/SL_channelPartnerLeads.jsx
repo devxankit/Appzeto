@@ -70,14 +70,14 @@ const SL_channelPartnerLeads = () => {
       if (selectedFilter !== 'all') params.timeFrame = selectedFilter
 
       const response = await salesLeadService.getChannelPartnerLeads(params)
-      setLeadsData(response.data || [])
+      setLeadsData(Array.isArray(response?.data) ? response?.data : [])
       setPagination({
-        page: response.page || 1,
-        limit: response.limit || 12,
-        total: response.total || 0,
-        pages: response.pages || 0
+        page: response?.page || 1,
+        limit: response?.limit || 12,
+        total: response?.total || 0,
+        pages: response?.pages || 0
       })
-      setTotalLeads(response.total || 0)
+      setTotalLeads(response?.total || 0)
     } catch (error) {
       console.error('Error fetching channel partner leads:', error)
       toast.error('Unable to load leads. Please check your connection.')

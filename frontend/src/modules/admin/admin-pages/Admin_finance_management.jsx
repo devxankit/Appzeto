@@ -14,8 +14,6 @@ import {
   FiFileText,
   FiUsers,
   FiCalendar,
-  FiSearch,
-  FiFilter,
   FiPlus,
   FiEdit,
   FiEye,
@@ -34,7 +32,9 @@ import {
   FiChevronRight,
   FiDownload,
   FiCheckSquare,
-  FiSend
+  FiSend,
+  FiPercent,
+  FiCheck
 } from 'react-icons/fi'
 
 const Admin_finance_management = () => {
@@ -43,13 +43,17 @@ const Admin_finance_management = () => {
   // State management
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('transactions')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedFilter, setSelectedFilter] = useState('all')
-  const [transactionTypeFilter, setTransactionTypeFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(20)
-  const [timeFilter, setTimeFilter] = useState('all')
-  const [isTimeFilterOpen, setIsTimeFilterOpen] = useState(false)
+  // Date range filter (same as dashboard)
+  const [filterType, setFilterType] = useState('all') // 'day', 'week', 'month', 'year', 'custom', 'all'
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [tempStartDate, setTempStartDate] = useState('')
+  const [tempEndDate, setTempEndDate] = useState('')
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false)
+  const [showDateRangePicker, setShowDateRangePicker] = useState(false)
+  const [showBreakdownModal, setShowBreakdownModal] = useState(false)
   const [error, setError] = useState(null)
   
   // Modal states
@@ -164,11 +168,97 @@ const Admin_finance_management = () => {
   const [statisticsLoading, setStatisticsLoading] = useState(false)
   const [showAllStats, setShowAllStats] = useState(false)
 
+  // Helper: get date range based on filter type (same as dashboard)
+  const getDateRange = () => {
+    if (filterType === 'all') {
+      return { startDate: null, endDate: null, startISO: null, endISO: null }
+    }
+    const today = new Date()
+    today.setHours(23, 59, 59, 999)
+    let start, end
+    switch (filterType) {
+      case 'day':
+        start = new Date(today)
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'week':
+        start = new Date(today)
+        start.setDate(today.getDate() - 6)
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'month':
+        start = new Date(today.getFullYear(), today.getMonth(), 1)
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'year':
+        start = new Date(today.getFullYear(), 0, 1)
+        start.setHours(0, 0, 0, 0)
+        end = today
+        break
+      case 'custom':
+        if (startDate && endDate) {
+          start = new Date(startDate)
+          start.setHours(0, 0, 0, 0)
+          end = new Date(endDate)
+          end.setHours(23, 59, 59, 999)
+        } else {
+          start = new Date(today.getFullYear(), today.getMonth(), 1)
+          start.setHours(0, 0, 0, 0)
+          end = today
+        }
+        break
+      default:
+        start = new Date(today.getFullYear(), today.getMonth(), 1)
+        start.setHours(0, 0, 0, 0)
+        end = today
+    }
+    return {
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0],
+      startISO: start.toISOString(),
+      endISO: end.toISOString()
+    }
+  }
+
+  // Helper: get filter label for display (same as dashboard)
+  const getFilterLabel = () => {
+    switch (filterType) {
+      case 'day': return 'Today'
+      case 'week': return 'This Week'
+      case 'month': return 'This Month'
+      case 'year': return 'This Year'
+      case 'all': return 'All Time'
+      case 'custom':
+        if (startDate && endDate) {
+          const s = new Date(startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+          const e = new Date(endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+          return `${s} - ${e}`
+        }
+        return 'Custom Range'
+      default: return 'This Month'
+    }
+  }
+
   // Fetch finance statistics from API
   const fetchFinanceStatistics = async () => {
     try {
       setStatisticsLoading(true)
-      const response = await adminFinanceService.getFinanceStatistics(timeFilter)
+      const dateRange = getDateRange()
+      let timeFilter = 'all'
+      const params = {}
+      if (filterType === 'day') timeFilter = 'day'
+      else if (filterType === 'week') timeFilter = 'week'
+      else if (filterType === 'month') timeFilter = 'month'
+      else if (filterType === 'year') timeFilter = 'year'
+      else if (filterType === 'custom' && dateRange.startDate && dateRange.endDate) {
+        timeFilter = 'custom'
+        params.startDate = dateRange.startDate
+        params.endDate = dateRange.endDate
+      }
+      const response = await adminFinanceService.getFinanceStatistics(timeFilter, params)
       
       if (response && response.success && response.data) {
         setStatistics({
@@ -224,11 +314,24 @@ const Admin_finance_management = () => {
     }
   }
 
-  // Fetch statistics when component mounts or time filter changes
+  // Fetch statistics when component mounts or date filter changes
   useEffect(() => {
-    fetchFinanceStatistics()
+    if (filterType === 'all' || filterType !== 'custom' || (startDate && endDate)) {
+      fetchFinanceStatistics()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeFilter])
+  }, [filterType, startDate, endDate])
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showFilterDropdown && !event.target.closest('.filter-dropdown-container')) {
+        setShowFilterDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showFilterDropdown])
 
   // Time-based statistics (now using real API data)
   const getTimeBasedStats = () => {
@@ -298,6 +401,10 @@ const Admin_finance_management = () => {
   const [pendingRecoveryList, setPendingRecoveryList] = useState([])
   const [pendingRecoveryLoading, setPendingRecoveryLoading] = useState(false)
 
+  // GST projects (projects with GST applied - for finance management)
+  const [gstProjectsList, setGstProjectsList] = useState([])
+  const [gstProjectsLoading, setGstProjectsLoading] = useState(false)
+
   // Fetch accounts from API
   const fetchAccounts = async () => {
     try {
@@ -325,13 +432,9 @@ const Admin_finance_management = () => {
         limit: itemsPerPage
       }
       
-      // Add filters
-      if (selectedFilter !== 'all') {
-        params.status = selectedFilter
-      }
-      if (searchTerm) {
-        params.search = searchTerm
-      }
+      const dateRange = getDateRange()
+      if (dateRange.startDate) params.startDate = dateRange.startDate
+      if (dateRange.endDate) params.endDate = dateRange.endDate
       
       const response = await adminFinanceService.getExpenses(params)
       
@@ -361,13 +464,9 @@ const Admin_finance_management = () => {
         limit: itemsPerPage
       }
       
-      // Add filters
-      if (selectedFilter !== 'all') {
-        params.category = selectedFilter
-      }
-      if (searchTerm) {
-        params.search = searchTerm
-      }
+      const dateRange = getDateRange()
+      if (dateRange.startDate) params.startDate = dateRange.startDate
+      if (dateRange.endDate) params.endDate = dateRange.endDate
       
       const response = await adminFinanceService.getProjectExpenses(params)
       
@@ -396,16 +495,19 @@ const Admin_finance_management = () => {
   const fetchPaymentApprovalRequests = async () => {
     try {
       setPaymentApprovalLoading(true)
+      setError(null)
       const params = {
         direction: 'all',
         paymentApprovalOnly: true,
         page: currentPage,
         limit: itemsPerPage
       }
-      if (selectedFilter !== 'all') params.status = selectedFilter
-      if (searchTerm) params.search = searchTerm
+      const dateRange = getDateRange()
+      if (dateRange.startDate) params.startDate = dateRange.startDate
+      if (dateRange.endDate) params.endDate = dateRange.endDate
       const response = await adminRequestService.getRequests(params)
       if (response.success && response.data) {
+        setError(null)
         const transformed = response.data.map(req => ({
           id: req._id || req.id,
           module: req.module,
@@ -434,6 +536,7 @@ const Admin_finance_management = () => {
       }
     } catch (err) {
       console.error('Error fetching payment approval requests:', err)
+      setError(err.message || 'Failed to load payment approval requests')
       toast.error('Failed to load payment approval requests')
       setPaymentApprovalRequests([])
     } finally {
@@ -445,18 +548,51 @@ const Admin_finance_management = () => {
   const fetchPendingRecovery = async () => {
     try {
       setPendingRecoveryLoading(true)
-      const response = await adminFinanceService.getPendingRecovery()
+      setError(null)
+      const dateRange = getDateRange()
+      const params = {}
+      if (dateRange.startDate) params.startDate = dateRange.startDate
+      if (dateRange.endDate) params.endDate = dateRange.endDate
+      const response = await adminFinanceService.getPendingRecovery(params)
       if (response.success && response.data) {
+        setError(null)
         setPendingRecoveryList(response.data)
       } else {
         setPendingRecoveryList([])
       }
     } catch (err) {
       console.error('Error fetching pending recovery:', err)
+      setError(err.message || 'Failed to load pending recovery')
       toast.error('Failed to load pending recovery')
       setPendingRecoveryList([])
     } finally {
       setPendingRecoveryLoading(false)
+    }
+  }
+
+  // Fetch GST projects (projects with GST applied)
+  const fetchGstProjects = async () => {
+    try {
+      setGstProjectsLoading(true)
+      setError(null)
+      const dateRange = getDateRange()
+      const params = {}
+      if (dateRange.startDate) params.startDate = dateRange.startDate
+      if (dateRange.endDate) params.endDate = dateRange.endDate
+      const response = await adminFinanceService.getGstProjects(params)
+      if (response.success && response.data) {
+        setError(null)
+        setGstProjectsList(response.data)
+      } else {
+        setGstProjectsList([])
+      }
+    } catch (err) {
+      console.error('Error fetching GST projects:', err)
+      setError(err.message || 'Failed to load GST projects')
+      toast.error('Failed to load GST projects')
+      setGstProjectsList([])
+    } finally {
+      setGstProjectsLoading(false)
     }
   }
 
@@ -546,13 +682,9 @@ const Admin_finance_management = () => {
         limit: itemsPerPage
       }
       
-      // Add filters
-      if (selectedFilter !== 'all') {
-        params.status = selectedFilter
-      }
-      if (searchTerm) {
-        params.search = searchTerm
-      }
+      const dateRange = getDateRange()
+      if (dateRange.startDate) params.startDate = dateRange.startDate
+      if (dateRange.endDate) params.endDate = dateRange.endDate
       
       const response = await adminFinanceService.getBudgets(params)
       
@@ -595,16 +727,9 @@ const Admin_finance_management = () => {
         limit: itemsPerPage
       }
       
-      // Add filters
-      if (transactionTypeFilter !== 'all') {
-        params.type = transactionTypeFilter
-      }
-      if (selectedFilter !== 'all') {
-        params.status = selectedFilter
-      }
-      if (searchTerm) {
-        params.search = searchTerm
-      }
+      const dateRange = getDateRange()
+      if (dateRange.startDate) params.startDate = dateRange.startDate
+      if (dateRange.endDate) params.endDate = dateRange.endDate
       
       const response = await adminFinanceService.getTransactions(params)
       
@@ -625,12 +750,12 @@ const Admin_finance_management = () => {
 
   // Reset to page 1 when filters change
   useEffect(() => {
-    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses' || activeTab === 'payment-approvals') {
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses' || activeTab === 'payment-approvals' || activeTab === 'pending-recovery' || activeTab === 'gst-projects') {
       setCurrentPage(1)
     }
-  }, [transactionTypeFilter, selectedFilter, searchTerm, activeTab, itemsPerPage])
+  }, [filterType, startDate, endDate, activeTab, itemsPerPage])
 
-  // Load transactions when component mounts or filters change
+  // Load data when component mounts or filters change
   useEffect(() => {
     if (activeTab === 'transactions') {
       fetchTransactions()
@@ -646,11 +771,13 @@ const Admin_finance_management = () => {
       fetchPaymentApprovalRequests()
     } else if (activeTab === 'pending-recovery') {
       fetchPendingRecovery()
+    } else if (activeTab === 'gst-projects') {
+      fetchGstProjects()
     } else {
       setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, currentPage, transactionTypeFilter, selectedFilter, searchTerm, itemsPerPage])
+  }, [activeTab, currentPage, filterType, startDate, endDate, itemsPerPage])
 
   // Fetch accounts when component mounts
   useEffect(() => {
@@ -902,6 +1029,8 @@ const Admin_finance_management = () => {
         return paymentApprovalRequests
       case 'pending-recovery':
         return pendingRecoveryList
+      case 'gst-projects':
+        return gstProjectsList
       default:
         return transactions
     }
@@ -913,31 +1042,18 @@ const Admin_finance_management = () => {
     const data = getCurrentData()
     
     // For transactions, expenses, budgets, project-expenses, and payment-approvals, backend handles filtering
-    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses' || activeTab === 'payment-approvals' || activeTab === 'pending-recovery') {
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses' || activeTab === 'payment-approvals' || activeTab === 'pending-recovery' || activeTab === 'gst-projects') {
       return data
     }
     
-    // For other tabs (still using mock data), apply client-side filtering
-    return data.filter(item => {
-      const matchesSearch = Object.values(item).some(value =>
-        value?.toString().toLowerCase().includes(searchTerm.toLowerCase())
-      )
-      
-      let matchesFilter = true
-      if (selectedFilter !== 'all') {
-        if (activeTab === 'accounts') {
-          matchesFilter = item.isActive === (selectedFilter === 'active')
-        }
-      }
-      
-      return matchesSearch && matchesFilter
-    })
-  }, [activeTab, searchTerm, selectedFilter, transactionTypeFilter, transactions, expenses, budgets, projectExpenses])
+    // For other tabs (e.g. accounts), return data as-is (no client-side filters)
+    return data
+  }, [activeTab, transactions, expenses, budgets, projectExpenses, paymentApprovalRequests, pendingRecoveryList, gstProjectsList, accounts])
 
   // Pagination
   const paginatedData = useMemo(() => {
     // For transactions, expenses, budgets, project-expenses, and payment-approvals, backend handles pagination
-    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses' || activeTab === 'payment-approvals' || activeTab === 'pending-recovery') {
+    if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses' || activeTab === 'payment-approvals' || activeTab === 'pending-recovery' || activeTab === 'gst-projects') {
       return filteredData
     }
     // For other tabs, apply client-side pagination
@@ -956,6 +1072,8 @@ const Admin_finance_management = () => {
     : activeTab === 'payment-approvals'
     ? paymentApprovalPages
     : activeTab === 'pending-recovery'
+    ? 1
+    : activeTab === 'gst-projects'
     ? 1
     : Math.ceil(filteredData.length / itemsPerPage)
 
@@ -1558,62 +1676,84 @@ const Admin_finance_management = () => {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                {/* Time Filter Combobox */}
-                <div className="relative">
+                {/* Date Range Filter (same as dashboard) */}
+                <div className="relative filter-dropdown-container">
                   <button
-                    onClick={() => setIsTimeFilterOpen(!isTimeFilterOpen)}
+                    onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                     className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:border-gray-400 transition-colors duration-200 shadow-sm text-sm font-medium text-gray-700 min-w-[140px] justify-between"
                   >
                     <span className="flex items-center gap-2">
-                      <FiCalendar className="h-4 w-4 text-gray-500" />
-                      <span>
-                        {timeFilter === 'all' ? 'All Time' : 
-                         timeFilter === 'today' ? 'Today' : 
-                         timeFilter === 'week' ? 'This Week' : 
-                         timeFilter === 'month' ? 'This Month' : 
-                         timeFilter === 'year' ? 'This Year' : 'All Time'}
-                      </span>
+                      <FiCalendar className="h-4 w-4 text-blue-600" />
+                      <span>{getFilterLabel()}</span>
                     </span>
-                    <FiChevronDown className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${isTimeFilterOpen ? 'rotate-180' : ''}`} />
+                    <FiChevronDown className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${showFilterDropdown ? 'rotate-180' : ''}`} />
                   </button>
-                  
-                  {/* Dropdown Menu */}
-                  {isTimeFilterOpen && (
-                    <>
-                      <div 
-                        className="fixed inset-0 z-10" 
-                        onClick={() => setIsTimeFilterOpen(false)}
-                      ></div>
-                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
-                        {[
-                          { value: 'all', label: 'All Time' },
-                          { value: 'today', label: 'Today' },
-                          { value: 'week', label: 'This Week' },
-                          { value: 'month', label: 'This Month' },
-                          { value: 'year', label: 'This Year' }
-                        ].map((option) => (
-                          <button
-                            key={option.value}
-                            onClick={() => {
-                              setTimeFilter(option.value)
-                              setIsTimeFilterOpen(false)
-                            }}
-                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                              timeFilter === option.value ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
-                            }`}
-                          >
-                            {timeFilter === option.value && (
-                              <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
-                            )}
-                            <span>{option.label}</span>
-                          </button>
-                        ))}
+
+                  {showFilterDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50 overflow-hidden"
+                    >
+                      <div className="px-3 pt-2 pb-2">
+                        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Date range</p>
+                        <div className="space-y-0.5">
+                          {[
+                            { type: 'all', label: 'All Time' },
+                            { type: 'day', label: 'Today' },
+                            { type: 'week', label: 'This Week' },
+                            { type: 'month', label: 'This Month' },
+                            { type: 'year', label: 'This Year' }
+                          ].map(({ type, label }) => (
+                            <button
+                              key={type}
+                              onClick={() => {
+                                setStartDate('')
+                                setEndDate('')
+                                setFilterType(type)
+                                setShowFilterDropdown(false)
+                              }}
+                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all text-left ${
+                                filterType === type ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                              }`}
+                            >
+                              <span className="flex-1">{label}</span>
+                              {filterType === type && <FiCheck className="h-4 w-4 text-blue-600 shrink-0" />}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </>
+                      <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
+                        <button
+                          onClick={() => {
+                            setTempStartDate(startDate)
+                            setTempEndDate(endDate)
+                            setFilterType('custom')
+                            setShowDateRangePicker(true)
+                          }}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all text-left ${
+                            filterType === 'custom' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                          }`}
+                        >
+                          <FiCalendar className="h-3.5 w-3.5" />
+                          <span className="flex-1">Custom range</span>
+                          {filterType === 'custom' && <FiCheck className="h-4 w-4 text-blue-600 shrink-0" />}
+                        </button>
+                      </div>
+                    </motion.div>
                   )}
                 </div>
 
                 {/* Refresh Button */}
+                <button
+                  onClick={() => setShowBreakdownModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-colors duration-200 shadow-sm text-sm font-medium text-gray-700"
+                >
+                  <FiBarChart className="h-4 w-4 text-gray-500" />
+                  <span>How it's calculated</span>
+                </button>
+
                 <button
                   onClick={() => {
                     fetchFinanceStatistics() // Always refresh statistics
@@ -1627,15 +1767,182 @@ const Admin_finance_management = () => {
                       fetchPaymentApprovalRequests()
                     } else if (activeTab === 'pending-recovery') {
                       fetchPendingRecovery()
+                    } else if (activeTab === 'gst-projects') {
+                      fetchGstProjects()
                     }
                   }}
-                  disabled={loading || statisticsLoading || (activeTab === 'transactions' && transactionsLoading) || (activeTab === 'expenses' && expensesLoading) || (activeTab === 'budgets' && budgetsLoading) || (activeTab === 'payment-approvals' && paymentApprovalLoading) || (activeTab === 'pending-recovery' && pendingRecoveryLoading)}
+                  disabled={loading || statisticsLoading || (activeTab === 'transactions' && transactionsLoading) || (activeTab === 'expenses' && expensesLoading) || (activeTab === 'budgets' && budgetsLoading) || (activeTab === 'payment-approvals' && paymentApprovalLoading) || (activeTab === 'pending-recovery' && pendingRecoveryLoading) || (activeTab === 'gst-projects' && gstProjectsLoading)}
                   className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <FiRefreshCw className={`text-sm ${(loading || statisticsLoading || transactionsLoading || expensesLoading || budgetsLoading || paymentApprovalLoading || pendingRecoveryLoading) ? 'animate-spin' : ''}`} />
+                  <FiRefreshCw className={`text-sm ${(loading || statisticsLoading || transactionsLoading || expensesLoading || budgetsLoading || paymentApprovalLoading || pendingRecoveryLoading || gstProjectsLoading) ? 'animate-spin' : ''}`} />
                   <span>Refresh</span>
                 </button>
               </div>
+
+              {/* Custom Date Range Picker Modal */}
+              {showDateRangePicker && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+                  onClick={() => setShowDateRangePicker(false)}
+                >
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Select Date Range</h3>
+                      <button
+                        onClick={() => setShowDateRangePicker(false)}
+                        className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
+                        <FiX className="h-5 w-5 text-gray-500" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                        <input
+                          type="date"
+                          value={tempStartDate}
+                          onChange={(e) => setTempStartDate(e.target.value)}
+                          max={tempEndDate || new Date().toISOString().split('T')[0]}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                        <input
+                          type="date"
+                          value={tempEndDate}
+                          onChange={(e) => setTempEndDate(e.target.value)}
+                          min={tempStartDate}
+                          max={new Date().toISOString().split('T')[0]}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div className="flex gap-3 pt-4">
+                        <button
+                          onClick={() => {
+                            if (tempStartDate && tempEndDate) {
+                              setStartDate(tempStartDate)
+                              setEndDate(tempEndDate)
+                              setShowDateRangePicker(false)
+                              setShowFilterDropdown(false)
+                            }
+                          }}
+                          disabled={!tempStartDate || !tempEndDate}
+                          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Apply
+                        </button>
+                        <button
+                          onClick={() => setShowDateRangePicker(false)}
+                          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+
+              {/* Statistics Breakdown Modal - Paper/Sheet style */}
+              {showBreakdownModal && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+                  onClick={() => setShowBreakdownModal(false)}
+                >
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="bg-amber-50/95 max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-lg shadow-2xl border border-amber-200/80"
+                    style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.8)' }}
+                  >
+                    {/* Paper header */}
+                    <div className="sticky top-0 z-10 bg-amber-50/98 border-b border-amber-200/80 px-6 py-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FiBarChart className="h-5 w-5 text-amber-700" />
+                        <h2 className="text-lg font-semibold text-amber-900">Finance Statistics — How Cards Are Calculated</h2>
+                      </div>
+                      <button
+                        onClick={() => setShowBreakdownModal(false)}
+                        className="p-2 hover:bg-amber-100 rounded-lg transition-colors"
+                      >
+                        <FiX className="h-5 w-5 text-amber-700" />
+                      </button>
+                    </div>
+
+                    <div className="px-6 py-5 space-y-6 text-amber-900/90">
+                      <p className="text-sm text-amber-800/80">All metrics respect the selected date range. Sources are mutually exclusive to prevent double-counting.</p>
+
+                      {/* Revenue section */}
+                      <section>
+                        <h3 className="text-base font-semibold text-amber-900 mb-3 pb-2 border-b border-amber-300/60">Revenue (Incoming)</h3>
+                        <div className="space-y-2 text-sm">
+                          <div className="bg-white/60 rounded p-3 border border-amber-200/50">
+                            <p className="font-medium text-amber-800">Total Revenue</p>
+                            <p className="text-amber-700 mt-1">= Completed Payments + Approved Payment Receipts + Paid Installments + Other Incoming Transactions</p>
+                            <p className="text-xs text-amber-600 mt-2">(Payment receipts & installments are excluded from &quot;Other&quot; to avoid double-counting.)</p>
+                          </div>
+                          <ul className="list-disc list-inside space-y-1 text-amber-700 ml-2">
+                            <li><strong>Completed Payments</strong> — Payment model, paid in period</li>
+                            <li><strong>Payment Receipts</strong> — Approved receipts (verifiedAt in period)</li>
+                            <li><strong>Paid Installments</strong> — Project installment plans, paid in period</li>
+                            <li><strong>Other Incoming</strong> — Manual/other transactions (excludes payment, installment, paymentReceipt)</li>
+                          </ul>
+                        </div>
+                      </section>
+
+                      {/* Expenses section */}
+                      <section>
+                        <h3 className="text-base font-semibold text-amber-900 mb-3 pb-2 border-b border-amber-300/60">Expenses (Outgoing)</h3>
+                        <div className="space-y-2 text-sm">
+                          <div className="bg-white/60 rounded p-3 border border-amber-200/50">
+                            <p className="font-medium text-amber-800">Total Expenses</p>
+                            <p className="text-amber-700 mt-1">= Salaries + Recurring + Incentives + Rewards (incl. PM) + Project Expenses + Other Expenses</p>
+                          </div>
+                          <ul className="list-disc list-inside space-y-1 text-amber-700 ml-2">
+                            <li><strong>Salary</strong> — Paid salaries (Salary model, month filter)</li>
+                            <li><strong>Recurring</strong> — Paid expense entries (ExpenseEntry, paidDate)</li>
+                            <li><strong>Incentives</strong> — Incentive Payment transactions (AdminFinance)</li>
+                            <li><strong>Rewards</strong> — Reward Payment + PM Reward transactions</li>
+                            <li><strong>Project Expenses</strong> — Project.expenses array (expenseDate)</li>
+                            <li><strong>Other</strong> — Outgoing transactions not from above sources</li>
+                          </ul>
+                        </div>
+                      </section>
+
+                      {/* Derived metrics */}
+                      <section>
+                        <h3 className="text-base font-semibold text-amber-900 mb-3 pb-2 border-b border-amber-300/60">Derived Metrics</h3>
+                        <ul className="space-y-2 text-sm text-amber-700">
+                          <li><strong>Net Profit</strong> = Total Revenue − Total Expenses</li>
+                          <li><strong>Today Earnings</strong> = Today&apos;s payments + receipts + installments + other incoming</li>
+                          <li><strong>Today Expenses</strong> = Today&apos;s salaries + recurring + project expenses + incentives + rewards + other</li>
+                          <li><strong>Today Profit</strong> = Today Earnings − Today Expenses</li>
+                          <li><strong>Total Sales</strong> = Sum of project costs (financialDetails.totalCost) in period</li>
+                          <li><strong>Pending Receivables</strong> = Sum of project remainingAmount (outstanding from clients)</li>
+                          <li><strong>Pending Payables</strong> = Pending salaries + pending recurring expenses</li>
+                        </ul>
+                      </section>
+
+                      {/* Change percentages */}
+                      <section>
+                        <h3 className="text-base font-semibold text-amber-900 mb-3 pb-2 border-b border-amber-300/60">Change Percentages</h3>
+                        <p className="text-sm text-amber-700">When filter is &quot;This Month&quot;: Revenue, Expenses, and Profit % are compared to last month.</p>
+                      </section>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
             </div>
           </div>
 
@@ -2081,6 +2388,7 @@ const Admin_finance_management = () => {
                   { id: 'project-expenses', label: 'Project Expenses', icon: FiFileText },
                   { id: 'payment-approvals', label: 'Payment Approvals', icon: FiCheckSquare },
                   { id: 'pending-recovery', label: 'Pending Recovery', icon: FiDollarSign },
+                  { id: 'gst-projects', label: 'GST Projects', icon: FiPercent },
                   { id: 'accounts', label: 'Accounts', icon: FiCreditCard }
                 ].map((tab) => {
                   const Icon = tab.icon
@@ -2118,45 +2426,8 @@ const Admin_finance_management = () => {
             </div>
           </div>
 
-          {/* Add Buttons and Transaction Type Tabs */}
+          {/* Add Buttons */}
           <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            {/* Transaction Type Tabs - Only show for transactions tab */}
-            {activeTab === 'transactions' && (
-              <div className="flex items-center space-x-1 bg-gray-100 p-1 rounded-lg">
-                <button
-                  onClick={() => setTransactionTypeFilter('all')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
-                    transactionTypeFilter === 'all'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setTransactionTypeFilter('incoming')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
-                    transactionTypeFilter === 'incoming'
-                      ? 'bg-white text-green-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  Incoming
-                </button>
-                <button
-                  onClick={() => setTransactionTypeFilter('outgoing')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
-                    transactionTypeFilter === 'outgoing'
-                      ? 'bg-white text-red-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  Outgoing
-                </button>
-              </div>
-            )}
-            
-            {/* Add Buttons */}
             <div className="flex justify-end">
               {activeTab === 'transactions' && (
                 <button
@@ -2197,83 +2468,12 @@ const Admin_finance_management = () => {
             </div>
           </div>
 
-          {/* Search and Filter */}
-          <div className="mb-6 flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <FiFilter className="text-gray-400" />
-              <select
-                value={selectedFilter}
-                onChange={(e) => setSelectedFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="all">All</option>
-                {activeTab === 'transactions' && (
-                  <>
-                    <option value="completed">Completed</option>
-                    <option value="pending">Pending</option>
-                    <option value="failed">Failed</option>
-                  </>
-                )}
-                {activeTab === 'budgets' && (
-                  <>
-                    <option value="active">Active</option>
-                    <option value="completed">Completed</option>
-                    <option value="pending">Pending</option>
-                  </>
-                )}
-                {activeTab === 'expenses' && (
-                  <>
-                    <option value="active">Active</option>
-                    <option value="completed">Completed</option>
-                    <option value="pending">Pending</option>
-                  </>
-                )}
-                {activeTab === 'accounts' && (
-                  <>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </>
-                )}
-                {activeTab === 'project-expenses' && (
-                  <>
-                    <option value="all">All Categories</option>
-                    <option value="domain">Domain</option>
-                    <option value="server">Server</option>
-                    <option value="api">API Service</option>
-                    <option value="hosting">Hosting</option>
-                    <option value="ssl">SSL Certificate</option>
-                    <option value="other">Other</option>
-                  </>
-                )}
-                {activeTab === 'payment-approvals' && (
-                  <>
-                    <option value="all">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                    <option value="responded">Responded</option>
-                  </>
-                )}
-              </select>
-            </div>
-          </div>
-
           {/* Content Grid */}
-          {(transactionsLoading && activeTab === 'transactions') || (expensesLoading && activeTab === 'expenses') || (budgetsLoading && activeTab === 'budgets') || (projectExpensesLoading && activeTab === 'project-expenses') || (paymentApprovalLoading && activeTab === 'payment-approvals') || (pendingRecoveryLoading && activeTab === 'pending-recovery') ? (
+          {(transactionsLoading && activeTab === 'transactions') || (expensesLoading && activeTab === 'expenses') || (budgetsLoading && activeTab === 'budgets') || (projectExpensesLoading && activeTab === 'project-expenses') || (paymentApprovalLoading && activeTab === 'payment-approvals') || (pendingRecoveryLoading && activeTab === 'pending-recovery') || (gstProjectsLoading && activeTab === 'gst-projects') ? (
             <div className="flex justify-center items-center py-12">
               <Loading size="medium" />
             </div>
-          ) : error && (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses') ? (
+          ) : error && (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses' || activeTab === 'payment-approvals' || activeTab === 'pending-recovery' || activeTab === 'gst-projects') ? (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
               <p className="text-red-600">{error}</p>
               <button
@@ -2282,6 +2482,9 @@ const Admin_finance_management = () => {
                   else if (activeTab === 'expenses') fetchExpenses()
                   else if (activeTab === 'budgets') fetchBudgets()
                   else if (activeTab === 'project-expenses') fetchProjectExpenses()
+                  else if (activeTab === 'payment-approvals') fetchPaymentApprovalRequests()
+                  else if (activeTab === 'pending-recovery') fetchPendingRecovery()
+                  else if (activeTab === 'gst-projects') fetchGstProjects()
                 }}
                 className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
@@ -2299,6 +2502,12 @@ const Admin_finance_management = () => {
               <span className="text-4xl text-gray-300 font-medium mx-auto mb-3 block" aria-hidden>₹</span>
               <p className="text-gray-600">No pending recovery</p>
               <p className="text-sm text-gray-500 mt-1">Projects with outstanding amount to collect will appear here</p>
+            </div>
+          ) : paginatedData.length === 0 && activeTab === 'gst-projects' ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+              <FiPercent className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-600">No GST projects found</p>
+              <p className="text-sm text-gray-500 mt-1">Projects with GST applied will appear here for finance management</p>
             </div>
           ) : paginatedData.length === 0 && activeTab === 'transactions' ? (
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
@@ -2672,6 +2881,62 @@ const Admin_finance_management = () => {
                             <span className="text-xs font-medium text-gray-600 tabular-nums w-9">{row.progress != null ? `${Math.round(row.progress)}%` : '0%'}</span>
                           </div>
                         </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : activeTab === 'gst-projects' ? (
+            /* GST Projects Table */
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-teal-50/50">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Project</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Client</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Recovered</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Pending Recovery</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Total Cost</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">GST Applied</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Sales/CP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedData.map((row, index) => (
+                      <motion.tr
+                        key={row.projectId || `gst-${index}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2, delay: index * 0.02 }}
+                        className="border-b border-gray-100 hover:bg-teal-50/30 transition-colors"
+                      >
+                        <td className="py-3 px-4">
+                          <span className="text-sm font-medium text-gray-900">{row.projectName || '—'}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div>
+                            <span className="text-sm font-medium text-gray-900">{row.clientName || '—'}</span>
+                            {row.clientPhone && <p className="text-xs text-gray-500">{row.clientPhone}</p>}
+                            {row.clientEmail && <p className="text-xs text-gray-500">{row.clientEmail}</p>}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          {row.projectStatus ? (
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded capitalize ${row.projectStatus === 'completed' ? 'bg-green-100 text-green-800' : row.projectStatus === 'active' ? 'bg-blue-100 text-blue-800' : row.projectStatus === 'on-hold' ? 'bg-amber-100 text-amber-800' : row.projectStatus === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>{row.projectStatus.replace(/-/g, ' ')}</span>
+                          ) : (
+                            <span className="text-sm text-gray-500">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right text-sm font-medium text-green-600">{formatCurrency(row.recoveredAmount || 0)}</td>
+                        <td className="py-3 px-4 text-right text-sm font-semibold text-amber-600">{formatCurrency(row.pendingRecovery || 0)}</td>
+                        <td className="py-3 px-4 text-right text-sm font-semibold text-gray-900">{formatCurrency(row.totalCost || 0)}</td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-sm font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded">{formatCurrency(row.gstApplied || 0)}</span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{row.relatedSalesOrCp || '—'}</td>
                       </motion.tr>
                     ))}
                   </tbody>

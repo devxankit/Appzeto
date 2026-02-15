@@ -23,7 +23,7 @@ const salarySchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['employee', 'project-manager', 'hr', 'accountant', 'pem'],
+    enum: ['employee', 'sales', 'project-manager', 'hr', 'accountant', 'pem'],
     required: true
   },
   

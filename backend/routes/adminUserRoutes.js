@@ -16,6 +16,7 @@ const {
   setEmployeeSalary,
   getSalaryRecords,
   getSalaryRecord,
+  getEmployeesWithSalary,
   updateSalaryRecord,
   generateMonthlySalaries,
   getEmployeeSalaryHistory,
@@ -61,7 +62,8 @@ router.get('/attendance', getAttendance);
 // Salary Management (Admin/HR) - Must come before generic routes
 router.post('/salary/generate/:month', protect, authorize('admin', 'hr'), generateMonthlySalaries);
 router.get('/salary/generate/:month', protect, authorize('admin', 'hr'), generateMonthlySalaries);
-router.get('/salary/employee/:userType/:employeeId', getEmployeeSalaryHistory);
+router.get('/salary/employee-ids', protect, authorize('admin', 'hr'), getEmployeesWithSalary);
+router.get('/salary/employee/:userType/:employeeId', protect, authorize('admin', 'hr'), getEmployeeSalaryHistory);
 router.put('/salary/set/:userType/:employeeId', protect, authorize('admin', 'hr'), setEmployeeSalary);
 router.put('/salary/:id/incentive', updateIncentivePayment);
 router.put('/salary/:id/reward', updateRewardPayment);

@@ -103,6 +103,15 @@ const getClientProjectById = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Project not found or you do not have access to this project', 404));
   }
 
+  // Recalculate financials so client gets accurate totalCost, remainingAmount, advanceReceived
+  try {
+    const { recalculateProjectFinancials } = require('../utils/projectFinancialHelper');
+    await recalculateProjectFinancials(project);
+    await project.save();
+  } catch (err) {
+    console.error('Error recalculating project financials in getClientProjectById:', err);
+  }
+
   // Calculate progress based on completed milestones vs total milestones
   const Milestone = require('../models/Milestone');
   const milestones = await Milestone.find({ project: project._id });
@@ -269,11 +278,14 @@ const getClientProjectStatistics = asyncHandler(async (req, res, next) => {
 
   const result = {
     totalProjects: clientProjects.length,
-    activeProjects: clientProjects.filter(p => p.status === 'active').length,
+    activeProjects: clientProjects.filter(p => p.status === 'active' || p.status === 'in-progress').length,
     completedProjects: clientProjects.filter(p => p.status === 'completed').length,
     totalBudget: clientProjects.reduce((sum, p) => sum + (p.budget || 0), 0),
-    avgProgress: clientProjects.length > 0 ? 
-      clientProjects.reduce((sum, p) => sum + (p.progress || 0), 0) / clientProjects.length : 0,
+    avgProgress: clientProjects.length > 0
+      ? Math.round(
+          Math.min(100, Math.max(0, clientProjects.reduce((sum, p) => sum + (Number(p.progress) || 0), 0) / clientProjects.length))
+        )
+      : 0,
     projectStatusBreakdown: projectStats,
     milestoneStatusBreakdown: milestoneStats,
     paymentStatusBreakdown: paymentStats,

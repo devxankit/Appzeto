@@ -49,8 +49,10 @@ const SL_demo_sent = () => {
     finishedDays: '',
     advanceReceived: '',
     includeGST: false,
+    clientDateOfBirth: '',
     description: ''
   })
+  const [showGSTConfirmModal, setShowGSTConfirmModal] = useState(false)
 
   // Fetch categories and leads on component mount
   useEffect(() => {
@@ -80,7 +82,7 @@ const SL_demo_sent = () => {
         limit: 50
       }
       const response = await salesLeadService.getLeadsByStatus('demo_sent', params)
-      setLeadsData(response.data || [])
+      setLeadsData(response?.data || [])
     } catch (error) {
       console.error('Error fetching leads:', error)
       toast.error('Failed to fetch leads')
@@ -150,11 +152,12 @@ const SL_demo_sent = () => {
   const parseAmount = (val) => Math.round(Number(String(val || '').replace(/,/g, '')) || 0)
   const handleConversionFormSubmit = async (e) => {
     e.preventDefault()
-    const totalCostNum = parseAmount(conversionFormData.totalCost)
-    if (!conversionFormData.totalCost || totalCostNum <= 0) {
+    const baseCost = parseAmount(conversionFormData.totalCost)
+    if (!conversionFormData.totalCost || baseCost <= 0) {
       toast.error('Please enter a valid project cost (greater than zero)')
       return
     }
+    const totalCostNum = conversionFormData.includeGST ? Math.round(baseCost * 1.18) : baseCost
     try {
       const payload = {
         projectName: conversionFormData.projectName.trim(),
@@ -163,6 +166,7 @@ const SL_demo_sent = () => {
         finishedDays: conversionFormData.finishedDays ? parseInt(conversionFormData.finishedDays, 10) : undefined,
         advanceReceived: parseAmount(conversionFormData.advanceReceived),
         includeGST: conversionFormData.includeGST || false,
+        clientDateOfBirth: conversionFormData.clientDateOfBirth || undefined,
         description: (conversionFormData.description || '').trim()
       }
       await salesLeadService.convertLeadToClient(selectedLeadForConversion, payload)
@@ -185,6 +189,7 @@ const SL_demo_sent = () => {
         finishedDays: '',
         advanceReceived: '',
         includeGST: false,
+        clientDateOfBirth: '',
         description: ''
       })
       setShowConversionForm(false)
@@ -612,7 +617,8 @@ const SL_demo_sent = () => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Convert Lead to Client</h3>
                 <button
-                  onClick={() => setShowConversionForm(false)}
+                  type="button"
+                  onClick={() => { setShowConversionForm(false); setShowGSTConfirmModal(false) }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <FiX className="w-5 h-5" />
@@ -697,16 +703,31 @@ const SL_demo_sent = () => {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Client DOB (optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={conversionFormData.clientDateOfBirth}
+                    onChange={(e) => setConversionFormData(prev => ({ ...prev, clientDateOfBirth: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  />
+                </div>
+
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     id="includeGST-demo"
                     checked={conversionFormData.includeGST}
-                    onChange={(e) => setConversionFormData(prev => ({ ...prev, includeGST: e.target.checked }))}
+                    onChange={(e) => {
+                      if (e.target.checked) setShowGSTConfirmModal(true)
+                      else setConversionFormData(prev => ({ ...prev, includeGST: false }))
+                    }}
                     className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
                   />
                   <label htmlFor="includeGST-demo" className="text-sm font-medium text-gray-700">
-                    Include GST
+                    Include GST (18%)
                   </label>
                 </div>
 
@@ -726,7 +747,7 @@ const SL_demo_sent = () => {
                 <div className="flex space-x-3 pt-4">
                   <button
                     type="button"
-                    onClick={() => setShowConversionForm(false)}
+                    onClick={() => { setShowConversionForm(false); setShowGSTConfirmModal(false) }}
                     className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     Cancel
@@ -741,6 +762,56 @@ const SL_demo_sent = () => {
               </form>
             </motion.div>
           </motion.div>
+        )}
+
+        {/* GST Confirmation Modal */}
+        {showGSTConfirmModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl">
+              <h3 className="text-lg font-bold text-gray-900 mb-3">Enable GST (18%)</h3>
+              <p className="text-sm text-gray-600 mb-4">Enabling GST will add 18% to the project cost.</p>
+              {(() => {
+                const base = parseAmount(conversionFormData.totalCost)
+                const gstAmount = Math.round(base * 0.18)
+                const withGST = Math.round(base * 1.18)
+                return (
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Cost without GST:</span>
+                      <span className="font-semibold">₹{base.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">GST (18%):</span>
+                      <span className="font-semibold text-teal-600">+ ₹{gstAmount.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
+                      <span className="font-medium text-gray-800">Total with GST:</span>
+                      <span className="font-bold text-green-700">₹{withGST.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowGSTConfirmModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConversionFormData(prev => ({ ...prev, includeGST: true }))
+                    setShowGSTConfirmModal(false)
+                  }}
+                  className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </AnimatePresence>
     </div>

@@ -94,7 +94,7 @@ const SL_converted = () => {
       }
       const response = await salesLeadService.getLeadsByStatus('converted', params)
       // Filter out any leads without valid client info (safety check for transferred clients)
-      const validLeads = (response.data || []).filter(lead => 
+      const validLeads = (response?.data || []).filter(lead => 
         lead?.convertedClientId || lead?.convertedClient?.id
       )
       setLeadsData(validLeads)

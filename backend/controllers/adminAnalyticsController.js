@@ -340,7 +340,10 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
   }
 
   // Get project status distribution - only show Active, Completed, On Hold, and Overdue (matching original mock data)
+  // Apply date filter when provided so Project Status chart respects the date range
+  const projectStatusMatch = (timeFilter && dateFilter) ? [{ $match: { createdAt: dateFilter } }] : [];
   const projectStatusData = await Project.aggregate([
+    ...projectStatusMatch,
     {
       $group: {
         _id: '$status',

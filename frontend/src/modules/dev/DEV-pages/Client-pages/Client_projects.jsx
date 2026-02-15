@@ -74,10 +74,10 @@ const Client_projects = () => {
       
       setProjects(projects)
       
-      // Calculate statistics
+      // Calculate statistics (include in-progress as active)
       const stats = {
         total: projects.length || 0,
-        active: projects.filter(p => p.status === 'active').length || 0,
+        active: projects.filter(p => p.status === 'active' || p.status === 'in-progress').length || 0,
         completed: projects.filter(p => p.status === 'completed').length || 0,
         overdue: projects.filter(p => p.status === 'overdue').length || 0
       }
@@ -132,9 +132,11 @@ const Client_projects = () => {
     }
   }
 
-  // Filter projects based on active filter
+  // Filter projects based on active filter (treat in-progress as active)
   const filteredProjects = projects.filter(project => {
-    return activeFilter === 'all' || project.status === activeFilter
+    if (activeFilter === 'all') return true
+    if (activeFilter === 'active') return project.status === 'active' || project.status === 'in-progress'
+    return project.status === activeFilter
   })
 
   const filters = [
@@ -315,7 +317,7 @@ const Client_projects = () => {
                         <div className="flex items-center space-x-2">
                           <div className="flex items-center space-x-1 text-gray-500">
                             <FiUsers className="h-3 w-3" />
-                            <span className="text-xs font-medium">{project.assignedTeam.length}</span>
+                            <span className="text-xs font-medium">{project.assignedTeam?.length ?? 0}</span>
                           </div>
                           <div className="flex items-center space-x-1 text-gray-500">
                             <FiCalendar className="h-3 w-3" />
@@ -414,7 +416,7 @@ const Client_projects = () => {
                         <div className="flex items-center space-x-4">
                           <div className="flex items-center space-x-1 text-gray-500">
                             <FiUsers className="h-3.5 w-3.5" />
-                            <span className="text-xs font-medium">{project.assignedTeam.length}</span>
+                            <span className="text-xs font-medium">{project.assignedTeam?.length ?? 0}</span>
                           </div>
                           <div className="flex items-center space-x-1 text-gray-500">
                             <FiCalendar className="h-3.5 w-3.5" />
@@ -446,10 +448,9 @@ const Client_projects = () => {
                             })()}
                           </div>
                           <div className="text-xs text-gray-500">
-                            Updated: {new Date(project.lastUpdate).toLocaleDateString('en-US', { 
-                              month: 'short', 
-                              day: 'numeric'
-                            })}
+                            Updated: {project.updatedAt || project.lastUpdate 
+                              ? new Date(project.updatedAt || project.lastUpdate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                              : 'N/A'}
                           </div>
                         </div>
                       </div>

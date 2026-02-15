@@ -35,7 +35,7 @@ const Client_wallet = () => {
       const [summaryResponse, transactionsResponse, upcomingResponse] = await Promise.all([
         clientWalletService.getSummary(),
         clientWalletService.getTransactions({ limit: 50 }),
-        clientWalletService.getUpcomingPayments({ limit: 10 })
+        clientWalletService.getUpcomingPayments({ limit: 100 })
       ])
 
       setSummary(summaryResponse?.summary || null)
@@ -527,7 +527,7 @@ const Client_wallet = () => {
                 whileHover={{ scale: 1.05 }}
                 className="bg-white/60 backdrop-blur-sm rounded-lg p-2 border border-blue-300/50 text-center hover:border-blue-400/70 transition-all duration-300 shadow-sm"
               >
-                <p className="text-blue-800 text-xs font-semibold mb-0.5">Due Soon</p>
+                <p className="text-blue-800 text-xs font-semibold mb-0.5">Upcoming</p>
                 <p className="text-gray-900 text-xs font-bold">{formatCurrency(totals.upcomingAmount)}</p>
               </motion.div>
               
@@ -694,9 +694,9 @@ const Client_wallet = () => {
                      <FiCalendar className="text-blue-600 text-xl" />
                      <FiClock className="text-blue-500 text-lg" />
                    </div>
-                   <h4 className="text-gray-600 text-sm font-medium mb-2">Due Soon</h4>
+                   <h4 className="text-gray-600 text-sm font-medium mb-2">Upcoming</h4>
                    <p className="text-gray-900 text-2xl font-bold">{formatCurrency(totals.upcomingAmount)}</p>
-                   <p className="text-blue-600 text-xs font-semibold mt-1">Next 30 days</p>
+                   <p className="text-blue-600 text-xs font-semibold mt-1">Scheduled payments</p>
                  </motion.div>
                </div>
 

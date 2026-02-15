@@ -73,7 +73,7 @@ const SL_hot_leads = () => {
         limit: 50
       }
       const response = await salesLeadService.getLeadsByStatus('hot', params)
-      setLeadsData(response.data || [])
+      setLeadsData(response?.data || [])
     } catch (error) {
       console.error('Error fetching leads:', error)
       toast.error('Failed to fetch hot leads')

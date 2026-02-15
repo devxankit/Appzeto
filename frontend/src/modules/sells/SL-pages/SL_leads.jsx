@@ -79,7 +79,7 @@ const LeadDashboard = () => {
     setIsLoadingCPLeadsCount(true)
     try {
       const response = await salesLeadService.getChannelPartnerLeads({ limit: 1 })
-      setChannelPartnerLeadsCount(response.total || 0)
+      setChannelPartnerLeadsCount(response?.total || 0)
     } catch (error) {
       console.error('Error fetching channel partner leads count:', error)
       setChannelPartnerLeadsCount(0)

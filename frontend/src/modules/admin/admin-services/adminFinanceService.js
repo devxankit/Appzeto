@@ -450,9 +450,23 @@ export const adminFinanceService = {
   },
 
   // Get all projects with pending recovery (outstanding amount to collect)
-  getPendingRecovery: async () => {
+  getPendingRecovery: async (params = {}) => {
     try {
-      const response = await apiRequest('/admin/finance/pending-recovery', { method: 'GET' });
+      const queryString = new URLSearchParams(params).toString();
+      const url = queryString ? `/admin/finance/pending-recovery?${queryString}` : '/admin/finance/pending-recovery';
+      const response = await apiRequest(url, { method: 'GET' });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get all GST projects (projects with includeGST = true) for finance management
+  getGstProjects: async (params = {}) => {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const url = queryString ? `/admin/finance/gst-projects?${queryString}` : '/admin/finance/gst-projects';
+      const response = await apiRequest(url, { method: 'GET' });
       return response;
     } catch (error) {
       throw error;

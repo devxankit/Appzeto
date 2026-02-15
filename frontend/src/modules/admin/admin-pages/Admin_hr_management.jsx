@@ -161,6 +161,7 @@ const Admin_hr_management = () => {
     employeeId: '',
     salary: ''
   })
+  const [employeesWithSalaryIds, setEmployeesWithSalaryIds] = useState([])
   const [editSalaryData, setEditSalaryData] = useState({
     basicSalary: ''
   })
@@ -1931,21 +1932,10 @@ const Admin_hr_management = () => {
     }
   }
 
-  // Load salary data from backend
+  // Load salary data from backend (fetch only - no auto-generation)
+  // Records are created by: Set salary (creates 4 months), Mark paid (creates next month), or "Generate for month" button
   const loadSalaryData = async (month) => {
     try {
-      // First, try to generate salaries for the month (auto-generation)
-      // 404 is expected if salaries are already generated, so we ignore that
-      try {
-        await adminSalaryService.generateMonthlySalaries(month)
-      } catch (genError) {
-        // If generation fails (404 = already generated, or connection error), continue to fetch
-        // Only log if it's not a 404 (which is expected)
-        if (!String(genError).includes('404') && !String(genError).includes('Connection')) {
-          console.log('Salary generation note:', genError.message || 'Salaries may already be generated')
-        }
-      }
-
       // Fetch salary records for the month
       const res = await adminSalaryService.getSalaryRecords({
         month,
@@ -2026,6 +2016,14 @@ const Admin_hr_management = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSalaryMonth, selectedSalaryDepartment, selectedPaymentStatus, activeTab])
 
+  // Load employee IDs who already have salary when Set salary modal opens
+  useEffect(() => {
+    if (showAddEmployeeSalaryModal) {
+      adminSalaryService.getEmployeesWithSalary()
+        .then(ids => setEmployeesWithSalaryIds(Array.isArray(ids) ? ids : []))
+        .catch(() => setEmployeesWithSalaryIds([]))
+    }
+  }, [showAddEmployeeSalaryModal])
 
   const getFilteredSalaryData = () => {
     let filtered = [...salaryData]
@@ -2431,6 +2429,8 @@ const Admin_hr_management = () => {
         employeeId: '',
         salary: ''
       })
+      // Add newly set employee to exclusion list so they won't appear in dropdown if modal reopened
+      setEmployeesWithSalaryIds(prev => [...new Set([...prev, employeeId])])
       
       // Reload salary data to show the new records
       await loadSalaryData(selectedSalaryMonth)
@@ -2478,14 +2478,23 @@ const Admin_hr_management = () => {
       setLoadingHistory(true)
       
       // Determine user type from record (backend: employee, sales, pm, admin for HR)
-      const userType = record.role === 'project-manager' ? 'pm' : 
-                      record.role === 'sales' ? 'sales' : 
-                      record.role === 'hr' ? 'admin' : 'employee'
+      // Fallback to employeeModel if role is missing (e.g. Salary doc structure)
+      const role = record.role || (record.employeeModel === 'Sales' ? 'sales' : record.employeeModel === 'PM' ? 'project-manager' : record.employeeModel === 'Admin' ? 'hr' : 'employee')
+      const userType = role === 'project-manager' ? 'pm' : 
+                      role === 'sales' ? 'sales' : 
+                      role === 'hr' ? 'admin' : 'employee'
       
+      const employeeId = record.employeeId?._id || record.employeeId
+      if (!employeeId) {
+        addToast({ type: 'error', message: 'Employee ID is missing' })
+        setLoadingHistory(false)
+        return
+      }
+
       // Fetch employee details to get joining date
       let joiningDate = null
       try {
-        const employeeDetails = await adminUserService.getUser(userType, record.employeeId)
+        const employeeDetails = await adminUserService.getUser(userType, employeeId)
         if (employeeDetails?.data?.joiningDate) {
           joiningDate = new Date(employeeDetails.data.joiningDate)
         }
@@ -2501,7 +2510,7 @@ const Admin_hr_management = () => {
         joiningDate: joiningDate
       })
       
-      const history = await adminSalaryService.getEmployeeSalaryHistory(userType, record.employeeId)
+      const history = await adminSalaryService.getEmployeeSalaryHistory(userType, employeeId)
       
       // Get current month for filtering
       const currentDate = new Date()
@@ -2539,8 +2548,8 @@ const Admin_hr_management = () => {
           })
         }
         
-        // Add Incentive Payment Entry (if paid - show even if amount is 0 for historical records)
-        if (item.incentiveStatus === 'paid' && item.incentivePaidDate) {
+        // Add Incentive Payment Entry (Sales only - incentive is not applicable to other employees)
+        if ((item.employeeModel === 'Sales' || role === 'sales') && item.incentiveStatus === 'paid' && item.incentivePaidDate) {
           allHistoryEntries.push({
             id: `${item._id || item.id}-incentive`,
             paymentType: 'incentive',
@@ -3498,11 +3507,12 @@ const Admin_hr_management = () => {
                     </div>
                   </CardContent>
                 </Card>
+                {getFilteredSalaryData().some(r => r.employeeModel === 'Sales') && (
                 <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 border-l-4 border-l-cyan-500 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-cyan-600 text-xs font-semibold uppercase tracking-wide">Incentive</p>
+                        <p className="text-cyan-600 text-xs font-semibold uppercase tracking-wide">Incentive (Sales)</p>
                         <p className="text-lg font-bold text-cyan-900 mt-0.5">{formatCurrency(salaryStats.totalIncentiveAmount)}</p>
                         <p className="text-xs text-gray-600 mt-1">Paid: {formatCurrency(salaryStats.paidIncentiveAmount)}</p>
                       </div>
@@ -3512,6 +3522,7 @@ const Admin_hr_management = () => {
                     </div>
                   </CardContent>
                 </Card>
+                )}
                 <Card className="bg-gradient-to-br from-pink-50 to-pink-100 border-l-4 border-l-pink-500 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
@@ -3550,7 +3561,9 @@ const Admin_hr_management = () => {
                           <th className="text-left py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[140px]">Employee</th>
                           <th className="text-left py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[90px]">Department</th>
                           <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[90px]">Salary</th>
+                          {getFilteredSalaryData().some(r => r.employeeModel === 'Sales') && (
                           <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[90px]">Incentive</th>
+                          )}
                           <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[85px]">Reward</th>
                           <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[95px]">Total</th>
                           <th className="text-center py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[95px]">Status</th>
@@ -3570,11 +3583,12 @@ const Admin_hr_management = () => {
                           if (!recordMonth) recordMonth = selectedSalaryMonth
                           const currentMonthStr = new Date().toISOString().slice(0, 7)
                           const canEdit = record.status !== 'paid' || recordMonth > currentMonthStr || selectedSalaryMonth > currentMonthStr
-                          const totalAmount = (record.fixedSalary || 0) + (record.incentiveAmount || 0) + (record.rewardAmount || 0)
+                          const isSalesEmployee = record.employeeModel === 'Sales'
+                          const totalAmount = (record.fixedSalary || 0) + (isSalesEmployee ? (record.incentiveAmount || 0) : 0) + (record.rewardAmount || 0)
                           const isPaid = record.status === 'paid'
                           return (
                             <tr key={index} className={`transition-colors ${
-                              isPaid ? 'bg-gray-100 hover:bg-gray-200/80' : isOverdue ? 'bg-red-50/40 hover:bg-red-50/60' : isDueSoon ? 'bg-amber-50/40 hover:bg-amber-50/60' : 'bg-white hover:bg-gray-50/50'
+                              isPaid ? 'bg-gray-200/70 hover:bg-gray-300/70 text-gray-600' : isOverdue ? 'bg-red-50/40 hover:bg-red-50/60' : isDueSoon ? 'bg-amber-50/40 hover:bg-amber-50/60' : 'bg-white hover:bg-gray-50/50'
                             }`}>
                               <td className="py-3 px-3">
                                 <div className="flex items-center gap-2">
@@ -3586,7 +3600,9 @@ const Admin_hr_management = () => {
                               </td>
                               <td className="py-3 px-3 text-gray-600">{record.department || '—'}</td>
                               <td className="py-3 px-3 text-right font-medium tabular-nums">{formatCurrency(record.fixedSalary || 0)}</td>
-                              <td className="py-3 px-3 text-right text-blue-700 font-medium tabular-nums">{formatCurrency(record.incentiveAmount || 0)}</td>
+                              {getFilteredSalaryData().some(r => r.employeeModel === 'Sales') && (
+                              <td className="py-3 px-3 text-right text-blue-700 font-medium tabular-nums">{isSalesEmployee ? formatCurrency(record.incentiveAmount || 0) : '—'}</td>
+                              )}
                               <td className="py-3 px-3 text-right text-purple-700 font-medium tabular-nums">{formatCurrency(record.rewardAmount || 0)}</td>
                               <td className="py-3 px-3 text-right font-semibold text-green-700 tabular-nums">{formatCurrency(totalAmount)}</td>
                               <td className="py-3 px-3">
@@ -3610,13 +3626,7 @@ const Admin_hr_management = () => {
                                   <button onClick={() => handleEditSalary(record)} disabled={!canEdit} className={`p-1.5 rounded-md transition-colors ${!canEdit ? 'opacity-40 cursor-not-allowed' : 'hover:bg-blue-50 text-blue-600'}`} title={!canEdit ? 'Cannot edit' : 'Edit'}><Edit3 className="h-4 w-4" /></button>
                                   <button onClick={() => handleDeleteSalary(record)} className="p-1.5 rounded-md hover:bg-red-50 text-red-600 transition-colors" title="Delete"><Trash2 className="h-4 w-4" /></button>
                                   {record.status !== 'paid' && (
-                                    <Button onClick={() => handleMarkSalaryPaid(record)} size="sm" className={`h-7 px-2.5 text-xs font-medium ${isOverdue ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white`}>Pay</Button>
-                                  )}
-                                  {record.employeeModel === 'Sales' && record.department === 'sales' && record.incentiveStatus !== 'paid' && record.incentiveAmount > 0 && (
-                                    <Button onClick={() => handleMarkIncentivePaid(record)} size="sm" className="h-7 px-2.5 text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white">Incentive</Button>
-                                  )}
-                                  {(record.department === 'sales' || ['nodejs', 'flutter', 'web', 'full-stack', 'app'].includes(record.department)) && record.rewardStatus !== 'paid' && record.rewardAmount > 0 && (
-                                    <Button onClick={() => handleMarkRewardPaid(record)} size="sm" className="h-7 px-2.5 text-xs font-medium bg-purple-500 hover:bg-purple-600 text-white">Reward</Button>
+                                    <Button onClick={() => handleMarkSalaryPaid(record)} size="sm" className={`h-7 px-2.5 text-xs font-medium ${isOverdue ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white`} title={record.employeeModel === 'Sales' ? 'Pay salary + incentive + reward together' : 'Mark as paid'}>Pay</Button>
                                   )}
                                 </div>
                               </td>
@@ -5105,13 +5115,13 @@ const Admin_hr_management = () => {
                           </div>
                         )}
 
-                        {/* Total */}
+                        {/* Total - Sales: salary + incentive + reward; Others: salary + reward only */}
                         <div className="pt-3 border-t-2 border-green-300 flex justify-between items-center">
                           <span className="text-base font-bold text-gray-900">Total Amount:</span>
                           <span className="text-2xl font-bold text-green-700">
                             {formatCurrency(
                               (selectedSalaryDetails.fixedSalary || 0) + 
-                              (selectedSalaryDetails.incentiveAmount || 0) + 
+                              (selectedSalaryDetails.employeeModel === 'Sales' ? (selectedSalaryDetails.incentiveAmount || 0) : 0) + 
                               (selectedSalaryDetails.rewardAmount || 0)
                             )}
                           </span>
@@ -6296,13 +6306,10 @@ const Admin_hr_management = () => {
                       </label>
                       <Combobox
                         options={(() => {
-                          // Get set of employee IDs who already have salary records
-                          const employeesWithSalary = new Set(
-                            salaryData.map(record => {
-                              const empId = record.employeeId
-                              return empId ? empId.toString() : null
-                            }).filter(Boolean)
-                          )
+                          // Use employee IDs who already have salary (from API + current salaryData as fallback)
+                          const idsFromApi = (employeesWithSalaryIds || []).map(id => String(id))
+                          const idsFromData = (salaryData || []).map(r => r.employeeId?.toString()).filter(Boolean)
+                          const employeesWithSalary = new Set([...idsFromApi, ...idsFromData])
                           
                           // Employees, sales, PMs, and HR can have salary set
                           const salaryEligibleRoles = ['employee', 'sales', 'project-manager', 'hr']
@@ -6638,12 +6645,14 @@ const Admin_hr_management = () => {
                             {formatCurrency(salaryHistory.filter(h => h.paymentType === 'salary').reduce((sum, h) => sum + h.amount, 0))}
                           </span>
                         </div>
+                        {selectedHistoryEmployee?.role === 'sales' && (
                         <div>
                           <span className="text-gray-600">Incentive Paid:</span>
                           <span className="ml-2 font-semibold text-cyan-600">
                             {formatCurrency(salaryHistory.filter(h => h.paymentType === 'incentive').reduce((sum, h) => sum + h.amount, 0))}
                           </span>
                         </div>
+                        )}
                         <div>
                           <span className="text-gray-600">Reward Paid:</span>
                           <span className="ml-2 font-semibold text-pink-600">

@@ -96,6 +96,11 @@ const salesSchema = new mongoose.Schema({
       required: true,
       min: 0
     },
+    reward: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
     targetDate: {
       type: Date,
       required: true

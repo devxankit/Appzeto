@@ -84,9 +84,11 @@ const SL_leadProfile = () => {
     advanceReceived: '',
     advanceAccount: '',
     includeGST: false,
+    clientDateOfBirth: '',
     description: '',
     screenshot: null
   })
+  const [showGSTConfirmModal, setShowGSTConfirmModal] = useState(false)
   const [lostReason, setLostReason] = useState('')
   const [showTransferDialog, setShowTransferDialog] = useState(false)
   const [selectedTransferPerson, setSelectedTransferPerson] = useState('')
@@ -172,6 +174,7 @@ const SL_leadProfile = () => {
             : { web: false, app: false, taxi: false },
           totalCost: lp?.estimatedCost?.toString() || '',
           finishedDays: '',
+          clientDateOfBirth: '',
           advanceReceived: '',
           advanceAccount: '',
           includeGST: false,
@@ -713,7 +716,9 @@ const SL_leadProfile = () => {
     try {
       // Prepare project data (whole-number amounts), handle comma-separated numbers
       const parseAmount = (val) => Math.round(Number(String(val || '').replace(/,/g, '')) || 0);
-      const totalCostValue = parseAmount(conversionData.totalCost)
+      const baseCost = parseAmount(conversionData.totalCost)
+      // When includeGST: project total = base + 18%; otherwise use base as entered
+      const totalCostValue = conversionData.includeGST ? Math.round(baseCost * 1.18) : baseCost
       const advanceValue = parseAmount(conversionData.advanceReceived)
       const projectData = {
         projectName: conversionData.projectName.trim(),
@@ -723,6 +728,7 @@ const SL_leadProfile = () => {
         advanceReceived: advanceValue,
         advanceAccount: conversionData.advanceAccount || '',
         includeGST: conversionData.includeGST || false,
+        clientDateOfBirth: conversionData.clientDateOfBirth || undefined,
         description: conversionData.description.trim() || '',
         screenshot: conversionData.screenshot || null
       }
@@ -742,6 +748,7 @@ const SL_leadProfile = () => {
         advanceReceived: '',
         advanceAccount: '',
         includeGST: false,
+        clientDateOfBirth: '',
         description: '',
         screenshot: null
       })
@@ -762,6 +769,7 @@ const SL_leadProfile = () => {
 
   const handleCloseDialog = () => {
     setShowConvertedDialog(false)
+    setShowGSTConfirmModal(false)
   }
 
   // Show loading state
@@ -1228,9 +1236,14 @@ const SL_leadProfile = () => {
                   </div>
                 </div>
 
-                {/* Total Cost */}
+                {/* Total Cost - base amount; when GST enabled, +18% applied on submit */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Total Cost <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Total Cost <span className="text-red-500">*</span>
+                    {conversionData.includeGST && (
+                      <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-teal-100 text-teal-800 rounded">GST +18% will be applied</span>
+                    )}
+                  </label>
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
                       <FaRupeeSign className="text-lg" />
@@ -1241,11 +1254,16 @@ const SL_leadProfile = () => {
                     step="1"
                       value={conversionData.totalCost}
                       onChange={(e) => setConversionData({ ...conversionData, totalCost: e.target.value })}
-                      placeholder="Total cost"
+                      placeholder={conversionData.includeGST ? 'Base cost (before GST)' : 'Total cost'}
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                     required
                   />
                   </div>
+                  {conversionData.includeGST && conversionData.totalCost && (
+                    <p className="mt-1 text-xs text-teal-600">
+                      Project total: ₹{Math.round(Number(String(conversionData.totalCost).replace(/,/g, '')) * 1.18 || 0).toLocaleString('en-IN')} (incl. GST)
+                    </p>
+                  )}
                 </div>
 
                 {/* Advance Received */}
@@ -1330,16 +1348,39 @@ const SL_leadProfile = () => {
                   </div>
                 </div>
 
-                {/* Include GST */}
+                {/* Client DOB (optional) - for client birthdays in Client Management */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date of Birth (optional)</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FiCalendar className="text-lg" />
+                    </div>
+                    <input
+                      type="date"
+                      value={conversionData.clientDateOfBirth}
+                      onChange={(e) => setConversionData({ ...conversionData, clientDateOfBirth: e.target.value })}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">Used for showing client birthdays in Client Management</p>
+                </div>
+
+                {/* Include GST - opens confirmation modal when enabling */}
                 <div>
                   <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
                       checked={conversionData.includeGST}
-                      onChange={(e) => setConversionData({ ...conversionData, includeGST: e.target.checked })}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setShowGSTConfirmModal(true)
+                        } else {
+                          setConversionData({ ...conversionData, includeGST: false })
+                        }
+                      }}
                       className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
                     />
-                    <span className="ml-2 text-sm text-gray-700">Include GST</span>
+                    <span className="ml-2 text-sm text-gray-700">Include GST (18%)</span>
                   </label>
                 </div>
 
@@ -1358,6 +1399,61 @@ const SL_leadProfile = () => {
                     <span>{isLoading ? 'Converting...' : 'Converted'}</span>
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* GST Confirmation Modal */}
+        {showGSTConfirmModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+            >
+              <h3 className="text-lg font-bold text-gray-900 mb-3">Enable GST (18%)</h3>
+              <p className="text-sm text-gray-600 mb-4">While enabling GST for this project, it will increase 18% of the cost.</p>
+              {(() => {
+                const base = Math.round(Number(String(conversionData.totalCost || '0').replace(/,/g, '')) || 0)
+                const gstAmount = Math.round(base * 0.18)
+                const withGST = Math.round(base * 1.18)
+                return (
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Cost without GST:</span>
+                      <span className="font-semibold">₹{base.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">GST (18%):</span>
+                      <span className="font-semibold text-teal-600">+ ₹{gstAmount.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
+                      <span className="font-medium text-gray-800">Project total with GST:</span>
+                      <span className="font-bold text-green-700">₹{withGST.toLocaleString('en-IN')}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">On confirmation, the project total cost will be set to the GST-inclusive amount.</p>
+                  </div>
+                )
+              })()}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowGSTConfirmModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConversionData(prev => ({ ...prev, includeGST: true }))
+                    setShowGSTConfirmModal(false)
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium"
+                >
+                  Confirm
+                </button>
               </div>
             </motion.div>
           </div>

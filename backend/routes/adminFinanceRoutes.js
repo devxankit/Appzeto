@@ -26,6 +26,7 @@ const {
   getFinanceStatistics,
   getSalesIncentiveMonthlySummary,
   getPendingRecovery,
+  getGstProjects,
 } = require('../controllers/adminFinanceController');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -40,6 +41,10 @@ router.route('/statistics')
 // Pending recovery (projects with outstanding amount)
 router.route('/pending-recovery')
   .get(getPendingRecovery);
+
+// GST projects (projects with GST applied - for finance management)
+router.route('/gst-projects')
+  .get(getGstProjects);
 
 // Transaction routes
 router.route('/transactions')

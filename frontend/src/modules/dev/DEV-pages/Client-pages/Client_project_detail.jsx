@@ -77,23 +77,29 @@ const Client_project_detail = () => {
         const tasks = tasksResponse.data || tasksResponse || []
         const payments = paymentsResponse.data || paymentsResponse || []
 
-        // Calculate financial details
-        const totalCost = project.budget || project.financialDetails?.totalCost || 0
-        const advanceReceived = project.financialDetails?.advanceReceived || 0
+        // Calculate financial details - prefer financialDetails.totalCost (canonical from conversion)
+        const totalCost = project.financialDetails?.totalCost ?? project.budget ?? 0
         const installmentPlan = project.installmentPlan || []
         
-        // Calculate paid installments
+        // Use backend-calculated remainingAmount when available (single source of truth)
+        const backendRemaining = project.financialDetails?.remainingAmount
+        const advanceReceived = project.financialDetails?.advanceReceived || 0
+        
+        // Calculate paid installments (for display/breakdown only)
         const paidInstallments = installmentPlan.filter(inst => inst.status === 'paid')
         const installmentPaidAmount = paidInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0)
         
-        // Calculate payment records paid amount
+        // advanceReceived from backend may already include installments (per projectFinancialHelper)
+        // Use backend remainingAmount when valid, else compute: totalCost - advanceReceived
+        // Payment records (Payment model) are separate from advanceReceived; add only if not double-counted
         const paymentRecordsPaid = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0)
+        const totalPaidAmount = Number.isFinite(backendRemaining) && backendRemaining >= 0
+          ? totalCost - backendRemaining
+          : Math.min(advanceReceived + installmentPaidAmount + paymentRecordsPaid, totalCost)
         
-        // Total paid = advance + paid installments + payment records
-        const totalPaidAmount = advanceReceived + installmentPaidAmount + paymentRecordsPaid
-        
-        // Calculate remaining amount
-        const remainingAmount = Math.max(0, totalCost - totalPaidAmount)
+        const remainingAmount = Number.isFinite(backendRemaining) && backendRemaining >= 0
+          ? backendRemaining
+          : Math.max(0, totalCost - totalPaidAmount)
         
         // Find next payment due (first pending installment or first pending payment)
         const nextPendingInstallment = installmentPlan.find(inst => inst.status === 'pending')
@@ -101,17 +107,14 @@ const Client_project_detail = () => {
         const nextPaymentDue = nextPendingInstallment?.amount || nextPendingPayment?.amount || 0
 
         // Use backend-calculated progress (based on completed milestones vs total milestones)
-        // Backend already calculates this correctly, so we use it directly
-        // If backend didn't calculate it, fallback to calculating it here for consistency
         let projectProgress = project.progress !== undefined ? project.progress : 0
-        
-        // Ensure progress is calculated if backend didn't provide it
-        if (projectProgress === 0 && milestones.length > 0) {
+        if (project.status === 'completed') {
+          projectProgress = 100
+        } else if (milestones.length > 0) {
           const completedMilestones = milestones.filter(m => m.status === 'completed').length
-          projectProgress = project.status === 'completed' 
-            ? 100 
-            : Math.round((completedMilestones / milestones.length) * 100)
+          projectProgress = Math.round((completedMilestones / milestones.length) * 100)
         }
+        projectProgress = Number.isFinite(projectProgress) ? Math.min(100, Math.max(0, projectProgress)) : 0
 
         // Transform project data
         const transformedProject = {
@@ -157,15 +160,7 @@ const Client_project_detail = () => {
 
         // Transform milestones
         const transformedMilestones = milestones.map((milestone, index) => {
-          // Calculate milestone progress - completed milestones should show 100%
-          let milestoneProgress = milestone.progress || 0
-          if (milestone.status === 'completed') {
-            milestoneProgress = 100
-          } else if (milestoneProgress === 0 && milestone.status !== 'pending') {
-            // If milestone is active/in-progress but progress is 0, calculate from tasks if available
-            // This is a fallback - backend should provide correct progress
-            milestoneProgress = milestone.progress || 0
-          }
+          let milestoneProgress = milestone.status === 'completed' ? 100 : (Number(milestone.progress) || 0)
           
           return {
             _id: milestone._id,
@@ -525,15 +520,19 @@ const Client_project_detail = () => {
       const project = projectResponse.data || projectResponse
       const payments = paymentsResponse.data || paymentsResponse || []
       
-      // Recalculate financial details
-      const totalCost = project.budget || project.financialDetails?.totalCost || 0
+      const totalCost = project.financialDetails?.totalCost ?? project.budget ?? 0
+      const backendRemaining = project.financialDetails?.remainingAmount
       const advanceReceived = project.financialDetails?.advanceReceived || 0
       const installmentPlan = project.installmentPlan || []
       const paidInstallments = installmentPlan.filter(inst => inst.status === 'paid')
       const installmentPaidAmount = paidInstallments.reduce((sum, inst) => sum + (inst.amount || 0), 0)
       const paymentRecordsPaid = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0)
-      const totalPaidAmount = advanceReceived + installmentPaidAmount + paymentRecordsPaid
-      const remainingAmount = Math.max(0, totalCost - totalPaidAmount)
+      const totalPaidAmount = Number.isFinite(backendRemaining) && backendRemaining >= 0
+        ? totalCost - backendRemaining
+        : Math.min(advanceReceived + installmentPaidAmount + paymentRecordsPaid, totalCost)
+      const remainingAmount = Number.isFinite(backendRemaining) && backendRemaining >= 0
+        ? backendRemaining
+        : Math.max(0, totalCost - totalPaidAmount)
       const nextPendingInstallment = installmentPlan.find(inst => inst.status === 'pending')
       const nextPendingPayment = payments.find(p => p.status === 'pending')
       const nextPaymentDue = nextPendingInstallment?.amount || nextPendingPayment?.amount || 0

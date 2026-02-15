@@ -77,7 +77,7 @@ const SL_requests = () => {
   const fetchAdmins = async () => {
     try {
       const response = await salesRequestService.getRecipients('admin')
-      setAdmins(response.data || [])
+      setAdmins(response?.data || [])
     } catch (error) {
       console.error('Error fetching admins:', error)
       toast.error('Failed to fetch admin list')
@@ -106,7 +106,7 @@ const SL_requests = () => {
       }
       
       const response = await salesRequestService.getRequests(params)
-      const requestsData = response.data || []
+      const requestsData = response?.data || []
       
       setRequests(requestsData)
       

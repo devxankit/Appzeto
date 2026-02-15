@@ -567,19 +567,27 @@ const SL_dashboard = () => {
                 <p className="text-lg font-bold text-gray-900 mb-0.5">₹{heroStats.target.toLocaleString()}</p>
                 {heroStats.allTargets && heroStats.allTargets.length > 0 && heroStats.targetNumber && (() => {
                   const activeTargetData = heroStats.allTargets.find(t => t.targetNumber === heroStats.targetNumber);
-                  if (activeTargetData && activeTargetData.deadline) {
-                    const deadline = new Date(activeTargetData.deadline);
+                  if (activeTargetData) {
+                    const reward = activeTargetData.reward || 0;
+                    const deadline = activeTargetData.deadline ? new Date(activeTargetData.deadline) : null;
                     const now = new Date();
-                    const daysLeft = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
+                    const daysLeft = deadline ? Math.ceil((deadline - now) / (1000 * 60 * 60 * 24)) : null;
                     return (
-                      <p className="text-[10px] text-emerald-600 leading-tight">
-                        {deadline.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} 
-                        {daysLeft >= 0 && (
-                          <span className={`ml-1 font-semibold ${daysLeft <= 7 ? 'text-red-600' : 'text-emerald-600'}`}>
-                            ({daysLeft}d)
-                          </span>
+                      <div className="space-y-0.5">
+                        {reward > 0 && (
+                          <p className="text-[10px] font-semibold text-green-600">Reward: ₹{reward.toLocaleString('en-IN')}</p>
                         )}
-                      </p>
+                        {deadline && (
+                          <p className="text-[10px] text-emerald-600 leading-tight">
+                            {deadline.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} 
+                            {daysLeft >= 0 && (
+                              <span className={`ml-1 font-semibold ${daysLeft <= 7 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                ({daysLeft}d)
+                              </span>
+                            )}
+                          </p>
+                        )}
+                      </div>
                     );
                   }
                   return null;
@@ -1313,13 +1321,21 @@ const SL_dashboard = () => {
                           </div>
                         </div>
 
-                        {/* Row 2: Amount + Deadline */}
+                        {/* Row 2: Amount + Reward + Deadline */}
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
-                          <div className="flex items-baseline gap-1.5">
-                            <FaRupeeSign className="text-emerald-600 text-base sm:text-lg mt-0.5 flex-shrink-0" />
-                            <span className="text-xl sm:text-2xl font-bold text-emerald-800 tracking-tight">
-                              {target.amount.toLocaleString('en-IN')}
-                            </span>
+                          <div className="flex flex-wrap items-baseline gap-2 sm:gap-3">
+                            <div className="flex items-baseline gap-1.5">
+                              <FaRupeeSign className="text-emerald-600 text-base sm:text-lg mt-0.5 flex-shrink-0" />
+                              <span className="text-xl sm:text-2xl font-bold text-emerald-800 tracking-tight">
+                                {target.amount.toLocaleString('en-IN')}
+                              </span>
+                              <span className="text-xs text-gray-500">target</span>
+                            </div>
+                            <div className={`flex items-baseline gap-1 text-sm font-semibold px-2 py-0.5 rounded-md ${target.reward > 0 ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
+                              <FaRupeeSign className={target.reward > 0 ? 'text-green-600' : 'text-gray-400'} />
+                              <span>{(target.reward || 0).toLocaleString('en-IN')}</span>
+                              <span className={`text-xs font-medium ${target.reward > 0 ? 'text-green-600' : 'text-gray-500'}`}>reward</span>
+                            </div>
                           </div>
                           <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 w-fit ${daysLeft <= 7 && !isAchieved ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
                             <FaClock className="text-[10px] sm:text-xs flex-shrink-0 opacity-80" />

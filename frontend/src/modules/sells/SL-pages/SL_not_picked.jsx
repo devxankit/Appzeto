@@ -83,7 +83,7 @@ const SL_not_picked = () => {
         limit: 50
       }
       const response = await salesLeadService.getLeadsByStatus('not_picked', params)
-      setLeadsData(response.data || [])
+      setLeadsData(response?.data || [])
     } catch (error) {
       console.error('Error fetching leads:', error)
       toast.error('Failed to fetch leads')

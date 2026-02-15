@@ -11,6 +11,12 @@ const setEmployeeSalary = async (userType, employeeId, fixedSalary) => {
   return res
 }
 
+// Get employee IDs who already have salary set (for Set salary dropdown)
+const getEmployeesWithSalary = async () => {
+  const res = await apiRequest('/admin/users/salary/employee-ids', { method: 'GET' })
+  return res?.data || []
+}
+
 // Get salary records with filters
 const getSalaryRecords = async (params = {}) => {
   const queryParams = new URLSearchParams()
@@ -84,6 +90,7 @@ const updateRewardPayment = async (id, data) => {
 
 export const adminSalaryService = {
   setEmployeeSalary,
+  getEmployeesWithSalary,
   getSalaryRecords,
   getSalaryRecord,
   updateSalaryRecord,

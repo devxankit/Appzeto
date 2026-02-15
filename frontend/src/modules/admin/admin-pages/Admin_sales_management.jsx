@@ -136,9 +136,9 @@ const Admin_sales_management = () => {
   const [targetAmount, setTargetAmount] = useState('')
   // Multiple targets state
   const [targets, setTargets] = useState([
-    { targetNumber: 1, amount: '', date: '', time: '' },
-    { targetNumber: 2, amount: '', date: '', time: '' },
-    { targetNumber: 3, amount: '', date: '', time: '' }
+    { targetNumber: 1, amount: '', reward: '', date: '', time: '' },
+    { targetNumber: 2, amount: '', reward: '', date: '', time: '' },
+    { targetNumber: 3, amount: '', reward: '', date: '', time: '' }
   ])
   const [leadsToAssign, setLeadsToAssign] = useState('')
   const [incentiveAmount, setIncentiveAmount] = useState('')
@@ -1186,9 +1186,9 @@ const Admin_sales_management = () => {
     setShowBulkLeadModal(false)
     setShowTargetModal(false)
     setTargets([
-      { targetNumber: 1, amount: '', date: '', time: '' },
-      { targetNumber: 2, amount: '', date: '', time: '' },
-      { targetNumber: 3, amount: '', date: '', time: '' }
+      { targetNumber: 1, amount: '', reward: '', date: '', time: '' },
+      { targetNumber: 2, amount: '', reward: '', date: '', time: '' },
+      { targetNumber: 3, amount: '', reward: '', date: '', time: '' }
     ])
     setShowAssignLeadModal(false)
     setShowLeadListModal(false)
@@ -1585,32 +1585,36 @@ const Admin_sales_management = () => {
     // Initialize targets from member data or defaults
     if (member.salesTargets && member.salesTargets.length > 0) {
       const memberTargets = member.salesTargets
+      const getTarget = (n) => memberTargets.find(t => t.targetNumber === n)
       setTargets([
         {
           targetNumber: 1,
-          amount: memberTargets.find(t => t.targetNumber === 1)?.amount?.toString() || '',
-          date: memberTargets.find(t => t.targetNumber === 1)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 1).targetDate).toISOString().split('T')[0] : '',
-          time: memberTargets.find(t => t.targetNumber === 1)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 1).targetDate).toTimeString().slice(0, 5) : ''
+          amount: getTarget(1)?.amount?.toString() || '',
+          reward: getTarget(1)?.reward?.toString() || '',
+          date: getTarget(1)?.targetDate ? new Date(getTarget(1).targetDate).toISOString().split('T')[0] : '',
+          time: getTarget(1)?.targetDate ? new Date(getTarget(1).targetDate).toTimeString().slice(0, 5) : ''
         },
         {
           targetNumber: 2,
-          amount: memberTargets.find(t => t.targetNumber === 2)?.amount?.toString() || '',
-          date: memberTargets.find(t => t.targetNumber === 2)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 2).targetDate).toISOString().split('T')[0] : '',
-          time: memberTargets.find(t => t.targetNumber === 2)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 2).targetDate).toTimeString().slice(0, 5) : ''
+          amount: getTarget(2)?.amount?.toString() || '',
+          reward: getTarget(2)?.reward?.toString() || '',
+          date: getTarget(2)?.targetDate ? new Date(getTarget(2).targetDate).toISOString().split('T')[0] : '',
+          time: getTarget(2)?.targetDate ? new Date(getTarget(2).targetDate).toTimeString().slice(0, 5) : ''
         },
         {
           targetNumber: 3,
-          amount: memberTargets.find(t => t.targetNumber === 3)?.amount?.toString() || '',
-          date: memberTargets.find(t => t.targetNumber === 3)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 3).targetDate).toISOString().split('T')[0] : '',
-          time: memberTargets.find(t => t.targetNumber === 3)?.targetDate ? new Date(memberTargets.find(t => t.targetNumber === 3).targetDate).toTimeString().slice(0, 5) : ''
+          amount: getTarget(3)?.amount?.toString() || '',
+          reward: getTarget(3)?.reward?.toString() || '',
+          date: getTarget(3)?.targetDate ? new Date(getTarget(3).targetDate).toISOString().split('T')[0] : '',
+          time: getTarget(3)?.targetDate ? new Date(getTarget(3).targetDate).toTimeString().slice(0, 5) : ''
         }
       ])
     } else {
       // Reset to defaults
       setTargets([
-        { targetNumber: 1, amount: '', date: '', time: '' },
-        { targetNumber: 2, amount: '', date: '', time: '' },
-        { targetNumber: 3, amount: '', date: '', time: '' }
+        { targetNumber: 1, amount: '', reward: '', date: '', time: '' },
+        { targetNumber: 2, amount: '', reward: '', date: '', time: '' },
+        { targetNumber: 3, amount: '', reward: '', date: '', time: '' }
       ])
     }
     
@@ -1655,11 +1659,15 @@ const Admin_sales_management = () => {
       const memberId = selectedItem._id || selectedItem.id
       
       // Prepare targets array for API
-      const targetsToSend = validTargets.map(t => ({
-        targetNumber: t.targetNumber,
-        amount: parseFloat(t.amount),
-        targetDate: new Date(`${t.date}T${t.time}`).toISOString()
-      }))
+      const targetsToSend = validTargets.map(t => {
+        const rewardVal = t.reward && !isNaN(parseFloat(t.reward)) ? parseFloat(t.reward) : 0
+        return {
+          targetNumber: t.targetNumber,
+          amount: parseFloat(t.amount),
+          reward: rewardVal >= 0 ? rewardVal : 0,
+          targetDate: new Date(`${t.date}T${t.time}`).toISOString()
+        }
+      })
 
       const response = await adminSalesService.setMultipleTargets(memberId, targetsToSend)
       
@@ -1668,18 +1676,13 @@ const Admin_sales_management = () => {
         await loadSalesTeam()
         await loadStatistics()
         setShowTargetModal(false)
-    setTargets([
-      { targetNumber: 1, amount: '', date: '', time: '' },
-      { targetNumber: 2, amount: '', date: '', time: '' },
-      { targetNumber: 3, amount: '', date: '', time: '' }
-    ])
+        setTargets([
+          { targetNumber: 1, amount: '', reward: '', date: '', time: '' },
+          { targetNumber: 2, amount: '', reward: '', date: '', time: '' },
+          { targetNumber: 3, amount: '', reward: '', date: '', time: '' }
+        ])
         setSelectedItem(null)
         setTargetAmount('')
-        setTargets([
-          { targetNumber: 1, amount: '', date: '', time: '' },
-          { targetNumber: 2, amount: '', date: '', time: '' },
-          { targetNumber: 3, amount: '', date: '', time: '' }
-        ])
       } else {
         toast.error(response.message || 'Failed to set targets')
       }
@@ -3976,7 +3979,7 @@ const Admin_sales_management = () => {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">Set Multiple Targets</h3>
-                  <p className="text-gray-600 text-sm mt-1">Set up to 3 revenue targets with dates and times for {selectedItem.name}</p>
+                  <p className="text-gray-600 text-sm mt-1">Set up to 3 revenue targets with reward amounts and dates for {selectedItem.name}</p>
                 </div>
                 <button
                   onClick={closeModals}
@@ -3999,7 +4002,9 @@ const Admin_sales_management = () => {
                       <div className="mt-2 space-y-1">
                         {selectedItem.salesTargets.map((t, idx) => (
                           <div key={idx} className="text-xs text-orange-700">
-                            Target {t.targetNumber}: {formatCurrency(t.amount)} - {new Date(t.targetDate).toLocaleDateString()} {new Date(t.targetDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            Target {t.targetNumber}: {formatCurrency(t.amount)}
+                            {t.reward > 0 && <span className="text-emerald-600 font-medium"> (Reward: {formatCurrency(t.reward)})</span>}
+                            {' - '}{new Date(t.targetDate).toLocaleDateString()} {new Date(t.targetDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         ))}
                       </div>
@@ -4016,7 +4021,7 @@ const Admin_sales_management = () => {
               <div className="space-y-6 mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-gray-900">Set Multiple Targets</h3>
-                  <p className="text-xs text-gray-500">Set up to 3 targets with specific dates and times</p>
+                  <p className="text-xs text-gray-500">Set up to 3 targets with reward amounts, dates and times</p>
                 </div>
 
                 {targets.map((target, index) => (
@@ -4028,7 +4033,7 @@ const Admin_sales_management = () => {
                       <h4 className="font-semibold text-gray-900">Target {target.targetNumber}</h4>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {/* Amount Input */}
                       <div>
                         <label className="block text-xs font-semibold text-gray-700 mb-1">Target Amount</label>
@@ -4040,6 +4045,23 @@ const Admin_sales_management = () => {
                             onChange={(e) => handleTargetChange(index, 'amount', e.target.value)}
                             placeholder="Enter amount"
                             className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm font-semibold"
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Reward Amount Input */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Reward Amount</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">₹</span>
+                          <input
+                            type="number"
+                            value={target.reward}
+                            onChange={(e) => handleTargetChange(index, 'reward', e.target.value)}
+                            placeholder="Reward on achieve"
+                            className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
                             min="0"
                             step="0.01"
                           />

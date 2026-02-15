@@ -56,13 +56,14 @@ const SL_profile = () => {
       // Load profile data from stored Sales data
       let storedSalesData = getStoredSalesData()
 
-      // Ensure we have a reliable join date from backend (createdAt)
-      if (storedSalesData && !storedSalesData.joiningDate && !storedSalesData.createdAt) {
+      // Ensure we have joiningDate from backend (loginTime is last login, not join date)
+      if (storedSalesData && !storedSalesData.joiningDate) {
         try {
           const prof = await getSalesProfile()
-          const createdAt = prof?.data?.sales?.createdAt
-          if (createdAt) {
-            storedSalesData = { ...storedSalesData, createdAt }
+          const sales = prof?.data?.sales || {}
+          const joiningDate = sales.joiningDate || sales.createdAt
+          if (joiningDate) {
+            storedSalesData = { ...storedSalesData, joiningDate }
             localStorage.setItem('salesUser', JSON.stringify(storedSalesData))
           }
         } catch (e) {
@@ -71,10 +72,10 @@ const SL_profile = () => {
       }
 
       if (storedSalesData) {
+        // Use joiningDate first; createdAt as fallback. Never use loginTime (that's last login, not join date)
         const joinDate =
           storedSalesData.joiningDate ||
           storedSalesData.createdAt ||
-          storedSalesData.loginTime ||
           new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString()
         setProfileData({
           fullName: storedSalesData.name || 'Sales User',

@@ -480,6 +480,7 @@ const Admin_dashboard = () => {
         // For 'all' filter, don't pass any timeFilter or date params
         // This will show all-time data
       } else if (filterType === 'custom' && dateRange.startDate && dateRange.endDate) {
+        dashboardParams.timeFilter = 'custom'
         dashboardParams.startDate = dateRange.startDate
         dashboardParams.endDate = dateRange.endDate
         financeParams.startDate = dateRange.startDate
@@ -528,7 +529,7 @@ const Admin_dashboard = () => {
             pendingAmount: financeData.pendingAmounts?.totalPendingReceivables || 0,
             profit: financeData.netProfit || 0,
             loss: (financeData.totalExpenses || 0) > (financeData.totalRevenue || 0)
-              ? (financeData.totalExpenses - financeData.totalRevenue)
+              ? (financeData.totalExpenses || 0) - (financeData.totalRevenue || 0)
               : 0,
             earningsGrowth: parseFloat(financeData.revenueChange || 0),
             expensesGrowth: parseFloat(financeData.expenseChange || 0),
@@ -1165,55 +1166,63 @@ const Admin_dashboard = () => {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Project Status</h3>
-                  <p className="text-sm text-gray-600">Current project distribution</p>
+                  <p className="text-sm text-gray-600">Project distribution ({getFilterLabel()})</p>
                 </div>
                 <div className="p-2 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100">
                   <PieChart className="h-5 w-5 text-blue-600" />
                 </div>
               </div>
               <div className="h-48 flex items-center">
-                <div className="w-32 h-32 flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartsPieChart>
-                      <Pie
-                        data={projectStatusData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={25}
-                        outerRadius={45}
-                        paddingAngle={3}
-                        dataKey="value"
-                      >
-                        {projectStatusData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'white',
-                          border: 'none',
-                          borderRadius: '8px',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                          fontSize: '12px'
-                        }}
-                      />
-                    </RechartsPieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex-1 flex flex-col justify-center space-y-3 pl-6">
-                  {projectStatusData.map((item, index) => (
-                    <div key={index} className="flex items-center space-x-3">
-                      <div
-                        className="w-3 h-3 rounded-full shadow-sm"
-                        style={{ backgroundColor: item.color }}
-                      ></div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                        <p className="text-xs text-gray-600">{item.value}</p>
-                      </div>
+                {projectStatusData.length > 0 ? (
+                  <>
+                    <div className="w-32 h-32 flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsPieChart>
+                          <Pie
+                            data={projectStatusData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={25}
+                            outerRadius={45}
+                            paddingAngle={3}
+                            dataKey="value"
+                          >
+                            {projectStatusData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry?.color || '#6B7280'} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                              fontSize: '12px'
+                            }}
+                          />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
                     </div>
-                  ))}
-                </div>
+                    <div className="flex-1 flex flex-col justify-center space-y-3 pl-6">
+                      {projectStatusData.map((item, index) => (
+                        <div key={index} className="flex items-center space-x-3">
+                          <div
+                            className="w-3 h-3 rounded-full shadow-sm"
+                            style={{ backgroundColor: item?.color || '#6B7280' }}
+                          ></div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{item?.name}</p>
+                            <p className="text-xs text-gray-600">{item?.value}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+                    No projects in this period
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>

@@ -231,8 +231,8 @@ const Client_milestone_detail = () => {
     if (!newComment.trim() || !milestoneData.milestone) return
     
     try {
-      // For now, add comment locally since there's no client milestone comment API yet
-      // TODO: Add backend API endpoint for client milestone comments
+      // TODO: Persist comments via backend API (POST /api/client/milestones/:id/comments)
+      // Currently comments are stored locally only and are lost on refresh
       const newCommentObj = {
         _id: Date.now().toString(),
         id: Date.now(),

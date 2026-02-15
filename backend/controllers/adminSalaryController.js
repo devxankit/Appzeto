@@ -4,6 +4,7 @@ const Sales = require('../models/Sales');
 const PM = require('../models/PM');
 const Admin = require('../models/Admin');
 const Incentive = require('../models/Incentive');
+const Project = require('../models/Project');
 const mongoose = require('mongoose');
 const asyncHandler = require('../middlewares/asyncHandler');
 
@@ -56,6 +57,52 @@ const getEmployeeModelType = (userType) => {
   }
 };
 
+// Helper: Calculate team target reward for a sales team lead for a given month
+// Returns the reward amount if team target was achieved in that month, else 0
+const calculateTeamTargetRewardForMonth = async (salesEmployeeId, month) => {
+  try {
+    const sales = await Sales.findById(salesEmployeeId)
+      .select('isTeamLead teamMembers teamLeadTarget teamLeadTargetReward');
+    if (!sales || !sales.isTeamLead || !(sales.teamLeadTarget > 0) || !(sales.teamLeadTargetReward > 0)) return 0;
+    if (!sales.teamMembers || sales.teamMembers.length === 0) return 0;
+
+    const [year, monthNum] = month.split('-');
+    const monthStart = new Date(parseInt(year), parseInt(monthNum) - 1, 1, 0, 0, 0, 0);
+    const monthEnd = new Date(parseInt(year), parseInt(monthNum), 0, 23, 59, 59, 999);
+
+    const teamMemberIds = sales.teamMembers
+      .map(id => (mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null))
+      .filter(Boolean);
+    // Include team lead's own conversions + team members (full team sales for target)
+    const allTeamIds = [new mongoose.Types.ObjectId(salesEmployeeId), ...teamMemberIds];
+
+    const teamSalesAggregation = await Project.aggregate([
+      { $lookup: { from: 'clients', localField: 'client', foreignField: '_id', as: 'clientData' } },
+      { $unwind: { path: '$clientData', preserveNullAndEmptyArrays: false } },
+      {
+        $match: {
+          'clientData.convertedBy': { $in: allTeamIds },
+          'clientData.conversionDate': { $gte: monthStart, $lte: monthEnd }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalSales: {
+            $sum: { $ifNull: ['$financialDetails.totalCost', { $ifNull: ['$budget', 0] }] }
+          }
+        }
+      }
+    ]);
+
+    const teamMonthlySales = teamSalesAggregation.length > 0 ? (Number(teamSalesAggregation[0].totalSales) || 0) : 0;
+    return teamMonthlySales >= sales.teamLeadTarget ? Number(sales.teamLeadTargetReward) : 0;
+  } catch (error) {
+    console.error(`Error calculating team target reward for sales ${salesEmployeeId}, month ${month}:`, error);
+    return 0;
+  }
+};
+
 // @desc    Set employee fixed salary
 // @route   PUT /api/admin/salary/set/:userType/:employeeId
 // @access  Private (Admin/HR)
@@ -97,22 +144,27 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
   employee.fixedSalary = amount;
   await employee.save();
 
-  // Auto-generate salary records for current and next 3 months
-  const currentDate = new Date();
+  // Create salary records from joining month through current + 36 months (3 years ahead)
+  // Mark-paid auto-creates next month, so records extend indefinitely until admin deletes
+  const joiningDate = employee.joiningDate || new Date();
+  const joinDate = new Date(joiningDate);
+  const now = new Date();
+  const startMonth = joinDate.getFullYear() * 12 + joinDate.getMonth();
+  const endMonth = now.getFullYear() * 12 + now.getMonth() + 36;
   const months = [];
-  for (let i = 0; i < 4; i++) {
-    const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
-    months.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+  for (let m = startMonth; m <= endMonth; m++) {
+    const y = Math.floor(m / 12);
+    const mo = (m % 12) + 1;
+    months.push(`${y}-${String(mo).padStart(2, '0')}`);
   }
-
-  const joiningDate = employee.joiningDate;
   const paymentDay = new Date(joiningDate).getDate();
 
   for (const month of months) {
     const paymentDate = calculatePaymentDate(joiningDate, month);
     
-    // Calculate incentiveAmount for sales team
+    // Calculate incentiveAmount and rewardAmount (team target reward) for sales team
     let incentiveAmount = 0;
+    let rewardAmount = 0;
     if (employeeModel === 'Sales') {
       try {
         const incentives = await Incentive.find({
@@ -120,8 +172,9 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
           currentBalance: { $gt: 0 }
         });
         incentiveAmount = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
+        rewardAmount = await calculateTeamTargetRewardForMonth(employee._id, month);
       } catch (error) {
-        console.error(`Error calculating incentive for employee ${employee._id}:`, error);
+        console.error(`Error calculating incentive/reward for employee ${employee._id}:`, error);
       }
     }
 
@@ -147,7 +200,7 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
         status: 'pending',
         incentiveAmount,
         incentiveStatus: 'pending',
-        rewardAmount: 0,
+        rewardAmount,
         rewardStatus: 'pending',
         createdBy: req.admin.id
       },
@@ -201,31 +254,33 @@ exports.getSalaryRecords = asyncHandler(async (req, res) => {
     .populate('updatedBy', 'name email')
     .sort({ paymentDate: 1, employeeName: 1 });
 
-  // Calculate incentiveAmount for sales team employees from Incentive model's currentBalance
-  // IMPORTANT: Only update incentiveAmount if status is 'pending' - preserve paid amounts for history
+  // Calculate incentiveAmount and rewardAmount (team target reward) for sales team employees
+  // IMPORTANT: Only update if status is 'pending' - preserve paid amounts for history
   for (const salary of salaries) {
     if (salary.employeeModel === 'Sales' && salary.department === 'sales') {
       try {
-        // Only recalculate if incentive is still pending
-        // If already paid, preserve the original amount for historical records
+        // Recalculate incentiveAmount if incentive is still pending
         if (salary.incentiveStatus === 'pending') {
-          // Sum all currentBalance values from Incentive records for this sales employee
           const incentives = await Incentive.find({
             salesEmployee: salary.employeeId,
             currentBalance: { $gt: 0 }
           });
-          
           const totalIncentive = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
-          
-          // Update incentiveAmount if it's different
           if (Math.abs((salary.incentiveAmount || 0) - totalIncentive) > 0.01) {
             salary.incentiveAmount = totalIncentive;
             await salary.save();
           }
         }
+        // Recalculate rewardAmount (includes team target reward for team leads) if reward is still pending
+        if (salary.rewardStatus === 'pending') {
+          const teamTargetReward = await calculateTeamTargetRewardForMonth(salary.employeeId, salary.month);
+          if (Math.abs((salary.rewardAmount || 0) - teamTargetReward) > 0.01) {
+            salary.rewardAmount = teamTargetReward;
+            await salary.save();
+          }
+        }
       } catch (error) {
-        console.error(`Error calculating incentive for salary ${salary._id}:`, error);
-        // Continue with default 0 if error occurs
+        console.error(`Error calculating incentive/reward for salary ${salary._id}:`, error);
       }
     }
   }
@@ -236,7 +291,8 @@ exports.getSalaryRecords = asyncHandler(async (req, res) => {
     .populate('updatedBy', 'name email')
     .sort({ paymentDate: 1, employeeName: 1 });
 
-  // Calculate statistics including incentive and reward amounts
+  // Calculate statistics - incentive only for Sales employees; others have fixed salary + reward only
+  const isSales = (s) => s.employeeModel === 'Sales' && s.department === 'sales';
   const stats = {
     totalEmployees: salaries.length,
     paidEmployees: salaries.filter(s => s.status === 'paid').length,
@@ -244,9 +300,9 @@ exports.getSalaryRecords = asyncHandler(async (req, res) => {
     totalAmount: salaries.reduce((sum, s) => sum + s.fixedSalary, 0),
     paidAmount: salaries.filter(s => s.status === 'paid').reduce((sum, s) => sum + s.fixedSalary, 0),
     pendingAmount: salaries.filter(s => s.status === 'pending').reduce((sum, s) => sum + s.fixedSalary, 0),
-    totalIncentiveAmount: salaries.reduce((sum, s) => sum + (s.incentiveAmount || 0), 0),
-    paidIncentiveAmount: salaries.filter(s => s.incentiveStatus === 'paid').reduce((sum, s) => sum + (s.incentiveAmount || 0), 0),
-    pendingIncentiveAmount: salaries.filter(s => s.incentiveStatus === 'pending').reduce((sum, s) => sum + (s.incentiveAmount || 0), 0),
+    totalIncentiveAmount: salaries.filter(isSales).reduce((sum, s) => sum + (s.incentiveAmount || 0), 0),
+    paidIncentiveAmount: salaries.filter(s => isSales(s) && s.incentiveStatus === 'paid').reduce((sum, s) => sum + (s.incentiveAmount || 0), 0),
+    pendingIncentiveAmount: salaries.filter(s => isSales(s) && s.incentiveStatus === 'pending').reduce((sum, s) => sum + (s.incentiveAmount || 0), 0),
     totalRewardAmount: salaries.reduce((sum, s) => sum + (s.rewardAmount || 0), 0),
     paidRewardAmount: salaries.filter(s => s.rewardStatus === 'paid').reduce((sum, s) => sum + (s.rewardAmount || 0), 0),
     pendingRewardAmount: salaries.filter(s => s.rewardStatus === 'pending').reduce((sum, s) => sum + (s.rewardAmount || 0), 0)
@@ -257,6 +313,17 @@ exports.getSalaryRecords = asyncHandler(async (req, res) => {
     data: salaries,
     stats,
     month: currentMonth
+  });
+});
+
+// @desc    Get employee IDs who already have salary set (for Set salary dropdown)
+// @route   GET /api/admin/users/salary/employee-ids
+// @access  Private (Admin/HR)
+exports.getEmployeesWithSalary = asyncHandler(async (req, res) => {
+  const ids = await Salary.distinct('employeeId');
+  res.json({
+    success: true,
+    data: ids.map(id => id.toString())
   });
 });
 
@@ -367,7 +434,67 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
     
     if (status === 'paid') {
       salary.paidDate = new Date();
-      
+
+      // For sales: pay incentive and reward together with salary on same day
+      if (previousStatus !== 'paid' && salary.employeeModel === 'Sales' && salary.department === 'sales') {
+        const { mapSalaryPaymentMethodToFinance } = require('../utils/paymentMethodMapper');
+        const pm = paymentMethod ? mapSalaryPaymentMethodToFinance(paymentMethod) : 'Bank Transfer';
+        const payDate = salary.paidDate || new Date();
+        // Incentive: recalc from Incentive model (current balance), mark paid, create tx
+        try {
+          const incentives = await Incentive.find({ salesEmployee: salary.employeeId, currentBalance: { $gt: 0 } });
+          const totalIncentive = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
+          if (totalIncentive > 0) {
+            salary.incentiveAmount = totalIncentive;
+            salary.incentiveStatus = 'paid';
+            salary.incentivePaidDate = payDate;
+            for (const inc of incentives) {
+              inc.currentBalance = 0;
+              if (!inc.paidAt) inc.paidAt = payDate;
+              await inc.save();
+            }
+            const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
+            const { mapSalaryPaymentMethodToFinance } = require('../utils/paymentMethodMapper');
+            await createOutgoingTransaction({
+              amount: totalIncentive,
+              category: 'Incentive Payment',
+              transactionDate: payDate,
+              createdBy: req.admin.id,
+              employee: salary.employeeId,
+              paymentMethod: pm,
+              description: `Incentive payment for ${salary.employeeName} - ${salary.month}`,
+              metadata: { sourceType: 'incentive', sourceId: salary._id.toString(), month: salary.month },
+              checkDuplicate: true
+            });
+          }
+        } catch (e) {
+          console.error('Error paying incentive with salary:', e);
+        }
+        // Reward: if rewardAmount > 0, mark paid and create tx
+        try {
+          const rewardAmt = Number(salary.rewardAmount || 0);
+          if (rewardAmt > 0) {
+            salary.rewardStatus = 'paid';
+            salary.rewardPaidDate = payDate;
+            const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
+            const { mapSalaryPaymentMethodToFinance } = require('../utils/paymentMethodMapper');
+            await createOutgoingTransaction({
+              amount: rewardAmt,
+              category: 'Reward Payment',
+              transactionDate: payDate,
+              createdBy: req.admin.id,
+              employee: salary.employeeId,
+              paymentMethod: pm,
+              description: `Reward payment for ${salary.employeeName} - ${salary.month}`,
+              metadata: { sourceType: 'reward', sourceId: salary._id.toString(), month: salary.month },
+              checkDuplicate: true
+            });
+          }
+        } catch (e) {
+          console.error('Error paying reward with salary:', e);
+        }
+      }
+
       // Create finance transaction when salary is marked as paid
       try {
         const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
@@ -423,17 +550,31 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
 
             // Only create if it doesn't exist
             if (!existingNextMonth) {
+              let nextIncentive = 0;
+              let nextReward = 0;
+              if (salary.employeeModel === 'Sales') {
+                try {
+                  const incs = await Incentive.find({ salesEmployee: salary.employeeId, currentBalance: { $gt: 0 } });
+                  nextIncentive = incs.reduce((s, i) => s + (i.currentBalance || 0), 0);
+                  nextReward = await calculateTeamTargetRewardForMonth(salary.employeeId, nextMonth);
+                } catch (e) { /* ignore */ }
+              }
+              const role = salary.employeeModel === 'Sales' ? 'sales' : salary.employeeModel === 'PM' ? 'project-manager' : salary.role || 'employee';
               await Salary.create({
                 employeeId: salary.employeeId,
                 employeeModel: salary.employeeModel,
                 employeeName: salary.employeeName,
                 department: salary.department,
-                role: salary.role,
+                role,
                 month: nextMonth,
-                fixedSalary: salary.fixedSalary, // Use same salary amount
-                paymentDate: paymentDate,
-                paymentDay: paymentDay,
+                fixedSalary: salary.fixedSalary,
+                paymentDate,
+                paymentDay,
                 status: 'pending',
+                incentiveAmount: nextIncentive,
+                incentiveStatus: 'pending',
+                rewardAmount: nextReward,
+                rewardStatus: 'pending',
                 createdBy: req.admin.id
               });
             }
@@ -642,8 +783,9 @@ exports.generateMonthlySalaries = asyncHandler(async (req, res) => {
       month
     });
 
-    // Calculate incentiveAmount for sales team
+    // Calculate incentiveAmount and rewardAmount (team target reward) for sales team
     let incentiveAmount = 0;
+    let rewardAmount = 0;
     if (emp.modelType === 'Sales') {
       try {
         const incentives = await Incentive.find({
@@ -651,39 +793,42 @@ exports.generateMonthlySalaries = asyncHandler(async (req, res) => {
           currentBalance: { $gt: 0 }
         });
         incentiveAmount = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
+        rewardAmount = await calculateTeamTargetRewardForMonth(emp._id, month);
       } catch (error) {
-        console.error(`Error calculating incentive for employee ${emp._id}:`, error);
+        console.error(`Error calculating incentive/reward for employee ${emp._id}:`, error);
       }
     }
 
     if (existing) {
-      // Update existing record if salary changed
-      if (existing.fixedSalary !== emp.fixedSalary) {
+      // Update existing record if salary changed or incentive/reward amounts changed
+      let needsUpdate = existing.fixedSalary !== emp.fixedSalary;
+      if (emp.modelType === 'Sales') {
+        if (Math.abs((existing.incentiveAmount || 0) - incentiveAmount) > 0.01 ||
+            Math.abs((existing.rewardAmount || 0) - rewardAmount) > 0.01) {
+          needsUpdate = true;
+        }
+      }
+      if (needsUpdate) {
         existing.fixedSalary = emp.fixedSalary;
         existing.paymentDate = paymentDate;
         existing.paymentDay = paymentDay;
-        // Update incentiveAmount if it's a sales employee
         if (emp.modelType === 'Sales') {
           existing.incentiveAmount = incentiveAmount;
+          existing.rewardAmount = rewardAmount;
         }
-        existing.updatedBy = req.admin.id;
-        await existing.save();
-        updated++;
-      } else if (emp.modelType === 'Sales' && Math.abs((existing.incentiveAmount || 0) - incentiveAmount) > 0.01) {
-        // Update incentiveAmount even if salary hasn't changed
-        existing.incentiveAmount = incentiveAmount;
         existing.updatedBy = req.admin.id;
         await existing.save();
         updated++;
       }
     } else {
-      // Create new record
+      // Create new record - map modelType to role for Salary schema
+      const role = emp.modelType === 'Sales' ? 'sales' : emp.modelType === 'PM' ? 'project-manager' : emp.role || 'employee'
       await Salary.create({
         employeeId: emp._id,
         employeeModel: emp.modelType,
         employeeName: emp.name,
         department: emp.department || 'unknown',
-        role: emp.role || 'employee',
+        role,
         month,
         fixedSalary: emp.fixedSalary,
         paymentDate,
@@ -691,7 +836,7 @@ exports.generateMonthlySalaries = asyncHandler(async (req, res) => {
         status: 'pending',
         incentiveAmount,
         incentiveStatus: 'pending',
-        rewardAmount: 0,
+        rewardAmount,
         rewardStatus: 'pending',
         createdBy: req.admin.id
       });
@@ -738,7 +883,7 @@ exports.getEmployeeSalaryHistory = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Delete salary record (only for pending and current/future months)
+// @desc    Delete salary record (admin can delete any record, including paid)
 // @route   DELETE /api/admin/salary/:id
 // @access  Private (Admin/HR)
 exports.deleteSalaryRecord = asyncHandler(async (req, res) => {
@@ -751,26 +896,7 @@ exports.deleteSalaryRecord = asyncHandler(async (req, res) => {
     });
   }
 
-  // Only allow deletion of pending records in current/future months
-  const salaryMonth = new Date(salary.month + '-01');
-  const currentMonth = new Date();
-  currentMonth.setDate(1);
-  currentMonth.setHours(0, 0, 0, 0);
-
-  if (salary.status === 'paid') {
-    return res.status(400).json({
-      success: false,
-      message: 'Cannot delete paid salary records'
-    });
-  }
-
-  if (salaryMonth < currentMonth) {
-    return res.status(400).json({
-      success: false,
-      message: 'Cannot delete salary records for past months'
-    });
-  }
-
+  // Admin has full power to delete any salary record (paid or pending, past or future)
   await Salary.findByIdAndDelete(salary._id);
 
   res.json({

@@ -85,6 +85,8 @@ const Admin_project_management = () => {
   const [selectedCategory, setSelectedCategory] = useState('all')
   // Project source filter state
   const [selectedSource, setSelectedSource] = useState('all') // 'all', 'sales', 'channel-partner', 'pm', 'admin'
+  // GST filter state - filter projects by GST included or not
+  const [selectedGSTFilter, setSelectedGSTFilter] = useState('all') // 'all', 'with_gst', 'without_gst'
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -1217,6 +1219,17 @@ const Admin_project_management = () => {
       matchesCategory = categoryMatch
     }
     
+    // GST filter (only for project tabs) - filter by includeGST
+    let matchesGST = true
+    if ((activeTab === 'pending-projects' || activeTab === 'active-projects' || activeTab === 'completed-projects') && selectedGSTFilter !== 'all') {
+      const hasGST = !!(item.financialDetails?.includeGST)
+      if (selectedGSTFilter === 'with_gst') {
+        matchesGST = hasGST
+      } else if (selectedGSTFilter === 'without_gst') {
+        matchesGST = !hasGST
+      }
+    }
+
     // Date filter (for all tabs)
     let matchesDate = true
     if (dateFilterType !== 'all') {
@@ -1245,7 +1258,7 @@ const Admin_project_management = () => {
       }
     }
     
-    return matchesSearch && matchesFilter && matchesCategory && matchesDate && matchesSource
+    return matchesSearch && matchesFilter && matchesCategory && matchesDate && matchesSource && matchesGST
   })
 
   const paginatedData = filteredData.slice(
@@ -2659,6 +2672,19 @@ function getFinancialSummary(project) {
                               <option value="admin">Admin Created</option>
                             </select>
                           )}
+
+                          {/* GST Filter */}
+                          {(activeTab === 'pending-projects' || activeTab === 'active-projects' || activeTab === 'completed-projects') && (
+                            <select
+                              value={selectedGSTFilter}
+                              onChange={(e) => setSelectedGSTFilter(e.target.value)}
+                              className="w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
+                            >
+                              <option value="all">All GST</option>
+                              <option value="with_gst">GST Included</option>
+                              <option value="without_gst">Without GST</option>
+                            </select>
+                          )}
                         </div>
 
                         {/* Second Row: Search, Priority/Status, Count Badge */}
@@ -2998,6 +3024,17 @@ function getFinancialSummary(project) {
                             <option value="channel-partner">Channel Partner</option>
                             <option value="pm">PM Created</option>
                             <option value="admin">Admin Created</option>
+                          </select>
+
+                          {/* GST Filter */}
+                          <select
+                            value={selectedGSTFilter}
+                            onChange={(e) => setSelectedGSTFilter(e.target.value)}
+                            className="w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
+                          >
+                            <option value="all">All GST</option>
+                            <option value="with_gst">GST Included</option>
+                            <option value="without_gst">Without GST</option>
                           </select>
                         </div>
 
@@ -3342,6 +3379,17 @@ function getFinancialSummary(project) {
                             <option value="channel-partner">Channel Partner</option>
                             <option value="pm">PM Created</option>
                             <option value="admin">Admin Created</option>
+                          </select>
+
+                          {/* GST Filter */}
+                          <select
+                            value={selectedGSTFilter}
+                            onChange={(e) => setSelectedGSTFilter(e.target.value)}
+                            className="w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white transition-colors"
+                          >
+                            <option value="all">All GST</option>
+                            <option value="with_gst">GST Included</option>
+                            <option value="without_gst">Without GST</option>
                           </select>
                         </div>
 

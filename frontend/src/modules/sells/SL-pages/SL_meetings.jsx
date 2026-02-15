@@ -70,8 +70,8 @@ const SL_meetings = () => {
         salesMeetingsService.getMyConvertedClients(),
         salesLeadService.getSalesTeam()
       ])
-      setMeetings(res.items || [])
-      setStats(res.stats || { total: 0, today: 0, upcoming: 0 })
+      setMeetings(res?.items || [])
+      setStats(res?.stats || { total: 0, today: 0, upcoming: 0 })
       setClients(Array.isArray(cl) ? cl : [])
       setSalesTeam(Array.isArray(team) ? team : [])
     } catch (e) {

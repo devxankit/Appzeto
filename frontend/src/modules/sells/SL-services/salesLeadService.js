@@ -263,6 +263,7 @@ export const convertLeadToClient = async (leadId, projectData) => {
       formData.append('advanceReceived', projectData.advanceReceived || 0);
       if (projectData.advanceAccount) formData.append('advanceAccount', projectData.advanceAccount);
       formData.append('includeGST', projectData.includeGST || false);
+      if (projectData.clientDateOfBirth) formData.append('clientDateOfBirth', projectData.clientDateOfBirth);
       formData.append('description', projectData.description || '');
       formData.append('screenshot', projectData.screenshot);
       

@@ -28,6 +28,8 @@ class AdminRequestService {
       if (params.status) queryParams.append('status', params.status);
       if (params.priority) queryParams.append('priority', params.priority);
       if (params.search) queryParams.append('search', params.search);
+      if (params.startDate) queryParams.append('startDate', params.startDate);
+      if (params.endDate) queryParams.append('endDate', params.endDate);
       if (params.page) queryParams.append('page', params.page);
       if (params.limit) queryParams.append('limit', params.limit);
       if (params.paymentApprovalOnly === true || params.paymentApprovalOnly === 'true') queryParams.append('paymentApprovalOnly', 'true');

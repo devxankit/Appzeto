@@ -855,6 +855,7 @@ const loginSales = async (req, res) => {
             employeeId: sales.employeeId,
             phone: sales.phone,
             lastLogin: sales.lastLogin,
+            joiningDate: sales.joiningDate,
             salesTarget: sales.salesTarget,
             currentSales: sales.currentSales,
             commissionRate: sales.commissionRate,
@@ -904,6 +905,7 @@ const getSalesProfile = async (req, res) => {
           phone: sales.phone,
           isActive: sales.isActive,
           lastLogin: sales.lastLogin,
+          joiningDate: sales.joiningDate,
           salesTarget: sales.salesTarget,
           currentSales: sales.currentSales,
           commissionRate: sales.commissionRate,
@@ -1418,6 +1420,7 @@ const getDashboardHeroStats = async (req, res) => {
         allTargets.push({
           targetNumber: target.targetNumber,
           amount: targetAmount,
+          reward: Number(target.reward || 0),
           targetDate: target.targetDate,
           deadline: target.targetDate,
           progress: Math.round(cumulativeProgress),
@@ -3837,6 +3840,7 @@ const convertLeadToClient = async (req, res) => {
         advanceReceived: req.body.advanceReceived ? Math.round(Number(String(req.body.advanceReceived).replace(/,/g, '')) || 0) : 0,
         advanceAccount: req.body.advanceAccount || undefined,
         includeGST: req.body.includeGST === 'true' || req.body.includeGST === true,
+        clientDateOfBirth: req.body.clientDateOfBirth || undefined,
         description: req.body.description || ''
       };
     }
@@ -3925,9 +3929,13 @@ const convertLeadToClient = async (req, res) => {
     // Upsert Client by phone number
     const Client = require('../models/Client');
     const phoneNumber = lead.phone;
+    const clientDateOfBirth = projectData?.clientDateOfBirth
+      ? (projectData.clientDateOfBirth instanceof Date ? projectData.clientDateOfBirth : new Date(projectData.clientDateOfBirth))
+      : undefined;
+
     let client = await Client.findOne({ phoneNumber });
     if (!client) {
-      client = await Client.create({
+      const clientFields = {
         phoneNumber,
         name: lead.leadProfile.name || lead.name || 'Client',
         companyName: lead.leadProfile.businessName || lead.company || '',
@@ -3936,16 +3944,23 @@ const convertLeadToClient = async (req, res) => {
         convertedBy: req.sales.id,
         conversionDate: new Date(),
         originLead: lead._id
-        // OTP is generated during client login via existing OTP flow
-      });
+      };
+      if (clientDateOfBirth) clientFields.dateOfBirth = clientDateOfBirth;
+      client = await Client.create(clientFields);
     } else {
       // Update existing client with conversion info if not already set
+      let needsSave = false;
       if (!client.convertedBy) {
         client.convertedBy = req.sales.id;
         client.conversionDate = new Date();
         client.originLead = lead._id;
-        await client.save();
+        needsSave = true;
       }
+      if (clientDateOfBirth && !client.dateOfBirth) {
+        client.dateOfBirth = clientDateOfBirth;
+        needsSave = true;
+      }
+      if (needsSave) await client.save();
     }
 
     // Prepare project fields (totalCost and advanceReceived already set in normalize step above)
@@ -5335,7 +5350,7 @@ const getWalletSummary = async (req, res) => {
     const salesId = safeObjectId(req.sales.id);
 
     // Load sales employee for salary, per-client incentive, and team lead info
-    const me = await Sales.findById(salesId).select('fixedSalary incentivePerClient name isTeamLead teamLeadTarget teamLeadTargetReward');
+    const me = await Sales.findById(salesId).select('fixedSalary incentivePerClient name isTeamLead teamLeadTarget teamLeadTargetReward teamMembers');
     const perClient = Number(me?.incentivePerClient || 0);
     const fixedSalary = Number(me?.fixedSalary || 0);
     const isTeamLead = me?.isTeamLead || false;
@@ -5450,6 +5465,95 @@ const getWalletSummary = async (req, res) => {
       });
     }
 
+    // Add incentive payments and reward payments from Salary model (when admin pays)
+    const Salary = require('../models/Salary');
+    const paidSalaryRecords = await Salary.find({
+      employeeId: salesId,
+      employeeModel: 'Sales',
+      $or: [
+        { incentiveStatus: 'paid', incentiveAmount: { $gt: 0 } },
+        { rewardStatus: 'paid', rewardAmount: { $gt: 0 } }
+      ]
+    }).select('_id month incentiveStatus incentiveAmount incentivePaidDate rewardStatus rewardAmount rewardPaidDate status fixedSalary paidDate').lean();
+
+    paidSalaryRecords.forEach(sal => {
+      if (sal.incentiveStatus === 'paid' && sal.incentiveAmount > 0 && sal.incentivePaidDate) {
+        transactions.push({
+          id: `incentive-payment-${sal._id}`,
+          type: 'incentive_payment',
+          amount: sal.incentiveAmount,
+          date: sal.incentivePaidDate,
+          clientName: null
+        });
+      }
+      if (sal.rewardStatus === 'paid' && sal.rewardAmount > 0 && sal.rewardPaidDate) {
+        transactions.push({
+          id: `reward-payment-${sal._id}`,
+          type: 'reward_payment',
+          amount: sal.rewardAmount,
+          date: sal.rewardPaidDate,
+          clientName: null
+        });
+      }
+    });
+
+    // Sort all transactions by date descending
+    transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Team target reward: calculate current month earned amount and paid status
+    let teamTargetRewardPayload = null;
+    if (isTeamLead && teamLeadTarget > 0 && teamLeadTargetReward > 0) {
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const salaryRecord = await Salary.findOne({
+        employeeId: salesId,
+        employeeModel: 'Sales',
+        month: currentMonth
+      }).select('rewardStatus rewardAmount').lean();
+
+      const isPaid = salaryRecord && salaryRecord.rewardStatus === 'paid' && (salaryRecord.rewardAmount || 0) > 0;
+      let currentReward = 0;
+      let status = 'pending';
+
+      if (isPaid) {
+        status = 'paid';
+        currentReward = 0; // Reset to zero for next target cycle
+      } else {
+        // Calculate if team achieved target this month
+        const teamMemberIds = (me.teamMembers || [])
+          .map(id => (mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null))
+          .filter(Boolean);
+        const allTeamIds = [new mongoose.Types.ObjectId(salesId), ...teamMemberIds];
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+        const teamSalesAgg = await Project.aggregate([
+          { $lookup: { from: 'clients', localField: 'client', foreignField: '_id', as: 'clientData' } },
+          { $unwind: { path: '$clientData', preserveNullAndEmptyArrays: false } },
+          {
+            $match: {
+              'clientData.convertedBy': { $in: allTeamIds },
+              'clientData.conversionDate': { $gte: monthStart, $lte: monthEnd }
+            }
+          },
+          {
+            $group: {
+              _id: null,
+              totalSales: { $sum: { $ifNull: ['$financialDetails.totalCost', { $ifNull: ['$budget', 0] }] } }
+            }
+          }
+        ]);
+        const teamMonthlySales = teamSalesAgg.length > 0 ? (Number(teamSalesAgg[0].totalSales) || 0) : 0;
+        currentReward = teamMonthlySales >= teamLeadTarget ? teamLeadTargetReward : 0;
+      }
+
+      teamTargetRewardPayload = {
+        target: teamLeadTarget,
+        reward: teamLeadTargetReward,
+        currentReward,
+        status
+      };
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -5468,10 +5572,7 @@ const getWalletSummary = async (req, res) => {
           current: teamLeadCurrent,
           pending: teamLeadPending
         },
-        teamTargetReward: isTeamLead ? {
-          target: teamLeadTarget,
-          reward: teamLeadTargetReward
-        } : null,
+        teamTargetReward: teamTargetRewardPayload,
         transactions
       }
     });

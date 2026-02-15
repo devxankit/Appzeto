@@ -1,9 +1,9 @@
 {
-  "running": false,
-  "lastRun": "2026-02-14T14:21:44.152Z",
-  "lastError": "Drive upload failed (saved locally to backup/local/): Folder must be inside a Shared Drive. Service accounts have no storage. Option A: Create a Shared Drive (Google Workspace), add crm-backup@appzeto-afa29.iam.gserviceaccount.com as Content manager. Option B: Set GOOGLE_IMPERSONATE_USER=your@workspace.com and enable domain-wide delegation.",
-  "lastFileName": "crm-backup-2026-02-14-14-21-44.gz",
-  "step": "error",
-  "progress": 50,
-  "startedAt": "2026-02-14T14:21:44.152Z"
+  "running": true,
+  "lastRun": "2026-02-15T20:30:00.257Z",
+  "lastError": null,
+  "lastFileName": null,
+  "step": "starting",
+  "progress": 5,
+  "startedAt": "2026-02-15T20:30:00.257Z"
 }
