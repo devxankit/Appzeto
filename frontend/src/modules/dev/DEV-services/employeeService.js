@@ -2,10 +2,12 @@ import { apiRequest, tokenUtils, employeeStorage } from './employeeBaseApiServic
 
 // Employee Service - Following the same pattern as other services
 const employeeService = {
-  // Dashboard and Analytics
-  async getEmployeeDashboardStats() {
+  // Dashboard and Analytics (params.timeFilter: 'all' | 'today' | 'week' | 'month' | 'year')
+  async getEmployeeDashboardStats(params = {}) {
     try {
-      const response = await apiRequest('/employee/analytics/dashboard');
+      const queryString = new URLSearchParams(params).toString();
+      const url = `/employee/analytics/dashboard${queryString ? `?${queryString}` : ''}`;
+      const response = await apiRequest(url);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to fetch dashboard stats: ${error.message}`);

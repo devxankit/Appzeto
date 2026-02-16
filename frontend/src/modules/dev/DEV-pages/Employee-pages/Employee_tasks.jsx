@@ -80,8 +80,9 @@ const Employee_tasks = () => {
         sortOrder: 'asc'
       })
 
-      // employeeService.getEmployeeTasks returns response.data which is the tasks array
-      setTasks(Array.isArray(response) ? response : [])
+      // Handle both array response and { data: array } from API
+      const tasksList = Array.isArray(response) ? response : (response?.data && Array.isArray(response.data) ? response.data : [])
+      setTasks(tasksList)
     } catch (err) {
       console.error('Error loading tasks:', err)
       setError(err.message || 'Failed to load tasks')
@@ -90,31 +91,43 @@ const Employee_tasks = () => {
     }
   }
 
+  // Normalize backend status (e.g. 'in-progress') for comparison with filter keys
+  const normalizeStatus = (s) => (s || '').toLowerCase().replace(/\s+/g, '-')
+  // Display label for status (backend uses 'in-progress', we show 'In Progress')
+  const statusDisplayLabel = (s) => {
+    const n = normalizeStatus(s)
+    if (n === 'in-progress') return 'In Progress'
+    if (n === 'completed') return 'Completed'
+    if (n === 'pending') return 'Pending'
+    if (n === 'testing') return 'Testing'
+    if (n === 'cancelled') return 'Cancelled'
+    return (s || 'Pending').toString()
+  }
+
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'Completed': return 'bg-green-100 text-green-800 border-green-200'
-      case 'In Progress': return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'Pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      default: return 'bg-gray-100 text-gray-800 border-gray-200'
-    }
+    const s = normalizeStatus(status)
+    if (s === 'completed') return 'bg-green-100 text-green-800 border-green-200'
+    if (s === 'in-progress') return 'bg-blue-100 text-blue-800 border-blue-200'
+    if (s === 'pending') return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    if (s === 'testing') return 'bg-purple-100 text-purple-800 border-purple-200'
+    if (s === 'cancelled') return 'bg-red-100 text-red-800 border-red-200'
+    return 'bg-gray-100 text-gray-800 border-gray-200'
   }
 
   const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'Urgent': return 'bg-red-100 text-red-800'
-      case 'High': return 'bg-orange-100 text-orange-800'
-      case 'Medium': return 'bg-yellow-100 text-yellow-800'
-      case 'Low': return 'bg-green-100 text-green-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
+    const p = (priority || '').toString().toLowerCase()
+    if (p === 'urgent' || p === 'high') return 'bg-red-100 text-red-800'
+    if (p === 'medium' || p === 'normal') return 'bg-yellow-100 text-yellow-800'
+    if (p === 'low') return 'bg-green-100 text-green-800'
+    return 'bg-gray-100 text-gray-800'
   }
 
   const filteredTasks = filter === 'all' ? tasks : tasks.filter(task => {
-    const taskStatus = (task.status || '').toLowerCase()
     if (filter === 'urgent') {
-      return task.isUrgent || task.priority === 'Urgent'
+      return task.isUrgent || (task.priority || '').toString().toLowerCase() === 'urgent'
     }
-    return taskStatus === filter.toLowerCase()
+    const normalizedFilter = normalizeStatus(filter)
+    return normalizeStatus(task.status) === normalizedFilter
   })
 
   const getTimeRemaining = (dueDate) => {
@@ -190,7 +203,7 @@ const Employee_tasks = () => {
                     <p className="text-xs text-gray-600">Total: {tasks.length} tasks assigned</p>
                   </div>
                   <div className="bg-gradient-to-r from-primary to-primary-dark text-white px-4 py-2 rounded-lg shadow-sm">
-                    <span className="text-sm font-medium">{tasks.filter(t => t.status === 'In Progress').length} Active</span>
+                    <span className="text-sm font-medium">{tasks.filter(t => normalizeStatus(t.status) === 'in-progress').length} Active</span>
                   </div>
                 </div>
               </div>
@@ -202,10 +215,10 @@ const Employee_tasks = () => {
             <div className="flex space-x-1 bg-white border border-gray-200 rounded-xl shadow-sm p-1">
               {[
                 { key: 'all', label: 'All', count: tasks.length },
-                { key: 'pending', label: 'Pending', count: tasks.filter(t => (t.status || '').toLowerCase() === 'pending').length },
-                { key: 'in progress', label: 'Active', count: tasks.filter(t => (t.status || '').toLowerCase() === 'in progress').length },
-                { key: 'completed', label: 'Done', count: tasks.filter(t => (t.status || '').toLowerCase() === 'completed').length },
-                { key: 'urgent', label: 'Urgent', count: tasks.filter(t => t.isUrgent || t.priority === 'Urgent').length }
+                { key: 'pending', label: 'Pending', count: tasks.filter(t => normalizeStatus(t.status) === 'pending').length },
+                { key: 'in-progress', label: 'Active', count: tasks.filter(t => normalizeStatus(t.status) === 'in-progress').length },
+                { key: 'completed', label: 'Done', count: tasks.filter(t => normalizeStatus(t.status) === 'completed').length },
+                { key: 'urgent', label: 'Urgent', count: tasks.filter(t => t.isUrgent || (t.priority || '').toString().toLowerCase() === 'urgent').length }
               ].map(({ key, label, count }) => (
                 <button
                   key={key}
@@ -231,10 +244,10 @@ const Employee_tasks = () => {
             <div className="flex space-x-1 bg-white border border-gray-200 rounded-xl shadow-sm p-1 max-w-fit">
               {[
                 { key: 'all', label: 'All', count: tasks.length },
-                { key: 'pending', label: 'Pending', count: tasks.filter(t => (t.status || '').toLowerCase() === 'pending').length },
-                { key: 'in progress', label: 'Active', count: tasks.filter(t => (t.status || '').toLowerCase() === 'in progress').length },
-                { key: 'completed', label: 'Done', count: tasks.filter(t => (t.status || '').toLowerCase() === 'completed').length },
-                { key: 'urgent', label: 'Urgent', count: tasks.filter(t => t.isUrgent || t.priority === 'Urgent').length }
+                { key: 'pending', label: 'Pending', count: tasks.filter(t => normalizeStatus(t.status) === 'pending').length },
+                { key: 'in-progress', label: 'Active', count: tasks.filter(t => normalizeStatus(t.status) === 'in-progress').length },
+                { key: 'completed', label: 'Done', count: tasks.filter(t => normalizeStatus(t.status) === 'completed').length },
+                { key: 'urgent', label: 'Urgent', count: tasks.filter(t => t.isUrgent || (t.priority || '').toString().toLowerCase() === 'urgent').length }
               ].map(({ key, label, count }) => (
                 <button
                   key={key}
@@ -303,10 +316,10 @@ const Employee_tasks = () => {
                     {/* Tags Row */}
                     <div className="flex items-center space-x-2 mb-3">
                       <span className={`px-2 py-1 rounded-md text-xs font-medium ${getStatusColor(task.status)}`}>
-                        {task.status}
+                        {statusDisplayLabel(task.status)}
                       </span>
                       <span className={`px-2 py-1 rounded-md text-xs font-medium ${getPriorityColor(task.priority)}`}>
-                        {task.priority}
+                        {(task.priority || '').toString() || 'Normal'}
                       </span>
                     </div>
 

@@ -36,8 +36,9 @@ const PM_milestone_detail = () => {
         
         // Load project data if projectId is available
         if (projectId) {
-          const projectData = await projectService.getProjectById(projectId)
-          setProject(projectData)
+          const res = await projectService.getProjectById(projectId)
+          const projectObj = res?.data ?? res
+          setProject(projectObj && typeof projectObj === 'object' ? projectObj : null)
         }
         
         // Load tasks for this milestone (if milestone has tasks)

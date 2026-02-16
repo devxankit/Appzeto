@@ -330,10 +330,11 @@ projectSchema.methods.updateProgress = async function () {
       project: this._id
     });
 
-    if (milestones.length === 0) {
+    if (this.status === 'completed') {
+      this.progress = 100;
+    } else if (milestones.length === 0) {
       this.progress = 0;
     } else {
-      // For completed projects, always set progress to 100%
       // Calculate progress based on number of completed milestones
       const completedMilestones = milestones.filter(m => m.status === 'completed').length;
       this.progress = Math.round((completedMilestones / milestones.length) * 100);

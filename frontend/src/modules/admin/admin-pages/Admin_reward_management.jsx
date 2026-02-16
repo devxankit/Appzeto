@@ -10,22 +10,21 @@ import {
   FiCheckCircle,
   FiTrendingUp,
   FiPlus,
-  FiTag,
   FiRefreshCw,
   FiSearch,
   FiFilter,
   FiCode,
-  FiShoppingCart,
+  FiUsers,
   FiToggleLeft,
   FiToggleRight,
   FiTrash2,
-  FiCalendar
+  FiCalendar,
+  FiAward
 } from 'react-icons/fi'
 
 const initialFilters = {
   team: 'all',
   status: 'all',
-  tag: 'all',
   search: ''
 }
 
@@ -34,18 +33,11 @@ const initialRewardForm = {
   description: '',
   amount: '',
   team: 'dev',
-  criteriaType: 'points',
-  criteriaValue: '',
+  criteriaType: 'completionRatio',
+  criteriaValue: '90',
   criteriaDescription: '',
-  tags: [],
   startsOn: '',
   endsOn: ''
-}
-
-const initialTagForm = {
-  name: '',
-  description: '',
-  color: '#2563eb'
 }
 
 const formatCurrency = (value = 0) => {
@@ -67,14 +59,13 @@ const formatDate = (value) => {
 }
 
 const getTeamInfo = (team) => {
-  if (team === 'sales') {
+  if (team === 'pm') {
     return {
-      label: 'Sales Team',
-      icon: FiShoppingCart,
-      badgeClasses: 'bg-amber-100 text-amber-700'
+      label: 'PM Team',
+      icon: FiUsers,
+      badgeClasses: 'bg-violet-100 text-violet-700'
     }
   }
-
   return {
     label: 'Development Team',
     icon: FiCode,
@@ -86,21 +77,13 @@ const describeCriteria = (reward) => {
   if (!reward?.criteria) {
     return 'No criteria configured'
   }
-
   const { type, value } = reward.criteria
-
-  if (reward.team === 'dev') {
+  if (type === 'completionRatio') {
+    return `Award when task completion ratio ≥ ${value}% at month end`
+  }
+  if (type === 'points') {
     return `Award when developer reaches ${value} points`
   }
-
-  if (type === 'leadsConverted') {
-    return `Award when ${value} leads are converted`
-  }
-
-  if (type === 'target') {
-    return `Award when target of ${formatCurrency(value)} is achieved`
-  }
-
   return 'Award criteria not specified'
 }
 
@@ -111,10 +94,9 @@ const Admin_reward_management = () => {
   const [initialLoading, setInitialLoading] = useState(true)
   const [loadingRewards, setLoadingRewards] = useState(false)
   const [submittingReward, setSubmittingReward] = useState(false)
-  const [submittingTag, setSubmittingTag] = useState(false)
+  const [awardingRewardId, setAwardingRewardId] = useState(null)
 
   const [rewards, setRewards] = useState([])
-  const [tags, setTags] = useState([])
   const [totals, setTotals] = useState({
     count: 0,
     active: 0,
@@ -124,17 +106,6 @@ const Admin_reward_management = () => {
 
   const [filters, setFilters] = useState(initialFilters)
   const [rewardForm, setRewardForm] = useState(initialRewardForm)
-  const [tagForm, setTagForm] = useState(initialTagForm)
-
-  const fetchTags = useCallback(async () => {
-    try {
-      const response = await adminRewardService.getTags()
-      setTags(response.data || [])
-    } catch (error) {
-      const message = error.message || 'Failed to load tags'
-      toast.error(message)
-    }
-  }, [toast])
 
   const fetchRewards = useCallback(async (currentFilters, showLoader = true) => {
     if (showLoader) {
@@ -169,10 +140,7 @@ const Admin_reward_management = () => {
     const loadInitialData = async () => {
       setInitialLoading(true)
       try {
-        await Promise.all([
-          fetchTags(),
-          fetchRewards(initialFilters, false)
-        ])
+        await fetchRewards(initialFilters, false)
       } finally {
         setInitialLoading(false)
         hasLoadedOnce.current = true
@@ -180,7 +148,7 @@ const Admin_reward_management = () => {
     }
 
     loadInitialData()
-  }, [fetchRewards, fetchTags])
+  }, [fetchRewards])
 
   useEffect(() => {
     if (!hasLoadedOnce.current) {
@@ -191,47 +159,23 @@ const Admin_reward_management = () => {
 
   const handleRefresh = () => {
     fetchRewards(filters)
-    fetchTags()
   }
 
   const handleRewardFormChange = (event) => {
     const { name, value } = event.target
-
     setRewardForm((prev) => {
       if (name === 'team') {
-        const nextTeam = value
         return {
           ...prev,
-          team: nextTeam,
-          criteriaType: nextTeam === 'sales' ? 'leadsConverted' : 'points',
-          criteriaValue: ''
+          team: value,
+          criteriaType: 'completionRatio',
+          criteriaValue: prev.criteriaValue || '90'
         }
       }
-
       if (name === 'criteriaType') {
-        return {
-          ...prev,
-          criteriaType: value,
-          criteriaValue: ''
-        }
+        return { ...prev, criteriaType: value, criteriaValue: value === 'completionRatio' ? '90' : prev.criteriaValue }
       }
-
-      return {
-        ...prev,
-        [name]: value
-      }
-    })
-  }
-
-  const toggleRewardTag = (tagId) => {
-    setRewardForm((prev) => {
-      const exists = prev.tags.includes(tagId)
-      return {
-        ...prev,
-        tags: exists
-          ? prev.tags.filter((id) => id !== tagId)
-          : [...prev.tags, tagId]
-      }
+      return { ...prev, [name]: value }
     })
   }
 
@@ -239,7 +183,6 @@ const Admin_reward_management = () => {
     event.preventDefault()
 
     const trimmedName = rewardForm.name.trim()
-
     if (!trimmedName) {
       toast.error('Reward name is required')
       return
@@ -252,14 +195,13 @@ const Admin_reward_management = () => {
     }
 
     const criteriaValue = Number(rewardForm.criteriaValue)
-    if (Number.isNaN(criteriaValue) || criteriaValue <= 0) {
-      const message = rewardForm.team === 'dev'
-        ? 'Please enter the points required'
-        : rewardForm.criteriaType === 'target'
-          ? 'Please enter the target amount'
-          : 'Please enter the number of leads required'
-
-      toast.error(message)
+    if (rewardForm.criteriaType === 'completionRatio') {
+      if (Number.isNaN(criteriaValue) || criteriaValue < 0 || criteriaValue > 100) {
+        toast.error('Completion ratio must be between 0 and 100 (e.g. 90 for 90%)')
+        return
+      }
+    } else if (Number.isNaN(criteriaValue) || criteriaValue <= 0) {
+      toast.error('Please enter a valid criteria value')
       return
     }
 
@@ -268,10 +210,9 @@ const Admin_reward_management = () => {
       description: rewardForm.description.trim() || undefined,
       amount,
       team: rewardForm.team,
-      criteriaType: rewardForm.team === 'dev' ? 'points' : rewardForm.criteriaType,
-      criteriaValue,
+      criteriaType: rewardForm.criteriaType || 'completionRatio',
+      criteriaValue: criteriaValue,
       criteriaDescription: rewardForm.criteriaDescription.trim() || undefined,
-      tags: rewardForm.tags,
       startsOn: rewardForm.startsOn || undefined,
       endsOn: rewardForm.endsOn || undefined
     }
@@ -280,17 +221,26 @@ const Admin_reward_management = () => {
     try {
       await adminRewardService.createReward(payload)
       toast.success('Reward created successfully')
-      setRewardForm((prev) => ({
-        ...initialRewardForm,
-        team: prev.team,
-        criteriaType: prev.team === 'sales' ? 'leadsConverted' : 'points'
-      }))
+      setRewardForm({ ...initialRewardForm, team: rewardForm.team })
       fetchRewards(filters)
     } catch (error) {
       const message = error.message || 'Failed to create reward'
       toast.error(message)
     } finally {
       setSubmittingReward(false)
+    }
+  }
+
+  const handleAwardForMonth = async (rewardId) => {
+    setAwardingRewardId(rewardId)
+    try {
+      const response = await adminRewardService.awardRewardForMonth(rewardId)
+      toast.success(response.message || 'Reward awarded for this month. Qualifying devs/PMs will see it in their wallet.')
+      fetchRewards(filters)
+    } catch (error) {
+      toast.error(error.message || 'Failed to award reward')
+    } finally {
+      setAwardingRewardId(null)
     }
   }
 
@@ -322,55 +272,6 @@ const Admin_reward_management = () => {
       fetchRewards(filters)
     } catch (error) {
       const message = error.message || 'Failed to delete reward'
-      toast.error(message)
-    }
-  }
-
-  const handleCreateTag = async (event) => {
-    event.preventDefault()
-
-    const trimmedName = tagForm.name.trim()
-
-    if (!trimmedName) {
-      toast.error('Tag name is required')
-      return
-    }
-
-    setSubmittingTag(true)
-    try {
-      const response = await adminRewardService.createTag({
-        name: trimmedName,
-        description: tagForm.description.trim() || undefined,
-        color: tagForm.color
-      })
-
-      setTags((prev) => [...prev, response.data])
-      toast.success('Tag created successfully')
-      setTagForm(initialTagForm)
-    } catch (error) {
-      const message = error.message || 'Failed to create tag'
-      toast.error(message)
-    } finally {
-      setSubmittingTag(false)
-    }
-  }
-
-  const handleDeleteTag = async (tagId) => {
-    const confirmed = window.confirm('Delete this tag? Tags used by rewards cannot be removed.')
-    if (!confirmed) {
-      return
-    }
-
-    try {
-      await adminRewardService.deleteTag(tagId)
-      setTags((prev) => prev.filter((tag) => tag._id !== tagId))
-      setRewardForm((prev) => ({
-        ...prev,
-        tags: prev.tags.filter((id) => id !== tagId)
-      }))
-      toast.success('Tag deleted')
-    } catch (error) {
-      const message = error.message || 'Failed to delete tag'
       toast.error(message)
     }
   }
@@ -416,7 +317,7 @@ const Admin_reward_management = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Reward Management</h1>
               <p className="mt-1 text-sm text-gray-600">
-                Create monetary rewards for development and sales teams. Dev rewards trigger on points, sales rewards on conversions or targets.
+                Create rewards for Development team and PMs. Rewards are based on task completion ratio (e.g. 90% at month end). Awarded rewards appear in employee and PM wallets.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -467,7 +368,7 @@ const Admin_reward_management = () => {
             </div>
           </section>
 
-          <section className="grid gap-6 lg:grid-cols-[2fr,1fr]">
+          <section>
             <form
               onSubmit={handleCreateReward}
               className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
@@ -519,43 +420,23 @@ const Admin_reward_management = () => {
                     onChange={handleRewardFormChange}
                     className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   >
-                    <option value="dev">Development (points)</option>
-                    <option value="sales">Sales (conversions / target)</option>
+                    <option value="dev">Development (task completion %)</option>
+                    <option value="pm">PM (task completion %)</option>
                   </select>
                 </label>
 
-                {rewardForm.team === 'sales' && (
-                  <label className="flex flex-col gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sales criteria</span>
-                    <select
-                      name="criteriaType"
-                      value={rewardForm.criteriaType}
-                      onChange={handleRewardFormChange}
-                      className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    >
-                      <option value="leadsConverted">Leads converted</option>
-                      <option value="target">Target amount achieved</option>
-                    </select>
-                  </label>
-                )}
-
                 <label className="flex flex-col gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    {rewardForm.team === 'dev'
-                      ? 'Points required'
-                      : rewardForm.criteriaType === 'target'
-                        ? 'Target amount (₹)'
-                        : 'Leads to convert'}
-                  </span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Task completion ratio (%)</span>
                   <input
                     type="number"
-                    min="1"
+                    min="0"
+                    max="100"
                     step="1"
                     name="criteriaValue"
                     value={rewardForm.criteriaValue}
                     onChange={handleRewardFormChange}
                     className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    placeholder={rewardForm.team === 'dev' ? 'Eg. 200' : 'Eg. 10'}
+                    placeholder="90"
                     required
                   />
                 </label>
@@ -613,32 +494,6 @@ const Admin_reward_management = () => {
                   </label>
                 </div>
 
-                <div className="md:col-span-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Tags (optional)</span>
-                  {tags.length === 0 ? (
-                    <p className="mt-2 text-sm text-gray-500">Create tags to categorise your rewards.</p>
-                  ) : (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {tags.map((tag) => (
-                        <button
-                          key={tag._id}
-                          type="button"
-                          onClick={() => toggleRewardTag(tag._id)}
-                          className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                            rewardForm.tags.includes(tag._id)
-                              ? 'border-transparent text-white'
-                              : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                          }`}
-                          style={{
-                            backgroundColor: rewardForm.tags.includes(tag._id) ? tag.color : 'transparent'
-                          }}
-                        >
-                          {tag.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
 
               <div className="mt-6 flex justify-end">
@@ -652,110 +507,13 @@ const Admin_reward_management = () => {
                 </button>
               </div>
             </form>
-
-            <form
-              onSubmit={handleCreateTag}
-              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
-            >
-              <div className="mb-4 flex items-center gap-2">
-                <span className="rounded-lg bg-amber-100 p-2 text-amber-600">
-                  <FiTag />
-                </span>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Create Tag</h2>
-                  <p className="text-sm text-gray-500">Group rewards by purpose or goal.</p>
-                </div>
-              </div>
-
-              <label className="mb-4 flex flex-col gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Tag name</span>
-                <input
-                  type="text"
-                  name="name"
-                  value={tagForm.name}
-                  onChange={(event) => setTagForm((prev) => ({ ...prev, name: event.target.value }))}
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  placeholder="Eg. Sprint, Offer, Milestone"
-                  required
-                />
-              </label>
-
-              <label className="mb-4 flex flex-col gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Description (optional)</span>
-                <textarea
-                  name="description"
-                  value={tagForm.description}
-                  onChange={(event) => setTagForm((prev) => ({ ...prev, description: event.target.value }))}
-                  rows={3}
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  placeholder="Explain how this tag should be used"
-                />
-              </label>
-
-              <label className="mb-6 flex flex-col gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Tag colour</span>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={tagForm.color}
-                    onChange={(event) => setTagForm((prev) => ({ ...prev, color: event.target.value }))}
-                    className="h-10 w-16 cursor-pointer rounded border border-gray-300"
-                  />
-                  <span className="text-sm text-gray-600">{tagForm.color}</span>
-                </div>
-              </label>
-
-              <button
-                type="submit"
-                disabled={submittingTag}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-amber-300"
-              >
-                <FiPlus />
-                {submittingTag ? 'Creating...' : 'Create tag'}
-              </button>
-
-              {tags.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="mb-2 text-sm font-semibold text-gray-700">Existing tags</h3>
-                  <div className="space-y-2">
-                    {tags.map((tag) => (
-                      <div
-                        key={tag._id}
-                        className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="h-3 w-3 rounded-full"
-                            style={{ backgroundColor: tag.color }}
-                          />
-                          <div>
-                            <p className="font-medium text-gray-800">{tag.name}</p>
-                            {tag.description && (
-                              <p className="text-xs text-gray-500">{tag.description}</p>
-                            )}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTag(tag._id)}
-                          className="text-gray-400 transition hover:text-red-500"
-                          title="Delete tag"
-                        >
-                          <FiTrash2 />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </form>
           </section>
 
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Rewards</h2>
-                <p className="text-sm text-gray-500">Manage active monetary rewards for both teams.</p>
+                <p className="text-sm text-gray-500">Development & PM rewards. Award for this month to credit qualifying devs/PMs (visible in their wallets).</p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="relative w-full sm:w-56">
@@ -771,16 +529,16 @@ const Admin_reward_management = () => {
                 <div className="flex flex-wrap items-center gap-3 text-sm">
                   <label className="flex items-center gap-2">
                     <FiFilter className="text-gray-400" />
-                    <select
-                      name="team"
-                      value={filters.team}
-                      onChange={handleFilterChange}
-                      className="rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    >
-                      <option value="all">All teams</option>
-                      <option value="dev">Development</option>
-                      <option value="sales">Sales</option>
-                    </select>
+                  <select
+                    name="team"
+                    value={filters.team}
+                    onChange={handleFilterChange}
+                    className="rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="all">All teams</option>
+                    <option value="dev">Development</option>
+                    <option value="pm">PM</option>
+                  </select>
                   </label>
                   <select
                     name="status"
@@ -791,17 +549,6 @@ const Admin_reward_management = () => {
                     <option value="all">All statuses</option>
                     <option value="active">Active only</option>
                     <option value="inactive">Inactive only</option>
-                  </select>
-                  <select
-                    name="tag"
-                    value={filters.tag}
-                    onChange={handleFilterChange}
-                    className="rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="all">All tags</option>
-                    {tags.map((tag) => (
-                      <option key={tag._id} value={tag._id}>{tag.name}</option>
-                    ))}
                   </select>
                 </div>
               </div>
@@ -826,9 +573,7 @@ const Admin_reward_management = () => {
                 {rewards.map((reward) => {
                   const teamInfo = getTeamInfo(reward.team)
                   const TeamIcon = teamInfo.icon
-                  const rewardTags = (reward.tags || [])
-                    .map((tag) => (typeof tag === 'object' ? tag : tags.find((item) => item._id === tag)))
-                    .filter(Boolean)
+                  const canAward = reward.team === 'dev' || reward.team === 'pm'
 
                   return (
                     <article
@@ -857,19 +602,6 @@ const Admin_reward_management = () => {
                           {reward.criteria?.description && (
                             <p className="text-xs text-gray-500">{reward.criteria.description}</p>
                           )}
-                          {rewardTags.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-2">
-                              {rewardTags.map((tag) => (
-                                <span
-                                  key={tag._id}
-                                  className="rounded-full px-3 py-1 text-xs font-semibold text-white"
-                                  style={{ backgroundColor: tag.color }}
-                                >
-                                  {tag.name}
-                                </span>
-                              ))}
-                            </div>
-                          )}
                           {(reward.startsOn || reward.endsOn) && (
                             <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
                               {reward.startsOn && (
@@ -888,7 +620,18 @@ const Admin_reward_management = () => {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-3 md:flex-col md:items-end">
+                        <div className="flex flex-wrap items-center gap-3 md:flex-col md:items-end">
+                          {canAward && reward.isActive && (
+                            <button
+                              type="button"
+                              onClick={() => handleAwardForMonth(reward._id)}
+                              disabled={awardingRewardId === reward._id}
+                              className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+                            >
+                              <FiAward className="text-lg" />
+                              {awardingRewardId === reward._id ? 'Awarding...' : 'Award for this month'}
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleToggleStatus(reward._id)}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import * as XLSX from 'xlsx'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
@@ -55,6 +56,7 @@ const Admin_finance_management = () => {
   const [showDateRangePicker, setShowDateRangePicker] = useState(false)
   const [showBreakdownModal, setShowBreakdownModal] = useState(false)
   const [error, setError] = useState(null)
+  const [exporting, setExporting] = useState(false)
   
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -822,6 +824,181 @@ const Admin_finance_management = () => {
       month: 'short',
       day: 'numeric'
     })
+  }
+
+  const handleExportToExcel = async () => {
+    try {
+      setExporting(true)
+      const dateRange = getDateRange()
+      let timeFilter = 'all'
+      if (filterType === 'day') timeFilter = 'day'
+      else if (filterType === 'week') timeFilter = 'week'
+      else if (filterType === 'month') timeFilter = 'month'
+      else if (filterType === 'year') timeFilter = 'year'
+      else if (filterType === 'custom') timeFilter = 'custom'
+      const params = { limit: 10000 }
+      if (dateRange.startDate) params.startDate = dateRange.startDate
+      if (dateRange.endDate) params.endDate = dateRange.endDate
+      const statsParams = {}
+      if (dateRange.startDate) statsParams.startDate = dateRange.startDate
+      if (dateRange.endDate) statsParams.endDate = dateRange.endDate
+
+      const [
+        statsRes,
+        txRes,
+        expRes,
+        budgetRes,
+        projectExpRes,
+        pendingRecRes,
+        gstRes,
+        accountsRes,
+        paymentApprovalRes
+      ] = await Promise.all([
+        adminFinanceService.getFinanceStatistics(timeFilter, statsParams),
+        adminFinanceService.getTransactions(params),
+        adminFinanceService.getExpenses(params),
+        adminFinanceService.getBudgets(params),
+        adminFinanceService.getProjectExpenses(params),
+        adminFinanceService.getPendingRecovery(params),
+        adminFinanceService.getGstProjects(params),
+        adminFinanceService.getAccounts({}),
+        adminRequestService.getRequests({ direction: 'all', paymentApprovalOnly: true, limit: 10000, ...(dateRange.startDate && { startDate: dateRange.startDate }), ...(dateRange.endDate && { endDate: dateRange.endDate }) })
+      ])
+
+      const stats = (statsRes && statsRes.success && statsRes.data) ? statsRes.data : {}
+      const transactionsList = (txRes && txRes.success && txRes.data) ? txRes.data : []
+      const expensesList = (expRes && expRes.success && expRes.data) ? expRes.data : []
+      const budgetsList = (budgetRes && budgetRes.success && budgetRes.data) ? budgetRes.data : []
+      const projectExpensesList = (projectExpRes && projectExpRes.success && projectExpRes.data) ? projectExpRes.data : []
+      const pendingRecoveryListExport = (pendingRecRes && pendingRecRes.success && pendingRecRes.data) ? pendingRecRes.data : []
+      const gstProjectsListExport = (gstRes && gstRes.success && gstRes.data) ? gstRes.data : []
+      const accountsList = (accountsRes && accountsRes.success && accountsRes.data) ? accountsRes.data : []
+      const paymentApprovalList = (paymentApprovalRes && paymentApprovalRes.success && paymentApprovalRes.data) ? paymentApprovalRes.data : []
+
+      const wb = XLSX.utils.book_new()
+
+      const filterLabel = getFilterLabel()
+      const summaryRows = [
+        { Metric: 'Report Info', Value: '' },
+        { Metric: 'Date filter applied', Value: filterLabel },
+        { Metric: 'From (date)', Value: dateRange.startDate || 'All' },
+        { Metric: 'To (date)', Value: dateRange.endDate || 'All' },
+        { Metric: 'Exported at', Value: new Date().toLocaleString('en-IN') },
+        { Metric: '', Value: '' },
+        { Metric: 'Summary (statistics for selected period)', Value: '' },
+        { Metric: 'Total Revenue', Value: stats.totalRevenue ?? 0 },
+        { Metric: 'Total Expenses', Value: stats.totalExpenses ?? 0 },
+        { Metric: 'Net Profit', Value: stats.netProfit ?? 0 },
+        { Metric: 'Total Sales', Value: stats.totalSales ?? 0 },
+        { Metric: 'Today Earnings', Value: stats.todayEarnings ?? 0 },
+        { Metric: 'Today Expenses', Value: stats.todayExpenses ?? 0 },
+        { Metric: 'Today Profit', Value: stats.todayProfit ?? 0 },
+        { Metric: 'Pending Receivables', Value: (stats.pendingAmounts && stats.pendingAmounts.totalPendingReceivables) ?? 0 },
+        { Metric: 'Pending Salaries', Value: (stats.pendingAmounts && stats.pendingAmounts.pendingSalaries) ?? 0 },
+        { Metric: 'Employee Salary', Value: stats.employeeSalary ?? 0 },
+        { Metric: 'Reward Money', Value: stats.rewardMoney ?? 0 },
+        { Metric: 'Project Advance Revenue', Value: (stats.revenueBreakdown && stats.revenueBreakdown.projectAdvanceRevenue) ?? 0 },
+        { Metric: 'Incentive Expenses', Value: (stats.expenseBreakdown && stats.expenseBreakdown.incentiveExpenses) ?? 0 },
+        { Metric: 'Reward Expenses', Value: (stats.expenseBreakdown && stats.expenseBreakdown.rewardExpenses) ?? 0 },
+        { Metric: 'Active Projects', Value: stats.activeProjects ?? 0 },
+        { Metric: 'Total Clients', Value: stats.totalClients ?? 0 }
+      ]
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'Summary')
+
+      const txRows = transactionsList.map(t => ({
+        Type: t.transactionType || t.type || '',
+        Category: t.category || '',
+        Amount: typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0,
+        Date: t.transactionDate || t.date || t.createdAt ? new Date(t.transactionDate || t.date || t.createdAt).toISOString().split('T')[0] : '',
+        Account: (t.account && (t.account.accountName || t.account.name)) ? (t.account.accountName || t.account.name) : (t.account && t.account._id) ? t.account._id : '',
+        Description: t.description || ''
+      }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(txRows.length ? txRows : [{ Type: '', Category: '', Amount: '', Date: '', Account: '', Description: '' }]), 'Transactions')
+
+      const expRows = expensesList.map(e => ({
+        Category: e.category || e.expenseCategory || '',
+        Amount: typeof e.amount === 'number' ? e.amount : parseFloat(e.amount) || 0,
+        Date: e.expenseDate || e.date || e.createdAt ? new Date(e.expenseDate || e.date || e.createdAt).toISOString().split('T')[0] : '',
+        Description: e.description || '',
+        Status: e.status || ''
+      }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(expRows.length ? expRows : [{ Category: '', Amount: '', Date: '', Description: '', Status: '' }]), 'Expenses')
+
+      const budgetRows = budgetsList.map(b => ({
+        Name: b.budgetName || b.name || '',
+        Category: b.budgetCategory || b.category || '',
+        Allocated: typeof (b.allocatedAmount ?? b.allocated) === 'number' ? (b.allocatedAmount ?? b.allocated) : parseFloat(b.allocatedAmount ?? b.allocated) || 0,
+        Spent: typeof (b.spentAmount ?? b.spent) === 'number' ? (b.spentAmount ?? b.spent) : parseFloat(b.spentAmount ?? b.spent) || 0,
+        Remaining: typeof (b.remainingAmount ?? b.remaining) === 'number' ? (b.remainingAmount ?? b.remaining) : parseFloat(b.remainingAmount ?? b.remaining) || 0,
+        'Start Date': b.startDate ? new Date(b.startDate).toISOString().split('T')[0] : '',
+        'End Date': b.endDate ? new Date(b.endDate).toISOString().split('T')[0] : '',
+        Description: b.description || ''
+      }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(budgetRows.length ? budgetRows : [{ Name: '', Category: '', Allocated: '', Spent: '', Remaining: '', 'Start Date': '', 'End Date': '', Description: '' }]), 'Budgets')
+
+      const projectExpRows = projectExpensesList.map(pe => ({
+        Project: (pe.project && (pe.project.name || pe.project.projectName)) ? (pe.project.name || pe.project.projectName) : '',
+        Name: pe.name || '',
+        Category: pe.category || '',
+        Amount: typeof pe.amount === 'number' ? pe.amount : parseFloat(pe.amount) || 0,
+        Vendor: pe.vendor || '',
+        'Payment Method': pe.paymentMethod || '',
+        Date: pe.expenseDate || pe.date || pe.createdAt ? new Date(pe.expenseDate || pe.date || pe.createdAt).toISOString().split('T')[0] : '',
+        Description: pe.description || ''
+      }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(projectExpRows.length ? projectExpRows : [{ Project: '', Name: '', Category: '', Amount: '', Vendor: '', 'Payment Method': '', Date: '', Description: '' }]), 'Project Expenses')
+
+      const accountRows = accountsList.map(a => ({
+        'Account Name': a.accountName || a.name || '',
+        Bank: a.bankName || a.bank || '',
+        'Account Number': a.accountNumber || '',
+        IFSC: a.ifscCode || a.ifsc || '',
+        Branch: a.branchName || a.branch || '',
+        Type: a.accountType || '',
+        Active: a.isActive !== false ? 'Yes' : 'No',
+        Description: a.description || ''
+      }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(accountRows.length ? accountRows : [{ 'Account Name': '', Bank: '', 'Account Number': '', IFSC: '', Branch: '', Type: '', Active: '', Description: '' }]), 'Accounts')
+
+      const pendingRecRows = pendingRecoveryListExport.map(pr => ({
+        'Project Name': (pr.project && (pr.project.name || pr.project.projectName)) ? (pr.project.name || pr.project.projectName) : pr.projectName || '',
+        Client: (pr.client && pr.client.name) ? pr.client.name : pr.clientName || '',
+        'Outstanding Amount': typeof (pr.outstandingAmount ?? pr.amount) === 'number' ? (pr.outstandingAmount ?? pr.amount) : parseFloat(pr.outstandingAmount ?? pr.amount) || 0,
+        Status: pr.status || ''
+      }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pendingRecRows.length ? pendingRecRows : [{ 'Project Name': '', Client: '', 'Outstanding Amount': '', Status: '' }]), 'Pending Recovery')
+
+      const gstRows = gstProjectsListExport.map(g => ({
+        'Project Name': (g.project && (g.project.name || g.project.projectName)) ? (g.project.name || g.project.projectName) : g.name || g.projectName || '',
+        Client: (g.client && g.client.name) ? g.client.name : g.clientName || '',
+        Status: g.status || '',
+        Progress: g.progress != null ? g.progress : '',
+        'Total Cost': typeof (g.totalCost ?? g.cost) === 'number' ? (g.totalCost ?? g.cost) : parseFloat(g.totalCost ?? g.cost) || 0
+      }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(gstRows.length ? gstRows : [{ 'Project Name': '', Client: '', Status: '', Progress: '', 'Total Cost': '' }]), 'GST Projects')
+
+      const paymentRows = paymentApprovalList.map(req => ({
+        Module: req.module || '',
+        Type: req.type || '',
+        Title: req.title || '',
+        Description: req.description || '',
+        Amount: typeof req.amount === 'number' ? req.amount : parseFloat(req.amount) || 0,
+        Status: req.status || '',
+        Priority: req.priority || '',
+        'Submitted Date': req.createdAt ? new Date(req.createdAt).toISOString().split('T')[0] : '',
+        'Submitted By': (req.requestedBy && req.requestedBy.name) ? req.requestedBy.name : ''
+      }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(paymentRows.length ? paymentRows : [{ Module: '', Type: '', Title: '', Description: '', Amount: '', Status: '', Priority: '', 'Submitted Date': '', 'Submitted By': '' }]), 'Payment Approvals')
+
+      const fileName = `Finance_Export_${new Date().toISOString().split('T')[0]}.xlsx`
+      XLSX.writeFile(wb, fileName)
+      toast.success('Finance data exported to Excel successfully')
+    } catch (err) {
+      console.error('Export failed:', err)
+      toast.error(err?.message || 'Failed to export finance data')
+    } finally {
+      setExporting(false)
+    }
   }
 
   // Payment approval request helpers
@@ -1752,6 +1929,16 @@ const Admin_finance_management = () => {
                 >
                   <FiBarChart className="h-4 w-4 text-gray-500" />
                   <span>How it's calculated</span>
+                </button>
+
+                <button
+                  onClick={handleExportToExcel}
+                  disabled={exporting}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-colors duration-200 shadow-sm text-sm font-medium text-gray-700"
+                  title="Export all financial data to Excel"
+                >
+                  <FiDownload className={`h-4 w-4 text-gray-600 ${exporting ? 'animate-pulse' : ''}`} />
+                  <span>{exporting ? 'Exporting…' : 'Export to Excel'}</span>
                 </button>
 
                 <button

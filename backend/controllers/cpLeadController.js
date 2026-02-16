@@ -95,7 +95,7 @@ exports.createLead = asyncHandler(async (req, res, next) => {
 // @access  Private (Channel Partner only)
 exports.getLeads = asyncHandler(async (req, res, next) => {
   const cpId = req.channelPartner.id;
-  const { status, priority, category, search, page = 1, limit = 20 } = req.query;
+  const { status, priority, category, search, excludeStatus, page = 1, limit = 20 } = req.query;
 
   // Build query - exclude shared leads (they should only appear in shared leads page)
   const query = { 
@@ -108,6 +108,18 @@ exports.getLeads = asyncHandler(async (req, res, next) => {
 
   if (status && status !== 'undefined' && status !== 'all') {
     query.status = status;
+  }
+  
+  // Support excluding statuses (e.g. excludeStatus=converted,lost)
+  // Only apply when explicit status is not provided.
+  if (!query.status && excludeStatus && excludeStatus !== 'undefined') {
+    const excluded = String(excludeStatus)
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (excluded.length) {
+      query.status = { $nin: excluded };
+    }
   }
 
   if (priority && priority !== 'undefined' && priority !== 'all') {

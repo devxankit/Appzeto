@@ -32,6 +32,8 @@ import { clientPaymentService } from '../../DEV-services/clientPaymentService'
 import clientRequestService from '../../DEV-services/clientRequestService'
 import { useToast } from '../../../../contexts/ToastContext'
 
+const displayProgress = (p) => Math.min(100, Math.max(0, Number(p) || 0))
+
 const Client_project_detail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -648,7 +650,7 @@ const Client_project_detail = () => {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-xl font-bold text-teal-600">{projectData.project.progress || 0}%</div>
+                <div className="text-xl font-bold text-teal-600">{displayProgress(projectData.project.progress)}%</div>
                 <div className="text-xs text-gray-500">Complete</div>
               </div>
             </div>
@@ -656,12 +658,12 @@ const Client_project_detail = () => {
             <div className="mb-3">
               <div className="flex justify-between text-xs mb-1">
                 <span className="text-gray-600">Project Progress</span>
-                <span className="text-gray-900 font-medium">{projectData.project.progress || 0}%</span>
+                <span className="text-gray-900 font-medium">{displayProgress(projectData.project.progress)}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${projectData.project.progress || 0}%` }}
+                  style={{ width: `${displayProgress(projectData.project.progress)}%` }}
                 ></div>
               </div>
             </div>
@@ -680,7 +682,7 @@ const Client_project_detail = () => {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-teal-600">{projectData.project.progress || 0}%</div>
+                <div className="text-3xl font-bold text-teal-600">{displayProgress(projectData.project.progress)}%</div>
                 <div className="text-xs text-gray-500">Complete</div>
               </div>
             </div>
@@ -688,12 +690,12 @@ const Client_project_detail = () => {
             <div className="mb-4">
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-gray-600">Project Progress</span>
-                <span className="text-gray-900 font-medium">{projectData.project.progress || 0}%</span>
+                <span className="text-gray-900 font-medium">{displayProgress(projectData.project.progress)}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div 
                   className="bg-gradient-to-r from-teal-500 to-teal-600 h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${projectData.project.progress || 0}%` }}
+                  style={{ width: `${displayProgress(projectData.project.progress)}%` }}
                 ></div>
               </div>
             </div>
@@ -941,7 +943,7 @@ const Client_project_detail = () => {
                     <div className="mb-2">
                       <div className="flex justify-between text-xs mb-1">
                         <span className="text-gray-600">Progress</span>
-                        <span className="text-gray-900 font-semibold">{milestone.progress}%</span>
+                        <span className="text-gray-900 font-semibold">{displayProgress(milestone.progress)}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div 
@@ -952,7 +954,7 @@ const Client_project_detail = () => {
                               ? 'bg-teal-500'
                               : 'bg-yellow-500'
                           }`}
-                          style={{ width: `${milestone.progress}%` }}
+                          style={{ width: `${displayProgress(milestone.progress)}%` }}
                         ></div>
                       </div>
                     </div>
@@ -1640,7 +1642,7 @@ const Client_project_detail = () => {
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-gray-500">Progress</div>
-                      <div className="text-sm font-bold text-gray-900">{projectData.project.progress || 0}%</div>
+                      <div className="text-sm font-bold text-gray-900">{displayProgress(projectData.project.progress)}%</div>
                     </div>
                   </div>
                 </div>

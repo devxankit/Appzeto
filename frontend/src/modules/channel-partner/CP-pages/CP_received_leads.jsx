@@ -292,11 +292,35 @@ const CP_received_leads = () => {
     if (!selectedLead || !selectedLead.rawData) return;
     
     try {
+      // "Hot" is a priority (urgent), not a status
+      if (newStatus === 'Hot') {
+        const response = await cpLeadService.updateLead(selectedLead.id, { priority: 'urgent' })
+        if (response.success) {
+          setLeads(prev => prev.map(l =>
+            l.id === selectedLead.id
+              ? { ...l, status: 'Hot', lastUpdated: 'Just now', rawData: response.data }
+              : l
+          ))
+          addToast('Lead marked as Hot successfully', 'success')
+        }
+        setIsUpdateModalOpen(false)
+        setSelectedLead(null)
+        return
+      }
+
+      // If lead was hot (urgent) and user changes status, clear urgent priority so UI reflects the chosen status
+      if (selectedLead.rawData?.priority === 'urgent') {
+        try {
+          await cpLeadService.updateLead(selectedLead.id, { priority: 'medium' })
+        } catch (err) {
+          // non-blocking
+        }
+      }
+
       const statusMap = {
         'New': 'new',
         'Connected': 'connected',
         'Follow-up': 'followup',
-        'Hot': 'connected',
         'Lost': 'lost',
         'Converted': 'converted'
       };

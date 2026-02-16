@@ -241,6 +241,7 @@ const updateProject = asyncHandler(async (req, res, next) => {
     const validStatuses = ['pending-assignment', 'untouched', 'started', 'active', 'on-hold', 'testing', 'completed', 'cancelled'];
     if (validStatuses.includes(status)) {
       updateData.status = status;
+      if (status === 'completed') updateData.progress = 100;
     }
   }
   if (dueDate !== undefined) updateData.dueDate = dueDate;

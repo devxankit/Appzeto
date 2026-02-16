@@ -22,6 +22,8 @@ import {
 import { clientMilestoneService } from '../../DEV-services/clientMilestoneService'
 import { useToast } from '../../../../contexts/ToastContext'
 
+const displayProgress = (p) => Math.min(100, Math.max(0, Number(p) || 0))
+
 const Client_milestone_detail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -52,7 +54,7 @@ const Client_milestone_detail = () => {
           title: milestone.title || '',
           description: milestone.description || '',
           status: milestone.status || 'pending',
-          progress: milestone.progress || 0,
+          progress: displayProgress(milestone.progress),
           dueDate: milestone.dueDate || new Date(),
           createdAt: milestone.createdAt || new Date(),
           assignedTo: milestone.assignedTo ? (Array.isArray(milestone.assignedTo) ? milestone.assignedTo.map(a => a.name).join(', ') : milestone.assignedTo.name) : 'Unassigned',
@@ -350,12 +352,12 @@ const Client_milestone_detail = () => {
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-medium text-gray-700">Progress</span>
-                  <span className="text-sm font-bold text-gray-900">{milestoneData.milestone.progress}%</span>
+                  <span className="text-sm font-bold text-gray-900">{displayProgress(milestoneData.milestone.progress)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div 
                     className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${milestoneData.milestone.progress}%` }}
+                    style={{ width: `${displayProgress(milestoneData.milestone.progress)}%` }}
                   ></div>
                 </div>
               </div>
@@ -398,12 +400,12 @@ const Client_milestone_detail = () => {
                   <div className="mb-6">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-700">Progress</span>
-                      <span className="text-sm text-gray-500">{milestoneData.milestone.progress}%</span>
+                      <span className="text-sm text-gray-500">{displayProgress(milestoneData.milestone.progress)}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-3">
                       <div 
                         className="bg-gradient-to-r from-teal-500 to-teal-600 h-3 rounded-full transition-all duration-300"
-                        style={{ width: `${milestoneData.milestone.progress}%` }}
+                        style={{ width: `${displayProgress(milestoneData.milestone.progress)}%` }}
                       ></div>
                     </div>
                   </div>

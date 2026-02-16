@@ -74,6 +74,7 @@ const CP_notifications = () => {
                         backendType: notif.type, // Keep original for filtering
                         title: notif.title,
                         message: notif.message,
+                        createdAt: notif.createdAt,
                         time: formatTimeAgo(notif.createdAt),
                         isRead: notif.read || false,
                         isPinned: notif.priority === 'urgent' || notif.priority === 'high',
@@ -138,7 +139,9 @@ const CP_notifications = () => {
         // Sort: unread first, then pinned, then by date
         if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
         if (a.isPinned !== b.isPinned) return b.isPinned ? 1 : -1;
-        return 0;
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime;
     });
 
     const markAllRead = async () => {

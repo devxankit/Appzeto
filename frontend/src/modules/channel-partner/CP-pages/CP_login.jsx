@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { FaPhoneAlt, FaShieldAlt, FaArrowRight, FaClock, FaSpinner } from 'react-icons/fa'
@@ -19,6 +19,7 @@ const CP_login = () => {
   const [isOtpSent, setIsOtpSent] = useState(false)
   const [otpTimer, setOtpTimer] = useState(0)
   const [errors, setErrors] = useState({})
+  const otpIntervalRef = useRef(null)
 
   // Check if user is already authenticated
   useEffect(() => {
@@ -26,6 +27,16 @@ const CP_login = () => {
       navigate('/cp-dashboard')
     }
   }, [navigate])
+
+  // Cleanup OTP timer interval on unmount
+  useEffect(() => {
+    return () => {
+      if (otpIntervalRef.current) {
+        clearInterval(otpIntervalRef.current)
+        otpIntervalRef.current = null
+      }
+    }
+  }, [])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -94,15 +105,21 @@ const CP_login = () => {
         }
         
         // Start countdown timer
-        const timer = setInterval(() => {
+        if (otpIntervalRef.current) {
+          clearInterval(otpIntervalRef.current)
+          otpIntervalRef.current = null
+        }
+        const timerId = setInterval(() => {
           setOtpTimer(prev => {
             if (prev <= 1) {
-              clearInterval(timer)
+              clearInterval(timerId)
+              if (otpIntervalRef.current === timerId) otpIntervalRef.current = null
               return 0
             }
             return prev - 1
           })
         }, 1000)
+        otpIntervalRef.current = timerId
         
         toast.success('OTP sent successfully to your phone number', {
           title: 'OTP Sent',
@@ -182,15 +199,21 @@ const CP_login = () => {
         }
         
         // Start countdown timer
-        const timer = setInterval(() => {
+        if (otpIntervalRef.current) {
+          clearInterval(otpIntervalRef.current)
+          otpIntervalRef.current = null
+        }
+        const timerId = setInterval(() => {
           setOtpTimer(prev => {
             if (prev <= 1) {
-              clearInterval(timer)
+              clearInterval(timerId)
+              if (otpIntervalRef.current === timerId) otpIntervalRef.current = null
               return 0
             }
             return prev - 1
           })
         }, 1000)
+        otpIntervalRef.current = timerId
         
         toast.success('OTP resent successfully', {
           title: 'OTP Resent',

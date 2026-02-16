@@ -31,7 +31,7 @@ const PM_testing_projects = () => {
         _id: project._id,
         name: project.name,
         description: project.description || '',
-        progress: project.progress || 0,
+        progress: project.status === 'completed' ? 100 : Math.min(100, Math.max(0, Number(project.progress) || 0)),
         status: project.status,
         priority: project.priority || 'normal',
         customer: project.client ? {
@@ -190,12 +190,12 @@ const PM_testing_projects = () => {
                   <div className="mb-3">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-xs font-medium text-gray-700">Progress</span>
-                      <span className="text-sm font-bold text-gray-900">{project.progress}%</span>
+                      <span className="text-sm font-bold text-gray-900">{Math.min(100, Math.max(0, project.progress ?? 0))}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-gradient-to-r from-primary to-primary-dark h-2 rounded-full transition-all duration-500 ease-out"
-                        style={{ width: `${project.progress}%` }}
+                        style={{ width: `${Math.min(100, Math.max(0, project.progress ?? 0))}%` }}
                       ></div>
                     </div>
                   </div>

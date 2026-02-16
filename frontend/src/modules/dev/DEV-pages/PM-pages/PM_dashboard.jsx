@@ -127,9 +127,10 @@ const PM_dashboard = () => {
       const allProjects = Array.isArray(projectsResponse) ? projectsResponse : (projectsResponse?.data || [])
       
       // Calculate statistics from projects data (frontend-based calculation)
+      // Active = both 'active' and 'in-progress' to match Client/backend usage
       const projectStats = {
         total: allProjects.length,
-        active: allProjects.filter(p => p.status === 'active').length,
+        active: allProjects.filter(p => p.status === 'active' || p.status === 'in-progress').length,
         completed: allProjects.filter(p => p.status === 'completed').length,
         onHold: allProjects.filter(p => p.status === 'on-hold').length,
         planning: allProjects.filter(p => p.status === 'planning').length,
@@ -143,13 +144,14 @@ const PM_dashboard = () => {
         }).length
       }
       
+      const clampProgress = (p) => Math.min(100, Math.max(0, Number(p) || 0))
       // Process recent projects (limit to 3 most recent)
       const processedRecentProjects = allProjects
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .slice(0, 3)
         .map(project => ({
           name: project.name,
-          progress: project.progress || 0,
+          progress: project.status === 'completed' ? 100 : clampProgress(project.progress),
           status: project.status,
           deadline: project.dueDate ? new Date(project.dueDate).toLocaleDateString() : 'No deadline',
           team: project.assignedTeam?.length || 0
@@ -498,7 +500,7 @@ const PM_dashboard = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-semibold text-gray-900">Recent Projects</h2>
-              <button className="text-teal-600 text-sm font-medium hover:text-teal-700">View All</button>
+              <button type="button" onClick={() => navigate('/pm-projects')} className="text-teal-600 text-sm font-medium hover:text-teal-700">View All</button>
             </div>
             
             <div className="space-y-2">
@@ -534,7 +536,8 @@ const PM_dashboard = () => {
                 {/* Y-axis labels */}
                 <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2 z-10">
                   {(() => {
-                    const maxProjects = Math.max(...projectGrowthData.map(d => d.projects), 12);
+                    const values = projectGrowthData.length > 0 ? projectGrowthData.map(d => d.projects) : [];
+                    const maxProjects = values.length > 0 ? Math.max(...values, 1) : 12;
                     const yAxisLabels = [maxProjects, Math.floor(maxProjects * 0.75), Math.floor(maxProjects * 0.5), Math.floor(maxProjects * 0.25), 0];
                     return yAxisLabels.map((label, i) => <span key={i}>{label}</span>);
                   })()}
@@ -558,7 +561,7 @@ const PM_dashboard = () => {
                         {/* Bar */}
                         <div 
                           className={`${data.color} w-6 mb-2 rounded-t-sm transition-all duration-300 hover:bg-teal-600 relative`}
-                          style={{ height: `${(data.projects / Math.max(...projectGrowthData.map(d => d.projects), 1)) * 90}px` }}
+                          style={{ height: `${(data.projects / (Math.max(...projectGrowthData.map(d => d.projects), 1) || 1)) * 90}px` }}
                           title={`${data.month}: ${data.projects} projects`}
                         >
                           {/* Value label on hover */}

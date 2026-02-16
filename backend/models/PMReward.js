@@ -51,6 +51,11 @@ const pmRewardSchema = new mongoose.Schema({
   paidAt: {
     type: Date,
     default: Date.now
+  },
+  rewardId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Reward',
+    default: null
   }
 }, {
   timestamps: true
@@ -62,6 +67,7 @@ pmRewardSchema.index({ status: 1 });
 pmRewardSchema.index({ dateAwarded: -1 });
 pmRewardSchema.index({ createdAt: -1 });
 pmRewardSchema.index({ pmId: 1, dateAwarded: -1 });
+pmRewardSchema.index({ rewardId: 1, pmId: 1 });
 
 // Static method to get rewards by PM
 pmRewardSchema.statics.getByPM = function(pmId) {

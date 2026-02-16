@@ -68,14 +68,22 @@ export const cpLeadService = {
 
   // Get leads shared from Sales
   getSharedLeadsFromSales: async (params = {}) => {
-    const queryParams = new URLSearchParams(params).toString();
+    const cleanParams = Object.entries(params).reduce((acc, [key, value]) => {
+      if (value !== undefined && value !== null && value !== '') acc[key] = value;
+      return acc;
+    }, {});
+    const queryParams = new URLSearchParams(cleanParams).toString();
     const url = `/cp/leads/shared/from-sales${queryParams ? `?${queryParams}` : ''}`;
     return await apiRequest(url, { method: 'GET' });
   },
 
   // Get leads shared with Sales
   getSharedLeadsWithSales: async (params = {}) => {
-    const queryParams = new URLSearchParams(params).toString();
+    const cleanParams = Object.entries(params).reduce((acc, [key, value]) => {
+      if (value !== undefined && value !== null && value !== '') acc[key] = value;
+      return acc;
+    }, {});
+    const queryParams = new URLSearchParams(cleanParams).toString();
     const url = `/cp/leads/shared/with-sales${queryParams ? `?${queryParams}` : ''}`;
     return await apiRequest(url, { method: 'GET' });
   },

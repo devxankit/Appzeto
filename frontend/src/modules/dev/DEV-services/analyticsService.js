@@ -269,12 +269,13 @@ export const analyticsService = {
         healthScore -= 20;
       }
       
-      // Deduct points for low progress
-      if (project.progress < 25) {
+      // Deduct points for low progress (safe number: backend may send undefined)
+      const progress = Number(project.progress) || 0;
+      if (progress < 25) {
         healthScore -= 15;
-      } else if (project.progress < 50) {
+      } else if (progress < 50) {
         healthScore -= 10;
-      } else if (project.progress < 75) {
+      } else if (progress < 75) {
         healthScore -= 5;
       }
       
@@ -295,7 +296,7 @@ export const analyticsService = {
           status: healthScore >= 80 ? 'excellent' : healthScore >= 60 ? 'good' : healthScore >= 40 ? 'fair' : 'poor',
           factors: {
             isOverdue: project.isOverdue,
-            progress: project.progress,
+            progress,
             overdueTasks,
             overdueMilestones
           }

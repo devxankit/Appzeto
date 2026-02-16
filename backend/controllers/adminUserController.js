@@ -6,6 +6,12 @@ const Client = require('../models/Client');
 const Project = require('../models/Project');
 const Task = require('../models/Task');
 const Payment = require('../models/Payment');
+const Milestone = require('../models/Milestone');
+const PaymentReceipt = require('../models/PaymentReceipt');
+const AdminFinance = require('../models/AdminFinance');
+const Incentive = require('../models/Incentive');
+const Request = require('../models/Request');
+const Lead = require('../models/Lead');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { uploadFile, deleteFile } = require('../services/cloudinaryService');
@@ -566,6 +572,110 @@ const deleteUser = asyncHandler(async (req, res, next) => {
   
   if (!user) {
     return next(new ErrorResponse('User not found', 404));
+  }
+
+  // If deleting a client, also clean up all related financial and project records
+  if (userType === 'client') {
+    try {
+      const clientId = user._id;
+
+      // If this client was converted from a sales lead, also remove that lead
+      // so that sales "Total Leads" and related statistics stay accurate.
+      if (user.originLead) {
+        try {
+          await Lead.findByIdAndDelete(user.originLead);
+        } catch (err) {
+          console.error('Error deleting origin lead for client on delete:', err);
+        }
+      }
+
+      // Find all projects for this client
+      const projects = await Project.find({ client: clientId }).select('_id submittedBy');
+      const projectIds = projects.map(p => p._id);
+
+      // Collect related sales employees for incentive recalculation
+      const salesIdSet = new Set();
+      if (user.convertedBy) {
+        salesIdSet.add(String(user.convertedBy));
+      }
+      projects.forEach(p => {
+        if (p.submittedBy) {
+          salesIdSet.add(String(p.submittedBy));
+        }
+      });
+      const salesIds = Array.from(salesIdSet);
+
+      // Delete dependent records in parallel where safe
+      const deleteOps = [];
+
+      if (projectIds.length > 0) {
+        deleteOps.push(
+          Task.deleteMany({ project: { $in: projectIds } }),
+          Milestone.deleteMany({ project: { $in: projectIds } }),
+          Payment.deleteMany({
+            $or: [
+              { client: clientId },
+              { project: { $in: projectIds } }
+            ]
+          }),
+          PaymentReceipt.deleteMany({
+            $or: [
+              { client: clientId },
+              { project: { $in: projectIds } }
+            ]
+          }),
+          AdminFinance.deleteMany({
+            $or: [
+              { client: clientId },
+              { project: { $in: projectIds } }
+            ]
+          }),
+          Incentive.deleteMany({
+            $or: [
+              { clientId: clientId },
+              { projectId: { $in: projectIds } }
+            ]
+          }),
+          Request.deleteMany({
+            $or: [
+              { client: clientId },
+              { project: { $in: projectIds } }
+            ]
+          }),
+          Project.deleteMany({ _id: { $in: projectIds } })
+        );
+      } else {
+        // Even if there are no projects, still clean up any stray records tied only to client
+        deleteOps.push(
+          Payment.deleteMany({ client: clientId }),
+          PaymentReceipt.deleteMany({ client: clientId }),
+          AdminFinance.deleteMany({ client: clientId }),
+          Incentive.deleteMany({ clientId: clientId }),
+          Request.deleteMany({ client: clientId })
+        );
+      }
+
+      if (deleteOps.length > 0) {
+        await Promise.all(deleteOps);
+      }
+
+      // Recalculate currentIncentive for affected sales employees
+      if (salesIds.length > 0) {
+        const salesMembers = await Sales.find({ _id: { $in: salesIds } });
+        await Promise.all(
+          salesMembers.map(async (member) => {
+            try {
+              await member.updateCurrentIncentive();
+            } catch (err) {
+              console.error('Error updating currentIncentive after client delete:', err);
+            }
+          })
+        );
+      }
+    } catch (cleanupError) {
+      // Log cleanup problems but do not block client deletion
+      console.error('Error cleaning up client related data on delete:', cleanupError);
+    }
   }
 
   // Delete associated document from Cloudinary if exists

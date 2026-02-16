@@ -712,6 +712,17 @@ const SL_leadProfile = () => {
       return
     }
 
+    const advanceNum = Math.round(Number(String(conversionData.advanceReceived || '').replace(/,/g, '')) || 0)
+    if (!advanceNum || advanceNum <= 0) {
+      toast.error('Advance amount is required and must be greater than 0')
+      return
+    }
+
+    if (!conversionData.advanceAccount || !conversionData.advanceAccount.toString().trim()) {
+      toast.error('Please select a payment account for the advance amount')
+      return
+    }
+
     setIsLoading(true)
     try {
       // Prepare project data (whole-number amounts), handle comma-separated numbers
@@ -1268,7 +1279,9 @@ const SL_leadProfile = () => {
 
                 {/* Advance Received */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Advance Received</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Advance Received <span className="text-red-500">*</span>
+                  </label>
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
                       <FiCheck className="text-lg" />
@@ -1285,7 +1298,9 @@ const SL_leadProfile = () => {
                   </div>
                   {/* Advance Account - use actual finance accounts */}
                   <div className="mt-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Advance Account *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Advance Account <span className="text-red-500">*</span>
+                    </label>
                     <select
                       value={conversionData.advanceAccount}
                       onChange={(e) => setConversionData({ ...conversionData, advanceAccount: e.target.value })}

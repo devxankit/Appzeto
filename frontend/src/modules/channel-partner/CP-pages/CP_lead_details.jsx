@@ -261,9 +261,42 @@ const CP_lead_details = () => {
         if (!lead) return;
 
         try {
+            // "Hot" is a priority (urgent), not a status
+            if (status === 'Hot') {
+                const hotRes = await cpLeadService.updateLead(lead.id, { priority: 'urgent' });
+                if (hotRes.success) {
+                    addToast('Lead marked as Hot successfully', 'success');
+                    setIsUpdateSheetOpen(false);
+                    const leadResponse = await cpLeadService.getLeadById(id);
+                    if (leadResponse.success && leadResponse.data) {
+                        const leadData = leadResponse.data;
+                        const displayStatus = leadData.status === 'converted' ? 'Converted' :
+                            leadData.status === 'lost' ? 'Lost' :
+                            leadData.priority === 'urgent' ? 'Hot' :
+                            leadData.status === 'connected' ? 'Connected' : 'Active';
+                        setLead(prev => ({
+                            ...prev,
+                            status: displayStatus.toLowerCase(),
+                            rawData: leadData
+                        }));
+                    }
+                } else {
+                    addToast('Failed to update status', 'error');
+                }
+                return;
+            }
+
+            // If lead was hot (urgent) and user changes status, clear urgent priority so UI reflects the chosen status
+            if (lead.rawData?.priority === 'urgent') {
+                try {
+                    await cpLeadService.updateLead(lead.id, { priority: 'medium' });
+                } catch (err) {
+                    // non-blocking
+                }
+            }
+
             // Map frontend status to backend status
-            const backendStatus = status === 'Hot' ? 'new' :
-                status === 'Connected' ? 'connected' :
+            const backendStatus = status === 'Connected' ? 'connected' :
                 status === 'Converted' ? 'converted' :
                 status === 'Lost' ? 'lost' : 'new';
 

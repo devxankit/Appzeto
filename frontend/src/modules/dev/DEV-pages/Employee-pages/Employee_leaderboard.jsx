@@ -83,7 +83,7 @@ const Employee_leaderboard = () => {
       const transformedData = response.leaderboard?.map((emp, index) => ({
         id: emp._id,
         name: emp.name,
-        avatar: emp.name.split(' ').map(n => n[0]).join('').substring(0, 2),
+        avatar: (emp.name || '?').toString().trim().split(/\s+/).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?',
         score: emp.points || 0,
         rank: emp.rank,
         completed: emp.statistics?.tasksCompleted || 0,
@@ -110,7 +110,7 @@ const Employee_leaderboard = () => {
           name: currentEmp.name,
           rank: currentEmp.rank || 1,
           score: currentEmp.points || 0,
-          avatar: currentEmp.name.split(' ').map(n => n[0]).join('').substring(0, 2),
+          avatar: (currentEmp.name || '?').toString().trim().split(/\s+/).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?',
           completedTasks: currentEmp.statistics?.tasksCompleted || 0,
           overdueTasks: currentEmp.statistics?.tasksOverdue || 0,
           missedDeadlines: currentEmp.statistics?.tasksMissed || 0,

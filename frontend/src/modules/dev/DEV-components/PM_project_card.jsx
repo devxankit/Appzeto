@@ -8,8 +8,12 @@ const normalizeStatus = (rawStatus) => {
   const s = String(rawStatus || '').toLowerCase()
   if (s.includes('hold')) return 'On Hold'
   if (s.includes('block')) return 'Blocked'
-  if (s.includes('complete')) return 'Completed'
-  if (s.includes('progress')) return 'In Progress'
+  if (s === 'completed' || s.includes('complete')) return 'Completed'
+  if (s === 'planning') return 'Planning'
+  if (s === 'testing') return 'Testing'
+  if (s === 'active' || s === 'in-progress' || s.includes('progress')) return 'In Progress'
+  if (s === 'cancelled') return 'Cancelled'
+  if (s === 'untouched') return 'New'
   return 'In Progress'
 }
 

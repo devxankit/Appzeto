@@ -22,8 +22,12 @@ const TransactionItem = ({ item }) => {
         if (!dateString) return '—';
         const date = new Date(dateString);
         const now = new Date();
-        const diffTime = Math.abs(now - date);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        // Compare by calendar day (so "Today" works correctly)
+        const startOfNow = new Date(now);
+        startOfNow.setHours(0, 0, 0, 0);
+        const startOfDate = new Date(date);
+        startOfDate.setHours(0, 0, 0, 0);
+        const diffDays = Math.floor((startOfNow - startOfDate) / (1000 * 60 * 60 * 24));
         
         if (diffDays === 0) return 'Today';
         if (diffDays === 1) return 'Yesterday';

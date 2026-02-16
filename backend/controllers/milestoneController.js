@@ -297,12 +297,16 @@ const updateMilestoneProgress = asyncHandler(async (req, res, next) => {
 
   // Verify user is the project manager
   const project = await Project.findById(milestone.project);
+  if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
   if (!project.projectManager.equals(req.user.id)) {
     return next(new ErrorResponse('Not authorized to update this milestone', 403));
   }
 
-  // Update progress
-  milestone.progress = progress;
+  // Update progress (clamp 0-100)
+  const value = Math.min(100, Math.max(0, Number(progress) || 0));
+  milestone.progress = value;
   await milestone.save();
 
   // Update parent project progress
@@ -314,8 +318,8 @@ const updateMilestoneProgress = asyncHandler(async (req, res, next) => {
     'updated',
     req.user.id,
     'PM',
-    `Milestone "${milestone.title}" progress updated to ${progress}%`,
-    { milestoneTitle: milestone.title, progress }
+    `Milestone "${milestone.title}" progress updated to ${value}%`,
+    { milestoneTitle: milestone.title, progress: value }
   );
 
   res.json({

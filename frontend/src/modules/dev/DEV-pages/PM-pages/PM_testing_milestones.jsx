@@ -33,20 +33,19 @@ const PM_testing_milestones = () => {
       const allMilestones = milestoneResponses.flatMap((response, index) => {
         // Handle both array response and object with data property
         const milestones = Array.isArray(response) ? response : (response?.data || []);
-        const project = allProjects[index];
-        
+        const projectRef = allProjects[index];
         return milestones
           .filter(m => m.status === 'testing')
           .map(milestone => ({
             _id: milestone._id,
             title: milestone.title || milestone.name || 'Untitled Milestone',
             description: milestone.description || '',
-            progress: milestone.progress || 0,
+            progress: Math.min(100, Math.max(0, Number(milestone.progress) || 0)),
             status: milestone.status,
             priority: milestone.priority || 'normal',
             project: {
-              _id: project._id,
-              name: project.name || 'Unknown Project'
+              _id: projectRef?._id,
+              name: projectRef?.name || 'Unknown Project'
             },
             assignedTeam: milestone.assignedTo || milestone.assignedTeam || [],
             dueDate: milestone.dueDate || milestone.endDate,
@@ -154,12 +153,12 @@ const PM_testing_milestones = () => {
                   <div className="mb-3">
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-gray-600">Progress</span>
-                      <span className="text-gray-900 font-medium">{milestone.progress || 0}%</span>
+                      <span className="text-gray-900 font-medium">{Math.min(100, Math.max(0, Number(milestone.progress) || 0))}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
                         className="bg-gradient-to-r from-primary to-primary-dark h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${milestone.progress || 0}%` }}
+                        style={{ width: `${Math.min(100, Math.max(0, Number(milestone.progress) || 0))}%` }}
                       ></div>
                     </div>
                   </div>

@@ -80,13 +80,14 @@ const Employee_project_detail = () => {
         myCompletedTasks: project.milestones ? project.milestones.reduce((sum, m) => sum + (m.employeeCompletedTasks || 0), 0) : 0
       }
 
-      // Milestone progress = % of tasks completed in that milestone (from backend or computed)
+      // Milestone progress = % of tasks completed in that milestone (from backend or computed), clamped 0-100
       const transformedMilestones = (project.milestones || []).map(milestone => {
         const totalTasks = milestone.totalTasks ?? (milestone.tasks || []).length
         const completedTasks = milestone.completedTasks ?? (milestone.tasks || []).filter(t => (t.status || '').toLowerCase() === 'completed').length
-        const progress = milestone.progress != null
+        const rawProgress = milestone.progress != null
           ? Number(milestone.progress)
           : (totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0)
+        const progress = Math.min(100, Math.max(0, Number.isFinite(rawProgress) ? rawProgress : 0))
         return {
           ...milestone,
           progress,
@@ -349,10 +350,10 @@ const Employee_project_detail = () => {
         <div key={member._id} className="group bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200">
           <div className="flex items-center space-x-4">
             <div className="w-12 h-12 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full flex items-center justify-center group-hover:from-primary/20 group-hover:to-primary/30 transition-all duration-200">
-              <span className="text-base font-bold text-primary">{member.fullName.split(' ').map(w => w[0]).join('').substring(0, 2)}</span>
+              <span className="text-base font-bold text-primary">{(member.fullName || member.name || '?').toString().trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'}</span>
             </div>
             <div className="flex-1">
-              <h3 className="text-base font-bold text-gray-900 group-hover:text-primary transition-colors duration-200">{member.fullName}</h3>
+              <h3 className="text-base font-bold text-gray-900 group-hover:text-primary transition-colors duration-200">{member.fullName || member.name || 'Team Member'}</h3>
               <p className="text-sm text-gray-600">Team Member</p>
             </div>
           </div>

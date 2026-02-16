@@ -42,6 +42,13 @@ export const adminRewardService = {
     })
   },
 
+  awardRewardForMonth: async (rewardId) => {
+    const response = await apiRequest(`/admin/rewards/${rewardId}/award-month`, {
+      method: 'POST'
+    })
+    return response
+  },
+
   getTags: async () => {
     return apiRequest('/admin/rewards/tags', {
       method: 'GET'

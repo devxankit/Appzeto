@@ -75,6 +75,17 @@ import adminAllowanceService from '../admin-services/adminAllowanceService'
 import adminRecurringExpenseService from '../admin-services/adminRecurringExpenseService'
 import adminRequestService from '../admin-services/adminRequestService'
 
+// Normalize employeeId to string (API may return ObjectId as object or string)
+const normalizeEmployeeId = (val) => {
+  if (val == null) return null
+  if (typeof val === 'string') return val
+  if (typeof val === 'object' && val !== null) {
+    const id = val._id ?? val.$oid ?? val.id
+    return id != null ? String(id) : null
+  }
+  return String(val)
+}
+
 const Admin_hr_management = () => {
   const { addToast } = useToast()
   const normalizePhone = (value) => {
@@ -1943,11 +1954,11 @@ const Admin_hr_management = () => {
         status: selectedPaymentStatus !== 'all' ? selectedPaymentStatus : undefined
       })
 
-      // Transform backend data to frontend format
+      // Transform backend data to frontend format (normalize employeeId to string for history API)
       const transformedData = (res.data || []).map((record, idx) => ({
         id: record._id ? record._id.toString() : (idx + 1).toString(),
         _id: record._id ? record._id.toString() : null, // Keep original _id for API calls
-        employeeId: record.employeeId,
+        employeeId: normalizeEmployeeId(record.employeeId) ?? (record.employeeId != null ? String(record.employeeId) : null),
         employeeName: record.employeeName,
         department: record.department,
         role: record.role,
@@ -2484,7 +2495,7 @@ const Admin_hr_management = () => {
                       role === 'sales' ? 'sales' : 
                       role === 'hr' ? 'admin' : 'employee'
       
-      const employeeId = record.employeeId?._id || record.employeeId
+      const employeeId = normalizeEmployeeId(record.employeeId)
       if (!employeeId) {
         addToast({ type: 'error', message: 'Employee ID is missing' })
         setLoadingHistory(false)
@@ -2505,7 +2516,7 @@ const Admin_hr_management = () => {
       setSelectedHistoryEmployee({
         name: record.employeeName,
         department: record.department,
-        employeeId: record.employeeId,
+        employeeId,
         role: record.role,
         joiningDate: joiningDate
       })

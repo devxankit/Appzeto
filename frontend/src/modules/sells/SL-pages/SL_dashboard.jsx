@@ -732,7 +732,9 @@ const SL_dashboard = () => {
                 }}
               >
                 <p className="text-emerald-800 text-sm mb-1.5 font-semibold">Total Leads</p>
-                <p className="text-gray-900 text-lg font-bold">{heroStats.totalLeads}</p>
+                <p className="text-gray-900 text-lg font-bold">
+                  {typeof totalLeads === 'number' ? totalLeads.toLocaleString('en-IN') : totalLeads}
+                </p>
               </motion.div>
               
               <motion.div 

@@ -6,6 +6,7 @@ const {
   updateReward,
   toggleRewardStatus,
   deleteReward,
+  awardRewardForMonth,
   getTags,
   createTag,
   deleteTag
@@ -30,6 +31,7 @@ router
 router.delete('/tags/:id', deleteTag);
 
 router.patch('/:id/toggle', toggleRewardStatus);
+router.post('/:id/award-month', awardRewardForMonth);
 
 router
   .route('/:id')

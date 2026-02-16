@@ -14,13 +14,21 @@ export const useToast = () => {
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([])
 
-  const addToast = useCallback((toast) => {
+  // Supports both:
+  // - addToast({ message, type, ... })
+  // - addToast(message, type?, options?)
+  const addToast = useCallback((toastOrMessage, maybeType = 'info', maybeOptions = {}) => {
     const id = Date.now() + Math.random()
+    const normalizedToast =
+      typeof toastOrMessage === 'string'
+        ? { message: toastOrMessage, type: maybeType, ...(maybeOptions || {}) }
+        : (toastOrMessage || {})
+
     const newToast = {
       id,
       type: 'info',
       duration: 4000,
-      ...toast
+      ...normalizedToast
     }
 
     setToasts(prev => [...prev, newToast])

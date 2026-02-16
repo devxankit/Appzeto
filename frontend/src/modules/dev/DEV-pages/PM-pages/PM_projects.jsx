@@ -68,12 +68,12 @@ const PM_projects = () => {
         sortOrder: 'desc'
       });
 
-      // Transform the data to match the expected format
+      // Transform the data to match the expected format (completed = 100% progress)
       const transformedProjects = (response?.data || []).map(project => ({
         _id: project._id,
         name: project.name,
         description: project.description,
-        progress: project.progress || 0,
+        progress: project.status === 'completed' ? 100 : (Math.min(100, Math.max(0, Number(project.progress) || 0))),
         status: project.status,
         priority: project.priority,
         customer: project.client ? {

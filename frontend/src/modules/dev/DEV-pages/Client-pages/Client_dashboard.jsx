@@ -28,6 +28,8 @@ import {
   FiLoader
 } from 'react-icons/fi'
 
+const clampProgress = (p) => Math.min(100, Math.max(0, Number(p) || 0))
+
 const Client_dashboard = () => {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
@@ -47,12 +49,12 @@ const Client_dashboard = () => {
         completed: 0,
         awaitingApproval: 0
       },
-          requests: {
-            total: recentRequests.length,
-            pendingResponse: recentRequests.filter(r => r.status === 'pending').length,
-            responded: recentRequests.filter(r => r.status !== 'pending').length,
-            urgent: 0
-          },
+      requests: {
+        total: 0,
+        pendingResponse: 0,
+        responded: 0,
+        urgent: 0
+      },
       tasks: {
         total: 0,
         completed: 0,
@@ -152,12 +154,10 @@ const Client_dashboard = () => {
       
       // Transform the data to match the expected format
       const transformedProjects = recentProjects.map(project => {
-        // Ensure progress is consistent - use backend calculated progress
-        // Backend calculates progress as completedMilestones / totalMilestones * 100
-        const projectProgress = project.status === 'completed' 
-          ? 100 
-          : (project.progress !== undefined ? project.progress : 0)
-        
+        // Ensure progress is consistent - use backend calculated progress, clamped 0-100
+        const projectProgress = project.status === 'completed'
+          ? 100
+          : clampProgress(project.progress)
         return {
           id: project._id,
           name: project.name,
@@ -189,10 +189,10 @@ const Client_dashboard = () => {
             awaitingApproval: 0
           },
           requests: {
-            total: 0, // This would need to be implemented
-            pendingResponse: 0,
-            responded: 0,
-            urgent: 0
+            total: recentRequests.length,
+            pendingResponse: recentRequests.filter(r => r.status === 'pending').length,
+            responded: recentRequests.filter(r => r.status !== 'pending').length,
+            urgent: recentRequests.filter(r => (r.priority || '').toLowerCase() === 'urgent').length
           },
           tasks: {
             total: transformedStats.tasks.total,
@@ -387,12 +387,12 @@ const Client_dashboard = () => {
                     <div className="mb-3">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-xs font-medium text-gray-700">Progress</span>
-                        <span className="text-xs font-bold text-gray-900">{project.progress}%</span>
+                        <span className="text-xs font-bold text-gray-900">{clampProgress(project.progress)}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
                         <div 
                           className="bg-gradient-to-r from-teal-500 to-teal-600 h-1.5 rounded-full transition-all duration-500 ease-out"
-                          style={{ width: `${project.progress}%` }}
+                          style={{ width: `${clampProgress(project.progress)}%` }}
                         ></div>
                       </div>
                     </div>
@@ -486,12 +486,12 @@ const Client_dashboard = () => {
                     <div className="mb-4">
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm font-medium text-gray-700">Progress</span>
-                        <span className="text-sm font-bold text-gray-900">{project.progress}%</span>
+                        <span className="text-sm font-bold text-gray-900">{clampProgress(project.progress)}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                         <div 
                           className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 rounded-full transition-all duration-500 ease-out"
-                          style={{ width: `${project.progress}%` }}
+                          style={{ width: `${clampProgress(project.progress)}%` }}
                         ></div>
                       </div>
                     </div>
@@ -581,12 +581,12 @@ const Client_dashboard = () => {
                     <div key={project.id || index}>
                       <div className="flex justify-between text-sm md:text-base mb-2 md:mb-3">
                         <span className="text-gray-600">{project.name || 'Unnamed Project'}</span>
-                        <span className="text-gray-900 font-medium">{project.milestones?.progress || project.progress || 0}%</span>
+                        <span className="text-gray-900 font-medium">{clampProgress(project.milestones?.progress ?? project.progress)}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2 md:h-3">
                         <div 
                           className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 md:h-3 rounded-full transition-all duration-500" 
-                          style={{width: `${project.milestones?.progress || project.progress || 0}%`}}
+                          style={{width: `${clampProgress(project.milestones?.progress ?? project.progress)}%`}}
                         ></div>
                       </div>
                     </div>

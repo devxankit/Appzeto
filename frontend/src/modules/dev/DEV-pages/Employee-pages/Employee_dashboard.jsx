@@ -151,11 +151,18 @@ const Employee_dashboard = () => {
     switch (taskStatusFilter) {
       case 'due-soon':
         return tasks.filter(task => {
-          const diffDays = Math.ceil((new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24))
+          if (!task.dueDate) return false
+          const due = new Date(task.dueDate)
+          if (Number.isNaN(due.getTime())) return false
+          const diffDays = Math.ceil((due - new Date()) / (1000 * 60 * 60 * 24))
           return diffDays <= 3 && diffDays >= 0 && task.status !== 'completed'
         })
       case 'overdue':
-        return tasks.filter(task => new Date(task.dueDate) < new Date() && task.status !== 'completed')
+        return tasks.filter(task => {
+          if (!task.dueDate) return false
+          const due = new Date(task.dueDate)
+          return !Number.isNaN(due.getTime()) && due < new Date() && task.status !== 'completed'
+        })
       case 'done':
         return tasks.filter(task => task.status === 'completed')
       case 'high-priority':
@@ -165,9 +172,11 @@ const Employee_dashboard = () => {
     }
   }, [tasks, taskStatusFilter])
 
-  // Calculate overall progress
-  const overallProgress = dashboardStats.tasks.total > 0
-    ? Math.round((dashboardStats.tasks.completed / dashboardStats.tasks.total) * 100)
+  // Calculate overall progress (defensive: avoid NaN when total is 0 or missing)
+  const totalTasks = Number(dashboardStats.tasks.total) || 0
+  const completedTasks = Number(dashboardStats.tasks.completed) || 0
+  const overallProgress = totalTasks > 0
+    ? Math.min(100, Math.max(0, Math.round((completedTasks / totalTasks) * 100)))
     : 0
 
   if (loading) {

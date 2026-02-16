@@ -212,10 +212,10 @@ const Employee_milestone_details = () => {
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Milestone Progress</span>
-                  <span className="font-medium text-gray-900">{milestone.progress || 0}%</span>
+                  <span className="font-medium text-gray-900">{Math.min(100, Math.max(0, Number(milestone.progress) || 0))}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-gradient-to-r from-primary to-primary-dark h-3 rounded-full transition-all duration-300" style={{ width: `${milestone.progress || 0}%` }} />
+                  <div className="bg-gradient-to-r from-primary to-primary-dark h-3 rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(0, Number(milestone.progress) || 0))}%` }} />
                 </div>
                 <div className="text-xs text-gray-500">Based on completed tasks in this milestone</div>
               </div>

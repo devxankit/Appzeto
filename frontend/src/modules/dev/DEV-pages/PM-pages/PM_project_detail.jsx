@@ -9,6 +9,8 @@ import socketService from '../../DEV-services/socketService'
 import { useToast } from '../../../../contexts/ToastContext'
 import { FolderKanban, Calendar, Users, CheckSquare, TrendingUp, Clock, Target, User, Plus, Loader2, FileText, Paperclip, Upload, Eye, Download, X, Edit, Trash2 } from 'lucide-react'
 
+const displayProgress = (p) => Math.min(100, Math.max(0, Number(p) || 0))
+
 const PM_project_detail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -114,21 +116,22 @@ const PM_project_detail = () => {
         attachments: response.data?.attachments || response.attachments || []
       }
 
-      setProject(projectData)
+      setProject({ ...projectData })
 
       // Load related data - milestones first so we can calculate progress
       const milestonesResponse = await milestoneService.getMilestonesByProject(id)
       const loadedMilestones = milestonesResponse.data || milestonesResponse || []
 
-      // Calculate progress based on completed milestones vs total milestones
-      if (loadedMilestones.length > 0) {
+      // Calculate progress: 100% if project completed, else from completed milestones / total
+      let progress = projectData.progress ?? 0
+      if (projectData.status === 'completed') {
+        progress = 100
+      } else if (loadedMilestones.length > 0) {
         const totalMilestones = loadedMilestones.length
         const completedMilestones = loadedMilestones.filter(m => m.status === 'completed').length
-        projectData.progress = totalMilestones > 0
-          ? Math.round((completedMilestones / totalMilestones) * 100)
-          : (projectData.progress || 0)
-        setProject(projectData)
+        progress = totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : progress
       }
+      setProject(prev => ({ ...prev, ...projectData, progress }))
 
       setMilestones(loadedMilestones)
 
@@ -159,17 +162,17 @@ const PM_project_detail = () => {
       const loadedMilestones = response.data || response || []
       setMilestones(loadedMilestones)
 
-      // Update project progress based on completed milestones
-      if (loadedMilestones.length > 0 && project) {
-        const totalMilestones = loadedMilestones.length
-        const completedMilestones = loadedMilestones.filter(m => m.status === 'completed').length
-        const calculatedProgress = totalMilestones > 0
-          ? Math.round((completedMilestones / totalMilestones) * 100)
-          : (project.progress || 0)
-
+      // Update project progress: 100% if completed, else from completed milestones / total
+      if (project) {
+        const completed = project.status === 'completed'
+        const calculatedProgress = completed
+          ? 100
+          : loadedMilestones.length > 0
+            ? Math.round((loadedMilestones.filter(m => m.status === 'completed').length / loadedMilestones.length) * 100)
+            : (project.progress ?? 0)
         setProject(prev => ({
           ...prev,
-          progress: calculatedProgress
+          progress: displayProgress(calculatedProgress)
         }))
       }
     } catch (error) {
@@ -384,12 +387,12 @@ const PM_project_detail = () => {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-3xl font-bold text-primary">{project.progress || 0}%</div>
+              <div className="text-3xl font-bold text-primary">{displayProgress(project?.progress)}%</div>
               <div className="text-xs text-gray-500">Complete</div>
             </div>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
-            <div className="bg-gradient-to-r from-primary to-primary-dark h-3 rounded-full transition-all duration-500" style={{ width: `${project.progress || 0}%` }}></div>
+            <div className="bg-gradient-to-r from-primary to-primary-dark h-3 rounded-full transition-all duration-500" style={{ width: `${displayProgress(project?.progress)}%` }}></div>
           </div>
         </div>
 
@@ -687,8 +690,8 @@ const PM_project_detail = () => {
             </div>
             <p className="text-sm text-gray-600 line-clamp-2 mb-3">{m.description || 'No description available'}</p>
             <div className="mb-3">
-              <div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Progress</span><span className="text-gray-900 font-medium">{m.progress || 0}%</span></div>
-              <div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-gradient-to-r from-primary to-primary-dark h-2 rounded-full transition-all duration-300" style={{ width: `${m.progress || 0}%` }}></div></div>
+              <div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Progress</span><span className="text-gray-900 font-medium">{displayProgress(m.progress)}%</span></div>
+              <div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-gradient-to-r from-primary to-primary-dark h-2 rounded-full transition-all duration-300" style={{ width: `${displayProgress(m.progress)}%` }}></div></div>
             </div>
             <div className="flex items-center justify-between text-sm text-gray-600">
               <div className="flex items-center space-x-1"><Calendar className="h-4 w-4" /><span>Due: {m.dueDate ? new Date(m.dueDate).toLocaleDateString() : 'No date'}</span></div>

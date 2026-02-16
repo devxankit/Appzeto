@@ -108,12 +108,14 @@ export const milestoneService = {
   },
 
   // Get milestone statistics for a project
+  // getMilestonesByProject returns the array directly (response.data from API)
   getMilestoneStatistics: async (projectId) => {
     try {
-      const milestones = await this.getMilestonesByProject(projectId);
-      
+      const raw = await this.getMilestonesByProject(projectId);
+      const list = Array.isArray(raw) ? raw : (raw?.data || []);
+
       const stats = {
-        total: milestones.data.length,
+        total: list.length,
         completed: 0,
         inProgress: 0,
         pending: 0,
@@ -124,10 +126,10 @@ export const milestoneService = {
       let totalProgress = 0;
       const now = new Date();
 
-      milestones.data.forEach(milestone => {
+      list.forEach(milestone => {
         stats[milestone.status] = (stats[milestone.status] || 0) + 1;
         totalProgress += milestone.progress || 0;
-        
+
         if (milestone.dueDate && new Date(milestone.dueDate) < now && milestone.status !== 'completed') {
           stats.overdue++;
         }
@@ -144,11 +146,12 @@ export const milestoneService = {
   // Get upcoming milestones
   getUpcomingMilestones: async (projectId, days = 7) => {
     try {
-      const milestones = await this.getMilestonesByProject(projectId);
+      const raw = await this.getMilestonesByProject(projectId);
+      const list = Array.isArray(raw) ? raw : (raw?.data || []);
       const now = new Date();
       const futureDate = new Date(now.getTime() + (days * 24 * 60 * 60 * 1000));
 
-      const upcoming = milestones.data.filter(milestone => {
+      const upcoming = list.filter(milestone => {
         const dueDate = new Date(milestone.dueDate);
         return dueDate >= now && dueDate <= futureDate && milestone.status !== 'completed';
       });
@@ -162,10 +165,11 @@ export const milestoneService = {
   // Get overdue milestones
   getOverdueMilestones: async (projectId) => {
     try {
-      const milestones = await this.getMilestonesByProject(projectId);
+      const raw = await this.getMilestonesByProject(projectId);
+      const list = Array.isArray(raw) ? raw : (raw?.data || []);
       const now = new Date();
 
-      const overdue = milestones.data.filter(milestone => {
+      const overdue = list.filter(milestone => {
         const dueDate = new Date(milestone.dueDate);
         return dueDate < now && milestone.status !== 'completed';
       });

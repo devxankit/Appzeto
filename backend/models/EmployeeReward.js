@@ -51,6 +51,11 @@ const employeeRewardSchema = new mongoose.Schema({
   paidAt: {
     type: Date,
     default: Date.now
+  },
+  rewardId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Reward',
+    default: null
   }
 }, {
   timestamps: true
@@ -62,6 +67,7 @@ employeeRewardSchema.index({ status: 1 });
 employeeRewardSchema.index({ dateAwarded: -1 });
 employeeRewardSchema.index({ createdAt: -1 });
 employeeRewardSchema.index({ employeeId: 1, dateAwarded: -1 });
+employeeRewardSchema.index({ rewardId: 1, employeeId: 1 });
 
 // Static method to get rewards by Employee
 employeeRewardSchema.statics.getByEmployee = function(employeeId) {

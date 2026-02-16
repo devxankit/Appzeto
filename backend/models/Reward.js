@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const criteriaSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['points', 'leadsConverted', 'target'],
+    enum: ['points', 'completionRatio', 'leadsConverted', 'target'],
     required: [true, 'Criteria type is required']
   },
   value: {
@@ -36,7 +36,7 @@ const rewardSchema = new mongoose.Schema({
   },
   team: {
     type: String,
-    enum: ['dev', 'sales'],
+    enum: ['dev', 'pm', 'sales'],
     required: [true, 'Team is required']
   },
   criteria: {
@@ -66,15 +66,19 @@ rewardSchema.index({ 'criteria.type': 1 });
 rewardSchema.index({ createdAt: -1 });
 
 rewardSchema.pre('validate', function(next) {
-  if (this.team === 'dev' && this.criteria.type !== 'points') {
-    this.invalidate('criteria.type', 'Development rewards must use points criteria');
+  if (this.team === 'dev' && !['points', 'completionRatio'].includes(this.criteria.type)) {
+    this.invalidate('criteria.type', 'Development rewards must use points or task completion ratio criteria');
+  }
+
+  if (this.team === 'pm' && this.criteria.type !== 'completionRatio') {
+    this.invalidate('criteria.type', 'PM rewards must use task completion ratio criteria');
   }
 
   if (this.team === 'sales' && !['leadsConverted', 'target'].includes(this.criteria.type)) {
     this.invalidate('criteria.type', 'Sales rewards must use leadsConverted or target criteria');
   }
 
-  if ((this.criteria.type === 'points' || this.criteria.type === 'leadsConverted' || this.criteria.type === 'target') &&
+  if ((this.criteria.type === 'points' || this.criteria.type === 'completionRatio' || this.criteria.type === 'leadsConverted' || this.criteria.type === 'target') &&
       (this.criteria.value === undefined || this.criteria.value === null)) {
     this.invalidate('criteria.value', 'Criteria value is required for the selected criteria type');
   }

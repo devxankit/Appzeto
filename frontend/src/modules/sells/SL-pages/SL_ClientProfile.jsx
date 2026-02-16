@@ -435,6 +435,7 @@ const SL_ClientProfile = () => {
   const client = clientData.client
   const financial = clientData.financial
   const project = clientData.project
+  const saleApproval = clientData.saleApproval
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
@@ -456,14 +457,29 @@ const SL_ClientProfile = () => {
           <div className="p-6">
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-16 h-16 rounded-full bg-teal-500 flex items-center justify-center shadow-lg">
-                    <span className="text-2xl font-bold text-white">{client.avatar}</span>
+                <div className="flex items-start justify-between mb-4 gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-16 h-16 rounded-full bg-teal-500 flex items-center justify-center shadow-lg">
+                      <span className="text-2xl font-bold text-white">{client.avatar}</span>
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-teal-800">{client.name}</h2>
+                      <p className="text-teal-600 text-sm">{client.phone}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-teal-800">{client.name}</h2>
-                    <p className="text-teal-600 text-sm">{client.phone}</p>
-                  </div>
+                  {saleApproval && saleApproval.status !== 'not_required' && (
+                    <div
+                      className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                        saleApproval.status === 'approved'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}
+                    >
+                      {saleApproval.status === 'approved'
+                        ? 'Sale Approved'
+                        : 'Pending Sale Approval'}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="space-y-3">

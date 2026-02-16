@@ -171,7 +171,17 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
   ]);
 
   // Get project financial data
+  // Business rule:
+  // - A sale is only counted once an advance payment has been approved by admin.
+  // - This is reflected when financialDetails.advanceReceived > 0
+  //   (updated by PaymentReceipt/Payment hooks after approval).
   const projectFinancials = await Project.aggregate([
+    {
+      $match: {
+        'financialDetails.totalCost': { $gt: 0 },
+        'financialDetails.advanceReceived': { $gt: 0 }
+      }
+    },
     {
       $group: {
         _id: null,

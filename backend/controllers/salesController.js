@@ -86,7 +86,10 @@ const getPaymentRecovery = async (req, res) => {
     }
 
     const projectFilter = {
-      client: { $in: clientIds }
+      client: { $in: clientIds },
+      // Business rule: only show receivables for sales where
+      // at least one advance/payment has been approved by admin.
+      'financialDetails.advanceReceived': { $gt: 0 }
     };
     if (overdue === 'true') {
       projectFilter.dueDate = { $lt: new Date() };
@@ -152,7 +155,11 @@ const getPaymentRecoveryStats = async (req, res) => {
     const myClients = await Client.find({ convertedBy: salesId }).select('_id');
     const clientIds = myClients.map(c => c._id);
     const projectQuery = { $or: [{ client: { $in: clientIds } }, { submittedBy: salesId }] };
-    const projects = await Project.find(projectQuery).select('dueDate financialDetails');
+    const projects = await Project.find({
+      ...projectQuery,
+      // Only include projects where an advance/payment has been approved
+      'financialDetails.advanceReceived': { $gt: 0 }
+    }).select('dueDate financialDetails');
     let totalDue = 0, overdueCount = 0, overdueAmount = 0;
     const now = new Date();
     projects.forEach(p => {
@@ -1177,7 +1184,11 @@ const getTileCardStats = async (req, res) => {
     // 1. Payment Recovery Stats
     const myClients = await Client.find({ convertedBy: salesId }).select('_id');
     const clientIds = myClients.map(c => c._id);
-    const projects = await Project.find({ client: { $in: clientIds } }).select('dueDate financialDetails updatedAt createdAt');
+    const projects = await Project.find({
+      client: { $in: clientIds },
+      // Only consider projects where an advance/payment has been approved
+      'financialDetails.advanceReceived': { $gt: 0 }
+    }).select('dueDate financialDetails updatedAt createdAt');
 
     // Count pending payments (projects with remainingAmount > 0)
     let pendingPayments = 0;
@@ -1330,12 +1341,14 @@ const getDashboardHeroStats = async (req, res) => {
       .filter(c => c.conversionDate && c.conversionDate >= todayStart && c.conversionDate <= todayEnd)
       .map(c => c._id.toString());
 
-    // Get all projects for clients converted this month and today
+    // Get only projects where advance has been approved (same rule as admin/sales payment recovery)
     const allClientIds = convertedClients.map(c => c._id);
-    const projects = await Project.find({ client: { $in: allClientIds } })
-      .select('client financialDetails.totalCost budget createdAt');
+    const projects = await Project.find({
+      client: { $in: allClientIds },
+      'financialDetails.advanceReceived': { $gt: 0 }
+    }).select('client financialDetails.totalCost budget createdAt');
 
-    // Calculate monthly sales (sum of project costs for clients converted this month)
+    // Calculate monthly sales (sum of project costs for clients converted this month, approved only)
     let monthlySales = 0;
     projects.forEach(p => {
       const clientIdStr = p.client.toString();
@@ -1345,7 +1358,7 @@ const getDashboardHeroStats = async (req, res) => {
       }
     });
 
-    // Calculate today's sales (sum of project costs for clients converted today)
+    // Calculate today's sales (sum of project costs for clients converted today, approved only)
     let todaysSales = 0;
     projects.forEach(p => {
       const clientIdStr = p.client.toString();
@@ -1355,10 +1368,10 @@ const getDashboardHeroStats = async (req, res) => {
       }
     });
 
-    // Count clients converted this month
+    // Count clients converted this month (with at least one approved project)
     const monthlyConvertedCount = monthlyClientIds.length;
 
-    // Count clients converted today
+    // Count clients converted today (with at least one approved project)
     const todayConvertedCount = todayClientIds.length;
 
     // Calculate incentives from actual conversion-based incentives
@@ -1470,8 +1483,9 @@ const getDashboardHeroStats = async (req, res) => {
     // Get total leads count
     const totalLeads = await Lead.countDocuments({ assignedTo: salesId });
 
-    // Get total clients count
-    const totalClients = convertedClients.length;
+    // Total clients = only those with at least one project where advance is approved
+    const approvedClientIds = [...new Set(projects.map(p => p.client.toString()))];
+    const totalClients = approvedClientIds.length;
 
     // Get reward
     const reward = sales.reward || 0;
@@ -1502,6 +1516,11 @@ const getDashboardHeroStats = async (req, res) => {
         if (validTeamMemberIds.length > 0) {
           // Optimized single aggregation query: Join projects with clients and filter
           const teamSalesAggregation = await Project.aggregate([
+            {
+              $match: {
+                'financialDetails.advanceReceived': { $gt: 0 }
+              }
+            },
             {
               $lookup: {
                 from: 'clients',
@@ -3850,12 +3869,32 @@ const convertLeadToClient = async (req, res) => {
     const totalCost = parseAmount(projectData?.totalCost ?? projectData?.estimatedBudget);
     const advanceReceived = parseAmount(projectData?.advanceReceived);
     let description = (projectData?.description ?? projectData?.notes ?? '').trim();
+
+    // Validate required financial fields
     if (totalCost <= 0) {
       return res.status(400).json({
         success: false,
         message: 'Project total cost is required and must be greater than zero. Please enter a valid project cost.'
       });
     }
+
+    // New business rule:
+    // - Every sale must have a non-zero advance amount
+    // - A payment account must be explicitly selected for that advance
+    if (advanceReceived <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Advance amount is required and must be greater than zero before converting this lead to a client.'
+      });
+    }
+
+    if (!projectData?.advanceAccount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment account is required for the advance amount. Please select an account before converting this lead.'
+      });
+    }
+
     projectData = { ...projectData, totalCost, advanceReceived, description };
 
     const { uploadToCloudinary } = require('../services/cloudinaryService');
@@ -4598,13 +4637,10 @@ const getClientProfile = async (req, res) => {
       const installmentTotals = calculateInstallmentTotals(primaryProject.installmentPlan || []);
       paidInstallmentAmount = Number(installmentTotals.paid || 0);
 
-      // Calculate initial advance (if any)
-      const totalFromReceiptsAndInstallments = totalApprovedPayments + paidInstallmentAmount;
-      if (advanceReceived > totalFromReceiptsAndInstallments) {
-        initialAdvance = advanceReceived - totalFromReceiptsAndInstallments;
-      } else {
-        initialAdvance = 0;
-      }
+      // Calculate totals for display
+      totalFromReceiptsAndInstallments = totalApprovedPayments + paidInstallmentAmount;
+      // Treat the approved receipts as the "approved advance" portion
+      initialAdvance = totalApprovedPayments;
 
       // Save project to persist the recalculated financials
       try {
@@ -4641,6 +4677,18 @@ const getClientProfile = async (req, res) => {
       expectedCompletion = primaryProject.dueDate;
     }
 
+    // Determine sale approval status for client profile
+    // A sale is considered "approved" once the advance amount has
+    // been received and approved by admin (at least one approved receipt).
+    let saleApprovalStatus = 'pending';
+    if (totalCost <= 0) {
+      saleApprovalStatus = 'not_required';
+    } else if (totalApprovedPayments > 0) {
+      saleApprovalStatus = 'approved';
+    } else {
+      saleApprovalStatus = 'pending';
+    }
+
     // Generate avatar from name
     const avatar = client.name ? client.name.charAt(0).toUpperCase() : 'C';
 
@@ -4665,6 +4713,11 @@ const getClientProfile = async (req, res) => {
             fromInstallments: paidInstallmentAmount,
             totalPaid: advanceReceived
           }
+        },
+        saleApproval: {
+          status: saleApprovalStatus,
+          approvedAdvanceAmount: totalApprovedPayments,
+          totalCost
         },
         project: {
           workProgress,

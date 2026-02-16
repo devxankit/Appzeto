@@ -859,7 +859,7 @@ exports.generateMonthlySalaries = asyncHandler(async (req, res) => {
 // @route   GET /api/admin/salary/employee/:userType/:employeeId
 // @access  Private (Admin/HR)
 exports.getEmployeeSalaryHistory = asyncHandler(async (req, res) => {
-  const { userType, employeeId } = req.params;
+  const { userType, employeeId: rawEmployeeId } = req.params;
 
   const employeeModel = getEmployeeModelType(userType);
   if (!employeeModel) {
@@ -868,6 +868,15 @@ exports.getEmployeeSalaryHistory = asyncHandler(async (req, res) => {
       message: 'Invalid user type'
     });
   }
+
+  // Ensure employeeId is a valid ObjectId (frontend may send string; reject invalid values like "[object Object]")
+  if (!rawEmployeeId || typeof rawEmployeeId !== 'string' || !mongoose.Types.ObjectId.isValid(rawEmployeeId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid employee ID'
+    });
+  }
+  const employeeId = new mongoose.Types.ObjectId(rawEmployeeId);
 
   const salaries = await Salary.find({
     employeeId,

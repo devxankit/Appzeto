@@ -15,6 +15,8 @@ import {
   FiLoader
 } from 'react-icons/fi'
 
+const clampProgress = (p) => Math.min(100, Math.max(0, Number(p) || 0))
+
 const Client_projects = () => {
   const [activeFilter, setActiveFilter] = useState('all')
   const [projects, setProjects] = useState([])
@@ -286,12 +288,12 @@ const Client_projects = () => {
                       <div className="mb-3">
                         <div className="flex justify-between items-center mb-1">
                           <span className="text-xs font-medium text-gray-700">Progress</span>
-                          <span className="text-xs font-bold text-gray-900">{project.progress}%</span>
+                          <span className="text-xs font-bold text-gray-900">{clampProgress(project.progress)}%</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
                           <div 
                             className="bg-gradient-to-r from-teal-500 to-teal-600 h-1.5 rounded-full transition-all duration-500 ease-out"
-                            style={{ width: `${project.progress}%` }}
+                            style={{ width: `${clampProgress(project.progress)}%` }}
                           ></div>
                         </div>
                       </div>
@@ -385,12 +387,12 @@ const Client_projects = () => {
                       <div className="mb-4">
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-sm font-medium text-gray-700">Progress</span>
-                          <span className="text-sm font-bold text-gray-900">{project.progress}%</span>
+                          <span className="text-sm font-bold text-gray-900">{clampProgress(project.progress)}%</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                           <div 
                             className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 rounded-full transition-all duration-500 ease-out"
-                            style={{ width: `${project.progress}%` }}
+                            style={{ width: `${clampProgress(project.progress)}%` }}
                           ></div>
                         </div>
                       </div>

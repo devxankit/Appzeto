@@ -602,10 +602,14 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   const transactionRevenueAmount = transactionRevenue[0]?.totalAmount || 0;
 
   // 5. Total Sales (Project costs in period)
-  // Sales represents the value of all projects sold/created within the selected period
+  // Sales represents the value of all projects sold/created within the selected period.
+  // Business rule:
+  // - A sale is only valid (and counted) once an advance payment has been approved by admin.
+  // - This is reflected when financialDetails.advanceReceived > 0
+  //   (updated by PaymentReceipt/Payment hooks after approval).
   const salesDateFilter = timeFilter !== 'all'
-    ? { createdAt: dateFilter }
-    : {};
+    ? { createdAt: dateFilter, 'financialDetails.advanceReceived': { $gt: 0 } }
+    : { 'financialDetails.advanceReceived': { $gt: 0 } };
   const totalSales = await Project.aggregate([
     { $match: salesDateFilter },
     { $group: { _id: null, totalAmount: { $sum: '$financialDetails.totalCost' } } }
@@ -929,7 +933,8 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
     {
       $match: {
         'financialDetails.remainingAmount': { $gt: 0 },
-        'financialDetails.totalCost': { $gt: 0 }
+        'financialDetails.totalCost': { $gt: 0 },
+        'financialDetails.advanceReceived': { $gt: 0 }
       }
     },
     { $group: { _id: null, totalAmount: { $sum: '$financialDetails.remainingAmount' } } }
@@ -1072,12 +1077,14 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // ========== OTHER METRICS ==========
 
   // Total Sales - Sum of all project costs (total value of all projects sold/created)
-  // This represents the total sales made, regardless of payment status
-  // Includes all projects: sales team created, admin created, all clients
+  // This represents the total sales made where an advance payment has been approved.
+  // Includes all projects: sales team created, admin created, all clients,
+  // but only those with financialDetails.advanceReceived > 0.
   const totalSalesAggregation = await Project.aggregate([
     {
       $match: {
-        'financialDetails.totalCost': { $gt: 0 }
+        'financialDetails.totalCost': { $gt: 0 },
+        'financialDetails.advanceReceived': { $gt: 0 }
       }
     },
     { $group: { _id: null, totalAmount: { $sum: '$financialDetails.totalCost' } } }
