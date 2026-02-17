@@ -7,7 +7,7 @@ import PM_project_form from '../../DEV-components/PM_project_form'
 import { projectService, milestoneService, taskService } from '../../DEV-services'
 import socketService from '../../DEV-services/socketService'
 import { useToast } from '../../../../contexts/ToastContext'
-import { FolderKanban, Calendar, Users, CheckSquare, TrendingUp, Clock, Target, User, Plus, Loader2, FileText, Paperclip, Upload, Eye, Download, X, Edit, Trash2 } from 'lucide-react'
+import { FolderKanban, Calendar, Users, CheckSquare, TrendingUp, Clock, Target, User, Plus, Loader2, FileText, Paperclip, Upload, Eye, Download, X, Edit, Trash2, Key } from 'lucide-react'
 
 const displayProgress = (p) => Math.min(100, Math.max(0, Number(p) || 0))
 
@@ -30,6 +30,8 @@ const PM_project_detail = () => {
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false)
   const [isEditTaskFormOpen, setIsEditTaskFormOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState(null)
+  const [credentials, setCredentials] = useState([])
+  const [credentialsLoading, setCredentialsLoading] = useState(false)
 
   useEffect(() => {
     if (id && id !== 'null' && id !== null) {
@@ -138,6 +140,8 @@ const PM_project_detail = () => {
       // Load tasks
       await loadTasks()
 
+      // Load project credentials (admin-created, read-only)
+      loadCredentials()
     } catch (error) {
       console.error('Error loading project:', error)
 
@@ -186,6 +190,21 @@ const PM_project_detail = () => {
       setTasks(response.data || response || [])
     } catch (error) {
       console.error('Error loading tasks:', error)
+    }
+  }
+
+  const loadCredentials = async () => {
+    if (!id || id === 'null' || id === null) return
+    try {
+      setCredentialsLoading(true)
+      const response = await projectService.getProjectCredentials(id)
+      const list = response?.data ?? response ?? []
+      setCredentials(Array.isArray(list) ? list : [])
+    } catch (error) {
+      console.error('Error loading project credentials:', error)
+      setCredentials([])
+    } finally {
+      setCredentialsLoading(false)
     }
   }
 
@@ -559,6 +578,54 @@ const PM_project_detail = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Project Credentials */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="p-2 bg-amber-100 rounded-xl">
+            <Key className="h-5 w-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Project Credentials</h3>
+            <p className="text-sm text-gray-500">Shared by Admin.</p>
+          </div>
+        </div>
+        {credentialsLoading ? (
+          <div className="flex items-center justify-center py-8 rounded-xl bg-gray-50 border border-gray-100">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : credentials.length === 0 ? (
+          <div className="text-center py-8 rounded-xl bg-gray-50 border border-gray-100">
+            <p className="text-sm text-gray-500">No credentials for this project.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {credentials.map((cred) => {
+              const text = cred.additionalInfo ? cred.additionalInfo.replace(/,(\s*)$/gm, '$1').trim() : ''
+              return (
+                <div key={cred._id} className="group flex items-start justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/50 p-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    {text ? (
+                      <pre className="text-sm text-gray-800 whitespace-pre-wrap break-words leading-relaxed font-sans">{text}</pre>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No credential text provided.</p>
+                    )}
+                  </div>
+                  {text && (
+                    <button
+                      type="button"
+                      onClick={() => { navigator.clipboard.writeText(text); toast.success('Copied'); }}
+                      className="flex-shrink-0 px-2.5 py-1 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:border-gray-300 rounded-lg transition-colors"
+                    >
+                      Copy
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Project Revisions Section */}

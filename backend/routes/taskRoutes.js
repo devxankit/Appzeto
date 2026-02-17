@@ -23,27 +23,41 @@ const router = express.Router();
 
 // All routes are protected
 router.use(protect);
-router.use(authorize('project-manager')); // PM-only routes
 
 // Task CRUD routes
-router.post('/', createTask);
-router.post('/urgent', createUrgentTask);
-router.get('/', getAllTasks);
-router.get('/milestone/:milestoneId', getTasksByMilestone);
-router.get('/project/:projectId', getTasksByProject);
-router.get('/employee/:employeeId', getTasksByEmployee);
-router.get('/urgent', getUrgentTasks);
-router.get('/:id', getTaskById);
-router.put('/:id', updateTask);
-router.delete('/:id', deleteTask);
+// Allow PMs and authorized Employees (e.g. Team Leads) to create standard tasks
+router.post('/', authorize('project-manager', 'employee'), createTask);
+
+// Urgent tasks should remain PM-only
+router.post('/urgent', authorize('project-manager'), createUrgentTask);
+
+// PM-only listing of all tasks
+router.get('/', authorize('project-manager'), getAllTasks);
+
+// Read access for PMs, Employees, and Clients (controller enforces detailed access rules)
+router.get('/milestone/:milestoneId', authorize('project-manager', 'employee', 'client'), getTasksByMilestone);
+router.get('/project/:projectId', authorize('project-manager', 'employee', 'client'), getTasksByProject);
+
+// Employee-specific listings are handled via /api/employee/tasks; keep this PM-only
+router.get('/employee/:employeeId', authorize('project-manager'), getTasksByEmployee);
+
+// Urgent task listing for PMs
+router.get('/urgent', authorize('project-manager'), getUrgentTasks);
+
+// Single task view for PMs, Employees and Clients (controller enforces project/assignment checks)
+router.get('/:id', authorize('project-manager', 'employee', 'client'), getTaskById);
+
+// Updates and deletion: allowed for PMs and authorized Employees (Team Leads) per controller logic
+router.put('/:id', authorize('project-manager', 'employee'), updateTask);
+router.delete('/:id', authorize('project-manager', 'employee'), deleteTask);
 
 // Task action routes
-router.patch('/:id/status', updateTaskStatus);
-router.patch('/:id/assign', assignTask);
-router.post('/:id/comments', addTaskComment);
+router.patch('/:id/status', authorize('project-manager', 'employee'), updateTaskStatus);
+router.patch('/:id/assign', authorize('project-manager', 'employee'), assignTask);
+router.post('/:id/comments', authorize('project-manager', 'employee', 'client'), addTaskComment);
 
 // Task attachment routes
-router.post('/:id/attachments', upload.single('attachment'), uploadTaskAttachment);
-router.delete('/:id/attachments/:attachmentId', removeTaskAttachment);
+router.post('/:id/attachments', authorize('project-manager', 'employee'), upload.single('attachment'), uploadTaskAttachment);
+router.delete('/:id/attachments/:attachmentId', authorize('project-manager', 'employee'), removeTaskAttachment);
 
 module.exports = router;

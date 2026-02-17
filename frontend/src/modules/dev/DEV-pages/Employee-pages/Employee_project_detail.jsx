@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
 import PM_task_form from '../../DEV-components/PM_task_form'
-import { employeeService, taskService } from '../../DEV-services'
+import TeamLead_task_form from '../../DEV-components/TeamLead_task_form'
+import { employeeService } from '../../DEV-services'
 import { useToast } from '../../../../contexts/ToastContext'
 import {
   FiFolder as FolderKanban,
@@ -18,13 +19,15 @@ import {
   FiBarChart2 as BarChart3,
   FiPlus as Plus,
   FiEdit as Edit,
-  FiTrash2 as Trash2
+  FiTrash2 as Trash2,
+  FiKey as Key
 } from 'react-icons/fi'
+import { Loader2 } from 'lucide-react'
 
 const Employee_project_detail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
-  const toast = useToast()
+  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [project, setProject] = useState(null)
@@ -36,6 +39,23 @@ const Employee_project_detail = () => {
   const [isEditTaskFormOpen, setIsEditTaskFormOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState(null)
   const [tasks, setTasks] = useState([])
+  const [credentials, setCredentials] = useState([])
+  const [credentialsLoading, setCredentialsLoading] = useState(false)
+
+  const loadCredentials = async () => {
+    if (!id) return
+    try {
+      setCredentialsLoading(true)
+      const response = await employeeService.getProjectCredentials(id)
+      const list = response?.data ?? response ?? []
+      setCredentials(Array.isArray(list) ? list : [])
+    } catch (err) {
+      console.error('Error loading project credentials:', err)
+      setCredentials([])
+    } finally {
+      setCredentialsLoading(false)
+    }
+  }
 
   const loadProjectData = async () => {
     if (!id) return
@@ -115,6 +135,8 @@ const Employee_project_detail = () => {
       } catch (teamError) {
         console.log('User is not a team lead or team data unavailable')
       }
+
+      loadCredentials()
     } catch (error) {
       console.error('Error loading project details:', error)
       setError(error.message || 'Failed to load project details. Please try again.')
@@ -162,7 +184,7 @@ const Employee_project_detail = () => {
     if (!window.confirm('Are you sure you want to delete this task?')) return
 
     try {
-      await taskService.deleteTask(taskId)
+      await employeeService.deleteTaskAsTeamLead(taskId)
       toast.success('Task deleted successfully')
       await loadProjectData()
     } catch (error) {
@@ -173,7 +195,7 @@ const Employee_project_detail = () => {
 
   const handleUpdateTask = async (taskData) => {
     try {
-      await taskService.updateTask(selectedTask._id, taskData)
+      await employeeService.updateTaskAsTeamLead(selectedTask._id, taskData)
       toast.success('Task updated successfully')
       setIsEditTaskFormOpen(false)
       await loadProjectData()
@@ -306,6 +328,54 @@ const Employee_project_detail = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Project Credentials */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="p-2 bg-amber-100 rounded-xl">
+            <Key className="h-5 w-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Project Credentials</h3>
+            <p className="text-sm text-gray-500">Shared by Admin.</p>
+          </div>
+        </div>
+        {credentialsLoading ? (
+          <div className="flex items-center justify-center py-8 rounded-xl bg-gray-50 border border-gray-100">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : credentials.length === 0 ? (
+          <div className="text-center py-8 rounded-xl bg-gray-50 border border-gray-100">
+            <p className="text-sm text-gray-500">No credentials for this project.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {credentials.map((cred) => {
+              const text = cred.additionalInfo ? cred.additionalInfo.replace(/,(\s*)$/gm, '$1').trim() : ''
+              return (
+                <div key={cred._id} className="group flex items-start justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/50 p-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    {text ? (
+                      <pre className="text-sm text-gray-800 whitespace-pre-wrap break-words leading-relaxed font-sans">{text}</pre>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No credential text provided.</p>
+                    )}
+                  </div>
+                  {text && (
+                    <button
+                      type="button"
+                      onClick={() => { navigator.clipboard.writeText(text); toast.success('Copied'); }}
+                      className="flex-shrink-0 px-2.5 py-1 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:border-gray-300 rounded-lg transition-colors"
+                    >
+                      Copy
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -503,28 +573,28 @@ const Employee_project_detail = () => {
         </div>
       </main>
 
-      {/* Task Form for Team Leads */}
+      {/* Task form for team leads – uses employee token only */}
       {isTeamLead && (
-        <PM_task_form
+        <TeamLead_task_form
           isOpen={isTaskFormOpen}
           onClose={() => setIsTaskFormOpen(false)}
           onSubmit={async (taskData) => {
             try {
-              // Create task using employee auth
-              const createdTask = await taskService.createTask(taskData)
+              const created = await employeeService.createTaskAsTeamLead(taskData)
+              const taskId = created?.data?._id || created?.data?.id
 
-              // Upload attachments if any
-              if (taskData.attachments && taskData.attachments.length > 0) {
+              if (taskId && taskData.attachments?.length > 0) {
                 toast.info(`Uploading ${taskData.attachments.length} attachment(s)...`)
-
-                for (const attachment of taskData.attachments) {
+                for (const att of taskData.attachments) {
                   try {
-                    const file = attachment.file || attachment
-                    await taskService.uploadTaskAttachment(createdTask._id, file)
-                    toast.success(`Attachment ${attachment.name} uploaded successfully`)
-                  } catch (error) {
-                    console.error('Attachment upload error:', error)
-                    toast.error(`Failed to upload ${attachment.name}`)
+                    const file = att?.file || att
+                    if (file) {
+                      await employeeService.uploadTaskAttachmentToTask(taskId, file)
+                      toast.success(att.name ? `Uploaded ${att.name}` : 'Attachment uploaded')
+                    }
+                  } catch (err) {
+                    console.error('Attachment upload error:', err)
+                    toast.error(att.name ? `Failed to upload ${att.name}` : 'Failed to upload attachment')
                   }
                 }
               }
@@ -535,12 +605,13 @@ const Employee_project_detail = () => {
             } catch (error) {
               console.error('Error creating task:', error)
               toast.error(error.message || 'Failed to create task')
+              throw error
             }
           }}
+          teamMembers={teamMembers}
+          availableProjects={project ? [project] : []}
           projectId={project?._id}
           milestoneId={null}
-          isTeamLead={true}
-          teamMembers={teamMembers}
         />
       )}
       {isTeamLead && (

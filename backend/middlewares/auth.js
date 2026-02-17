@@ -20,6 +20,10 @@ const protect = async (req, res, next) => {
     else if (req.cookies.token) {
       token = req.cookies.token;
     }
+    // Check for employee token in cookies
+    else if (req.cookies.employeeToken) {
+      token = req.cookies.employeeToken;
+    }
     // Check for sales token in cookies
     else if (req.cookies.salesToken) {
       token = req.cookies.salesToken;

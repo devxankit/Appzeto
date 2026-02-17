@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
-import { employeeService } from '../../DEV-services'
+import { employeeService, getStoredEmployeeData } from '../../DEV-services'
 import { useToast } from '../../../../contexts/ToastContext'
 import { ArrowLeft, CheckSquare, Calendar, User, Clock, FileText, Download, Eye, Users, Paperclip, AlertCircle, CheckCircle, Loader2, AlertTriangle, Save, Plus, Edit, Trash2 } from 'lucide-react'
 import PM_task_form from '../../DEV-components/PM_task_form'
 import ConfirmationModal from '../../DEV-components/ConfirmationModal'
-import { taskService, getStoredEmployeeData } from '../../DEV-services'
 
 const Employee_task_detail = () => {
   const { id } = useParams()
@@ -209,7 +208,7 @@ const Employee_task_detail = () => {
   const handleDeleteTask = async () => {
     setIsUpdating(true)
     try {
-      await taskService.deleteTask(id)
+      await employeeService.deleteTaskAsTeamLead(id)
       toast.success('Task deleted successfully')
       navigate(projectId ? `/employee-project/${projectId}` : -1)
     } catch (error) {
@@ -223,8 +222,8 @@ const Employee_task_detail = () => {
 
   const handleUpdateTask = async (taskData) => {
     try {
-      const response = await taskService.updateTask(id, taskData)
-      const updatedTask = response.data || response
+      const response = await employeeService.updateTaskAsTeamLead(id, taskData)
+      const updatedTask = response?.data || response
       setTask(updatedTask)
       toast.success('Task updated successfully')
       setIsEditTaskFormOpen(false)
@@ -282,6 +281,12 @@ const Employee_task_detail = () => {
 
   const timeInfo = getTimeRemaining(task.dueDate)
 
+  // Dev team lead: can update status and edit/delete only their own tasks (where they are in assignedTo). Team member tasks: no status dropdown or edit/delete.
+  const currentUserId = (getStoredEmployeeData()?.id || getStoredEmployeeData()?._id || '').toString()
+  const isAssignedToMe = task.assignedTo && task.assignedTo.some(
+    a => (a && (a._id?.toString() === currentUserId || (a.toString && a.toString() === currentUserId)))
+  )
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Employee_navbar />
@@ -332,49 +337,23 @@ const Employee_task_detail = () => {
                 </div>
               </div>
               <div className="flex items-center space-x-2">
+                {/* Team lead can edit or delete any task (own or team members') on task details page */}
                 {isTeamLead && (
                   <>
-                    {(() => {
-                      const employeeData = getStoredEmployeeData()
-                      const currentUserId = (employeeData?.id || employeeData?._id || '').toString()
-                      const isStorageLead = employeeData?.isTeamLead === true
-
-                      const creatorObj = task.createdBy
-                      const creatorId = (creatorObj?._id || creatorObj || '').toString()
-
-                      // Check if current user is PM or task creator
-                      const isCreator = creatorId === currentUserId
-
-                      // Check if current user is lead and has members assigned to this task
-                      const teamMemberIds = teamMembers.map(m => (m.id || m._id || '').toString())
-                      const taskAssignees = (task.assignedTo || []).map(a => (a._id || a || '').toString())
-
-                      const isAssignedToTeam = taskAssignees.some(id => teamMemberIds.includes(id) || id === currentUserId)
-
-                      const canEdit = (isTeamLead || isStorageLead) && (isCreator || isAssignedToTeam)
-
-                      if (canEdit) {
-                        return (
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => setIsEditTaskFormOpen(true)}
-                              className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors border border-primary/20 bg-white shadow-sm"
-                              title="Edit Task"
-                            >
-                              <Edit className="h-5 w-5" />
-                            </button>
-                            <button
-                              onClick={() => setIsDeleteDialogOpen(true)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-100 bg-white shadow-sm"
-                              title="Delete Task"
-                            >
-                              <Trash2 className="h-5 w-5" />
-                            </button>
-                          </div>
-                        )
-                      }
-                      return null
-                    })()}
+                    <button
+                      onClick={() => setIsEditTaskFormOpen(true)}
+                      className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors border border-primary/20 bg-white shadow-sm"
+                      title="Edit Task"
+                    >
+                      <Edit className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => setIsDeleteDialogOpen(true)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-100 bg-white shadow-sm"
+                      title="Delete Task"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
                   </>
                 )}
               </div>
@@ -392,79 +371,81 @@ const Employee_task_detail = () => {
               <p className="text-gray-700 leading-relaxed">{task.description || 'No description provided'}</p>
             </div>
 
-            {/* Status Update Section - Moved Above Attachments */}
-            <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-                <CheckSquare className="h-5 w-5 text-primary" />
-                <span>Update Status</span>
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-600 mb-2 block">Current Status</label>
-                  <div className="relative dropdown-container">
-                    <button
-                      type="button"
-                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                      className="w-full h-12 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 text-left flex items-center justify-between cursor-pointer hover:border-gray-300"
-                    >
-                      <span className="text-gray-900">{currentStatus || 'Select status'}</span>
-                      <svg
-                        className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+            {/* Status Update Section – only when task is assigned to current user (team lead cannot update team members' task status) */}
+            {isAssignedToMe && (
+              <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                  <CheckSquare className="h-5 w-5 text-primary" />
+                  <span>Update Status</span>
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-600 mb-2 block">Current Status</label>
+                    <div className="relative dropdown-container">
+                      <button
+                        type="button"
+                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        className="w-full h-12 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 text-left flex items-center justify-between cursor-pointer hover:border-gray-300"
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
+                        <span className="text-gray-900">{currentStatus || 'Select status'}</span>
+                        <svg
+                          className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
 
-                    {isDropdownOpen && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                        {statusOptions.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => {
-                              setCurrentStatus(option.value)
-                              setIsDropdownOpen(false)
-                            }}
-                            className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-150 flex items-center justify-between ${currentStatus === option.value ? 'bg-primary/5 text-primary' : 'text-gray-900'
-                              }`}
-                          >
-                            <span>{option.label}</span>
-                            {currentStatus === option.value && (
-                              <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                      {isDropdownOpen && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                          {statusOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                setCurrentStatus(option.value)
+                                setIsDropdownOpen(false)
+                              }}
+                              className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-150 flex items-center justify-between ${currentStatus === option.value ? 'bg-primary/5 text-primary' : 'text-gray-900'
+                                }`}
+                            >
+                              <span>{option.label}</span>
+                              {currentStatus === option.value && (
+                                <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <button
-                  onClick={handleStatusUpdate}
-                  disabled={isUpdating || currentStatus === backendToDisplayStatus(task.status)}
-                  className="w-full bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white px-6 py-3 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-sm hover:shadow-md transition-all duration-200"
-                >
-                  {isUpdating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Update Status
-                    </>
+                  <button
+                    onClick={handleStatusUpdate}
+                    disabled={isUpdating || currentStatus === backendToDisplayStatus(task.status)}
+                    className="w-full bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white px-6 py-3 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-sm hover:shadow-md transition-all duration-200"
+                  >
+                    {isUpdating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Update Status
+                      </>
+                    )}
+                  </button>
+                  {currentStatus === backendToDisplayStatus(task.status) && (
+                    <p className="text-xs text-gray-500 text-center">Status is already up to date</p>
                   )}
-                </button>
-                {currentStatus === backendToDisplayStatus(task.status) && (
-                  <p className="text-xs text-gray-500 text-center">Status is already up to date</p>
-                )}
+                </div>
               </div>
-            </div>
+            )}
 
             {task.attachments && task.attachments.length > 0 && (
               <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100">
@@ -518,28 +499,53 @@ const Employee_task_detail = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Task Details</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Due Date</label>
+                  <label className="text-sm font-medium text-gray-600">Due date</label>
                   <p className="text-base font-medium text-gray-900 flex items-center space-x-2 mt-1">
-                    <Calendar className="h-4 w-4 text-primary" />
-                    <span>{new Date(task.dueDate).toLocaleDateString()}</span>
+                    <Calendar className="h-4 w-4 text-primary flex-shrink-0" />
+                    <span>{task.dueDate ? new Date(task.dueDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}</span>
                   </p>
                   <p className={`text-sm font-medium mt-1 ${timeInfo.color}`}>
                     {timeInfo.text}
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Created</label>
+                  <label className="text-sm font-medium text-gray-600">Created on</label>
                   <p className="text-base font-medium text-gray-900 flex items-center space-x-2 mt-1">
-                    <Clock className="h-4 w-4 text-primary" />
-                    <span>{new Date(task.createdAt).toLocaleDateString()}</span>
+                    <Clock className="h-4 w-4 text-primary flex-shrink-0" />
+                    <span>{task.createdAt ? new Date(task.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}</span>
                   </p>
                 </div>
+                {task.startDate && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Started on</label>
+                    <p className="text-base font-medium text-gray-900 flex items-center space-x-2 mt-1">
+                      <Clock className="h-4 w-4 text-primary flex-shrink-0" />
+                      <span>{new Date(task.startDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
+                    </p>
+                  </div>
+                )}
                 {task.completedDate && (
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Completed</label>
+                    <label className="text-sm font-medium text-gray-600">Completed on</label>
                     <p className="text-base font-medium text-gray-900 flex items-center space-x-2 mt-1">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      <span>{new Date(task.completedDate).toLocaleDateString()}</span>
+                      <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span>{new Date(task.completedDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Priority</label>
+                  <p className="text-base font-medium text-gray-900 mt-1">
+                    <span className={`px-2 py-0.5 rounded-md text-sm ${getPriorityColor(task.priority)}`}>
+                      {formatPriority(task.priority)}
+                    </span>
+                  </p>
+                </div>
+                {task.createdBy && (task.createdBy.name || task.createdBy.email) && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Created by</label>
+                    <p className="text-base font-medium text-gray-900 mt-1">
+                      {task.createdBy.name || task.createdBy.email || '—'}
                     </p>
                   </div>
                 )}
@@ -549,7 +555,7 @@ const Employee_task_detail = () => {
             <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
                 <Users className="h-5 w-5 text-primary" />
-                <span>Assigned Team</span>
+                <span>Assigned to</span>
               </h3>
               {task.assignedTo && task.assignedTo.length > 0 ? (
                 <div className="space-y-3">
@@ -560,26 +566,29 @@ const Employee_task_detail = () => {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-900">{m.name || m.fullName || 'Unknown'}</p>
-                        <p className="text-xs text-gray-500">{m.email || ''}</p>
+                        {(m.position || m.department) && (
+                          <p className="text-xs text-gray-500">{[m.position, m.department].filter(Boolean).join(' · ')}</p>
+                        )}
+                        {m.email && <p className="text-xs text-gray-500">{m.email}</p>}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-500 text-sm">No team members assigned</p>
+                <p className="text-gray-500 text-sm">No one assigned</p>
               )}
             </div>
 
             <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Project Info</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Project &amp; Milestone</h3>
               <div className="space-y-3">
                 <div>
                   <label className="text-sm font-medium text-gray-600">Project</label>
-                  <p className="text-base font-medium text-gray-900">{task.project?.name || 'Unknown Project'}</p>
+                  <p className="text-base font-medium text-gray-900 mt-1">{task.project?.name || '—'}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-600">Milestone</label>
-                  <p className="text-base font-medium text-gray-900">{task.milestone?.title || 'Unknown Milestone'}</p>
+                  <p className="text-base font-medium text-gray-900 mt-1">{task.milestone?.title || '—'}</p>
                 </div>
               </div>
             </div>

@@ -5,6 +5,7 @@ const {
   getEmployeeProjectMilestones,
   getEmployeeProjectStatistics
 } = require('../controllers/employeeProjectController');
+const { getCredentialsByProjectForPMOrEmployee } = require('../controllers/adminProjectCredentialController');
 const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
@@ -16,7 +17,8 @@ router.use(authorize('employee'));
 // Employee project routes
 router.get('/', getEmployeeProjects);
 router.get('/statistics', getEmployeeProjectStatistics);
-router.get('/:id', getEmployeeProjectById);
 router.get('/:id/milestones', getEmployeeProjectMilestones);
+router.get('/:id/credentials', getCredentialsByProjectForPMOrEmployee);
+router.get('/:id', getEmployeeProjectById);
 
 module.exports = router;

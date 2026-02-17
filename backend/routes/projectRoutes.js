@@ -14,6 +14,7 @@ const {
   getProjectTeamMembers,
   getCategories
 } = require('../controllers/projectController');
+const { getCredentialsByProjectForPMOrEmployee } = require('../controllers/adminProjectCredentialController');
 const { protect, authorize } = require('../middlewares/auth');
 const upload = require('../middlewares/upload');
 
@@ -29,6 +30,7 @@ router.get('/', getAllProjects);
 router.get('/statistics', getProjectStatistics);
 router.get('/client/:clientId', getProjectsByClient);
 router.get('/pm/:pmId', getProjectsByPM);
+router.get('/:id/credentials', getCredentialsByProjectForPMOrEmployee);
 router.get('/:id', getProjectById);
 router.put('/:id', updateProject);
 router.delete('/:id', deleteProject);

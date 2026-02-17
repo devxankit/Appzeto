@@ -218,6 +218,16 @@ export const projectService = {
     }
   },
 
+  // Get project credentials (created in admin expense management, read-only for PM)
+  getProjectCredentials: async (projectId) => {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/credentials`);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // PM New Projects functionality
   // Get new projects assigned to PM
   getNewProjects: async (params = {}) => {

@@ -10,6 +10,14 @@ import { DatePicker } from '../../../components/ui/date-picker'
 import { teamService, projectService, milestoneService, taskService, tokenUtils, employeeService } from '../DEV-services'
 import { useToast } from '../../../contexts/ToastContext'
 
+// Normalize to string ID (handles object refs like project._id or raw id)
+const toId = (v) => {
+  if (v == null || v === '') return ''
+  if (typeof v === 'string' && v.length === 24) return v
+  if (typeof v === 'object' && v._id != null) return String(v._id)
+  return String(v)
+}
+
 const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTeamLead = false, teamMembers: teamLeadMembers = [], availableProjects = [], initialData = null }) => {
   const { toast } = useToast()
   const isSubmittingRef = useRef(false)
@@ -20,8 +28,8 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
     assignedTo: '',
     status: 'pending',
     priority: 'normal',
-    milestone: milestoneId || '',
-    project: projectId || '',
+    milestone: toId(milestoneId) || '',
+    project: toId(projectId) || '',
     attachments: []
   })
 
@@ -39,22 +47,21 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
     if (isOpen) {
       if (initialData) {
         // Edit Mode
+        const currentProjectId = toId(initialData.project)
+        const currentMilestoneId = toId(initialData.milestone)
         setFormData({
           title: initialData.title || '',
           description: initialData.description || '',
           dueDate: initialData.dueDate ? new Date(initialData.dueDate).toISOString().split('T')[0] : '',
           assignedTo: (initialData.assignedTo && initialData.assignedTo.length > 0)
-            ? (typeof initialData.assignedTo[0] === 'object' ? initialData.assignedTo[0]._id : initialData.assignedTo[0])
+            ? toId(initialData.assignedTo[0])
             : '',
           status: initialData.status || 'pending',
           priority: initialData.priority || 'normal',
-          milestone: initialData.milestone || '',
-          project: initialData.project || '',
+          milestone: currentMilestoneId,
+          project: currentProjectId,
           attachments: [] // Attachments are handled via specialized APIs, keeping empty for edit
         })
-
-        const currentProjectId = initialData.project?._id || initialData.project
-        const currentMilestoneId = initialData.milestone?._id || initialData.milestone
 
         if (currentProjectId) {
           loadSingleProject(currentProjectId)
@@ -65,13 +72,15 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
           loadTeamMembers(currentProjectId, currentMilestoneId)
         }
       } else if (projectId) {
-        // Create Mode - with Project
-        loadSingleProject(projectId)
-        setFormData(prev => ({ ...prev, project: projectId, milestone: milestoneId || '' }))
-        loadMilestones(projectId)
+        // Create Mode - with Project (ensure string ids)
+        const pid = toId(projectId)
+        const mid = toId(milestoneId)
+        loadSingleProject(pid)
+        setFormData(prev => ({ ...prev, project: pid, milestone: mid }))
+        loadMilestones(pid)
 
-        if (milestoneId) {
-          loadTeamMembers(projectId, milestoneId)
+        if (mid) {
+          loadTeamMembers(pid, mid)
         }
       } else {
         // Create Mode - generic
@@ -81,8 +90,9 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
   }, [isOpen, projectId, milestoneId, initialData])
 
   useEffect(() => {
-    if (formData.project) {
-      loadMilestones(formData.project)
+    const pid = toId(formData.project)
+    if (pid) {
+      loadMilestones(pid)
       setFormData(prev => ({ ...prev, milestone: '', assignedTo: '' }))
     }
   }, [formData.project])
@@ -145,16 +155,17 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
   }
 
   const loadSingleProject = async (pid) => {
-    if (!pid) return
+    const id = toId(pid)
+    if (!id) return
     try {
       setIsLoadingProjects(true)
 
       if (isTeamLead) {
-        const response = await employeeService.getEmployeeProjectById(pid)
+        const response = await employeeService.getEmployeeProjectById(id)
         const projectData = response?.data || response
         setProjects(projectData ? [projectData] : [])
       } else {
-        const response = await projectService.getProjectById(pid)
+        const response = await projectService.getProjectById(id)
         const projectData = response?.data || response
         setProjects(projectData ? [projectData] : [])
       }
@@ -167,16 +178,17 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
   }
 
   const loadMilestones = async (pid) => {
-    if (!pid) { setMilestones([]); return }
+    const id = toId(pid)
+    if (!id) { setMilestones([]); return }
     try {
       setIsLoadingMilestones(true)
 
       if (isTeamLead) {
-        const response = await employeeService.getEmployeeProjectMilestones(pid)
+        const response = await employeeService.getEmployeeProjectMilestones(id)
         const milestonesData = response?.data || response || []
         setMilestones(Array.isArray(milestonesData) ? milestonesData : [])
       } else {
-        const response = await milestoneService.getMilestonesByProject(pid)
+        const response = await milestoneService.getMilestonesByProject(id)
         const milestonesData = response?.data || response || []
         setMilestones(Array.isArray(milestonesData) ? milestonesData : [])
       }
@@ -189,34 +201,25 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
   }
 
   const loadTeamMembers = async (pid, mid = null) => {
-    if (!pid) { setTeamMembers([]); return }
+    const projectIdStr = toId(pid)
+    if (!projectIdStr) { setTeamMembers([]); return }
 
-    // If Team Lead mode, use the provided team members instead of loading from API
+    // Team Lead mode: use only the provided team members (from getMyTeam). Do NOT call PM APIs (teamService uses pmToken → 401).
     if (isTeamLead && teamLeadMembers && teamLeadMembers.length > 0) {
-      // Fetch full employee details for team members
-      try {
-        setIsLoadingTeamMembers(true)
-        const response = await teamService.getEmployeesForTask(pid, mid)
-        const teamData = response?.data || response || []
-
-        // Filter to only include Team Lead's team members
-        const teamMemberIds = teamLeadMembers.map(id => id.toString())
-        const filteredTeam = teamData.filter(emp => teamMemberIds.includes(emp._id.toString()))
-
-        setTeamMembers(Array.isArray(filteredTeam) ? filteredTeam : [])
-      } catch (error) {
-        console.error('Error loading team members:', error)
-        setTeamMembers([])
-      } finally {
-        setIsLoadingTeamMembers(false)
-      }
+      const normalized = teamLeadMembers.map(m => ({
+        _id: m._id || m.id,
+        name: m.name || 'Unknown',
+        position: m.position || '',
+        department: m.department || ''
+      }))
+      setTeamMembers(normalized)
       return
     }
 
     // Original PM logic
     try {
       setIsLoadingTeamMembers(true)
-      const response = await teamService.getEmployeesForTask(pid, mid)
+      const response = await teamService.getEmployeesForTask(projectIdStr, toId(mid))
 
       // Handle both response.data and response directly
       const teamData = response?.data || response || []
@@ -230,10 +233,11 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
   }
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+    const normalized = (field === 'project' || field === 'milestone' || field === 'assignedTo') ? toId(value) : value
+    setFormData(prev => ({ ...prev, [field]: normalized }))
     if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }))
-    if (field === 'project' && value) {
-      loadMilestones(value)
+    if (field === 'project' && normalized) {
+      loadMilestones(normalized)
       // Clear milestone and team when project changes
       setFormData(prev => ({ ...prev, milestone: '', assignedTo: '' }))
       setTeamMembers([])
@@ -280,13 +284,11 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
         title: initialData.title || '',
         description: initialData.description || '',
         dueDate: initialData.dueDate ? new Date(initialData.dueDate).toISOString().split('T')[0] : '',
-        assignedTo: (initialData.assignedTo && initialData.assignedTo.length > 0)
-          ? (typeof initialData.assignedTo[0] === 'object' ? initialData.assignedTo[0]._id : initialData.assignedTo[0])
-          : '',
+        assignedTo: (initialData.assignedTo && initialData.assignedTo.length > 0) ? toId(initialData.assignedTo[0]) : '',
         status: initialData.status || 'pending',
         priority: initialData.priority || 'normal',
-        milestone: initialData.milestone || '',
-        project: initialData.project || '',
+        milestone: toId(initialData.milestone) || '',
+        project: toId(initialData.project) || '',
         attachments: []
       })
     } else {
@@ -297,8 +299,8 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
         assignedTo: '',
         status: 'pending',
         priority: 'normal',
-        milestone: milestoneId || '',
-        project: projectId || '',
+        milestone: toId(milestoneId) || '',
+        project: toId(projectId) || '',
         attachments: []
       })
     }
@@ -370,9 +372,9 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
     { value: 'urgent', label: 'Urgent' }
   ]
 
-  const projectOptions = (projects || []).map(p => ({ value: p._id, label: p.name }))
-  const milestoneOptions = (milestones || []).map(m => ({ value: m._id, label: m.title }))
-  const teamMemberOptions = (teamMembers || []).map(m => ({ value: m._id, label: m.position ? `${m.name} - ${m.position}` : m.name }))
+  const projectOptions = (projects || []).map(p => ({ value: toId(p._id) || p._id, label: p.name }))
+  const milestoneOptions = (milestones || []).map(m => ({ value: toId(m._id) || m._id, label: m.title }))
+  const teamMemberOptions = (teamMembers || []).map(m => ({ value: toId(m._id) || m._id, label: m.position ? `${m.name} - ${m.position}` : m.name }))
 
   // Get selected project and milestone names for display
   const selectedProject = (projects || []).find(p => p._id === formData.project)
@@ -446,7 +448,7 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
                 <div className="flex items-center space-x-3 text-gray-500 bg-gray-50 p-4 rounded-lg"><Loader2 className="h-5 w-5 animate-spin" /><span>Loading projects...</span></div>
               ) : (
                 <>
-                  <Combobox options={projectOptions} value={formData.project} onChange={(v) => handleInputChange('project', v)} placeholder="Select project" disabled={!!projectId} />
+                  <Combobox options={projectOptions} value={toId(formData.project) || formData.project} onChange={(v) => handleInputChange('project', v)} placeholder="Select project" disabled={!!projectId} />
                   {projectOptions.length === 0 && (<p className="text-sm text-gray-500">No projects available</p>)}
                 </>
               )}
@@ -465,7 +467,7 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
                 <div className="flex items-center space-x-3 text-gray-500 bg-gray-50 p-4 rounded-lg"><Loader2 className="h-5 w-5 animate-spin" /><span>Loading milestones...</span></div>
               ) : (
                 <>
-                  <Combobox options={milestoneOptions} value={formData.milestone} onChange={(v) => handleInputChange('milestone', v)} placeholder="Select milestone" disabled={!formData.project} />
+                  <Combobox options={milestoneOptions} value={toId(formData.milestone) || formData.milestone} onChange={(v) => handleInputChange('milestone', v)} placeholder="Select milestone" disabled={!formData.project} />
                   {milestoneOptions.length === 0 && formData.project && (<p className="text-sm text-gray-500">No milestones available for this project</p>)}
                 </>
               )}
@@ -511,7 +513,7 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
               <div className="flex items-center space-x-3 text-gray-500 bg-gray-50 p-4 rounded-lg"><Loader2 className="h-5 w-5 animate-spin" /><span>Loading team member...</span></div>
             ) : (
               <>
-                <Combobox options={teamMemberOptions} value={formData.assignedTo} onChange={(v) => handleInputChange('assignedTo', v)} placeholder="Select team member" />
+                <Combobox options={teamMemberOptions} value={toId(formData.assignedTo) || formData.assignedTo} onChange={(v) => handleInputChange('assignedTo', v)} placeholder="Select team member" />
                 {!formData.milestone && teamMembers.length === 0 && (
                   <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-200">
                     Please select a milestone first to see available team members

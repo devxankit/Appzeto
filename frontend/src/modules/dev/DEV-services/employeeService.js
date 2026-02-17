@@ -59,7 +59,8 @@ const employeeService = {
 
   async getEmployeeProjectById(id) {
     try {
-      const response = await apiRequest(`/employee/projects/${id}`);
+      const pid = (id != null && typeof id === 'object' && id._id != null) ? String(id._id) : String(id ?? '');
+      const response = await apiRequest(`/employee/projects/${pid}`);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to fetch project: ${error.message}`);
@@ -68,10 +69,21 @@ const employeeService = {
 
   async getEmployeeProjectMilestones(projectId) {
     try {
-      const response = await apiRequest(`/employee/projects/${projectId}/milestones`);
+      const pid = (projectId != null && typeof projectId === 'object' && projectId._id != null) ? String(projectId._id) : String(projectId ?? '');
+      const response = await apiRequest(`/employee/projects/${pid}/milestones`);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to fetch project milestones: ${error.message}`);
+    }
+  },
+
+  async getProjectCredentials(projectId) {
+    try {
+      const pid = (projectId != null && typeof projectId === 'object' && projectId._id != null) ? String(projectId._id) : String(projectId ?? '');
+      const response = await apiRequest(`/employee/projects/${pid}/credentials`);
+      return response;
+    } catch (error) {
+      throw new Error(`Failed to fetch project credentials: ${error.message}`);
     }
   },
 
@@ -282,6 +294,69 @@ const employeeService = {
       return response;
     } catch (error) {
       throw error;
+    }
+  },
+
+  // --- Team Lead: create task and upload attachments (uses employee token, hits main /api/tasks) ---
+  async createTaskAsTeamLead(taskData) {
+    try {
+      const response = await apiRequest('/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: taskData.title,
+          description: taskData.description || '',
+          dueDate: taskData.dueDate,
+          assignedTo: taskData.assignedTo ? [taskData.assignedTo] : [],
+          status: taskData.status || 'pending',
+          priority: taskData.priority || 'normal',
+          milestone: taskData.milestone,
+          project: taskData.project
+        })
+      });
+      return response;
+    } catch (error) {
+      throw new Error(error.message || 'Failed to create task');
+    }
+  },
+
+  async uploadTaskAttachmentToTask(taskId, file) {
+    try {
+      const formData = new FormData();
+      formData.append('attachment', file);
+      const response = await apiRequest(`/tasks/${taskId}/attachments`, {
+        method: 'POST',
+        body: formData
+      });
+      return response;
+    } catch (error) {
+      throw new Error(error.message || 'Failed to upload attachment');
+    }
+  },
+
+  async updateTaskAsTeamLead(taskId, taskData) {
+    try {
+      const response = await apiRequest(`/tasks/${taskId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: taskData.title,
+          description: taskData.description,
+          assignedTo: Array.isArray(taskData.assignedTo) ? taskData.assignedTo : (taskData.assignedTo ? [taskData.assignedTo] : []),
+          priority: taskData.priority,
+          dueDate: taskData.dueDate,
+          estimatedHours: taskData.estimatedHours
+        })
+      });
+      return response;
+    } catch (error) {
+      throw new Error(error.message || 'Failed to update task');
+    }
+  },
+
+  async deleteTaskAsTeamLead(taskId) {
+    try {
+      await apiRequest(`/tasks/${taskId}`, { method: 'DELETE' });
+    } catch (error) {
+      throw new Error(error.message || 'Failed to delete task');
     }
   }
 };

@@ -47,13 +47,12 @@ const Employee_dashboard = () => {
     },
     recentPointsHistory: []
   })
-  const [timeFilter, setTimeFilter] = useState('all')
   const [taskStatusFilter, setTaskStatusFilter] = useState('all')
   const [requestsCount, setRequestsCount] = useState(0)
 
   useEffect(() => {
     loadDashboardData()
-  }, [timeFilter])
+  }, [])
 
   useEffect(() => {
     setupWebSocket()
@@ -92,7 +91,7 @@ const Employee_dashboard = () => {
 
       // Load dashboard statistics, tasks, and requests count
       const [dashboardResponse, tasksResponse, requestsResponse] = await Promise.all([
-        employeeService.getEmployeeDashboardStats({ timeFilter }),
+        employeeService.getEmployeeDashboardStats({ timeFilter: 'all' }),
         employeeService.getEmployeeTasks({ limit: 100 }), // Fetch more tasks to allow frontend filtering too
         employeeRequestService.getRequests({ direction: 'outgoing', limit: 1 }).catch(() => ({ pagination: { total: 0 } }))
       ])
@@ -217,26 +216,9 @@ const Employee_dashboard = () => {
             </div>
           )}
 
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 md:mb-8 gap-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Welcome, {getStoredEmployeeData()?.name || 'Employee'}!</h1>
-              <p className="text-sm text-gray-600 mt-1">Appzeto loves you!</p>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium text-gray-600">Filter:</span>
-              <select
-                value={timeFilter}
-                onChange={(e) => setTimeFilter(e.target.value)}
-                className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-              >
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-                <option value="year">This Year</option>
-              </select>
-            </div>
+          <div className="mb-6 md:mb-8">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Welcome, {getStoredEmployeeData()?.name || 'Employee'}!</h1>
+            <p className="text-sm text-gray-600 mt-1">Appzeto loves you!</p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">

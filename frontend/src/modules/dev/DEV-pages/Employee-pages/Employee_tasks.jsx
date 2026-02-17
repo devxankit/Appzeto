@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
-import PM_task_form from '../../DEV-components/PM_task_form'
-import { employeeService, taskService, socketService } from '../../DEV-services'
+import TeamLead_task_form from '../../DEV-components/TeamLead_task_form'
+import { employeeService, socketService } from '../../DEV-services'
 import { useToast } from '../../../../contexts/ToastContext'
 import { CheckSquare, Search, Filter, Calendar, User, MoreVertical, Loader2, Clock, AlertTriangle, Plus } from 'lucide-react'
 
@@ -374,35 +374,31 @@ const Employee_tasks = () => {
         </div>
       </main>
 
-      {/* Task Form for Team Leads */}
+      {/* Dedicated Team Lead task form – uses employee token only (no PM APIs) */}
       {isTeamLead && (
-        <PM_task_form
+        <TeamLead_task_form
           isOpen={isTaskFormOpen}
           onClose={() => setIsTaskFormOpen(false)}
           onSubmit={async (taskData) => {
             try {
-              // Create task using employee auth
-              const createdTask = await taskService.createTask(taskData)
+              const created = await employeeService.createTaskAsTeamLead(taskData)
+              const taskId = created?.data?._id || created?.data?.id || created?._id
 
-              // Handle attachments if any
-              if (taskData.attachments && taskData.attachments.length > 0) {
-                const taskId = createdTask?.data?._id || createdTask?._id
-                for (const attachment of taskData.attachments) {
-                  await taskService.uploadTaskAttachment(taskId, attachment.file)
+              if (taskId && taskData.attachments?.length > 0) {
+                for (const att of taskData.attachments) {
+                  if (att?.file) await employeeService.uploadTaskAttachmentToTask(taskId, att.file)
                 }
               }
 
               setIsTaskFormOpen(false)
               toast.success('Task created successfully!')
-              loadTasks() // Reload tasks
+              loadTasks()
             } catch (error) {
               console.error('Error creating task:', error)
               toast.error(error.message || 'Failed to create task')
+              throw error
             }
           }}
-          projectId={null}
-          milestoneId={null}
-          isTeamLead={true}
           teamMembers={teamMembers}
           availableProjects={teamProjects}
         />

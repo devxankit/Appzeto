@@ -282,6 +282,45 @@ const getProjectsWithExpenses = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get project credentials for PM or Employee (read-only, project must be accessible)
+// @route   GET /api/projects/:id/credentials (PM) or GET /api/employee/projects/:id/credentials (Employee)
+// @access  PM (own projects) or Employee (assigned projects)
+const getCredentialsByProjectForPMOrEmployee = asyncHandler(async (req, res, next) => {
+  const projectId = req.params.projectId || req.params.id;
+  if (!projectId) {
+    return next(new ErrorResponse('Project ID is required', 400));
+  }
+
+  const project = await Project.findById(projectId).select('projectManager assignedTeam');
+  if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
+
+  const userType = req.userType || req.user?.role;
+  if (userType === 'project-manager') {
+    if (!project.projectManager || !project.projectManager.equals(req.user._id)) {
+      return next(new ErrorResponse('Not authorized to access this project', 403));
+    }
+  } else if (userType === 'employee') {
+    const inTeam = project.assignedTeam && project.assignedTeam.some(m => m.equals(req.user._id));
+    if (!inTeam) {
+      return next(new ErrorResponse('Not authorized to access this project', 403));
+    }
+  } else {
+    return next(new ErrorResponse('Not authorized', 403));
+  }
+
+  const credentials = await ProjectCredential.find({ project: projectId, isActive: true })
+    .populate('project', 'name')
+    .sort({ credentialType: 1, createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    count: credentials.length,
+    data: credentials
+  });
+});
+
 module.exports = {
   getAllCredentials,
   getCredentialsByProject,
@@ -289,5 +328,6 @@ module.exports = {
   createCredential,
   updateCredential,
   deleteCredential,
-  getProjectsWithExpenses
+  getProjectsWithExpenses,
+  getCredentialsByProjectForPMOrEmployee
 };

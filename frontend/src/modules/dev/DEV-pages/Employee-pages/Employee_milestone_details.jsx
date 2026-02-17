@@ -22,7 +22,7 @@ import {
   FiTrash2 as Trash2
 } from 'react-icons/fi'
 import PM_task_form from '../../DEV-components/PM_task_form'
-import { employeeService, taskService } from '../../DEV-services'
+import { employeeService } from '../../DEV-services'
 import { useToast } from '../../../../contexts/ToastContext'
 
 const Employee_milestone_details = () => {
@@ -113,7 +113,7 @@ const Employee_milestone_details = () => {
     if (!window.confirm('Are you sure you want to delete this task?')) return
 
     try {
-      await taskService.deleteTask(taskId)
+      await employeeService.deleteTaskAsTeamLead(taskId)
       toast.success('Task deleted successfully')
       window.location.reload()
     } catch (error) {
@@ -124,7 +124,7 @@ const Employee_milestone_details = () => {
 
   const handleUpdateTask = async (taskData) => {
     try {
-      await taskService.updateTask(selectedTask._id, taskData)
+      await employeeService.updateTaskAsTeamLead(selectedTask._id, taskData)
       toast.success('Task updated successfully')
       setIsEditTaskFormOpen(false)
       window.location.reload()
@@ -331,11 +331,11 @@ const Employee_milestone_details = () => {
           onClose={() => setIsTaskFormOpen(false)}
           onSubmit={async (taskData) => {
             try {
-              const createdTask = await taskService.createTask(taskData)
-              if (taskData.attachments && taskData.attachments.length > 0) {
-                const taskId = createdTask?.data?._id || createdTask?._id
-                for (const attachment of taskData.attachments) {
-                  await taskService.uploadTaskAttachment(taskId, attachment.file)
+              const created = await employeeService.createTaskAsTeamLead(taskData)
+              const taskId = created?.data?._id || created?.data?.id
+              if (taskId && taskData.attachments?.length > 0) {
+                for (const att of taskData.attachments) {
+                  if (att?.file) await employeeService.uploadTaskAttachmentToTask(taskId, att.file)
                 }
               }
               setIsTaskFormOpen(false)
