@@ -145,6 +145,7 @@ router.post('/clients/:clientId/payments', require('../controllers/salesControll
 router.post('/clients/:clientId/project-requests', require('../controllers/salesController').createProjectRequest);
 router.get('/clients/:clientId/project-requests', require('../controllers/salesController').getProjectRequests);
 router.post('/clients/:clientId/increase-cost', require('../controllers/salesController').increaseProjectCost);
+router.post('/clients/:clientId/projects', upload.single('screenshot'), require('../controllers/salesController').createProjectForExistingClient);
 router.post('/clients/:clientId/transfer', require('../controllers/salesController').transferClient);
 router.post('/clients/:clientId/mark-completed', require('../controllers/salesController').markProjectCompleted);
 router.get('/clients/:clientId/transactions', require('../controllers/salesController').getClientTransactions);

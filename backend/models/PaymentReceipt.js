@@ -56,6 +56,36 @@ paymentReceiptSchema.post('save', async function(doc) {
         await project.save();
       console.log(`Updated project ${project._id} financials after payment receipt approval: advanceReceived=${project.financialDetails.advanceReceived}, remainingAmount=${project.financialDetails.remainingAmount}`);
       
+      // On first approved payment, move initial portion of conversion incentive from pending to current
+      try {
+        const Incentive = require('./Incentive');
+        const incentives = await Incentive.find({
+          isConversionBased: true,
+          projectId: project._id,
+          pendingBalance: { $gt: 0 }
+        });
+
+        for (const incentive of incentives) {
+          // Only move initial portion once, on first approval
+          if (incentive.currentBalance === 0) {
+            const totalAmount = Number(incentive.amount || 0);
+            let amountToMove = Math.round(totalAmount * 0.5);
+            if (amountToMove <= 0) continue;
+            if (amountToMove > incentive.pendingBalance) {
+              amountToMove = incentive.pendingBalance;
+            }
+            try {
+              await incentive.movePendingToCurrent(amountToMove);
+              console.log(`Moved initial ${amountToMove} from pending to current for incentive ${incentive._id} on payment receipt approval ${doc._id}`);
+            } catch (moveErr) {
+              console.error(`Error moving initial pending to current for incentive ${incentive._id}:`, moveErr);
+            }
+          }
+        }
+      } catch (incentiveHookError) {
+        console.error('Error handling conversion incentives on payment receipt approval:', incentiveHookError);
+      }
+      
       // Create finance transaction
       try {
         const { createIncomingTransaction } = require('../utils/financeTransactionHelper');

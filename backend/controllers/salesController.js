@@ -4179,21 +4179,19 @@ const convertLeadToClient = async (req, res) => {
 
     if (incentivePerClient > 0) {
       try {
-        // Calculate split: 50% current, 50% pending (use Math.round to avoid floating point drift)
         const totalAmount = incentivePerClient;
-        const currentBalance = Math.round(totalAmount * 0.5);
-        const pendingBalance = totalAmount - currentBalance;
 
-        // Create conversion-based incentive for team member
+        // Initially keep full amount as pending; it will be moved to current
+        // when payments are approved / project becomes no-dues
         teamMemberIncentive = await Incentive.create({
           salesEmployee: req.sales.id,
           amount: totalAmount,
-          currentBalance: currentBalance,
-          pendingBalance: pendingBalance,
+          currentBalance: 0,
+          pendingBalance: totalAmount,
           reason: 'Lead conversion to client',
           description: `Automatic incentive for converting lead to client: ${client.name || 'Client'}`,
           dateAwarded: new Date(),
-          status: 'conversion-current', // Has current balance portion
+          status: 'conversion-pending',
           isConversionBased: true,
           projectId: newProject._id,
           clientId: client._id,
@@ -4217,20 +4215,16 @@ const convertLeadToClient = async (req, res) => {
           const teamLeadIncentiveAmount = Math.round(teamMemberIncentiveAmount * 0.5); // 50% of team member's incentive
 
           if (teamLeadIncentiveAmount > 0) {
-            // Split 50/50: half current, half pending (use Math.round to avoid floating point drift)
-            const teamLeadCurrentBalance = Math.round(teamLeadIncentiveAmount * 0.5);
-            const teamLeadPendingBalance = teamLeadIncentiveAmount - teamLeadCurrentBalance;
-
-            // Create team lead incentive
+            // Initially keep full team-lead amount as pending as well
             await Incentive.create({
               salesEmployee: teamLead._id,
               amount: teamLeadIncentiveAmount,
-              currentBalance: teamLeadCurrentBalance,
-              pendingBalance: teamLeadPendingBalance,
+              currentBalance: 0,
+              pendingBalance: teamLeadIncentiveAmount,
               reason: 'Team member lead conversion',
               description: `Team lead incentive for ${sales.name || 'Team Member'}'s conversion: ${client.name || 'Client'}`,
               dateAwarded: new Date(),
-              status: 'conversion-current',
+              status: 'conversion-pending',
               isConversionBased: true,
               projectId: newProject._id,
               clientId: client._id,
@@ -4313,6 +4307,303 @@ const convertLeadToClient = async (req, res) => {
   } catch (error) {
     console.error('Convert lead error:', error);
     return res.status(500).json({ success: false, message: 'Server error while converting lead', error: error.message });
+  }
+};
+
+// @desc    Create a new project for an existing client (pending-assignment)
+// @route   POST /api/sales/clients/:clientId/projects
+// @access  Private (Sales only)
+const createProjectForExistingClient = async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    // Handle both FormData and JSON requests
+    let projectData;
+    if (req.body.projectData) {
+      // JSON request
+      projectData = req.body.projectData;
+    } else {
+      // FormData request - parse fields
+      projectData = {
+        projectName: req.body.projectName,
+        categoryId: req.body.categoryId || req.body.category,
+        projectType: req.body.projectType
+          ? (typeof req.body.projectType === 'string'
+              ? JSON.parse(req.body.projectType)
+              : req.body.projectType)
+          : null,
+        totalCost: req.body.totalCost
+          ? Math.round(Number(String(req.body.totalCost).replace(/,/g, '')) || 0)
+          : 0,
+        finishedDays: req.body.finishedDays ? parseInt(req.body.finishedDays) : undefined,
+        advanceReceived: req.body.advanceReceived
+          ? Math.round(Number(String(req.body.advanceReceived).replace(/,/g, '')) || 0)
+          : 0,
+        advanceAccount: req.body.advanceAccount || undefined,
+        includeGST: req.body.includeGST === 'true' || req.body.includeGST === true,
+        clientDateOfBirth: req.body.clientDateOfBirth || undefined,
+        description: req.body.description || ''
+      };
+    }
+
+    const parseAmount = (v) =>
+      Math.round(Number(String(v || '').replace(/,/g, '')) || 0);
+    const totalCost = parseAmount(projectData?.totalCost ?? projectData?.estimatedBudget);
+    const advanceReceived = parseAmount(projectData?.advanceReceived);
+    let description = (projectData?.description ?? projectData?.notes ?? '').trim();
+
+    if (totalCost <= 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Project total cost is required and must be greater than zero. Please enter a valid project cost.'
+      });
+    }
+
+    if (advanceReceived <= 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Advance amount is required and must be greater than zero before creating this project.'
+      });
+    }
+
+    if (!projectData?.advanceAccount) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Payment account is required for the advance amount. Please select an account before creating this project.'
+      });
+    }
+
+    projectData = { ...projectData, totalCost, advanceReceived, description };
+
+    const { uploadToCloudinary } = require('../services/cloudinaryService');
+    const Client = require('../models/Client');
+    const Project = require('../models/Project');
+
+    const client = await Client.findById(clientId);
+    if (!client || client.isActive === false) {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Client not found or inactive' });
+    }
+
+    // Prepare project fields
+    const includeGST = projectData?.includeGST || false;
+    const remainingAmount = totalCost;
+
+    const name = projectData?.projectName || 'Sales Additional Project';
+    if (!description) {
+      description =
+        client.notes ||
+        `Additional project created for existing client ${client.name || ''}`.trim();
+    }
+
+    const categoryId =
+      projectData?.categoryId || client.defaultProjectCategory || null;
+
+    const projectType = projectData?.projectType || {
+      web: false,
+      app: false,
+      taxi: false
+    };
+    const finishedDays = projectData?.finishedDays
+      ? parseInt(projectData.finishedDays)
+      : undefined;
+
+    if (!categoryId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project category is required to create project'
+      });
+    }
+
+    // Handle screenshot upload if present
+    let screenshotAttachment = null;
+    if (req.file) {
+      try {
+        const cloudinaryConfig =
+          process.env.CLOUDINARY_CLOUD_NAME &&
+          process.env.CLOUDINARY_API_KEY &&
+          process.env.CLOUDINARY_API_SECRET;
+
+        if (!cloudinaryConfig) {
+          console.warn('Cloudinary not configured, skipping screenshot upload');
+        } else {
+          const uploadResult = await uploadToCloudinary(req.file, 'projects/conversions');
+          if (uploadResult.success && uploadResult.data) {
+            const result = uploadResult.data;
+            screenshotAttachment = {
+              public_id: result.public_id,
+              secure_url: result.secure_url,
+              originalName: result.original_filename || req.file.originalname,
+              original_filename: result.original_filename || req.file.originalname,
+              format: result.format,
+              size: result.bytes,
+              bytes: result.bytes,
+              width: result.width,
+              height: result.height,
+              resource_type: 'image',
+              uploadedAt: new Date()
+            };
+          } else {
+            console.warn(
+              'Screenshot upload failed (existing client project):',
+              uploadResult.error || 'Unknown error'
+            );
+          }
+        }
+      } catch (uploadError) {
+        console.error(
+          'Error uploading screenshot for existing client project:',
+          uploadError.message || uploadError
+        );
+      }
+    }
+
+    const projectFields = {
+      name,
+      description,
+      client: client._id,
+      category: categoryId,
+      projectType,
+      status: 'pending-assignment',
+      budget: totalCost,
+      startDate: new Date(),
+      submittedBy: req.sales.id,
+      originLead: client.originLead || null,
+      financialDetails: {
+        totalCost,
+        advanceReceived: 0,
+        includeGST,
+        remainingAmount
+      }
+    };
+
+    if (finishedDays) {
+      projectFields.finishedDays = finishedDays;
+    }
+
+    if (screenshotAttachment) {
+      projectFields.attachments = [screenshotAttachment];
+    }
+
+    const newProject = await Project.create(projectFields);
+
+    // Create advance PaymentReceipt + Request (same pattern as convertLeadToClient)
+    if (advanceReceived > 0) {
+      try {
+        const Request = require('../models/Request');
+        const Admin = require('../models/Admin');
+        const PaymentReceipt = require('../models/PaymentReceipt');
+        const Account = require('../models/Account');
+
+        let accountId = projectData?.advanceAccount;
+        if (!accountId) {
+          const firstAccount = await Account.findOne({ isActive: true }).select('_id');
+          accountId = firstAccount?._id;
+        }
+
+        if (!accountId) {
+          console.warn(
+            'No account available for advance receipt; skipping receipt/request creation for existing client project'
+          );
+        } else {
+          const receipt = await PaymentReceipt.create({
+            client: client._id,
+            project: newProject._id,
+            amount: advanceReceived,
+            account: accountId,
+            method: 'other',
+            notes: `Advance payment for additional project "${newProject.name}"`,
+            status: 'pending',
+            createdBy: req.sales.id
+          });
+
+          const admin = await Admin.findOne({ isActive: true }).select('_id');
+          if (admin && admin._id) {
+            await Request.create({
+              module: 'sales',
+              type: 'payment-recovery',
+              title: `Advance payment request for additional project "${newProject.name}"`,
+              description: `Advance payment of ₹${advanceReceived.toLocaleString()} requested for additional project.`,
+              category: 'Advance Payment',
+              priority: 'high',
+              requestedBy: req.sales.id,
+              requestedByModel: 'Sales',
+              recipient: admin._id,
+              recipientModel: 'Admin',
+              project: newProject._id,
+              client: client._id,
+              amount: advanceReceived,
+              metadata: {
+                source: 'sales-existing-client-project',
+                clientId: client._id.toString(),
+                projectId: newProject._id.toString(),
+                paymentReceiptId: receipt._id.toString(),
+                screenshotUrl: screenshotAttachment?.secure_url || null,
+                originLeadId: client.originLead ? client.originLead.toString() : null
+              }
+            });
+          } else {
+            console.warn(
+              'No active admin found to create advance payment request for existing client project'
+            );
+          }
+        }
+      } catch (error) {
+        console.error(
+          'Error creating advance payment request for existing client project:',
+          error
+        );
+      }
+    }
+
+    // Incentive for additional project (treat like conversion)
+    const sales = await Sales.findById(req.sales.id);
+    const Incentive = require('../models/Incentive');
+    const incentivePerClient = Number(sales?.incentivePerClient || 0);
+
+    if (incentivePerClient > 0) {
+      try {
+        const totalAmount = incentivePerClient;
+        await Incentive.create({
+          salesEmployee: req.sales.id,
+          amount: totalAmount,
+        currentBalance: 0,
+        pendingBalance: totalAmount,
+          reason: 'Additional project for existing client',
+          description: `Automatic incentive for additional project: ${client.name || 'Client'}`,
+          dateAwarded: new Date(),
+        status: 'conversion-pending',
+          isConversionBased: true,
+          projectId: newProject._id,
+          clientId: client._id,
+          leadId: client.originLead || null,
+          isTeamMemberIncentive: false
+        });
+      } catch (incentiveError) {
+        console.error(
+          'Error creating conversion incentive for existing client project:',
+          incentiveError
+        );
+      }
+    }
+
+    const populatedProject = await Project.findById(newProject._id).populate('client');
+    return res.status(201).json({
+      success: true,
+      message: 'Project created successfully for existing client',
+      data: { client: populatedProject.client, project: populatedProject }
+    });
+  } catch (error) {
+    console.error('Create project for existing client error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while creating project for existing client',
+      error: error.message
+    });
   }
 };
 
@@ -4582,11 +4873,23 @@ const getClientProfile = async (req, res) => {
     // Find associated project(s) for this client
     // Reload project to ensure we have latest financialDetails updated by PaymentReceipt hook
     const projects = await Project.find({ client: clientId })
-      .select('name description status progress projectType financialDetails budget startDate dueDate finishedDays installmentPlan')
+      .select('name description status progress projectType financialDetails budget startDate dueDate finishedDays installmentPlan category createdAt updatedAt')
       .sort({ createdAt: -1 });
 
-    // Use primary project (most recent or first one)
-    let primaryProject = projects[0] || null;
+    // Allow frontend to request a specific primary project
+    const requestedProjectId = req.query.projectId;
+
+    let primaryProject = null;
+    if (requestedProjectId) {
+      primaryProject = projects.find(
+        p => String(p._id) === String(requestedProjectId)
+      ) || null;
+    }
+
+    // Fallback to most recent or first one
+    if (!primaryProject) {
+      primaryProject = projects[0] || null;
+    }
 
     // Reload project with fresh data to ensure financialDetails are up-to-date
     if (primaryProject) {
@@ -5884,6 +6187,7 @@ module.exports = {
   createProjectRequest,
   getProjectRequests,
   increaseProjectCost,
+  createProjectForExistingClient,
   transferClient,
   markProjectCompleted,
   getClientTransactions,

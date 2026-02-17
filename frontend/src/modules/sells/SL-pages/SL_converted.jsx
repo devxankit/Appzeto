@@ -11,11 +11,13 @@ import {
   FiMail,
   FiTag,
   FiLoader,
-  FiExternalLink
+  FiExternalLink,
+  FiMoreVertical
 } from 'react-icons/fi'
 import SL_navbar from '../SL-components/SL_navbar'
-import { salesLeadService } from '../SL-services'
+import { salesLeadService, salesClientService } from '../SL-services'
 import { useToast } from '../../../contexts/ToastContext'
+import SalesProjectConversionDialog from '../SL-components/SalesProjectConversionDialog'
 
 const SL_converted = () => {
   const navigate = useNavigate()
@@ -33,6 +35,8 @@ const SL_converted = () => {
   const [leadsData, setLeadsData] = useState([])
   const [categories, setCategories] = useState([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false)
+  const [selectedClientForProject, setSelectedClientForProject] = useState(null)
 
   // Fetch categories and leads on component mount
   useEffect(() => {
@@ -93,11 +97,57 @@ const SL_converted = () => {
         limit: 50
       }
       const response = await salesLeadService.getLeadsByStatus('converted', params)
+      const rawLeads = Array.isArray(response?.data) ? response.data : []
       // Filter out any leads without valid client info (safety check for transferred clients)
-      const validLeads = (response?.data || []).filter(lead => 
+      const validLeads = rawLeads.filter(lead => 
         lead?.convertedClientId || lead?.convertedClient?.id
       )
-      setLeadsData(validLeads)
+
+      // Enrich leads with all projects per client (so cards can show multiple projects)
+      const clientIds = Array.from(
+        new Set(
+          validLeads
+            .map(lead => 
+              lead?.convertedClientId ||
+              lead?.convertedClient?.id ||
+              lead?.project?.client
+            )
+            .filter(Boolean)
+        )
+      )
+
+      const projectsByClientId = {}
+      try {
+        const profiles = await Promise.all(
+          clientIds.map(id =>
+            salesClientService.getClientProfile(id).catch(() => null)
+          )
+        )
+        profiles.forEach((res, idx) => {
+          const cid = clientIds[idx]
+          if (res?.success && Array.isArray(res.data?.allProjects)) {
+            projectsByClientId[cid] = res.data.allProjects
+          }
+        })
+      } catch (e) {
+        console.error('Error fetching client projects for converted list:', e)
+      }
+
+      const enrichedLeads = validLeads.map(lead => {
+        const clientId =
+          lead?.convertedClientId ||
+          lead?.convertedClient?.id ||
+          lead?.project?.client
+        const allProjects = clientId && projectsByClientId[clientId]
+          ? projectsByClientId[clientId]
+          : (lead.project ? [lead.project] : [])
+        return {
+          ...lead,
+          __allProjects: allProjects
+        }
+      })
+
+      setLeadsData(enrichedLeads)
     } catch (error) {
       console.error('Error fetching leads:', error)
       toast.error('Failed to fetch leads')
@@ -152,11 +202,16 @@ const SL_converted = () => {
     window.open(`https://wa.me/91${phone}?text=${message}`, '_blank')
   }
 
-  const handleProfile = (client) => {
-    const clientId =
+  const getClientIdForItem = (client) => {
+    return (
       client?.convertedClientId ||
       client?.convertedClient?.id ||
       client?.project?.client
+    )
+  }
+
+  const handleProfile = (client, projectId) => {
+    const clientId = getClientIdForItem(client)
 
     if (!clientId) {
       toast.error('Client profile is not available. This client may have been transferred.')
@@ -169,41 +224,67 @@ const SL_converted = () => {
       return
     }
 
-    navigate(`/client-profile/${clientId}`)
+    const query = projectId ? `?projectId=${projectId}` : ''
+    navigate(`/client-profile/${clientId}${query}`)
+  }
+
+  const handleAddProjectForClient = (client) => {
+    const clientId = getClientIdForItem(client)
+
+    if (!clientId) {
+      toast.error('Client is not available for creating a new project. This client may have been transferred.')
+      return
+    }
+
+    const displayName = client.leadProfile?.name || client.name || 'Unknown'
+    const displayBusiness = client.leadProfile?.businessName || client.company || 'No company'
+    const phone =
+      client.phone ||
+      client.convertedClient?.phoneNumber ||
+      ''
+
+    const rawCategory =
+      client.project?.category ||
+      client.leadProfile?.category ||
+      client.category
+
+    const initialCategoryId =
+      typeof rawCategory === 'object'
+        ? (rawCategory?._id || rawCategory?.id || null)
+        : rawCategory || null
+
+    setSelectedClientForProject({
+      clientId,
+      name: displayName,
+      businessName: displayBusiness,
+      phone,
+      initialCategoryId
+    })
+    setIsProjectDialogOpen(true)
   }
 
 
-  // Mobile Client Card Component
-  const MobileClientCard = ({ client }) => {
-    const categoryInfo = getCategoryInfo(client.category)
-    // Use category first (preferred), then fall back to legacy projectType flags
-    const projectCategory = client.project?.category || client.leadProfile?.category
-    let projectTypeLabel = 'N/A'
-    if (projectCategory) {
-      // If category is populated (object), use its name
-      if (typeof projectCategory === 'object' && projectCategory.name) {
-        projectTypeLabel = projectCategory.name
-      } else {
-        // Category is just an ID, try to find it in categories array if available
-        // Note: This assumes categories are loaded - if not, will show ID or fall back
-        projectTypeLabel = projectCategory.toString() || 'N/A'
-      }
-    } else {
-      // Legacy: fall back to projectType flags
-      const projectType = client.project?.projectType || client.leadProfile?.projectType || {}
-      projectTypeLabel = projectType.web ? 'Web' : projectType.app ? 'App' : projectType.taxi ? 'Taxi' : 'N/A'
-    }
-    const totalCost = client.project?.financialDetails?.totalCost || client.project?.budget || client.leadProfile?.estimatedCost || 0
-    const displayName = client.leadProfile?.name || client.name || 'Unknown'
-    const displayBusiness = client.leadProfile?.businessName || client.company || 'No company'
+  // Grouped Mobile Client Card Component (one card per client with multiple projects)
+  const MobileClientCard = ({ clientGroup, onAddProject }) => {
+    const [isMenuOpen, setIsMenuOpen] = useState(false)
+    const { baseLead, projects } = clientGroup
+    const categoryInfo = getCategoryInfo(baseLead.category)
+
+    const displayName = clientGroup.name
+    const displayBusiness = clientGroup.businessName
     const avatar = displayName.charAt(0).toUpperCase()
-    const isTransferred = client?.convertedClient?.isTransferred || false
-    const transferInfo = client?.convertedClient?.transferInfo
-    
+    const isTransferred = baseLead?.convertedClient?.isTransferred || false
+    const transferInfo = baseLead?.convertedClient?.transferInfo
+    const totalClientValue = projects.reduce((sum, p) => {
+      const fin = p.project.financialDetails
+      const budget = p.project.budget
+      const est = baseLead.leadProfile?.estimatedCost
+      return sum + (fin?.totalCost || budget || est || 0)
+    }, 0)
+
     return (
       <div 
-        className="p-3 space-y-2 cursor-pointer hover:bg-gray-50 transition-colors duration-200"
-        onClick={() => handleProfile(client)}
+        className="relative p-3 space-y-3 bg-white rounded-lg hover:bg-gray-50 transition-colors duration-200 border border-gray-200"
       >
         {/* Header Section */}
         <div className="flex items-center space-x-3">
@@ -214,7 +295,7 @@ const SL_converted = () => {
             </div>
           </div>
 
-          {/* Client Info */}
+            {/* Client Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-gray-900 truncate">
@@ -239,33 +320,90 @@ const SL_converted = () => {
                   • Transferred by {transferInfo.transferredBy}
                 </span>
               )}
+              </div>
             </div>
-          </div>
 
-          {/* Revenue */}
-          <div className="text-right flex-shrink-0">
-            <p className="text-sm font-bold text-green-600">₹{totalCost.toLocaleString()}</p>
+            {/* Revenue & Menu */}
+            <div className="flex flex-col items-end flex-shrink-0 relative">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsMenuOpen(prev => !prev)
+              }}
+              className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+              title="More actions"
+            >
+              <FiMoreVertical className="w-4 h-4" />
+            </button>
+            {isMenuOpen && (
+              <div
+                className="absolute right-0 mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsMenuOpen(false)
+                    if (onAddProject) {
+                      onAddProject(baseLead)
+                    }
+                  }}
+                >
+                  Add New Project
+                </button>
+              </div>
+            )}
+            <p className="mt-1 text-sm font-bold text-green-600">
+              ₹{totalClientValue.toLocaleString()}
+            </p>
           </div>
         </div>
 
-        {/* Package Badge & Date */}
-        <div className="flex justify-between items-center">
-          <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
-            {projectTypeLabel}
-          </span>
-          <span className="text-xs text-gray-500">{client.updatedAt ? new Date(client.updatedAt).toLocaleDateString() : 'N/A'}</span>
+        {/* Projects List */}
+        <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
+          {projects.map(({ project }, index) => {
+            const cost = project.financialDetails?.totalCost || project.budget || 0
+            const label = project.name || `Project ${index + 1}`
+            const date = project.updatedAt || project.createdAt
+            return (
+              <button
+                key={project._id || index}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleProfile(baseLead, project._id)
+                }}
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-gray-50 border border-gray-100"
+              >
+                <div className="flex flex-col items-start">
+                  <span className="text-xs font-semibold text-gray-800 truncate max-w-[180px]">
+                    {label}
+                  </span>
+                  {date && (
+                    <span className="text-[10px] text-gray-500">
+                      Updated {new Date(date).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-bold text-green-700">
+                  ₹{cost.toLocaleString()}
+                </span>
+              </button>
+            )
+          })}
         </div>
 
         {/* Actions Section */}
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-          <span className="text-xs text-gray-500">{client.phone || 'No phone'}</span>
+        <div className="flex items-center justify-between pt-2 border-t border-gray-100 mt-2">
+          <span className="text-xs text-gray-500">{clientGroup.phone || 'No phone'}</span>
           
           <div className="flex items-center space-x-1">
             {/* Call Button */}
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                handleCall(client.phone)
+                handleCall(clientGroup.phone)
               }}
               className="p-2 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-all duration-200"
               title="Call"
@@ -277,7 +415,7 @@ const SL_converted = () => {
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                handleWhatsApp(client.phone)
+                handleWhatsApp(clientGroup.phone)
               }}
               className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
               title="WhatsApp"
@@ -291,7 +429,7 @@ const SL_converted = () => {
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                handleProfile(client)
+                handleProfile(baseLead)
               }}
               className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all duration-200"
               title="Profile"
@@ -305,8 +443,8 @@ const SL_converted = () => {
   }
 
   // Desktop Client Card Component (same as mobile for consistency)
-  const DesktopClientCard = ({ client }) => {
-    return <MobileClientCard client={client} />
+  const DesktopClientCard = ({ clientGroup }) => {
+    return <MobileClientCard clientGroup={clientGroup} onAddProject={handleAddProjectForClient} />
   }
 
   return (
@@ -458,7 +596,13 @@ const SL_converted = () => {
             className="mb-4"
           >
             <p className="text-gray-600 text-sm">
-              Showing {leadsData.length} of {leadsData.length} converted clients
+              {(() => {
+                const uniqueClientIds = new Set(
+                  (leadsData || []).map(lead => getClientIdForItem(lead)).filter(Boolean)
+                )
+                const count = uniqueClientIds.size
+                return `Showing ${count} converted client${count === 1 ? '' : 's'}`
+              })()}
             </p>
           </motion.div>
 
@@ -499,20 +643,58 @@ const SL_converted = () => {
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No Converted Leads</h3>
                   <p className="text-gray-500">No leads have been converted to clients yet.</p>
                 </motion.div>
-              ) : (
-                leadsData.map((lead, index) => (
-                <motion.div
-                  key={lead._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="bg-white rounded-lg p-3 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
-                >
-                  <MobileClientCard client={lead} />
-                </motion.div>
+              ) : (() => {
+                // Group leads by client for multi-project cards
+                const groupsMap = new Map()
+                for (const lead of leadsData) {
+                  const clientId = getClientIdForItem(lead)
+                  if (!clientId) continue
+                  if (!groupsMap.has(clientId)) {
+                    const displayName = lead.leadProfile?.name || lead.name || 'Unknown'
+                    const displayBusiness = lead.leadProfile?.businessName || lead.company || 'No company'
+                    const phone =
+                      lead.phone ||
+                      lead.convertedClient?.phoneNumber ||
+                      ''
+                    groupsMap.set(clientId, {
+                      clientId,
+                      baseLead: lead,
+                      name: displayName,
+                      businessName: displayBusiness,
+                      phone,
+                      projects: []
+                    })
+                  }
+                  const group = groupsMap.get(clientId)
+                  const projectsForLead = Array.isArray(lead.__allProjects) && lead.__allProjects.length
+                    ? lead.__allProjects
+                    : (lead.project ? [lead.project] : [])
+                  projectsForLead.forEach(project => {
+                    if (
+                      project &&
+                      !group.projects.some(
+                        p => String(p.project._id || '') === String(project._id || '')
+                      )
+                    ) {
+                      group.projects.push({ project, lead })
+                    }
+                  })
+                }
+                const groupedClients = Array.from(groupsMap.values())
+
+                return groupedClients.map((group, index) => (
+                  <motion.div
+                    key={group.clientId}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className="bg-white rounded-lg p-3 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
+                  >
+                    <MobileClientCard clientGroup={group} onAddProject={handleAddProjectForClient} />
+                  </motion.div>
                 ))
-              )}
+              })()}
             </AnimatePresence>
 
             {/* Empty State */}
@@ -536,6 +718,58 @@ const SL_converted = () => {
           </motion.div>
         </div>
       </main>
+
+      <SalesProjectConversionDialog
+        isOpen={isProjectDialogOpen && !!selectedClientForProject}
+        mode="fromClient"
+        onClose={() => {
+          setIsProjectDialogOpen(false)
+          setSelectedClientForProject(null)
+        }}
+        clientId={selectedClientForProject?.clientId}
+        clientName={selectedClientForProject?.name}
+        clientPhone={selectedClientForProject?.phone}
+        businessName={selectedClientForProject?.businessName}
+        initialCategoryId={selectedClientForProject?.initialCategoryId}
+        onSuccess={(result) => {
+          setIsProjectDialogOpen(false)
+          setSelectedClientForProject(null)
+
+          // Append a new synthetic converted entry for this additional project
+          try {
+            const payload = result?.data || result || {}
+            const project = payload.project
+            const client = payload.client
+
+            if (project && client) {
+              const synthetic = {
+                _id: project._id || `${client._id}-${Date.now()}`,
+                convertedClientId: client._id,
+                convertedClient: {
+                  id: client._id,
+                  isTransferred: false
+                },
+                project,
+                leadProfile: {
+                  name: client.name || client.fullName || 'Unknown',
+                  businessName: client.companyName || client.company || 'No company'
+                },
+                category: project.category,
+                phone: client.phoneNumber || client.phone || '',
+                updatedAt: project.updatedAt || project.createdAt || new Date().toISOString()
+              }
+
+              setLeadsData(prev => [...prev, synthetic])
+            } else {
+              // Fallback: refresh from server if shape is unexpected
+              fetchLeads()
+            }
+          } catch (e) {
+            console.error('Error appending new project entry to converted list:', e)
+            fetchLeads()
+          }
+        }}
+      />
     </div>
   )
 }

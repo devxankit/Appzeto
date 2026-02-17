@@ -112,7 +112,9 @@ const SL_ClientProfile = () => {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await salesClientService.getClientProfile(id)
+      const urlParams = new URLSearchParams(window.location.search)
+      const projectId = urlParams.get('projectId')
+      const response = await salesClientService.getClientProfile(id, projectId || undefined)
       if (response.success && response.data) {
         setClientData(response.data)
       } else {

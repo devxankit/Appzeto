@@ -4,6 +4,7 @@ const Incentive = require('../models/Incentive');
 const Sales = require('../models/Sales');
 const Admin = require('../models/Admin');
 const Client = require('../models/Client');
+const Project = require('../models/Project');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 
@@ -1364,6 +1365,37 @@ const getSalesOverview = asyncHandler(async (req, res, next) => {
     }
   ]);
 
+  // Get confirmed sales total based on projects where an advance has been received.
+  // This aligns the "Total Sales" figure in Sales Management with Finance statistics.
+  let projectSalesMatch = {
+    'financialDetails.advanceReceived': { $gt: 0 }
+  };
+
+  // Apply the same period filter (createdAt) used for leads, when available
+  if (dateFilter.createdAt) {
+    projectSalesMatch.createdAt = dateFilter.createdAt;
+  }
+
+  const projectSalesAgg = await Project.aggregate([
+    { $match: projectSalesMatch },
+    {
+      $group: {
+        _id: null,
+        // Use totalCost when available, fall back to budget for legacy data
+        totalAmount: {
+          $sum: {
+            $ifNull: [
+              '$financialDetails.totalCost',
+              { $ifNull: ['$budget', 0] }
+            ]
+          }
+        }
+      }
+    }
+  ]);
+
+  const confirmedSalesTotal = projectSalesAgg[0]?.totalAmount || 0;
+
   const leadData = leadStats[0] || {
     totalLeads: 0,
     unassignedLeads: 0,
@@ -1412,7 +1444,10 @@ const getSalesOverview = asyncHandler(async (req, res, next) => {
         leadData.convertedValue / leadData.convertedLeads : 0
     },
     sales: {
-      total: leadData.convertedValue || 0, // Total sales = converted leads value
+      // Total sales = confirmed project sales where an advance has been received.
+      // This uses the same business rule as finance statistics, so if no projects
+      // have any advance payments, total sales will be 0.
+      total: confirmedSalesTotal,
       conversion: leadData.totalLeads > 0 ? 
         Math.round((leadData.convertedLeads / leadData.totalLeads) * 100 * 100) / 100 : 0
     },

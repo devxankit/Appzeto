@@ -392,4 +392,3 @@ exports.awardRewardForMonth = asyncHandler(async (req, res, next) => {
     data: { awarded }
   });
 });
-
