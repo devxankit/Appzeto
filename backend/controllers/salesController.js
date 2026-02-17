@@ -4165,89 +4165,19 @@ const convertLeadToClient = async (req, res) => {
     }
     await lead.save();
 
-    // Update sales stats
-    const sales = await Sales.findById(req.sales.id);
-    if (sales && sales.updateLeadStats) {
-      await sales.updateLeadStats();
-    }
+   // Update sales stats
+   const sales = await Sales.findById(req.sales.id);
+   if (sales && sales.updateLeadStats) {
+     await sales.updateLeadStats();
+   }
 
-    // Create automatic incentive record for conversion (if incentivePerClient is set)
-    const Incentive = require('../models/Incentive');
-    const incentivePerClient = Number(sales?.incentivePerClient || 0);
-
-    let teamMemberIncentive = null;
-
-    if (incentivePerClient > 0) {
-      try {
-        const totalAmount = incentivePerClient;
-
-        // Initially keep full amount as pending; it will be moved to current
-        // when payments are approved / project becomes no-dues
-        teamMemberIncentive = await Incentive.create({
-          salesEmployee: req.sales.id,
-          amount: totalAmount,
-          currentBalance: 0,
-          pendingBalance: totalAmount,
-          reason: 'Lead conversion to client',
-          description: `Automatic incentive for converting lead to client: ${client.name || 'Client'}`,
-          dateAwarded: new Date(),
-          status: 'conversion-pending',
-          isConversionBased: true,
-          projectId: newProject._id,
-          clientId: client._id,
-          leadId: lead._id,
-          isTeamMemberIncentive: false // Will be updated if team lead exists
-          // createdBy is not required for conversion-based incentives
-        });
-
-        // Check if this sales employee has a team lead
-        const Sales = require('../models/Sales');
-        const teamLead = await Sales.findOne({
-          teamMembers: req.sales.id,
-          isTeamLead: true,
-          isActive: true
-        });
-
-        // If team lead exists, automatically create team lead incentive (50% of team member's incentive)
-        if (teamLead && teamMemberIncentive) {
-          // Auto-calculate team lead incentive as 50% of team member's incentive
-          const teamMemberIncentiveAmount = Number(teamMemberIncentive.amount || incentivePerClient || 0);
-          const teamLeadIncentiveAmount = Math.round(teamMemberIncentiveAmount * 0.5); // 50% of team member's incentive
-
-          if (teamLeadIncentiveAmount > 0) {
-            // Initially keep full team-lead amount as pending as well
-            await Incentive.create({
-              salesEmployee: teamLead._id,
-              amount: teamLeadIncentiveAmount,
-              currentBalance: 0,
-              pendingBalance: teamLeadIncentiveAmount,
-              reason: 'Team member lead conversion',
-              description: `Team lead incentive for ${sales.name || 'Team Member'}'s conversion: ${client.name || 'Client'}`,
-              dateAwarded: new Date(),
-              status: 'conversion-pending',
-              isConversionBased: true,
-              projectId: newProject._id,
-              clientId: client._id,
-              leadId: lead._id,
-              isTeamLeadIncentive: true,
-              isTeamMemberIncentive: false,
-              teamLeadId: teamLead._id,
-              teamMemberId: req.sales.id,
-              originalIncentiveId: teamMemberIncentive._id
-            });
-
-            // Update team member incentive to mark it
-            teamMemberIncentive.isTeamMemberIncentive = true;
-            teamMemberIncentive.teamLeadId = teamLead._id;
-            await teamMemberIncentive.save();
-          }
-        }
-      } catch (incentiveError) {
-        // Log error but don't fail the conversion
-        console.error('Error creating conversion incentive:', incentiveError);
-        // Continue with conversion even if incentive creation fails
-      }
-    }
+   /**
+    * NOTE: Conversion-based incentives are now created only AFTER
+    * the first payment receipt for this project is approved.
+    * See PaymentReceipt model post-save hook for incentive creation logic.
+    * This ensures incentives do not appear in pending/current lists
+    * until advance payment has actually been approved.
+    */
 
     // Check if this lead was shared from a Channel Partner and distribute commission
     let cpCommissionData = null;
@@ -4565,31 +4495,14 @@ const createProjectForExistingClient = async (req, res) => {
     const Incentive = require('../models/Incentive');
     const incentivePerClient = Number(sales?.incentivePerClient || 0);
 
-    if (incentivePerClient > 0) {
-      try {
-        const totalAmount = incentivePerClient;
-        await Incentive.create({
-          salesEmployee: req.sales.id,
-          amount: totalAmount,
-        currentBalance: 0,
-        pendingBalance: totalAmount,
-          reason: 'Additional project for existing client',
-          description: `Automatic incentive for additional project: ${client.name || 'Client'}`,
-          dateAwarded: new Date(),
-        status: 'conversion-pending',
-          isConversionBased: true,
-          projectId: newProject._id,
-          clientId: client._id,
-          leadId: client.originLead || null,
-          isTeamMemberIncentive: false
-        });
-      } catch (incentiveError) {
-        console.error(
-          'Error creating conversion incentive for existing client project:',
-          incentiveError
-        );
-      }
-    }
+    /**
+     * NOTE: Conversion-based incentives for additional projects are now
+     * created only AFTER the first payment receipt for this project
+     * has been approved (see PaymentReceipt post-save hook).
+     *
+     * This prevents incentives from appearing anywhere (including
+     * "pending" views) before advance payment approval.
+     */
 
     const populatedProject = await Project.findById(newProject._id).populate('client');
     return res.status(201).json({

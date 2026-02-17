@@ -46,19 +46,101 @@ paymentReceiptSchema.post('save', async function(doc) {
       return;
     }
 
-    // Handle approval: update project financials and create finance transaction
+    // Handle approval: update project financials, create incentive (if applicable) and finance transaction
     if (doc.status === 'approved') {
       // Use shared utility to recalculate financials for consistency
       const { recalculateProjectFinancials } = require('../utils/projectFinancialHelper');
       await recalculateProjectFinancials(project);
         
-        // Save project (this will trigger the post-save hook for incentive movement if remainingAmount is 0)
-        await project.save();
+      // Save project (this may trigger other hooks e.g. for no-dues handling)
+      await project.save();
       console.log(`Updated project ${project._id} financials after payment receipt approval: advanceReceived=${project.financialDetails.advanceReceived}, remainingAmount=${project.financialDetails.remainingAmount}`);
       
-      // On first approved payment, move initial portion of conversion incentive from pending to current
+      // On FIRST approved payment for this project, create conversion-based incentives,
+      // then move HALF of each incentive amount to current balance.
+      // Remaining half stays in pending until project becomes "no dues" (handled in Project model).
       try {
         const Incentive = require('./Incentive');
+        const Sales = require('./Sales');
+
+        const salesEmployeeId = doc.createdBy;
+
+        // If an incentive already exists for this project + sales employee,
+        // we have already processed the "first payment" – do not create again.
+        const existingIncentive = await Incentive.findOne({
+          isConversionBased: true,
+          projectId: project._id,
+          salesEmployee: salesEmployeeId
+        });
+
+        if (!existingIncentive) {
+          const salesEmployee = await Sales.findById(salesEmployeeId).select('name incentivePerClient isActive');
+          const incentivePerClient = Number(salesEmployee?.incentivePerClient || 0);
+
+          if (salesEmployee && salesEmployee.isActive && incentivePerClient > 0) {
+            const totalAmount = incentivePerClient;
+
+            // Create team member incentive as FULLY pending first
+            const teamMemberIncentive = await Incentive.create({
+              salesEmployee: salesEmployeeId,
+              amount: totalAmount,
+              currentBalance: 0,
+              pendingBalance: totalAmount,
+              reason: 'Lead conversion to client',
+              description: `Automatic incentive for project "${project.name || 'Project'}" after first approved payment`,
+              dateAwarded: new Date(),
+              status: 'conversion-pending',
+              isConversionBased: true,
+              projectId: project._id,
+              clientId: doc.client,
+              leadId: project.originLead || null,
+              isTeamMemberIncentive: false
+            });
+
+            // Check if this sales employee has a team lead and create team-lead incentive (50% share),
+            // also as FULLY pending initially
+            const teamLead = await Sales.findOne({
+              teamMembers: salesEmployeeId,
+              isTeamLead: true,
+              isActive: true
+            }).select('name');
+
+            if (teamLead) {
+              const teamMemberIncentiveAmount = Number(teamMemberIncentive.amount || totalAmount || 0);
+              const teamLeadIncentiveAmount = Math.round(teamMemberIncentiveAmount * 0.5); // 50% of team member's incentive
+
+              if (teamLeadIncentiveAmount > 0) {
+                await Incentive.create({
+                  salesEmployee: teamLead._id,
+                  amount: teamLeadIncentiveAmount,
+                  currentBalance: 0,
+                  pendingBalance: teamLeadIncentiveAmount,
+                  reason: 'Team member lead conversion',
+                  description: `Team lead incentive for ${salesEmployee.name || 'Team Member'} on project "${project.name || 'Project'}"`,
+                  dateAwarded: new Date(),
+                  status: 'conversion-pending',
+                  isConversionBased: true,
+                  projectId: project._id,
+                  clientId: doc.client,
+                  leadId: project.originLead || null,
+                  isTeamLeadIncentive: true,
+                  isTeamMemberIncentive: false,
+                  teamLeadId: teamLead._id,
+                  teamMemberId: salesEmployeeId,
+                  originalIncentiveId: teamMemberIncentive._id
+                });
+
+                // Mark original incentive as "team member incentive"
+                teamMemberIncentive.isTeamMemberIncentive = true;
+                teamMemberIncentive.teamLeadId = teamLead._id;
+                await teamMemberIncentive.save();
+              }
+            }
+          }
+        }
+
+        // Now move HALF of the incentive amount from pending to current
+        // for all conversion-based incentives on this project that are still fully pending.
         const incentives = await Incentive.find({
           isConversionBased: true,
           projectId: project._id,
@@ -66,7 +148,7 @@ paymentReceiptSchema.post('save', async function(doc) {
         });
 
         for (const incentive of incentives) {
-          // Only move initial portion once, on first approval
+          // Only move initial portion once, on first approval (currentBalance === 0)
           if (incentive.currentBalance === 0) {
             const totalAmount = Number(incentive.amount || 0);
             let amountToMove = Math.round(totalAmount * 0.5);
@@ -83,7 +165,7 @@ paymentReceiptSchema.post('save', async function(doc) {
           }
         }
       } catch (incentiveHookError) {
-        console.error('Error handling conversion incentives on payment receipt approval:', incentiveHookError);
+        console.error('Error creating/moving conversion incentives on payment receipt approval:', incentiveHookError);
       }
       
       // Create finance transaction
