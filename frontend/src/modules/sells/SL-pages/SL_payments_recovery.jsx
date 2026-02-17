@@ -404,8 +404,19 @@ Thank you!`
                     {payment.clientName || 'Unknown Client'}
                   </h3>
                   {payment.projectName && payment.projectName !== 'Unnamed Project' && (
-                    <p className="text-xs text-teal-600 font-medium mb-1">{payment.projectName}</p>
+                    <p className="text-xs text-teal-600 font-medium mb-0.5">{payment.projectName}</p>
                   )}
+                  {/* Project cost display with clear GST breakdown when applicable */}
+                  <p className="text-xs text-gray-700 mb-1">
+                    {(() => {
+                      const base = Number(payment.baseCost ?? payment.totalCost ?? 0) || 0
+                      const gst = Number(payment.gstAmount || 0) || 0
+                      if (payment.includeGST && gst > 0) {
+                        return `Cost: ₹${base.toLocaleString()} + GST ₹${gst.toLocaleString()}`
+                      }
+                      return `Cost: ₹${base.toLocaleString()}`
+                    })()}
+                  </p>
                   {payment.companyName && (
                     <p className="text-xs text-gray-500 mb-1">{payment.companyName}</p>
                   )}

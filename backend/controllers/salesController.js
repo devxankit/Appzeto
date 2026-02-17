@@ -124,6 +124,18 @@ const getPaymentRecovery = async (req, res) => {
           return null;
         }
 
+        const totalCost = Number(p.financialDetails?.totalCost || p.budget || 0);
+        const includeGST = !!p.financialDetails?.includeGST;
+
+        let baseCost = totalCost;
+        let gstAmount = 0;
+
+        if (includeGST && totalCost > 0) {
+          // Assuming 18% GST: total = base * 1.18 → base = total / 1.18
+          baseCost = Math.round(totalCost / 1.18);
+          gstAmount = Math.max(0, totalCost - baseCost);
+        }
+
         return {
           projectId: p._id.toString(),
           projectName: p.name || 'Unnamed Project',
@@ -133,7 +145,11 @@ const getPaymentRecovery = async (req, res) => {
           email: p.client.email || null,
           companyName: p.client.companyName || null,
           dueDate: p.dueDate || null,
-          remainingAmount: rem
+          remainingAmount: rem,
+          totalCost,
+          baseCost,
+          gstAmount,
+          includeGST
         };
       })
       .filter(Boolean)
@@ -1346,25 +1362,35 @@ const getDashboardHeroStats = async (req, res) => {
     const projects = await Project.find({
       client: { $in: allClientIds },
       'financialDetails.advanceReceived': { $gt: 0 }
-    }).select('client financialDetails.totalCost budget createdAt');
+    }).select('client financialDetails.totalCost financialDetails.includeGST budget createdAt');
 
-    // Calculate monthly sales (sum of project costs for clients converted this month, approved only)
+    // Helper: calculate project cost for targets/sales excluding GST if included
+    const getProjectBaseCost = (project) => {
+      const rawCost = Number(project.financialDetails?.totalCost || project.budget || 0);
+      const includeGST = !!project.financialDetails?.includeGST;
+      if (!includeGST || rawCost <= 0) return rawCost;
+      // Assuming 18% GST: total = base * 1.18 → base = total / 1.18
+      const base = Math.round(rawCost / 1.18);
+      return base > 0 ? base : rawCost;
+    };
+
+    // Calculate monthly sales (sum of project base costs for clients converted this month, approved only)
     let monthlySales = 0;
     projects.forEach(p => {
       const clientIdStr = p.client.toString();
       if (monthlyClientIds.includes(clientIdStr)) {
-        const cost = p.financialDetails?.totalCost || p.budget || 0;
-        monthlySales += cost;
+        const costForTarget = getProjectBaseCost(p);
+        monthlySales += costForTarget;
       }
     });
 
-    // Calculate today's sales (sum of project costs for clients converted today, approved only)
+    // Calculate today's sales (sum of project base costs for clients converted today, approved only)
     let todaysSales = 0;
     projects.forEach(p => {
       const clientIdStr = p.client.toString();
       if (todayClientIds.includes(clientIdStr)) {
-        const cost = p.financialDetails?.totalCost || p.budget || 0;
-        todaysSales += cost;
+        const costForTarget = getProjectBaseCost(p);
+        todaysSales += costForTarget;
       }
     });
 
@@ -1545,12 +1571,37 @@ const getDashboardHeroStats = async (req, res) => {
               }
             },
             {
+              // Compute base cost for targets: if includeGST=true, divide totalCost by 1.18 and round
+              $addFields: {
+                rawCost: {
+                  $ifNull: ['$financialDetails.totalCost', { $ifNull: ['$budget', 0] }]
+                },
+                includeGST: {
+                  $ifNull: ['$financialDetails.includeGST', false]
+                }
+              }
+            },
+            {
+              $addFields: {
+                baseCostForTarget: {
+                  $cond: [
+                    { $and: [{ $eq: ['$includeGST', true] }, { $gt: ['$rawCost', 0] }] },
+                    {
+                      $round: [
+                        { $divide: ['$rawCost', 1.18] },
+                        0
+                      ]
+                    },
+                    '$rawCost'
+                  ]
+                }
+              }
+            },
+            {
               $group: {
                 _id: null,
                 totalSales: {
-                  $sum: {
-                    $ifNull: ['$financialDetails.totalCost', { $ifNull: ['$budget', 0] }]
-                  }
+                  $sum: '$baseCostForTarget'
                 }
               }
             }
