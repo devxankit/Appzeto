@@ -144,12 +144,13 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
   employee.fixedSalary = amount;
   await employee.save();
 
-  // Create salary records from joining month through current + 36 months (3 years ahead)
+  // Create salary records starting from the month AFTER joining through current + 36 months (3 years ahead)
   // Mark-paid auto-creates next month, so records extend indefinitely until admin deletes
   const joiningDate = employee.joiningDate || new Date();
   const joinDate = new Date(joiningDate);
   const now = new Date();
-  const startMonth = joinDate.getFullYear() * 12 + joinDate.getMonth();
+  // Example: joins on 5-Feb -> first salary should be 5-Mar (not Feb)
+  const startMonth = joinDate.getFullYear() * 12 + joinDate.getMonth() + 1;
   const endMonth = now.getFullYear() * 12 + now.getMonth() + 36;
   const months = [];
   for (let m = startMonth; m <= endMonth; m++) {
@@ -254,27 +255,32 @@ exports.getSalaryRecords = asyncHandler(async (req, res) => {
     .populate('updatedBy', 'name email')
     .sort({ paymentDate: 1, employeeName: 1 });
 
-  // Calculate incentiveAmount and rewardAmount (team target reward) for sales team employees
-  // IMPORTANT: Only update if status is 'pending' - preserve paid amounts for history
+  // Sync incentiveAmount and rewardAmount for sales (pending only). Do NOT overwrite
+  // existing non-zero amounts with 0 – that would "remove" incentive/reward after an admin
+  // only updates fixed salary and list is reloaded.
   for (const salary of salaries) {
     if (salary.employeeModel === 'Sales' && salary.department === 'sales') {
       try {
-        // Recalculate incentiveAmount if incentive is still pending
         if (salary.incentiveStatus === 'pending') {
           const incentives = await Incentive.find({
             salesEmployee: salary.employeeId,
             currentBalance: { $gt: 0 }
           });
           const totalIncentive = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
-          if (Math.abs((salary.incentiveAmount || 0) - totalIncentive) > 0.01) {
+          const existing = salary.incentiveAmount || 0;
+          const diff = Math.abs(existing - totalIncentive) > 0.01;
+          const wouldZero = totalIncentive === 0 && existing > 0;
+          if (diff && !wouldZero) {
             salary.incentiveAmount = totalIncentive;
             await salary.save();
           }
         }
-        // Recalculate rewardAmount (includes team target reward for team leads) if reward is still pending
         if (salary.rewardStatus === 'pending') {
           const teamTargetReward = await calculateTeamTargetRewardForMonth(salary.employeeId, salary.month);
-          if (Math.abs((salary.rewardAmount || 0) - teamTargetReward) > 0.01) {
+          const existing = salary.rewardAmount || 0;
+          const diff = Math.abs(existing - teamTargetReward) > 0.01;
+          const wouldZero = teamTargetReward === 0 && existing > 0;
+          if (diff && !wouldZero) {
             salary.rewardAmount = teamTargetReward;
             await salary.save();
           }
@@ -391,7 +397,45 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
   // Store previous status for transaction creation and next month creation
   const previousStatus = salary.status;
 
-  // Update fixedSalary if provided
+  // When only "safe" fields are being updated (fixedSalary, remarks, paymentMethod), use
+  // a selective $set so incentive/reward are never touched. This prevents incentive and
+  // reward from being cleared when admin only edits fixed salary.
+  const onlySafeFields = status === undefined && incentiveStatus === undefined && rewardStatus === undefined;
+  if (onlySafeFields) {
+    const setFields = { updatedBy: req.admin ? req.admin.id : null };
+
+    if (fixedSalary !== undefined && fixedSalary !== null) {
+      const parsedSalary = parseFloat(fixedSalary);
+      if (isNaN(parsedSalary)) {
+        return res.status(400).json({ success: false, message: 'Fixed salary must be a valid number' });
+      }
+      if (parsedSalary < 0) {
+        return res.status(400).json({ success: false, message: 'Fixed salary must be greater than or equal to 0' });
+      }
+      setFields.fixedSalary = parsedSalary;
+      const employee = await getEmployee(salary.employeeId, salary.employeeModel);
+      if (employee && typeof employee.fixedSalary !== 'undefined') {
+        employee.fixedSalary = parsedSalary;
+        await employee.save();
+      }
+    }
+    if (remarks !== undefined) setFields.remarks = remarks;
+    if (paymentMethod && salary.status === 'paid') setFields.paymentMethod = paymentMethod;
+
+    const updated = await Salary.findByIdAndUpdate(
+      req.params.id,
+      { $set: setFields },
+      { new: true }
+    ).populate('createdBy', 'name email').populate('updatedBy', 'name email');
+
+    return res.json({
+      success: true,
+      message: 'Salary record updated successfully',
+      data: updated
+    });
+  }
+
+  // Update fixedSalary if provided (when also updating status / incentive / reward)
   if (fixedSalary !== undefined && fixedSalary !== null) {
     const parsedSalary = parseFloat(fixedSalary);
     console.log('Parsing fixedSalary:', { original: fixedSalary, parsed: parsedSalary });

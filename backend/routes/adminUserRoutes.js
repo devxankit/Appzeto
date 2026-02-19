@@ -65,12 +65,12 @@ router.get('/salary/generate/:month', protect, authorize('admin', 'hr'), generat
 router.get('/salary/employee-ids', protect, authorize('admin', 'hr'), getEmployeesWithSalary);
 router.get('/salary/employee/:userType/:employeeId', protect, authorize('admin', 'hr'), getEmployeeSalaryHistory);
 router.put('/salary/set/:userType/:employeeId', protect, authorize('admin', 'hr'), setEmployeeSalary);
-router.put('/salary/:id/incentive', updateIncentivePayment);
-router.put('/salary/:id/reward', updateRewardPayment);
-router.get('/salary/:id', getSalaryRecord);
+router.put('/salary/:id/incentive', protect, authorize('admin', 'hr'), updateIncentivePayment);
+router.put('/salary/:id/reward', protect, authorize('admin', 'hr'), updateRewardPayment);
+router.get('/salary/:id', protect, authorize('admin', 'hr'), getSalaryRecord);
 router.put('/salary/:id', protect, authorize('admin', 'hr'), updateSalaryRecord);
-router.delete('/salary/:id', deleteSalaryRecord);
-router.get('/salary', getSalaryRecords);
+router.delete('/salary/:id', protect, authorize('admin', 'hr'), deleteSalaryRecord);
+router.get('/salary', protect, authorize('admin', 'hr'), getSalaryRecords);
 
 // Allowances Management (Admin/HR) - Must come before generic routes
 router.get('/allowances/statistics', getAllowanceStatistics);
