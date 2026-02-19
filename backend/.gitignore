@@ -70,3 +70,4 @@ backup/*.gz
 backup/local/
 backup/backup.pid
 backup/backup.log
+backup/status.json
