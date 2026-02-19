@@ -183,7 +183,7 @@ exports.getConversionFunnel = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Get revenue chart data
+// @desc    Get revenue chart data (uses conversionData.totalCost when available, else lead.value)
 // @route   GET /api/cp/dashboard/revenue-chart
 // @access  Private (Channel Partner only)
 exports.getRevenueChart = asyncHandler(async (req, res, next) => {
@@ -194,7 +194,7 @@ exports.getRevenueChart = asyncHandler(async (req, res, next) => {
   const startDate = new Date();
   startDate.setMonth(startDate.getMonth() - monthsNum);
 
-  // Get revenue from converted leads
+  // Get revenue from converted leads; use leadProfile.conversionData.totalCost when available
   const revenueByMonth = await CPLead.aggregate([
     {
       $match: {
@@ -204,12 +204,35 @@ exports.getRevenueChart = asyncHandler(async (req, res, next) => {
       }
     },
     {
+      $lookup: {
+        from: 'cpleadprofiles',
+        localField: 'leadProfile',
+        foreignField: '_id',
+        as: 'profile'
+      }
+    },
+    { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+    {
       $group: {
         _id: {
           year: { $year: '$convertedAt' },
           month: { $month: '$convertedAt' }
         },
-        revenue: { $sum: '$value' },
+        revenue: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $ne: ['$profile', null] },
+                  { $ne: ['$profile.conversionData', null] },
+                  { $gt: ['$profile.conversionData.totalCost', 0] }
+                ]
+              },
+              '$profile.conversionData.totalCost',
+              '$value'
+            ]
+          }
+        },
         count: { $sum: 1 }
       }
     },

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
 import PM_task_form from '../../DEV-components/PM_task_form'
 import TeamLead_task_form from '../../DEV-components/TeamLead_task_form'
-import { employeeService } from '../../DEV-services'
+import { employeeService, getStoredEmployeeData } from '../../DEV-services'
 import { useToast } from '../../../../contexts/ToastContext'
 import {
   FiFolder as FolderKanban,
@@ -432,14 +432,17 @@ const Employee_project_detail = () => {
     </div>
   )
 
-  const renderTasks = () => (
-    <div className="space-y-3">
-      {tasks.length > 0 ? tasks.map((task) => {
-        // Simple permission check: Team Leads can edit tasks they created
-        const currentUserId = localStorage.getItem('employeeId') // Basic way to get ID, ideally from a context/store
-        const canManageTask = isTeamLead && (task.createdBy?._id === currentUserId || task.createdBy === currentUserId)
+  const renderTasks = () => {
+    const currentUserId = (getStoredEmployeeData()?.id || getStoredEmployeeData()?._id || '').toString()
 
-        return (
+    return (
+      <div className="space-y-3">
+        {tasks.length > 0 ? tasks.map((task) => {
+          const createdByRaw = task.createdBy && (task.createdBy._id || task.createdBy.id || task.createdBy)
+          const createdById = createdByRaw && createdByRaw.toString ? createdByRaw.toString() : ''
+          const canManageTask = isTeamLead && currentUserId && createdById && createdById === currentUserId
+
+          return (
           <div key={task._id} onClick={() => navigate(`/employee-task/${task._id}?projectId=${id}`)} className="group bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary/20 transition-all duration-200 cursor-pointer">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4 flex-1 truncate">
@@ -479,18 +482,19 @@ const Employee_project_detail = () => {
               </div>
             </div>
           </div>
-        )
-      }) : (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckSquare className="h-8 w-8 text-gray-400" />
+          )
+        }) : (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckSquare className="h-8 w-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No tasks yet</h3>
+            <p className="text-gray-600">Tasks for this project will appear here</p>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No tasks yet</h3>
-          <p className="text-gray-600">Tasks for this project will appear here</p>
-        </div>
-      )}
-    </div>
-  )
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">

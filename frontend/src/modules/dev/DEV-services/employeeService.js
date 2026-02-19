@@ -160,7 +160,12 @@ const employeeService = {
           comments
         })
       });
-      return response.data;
+      const updatedTask = response.data;
+      return {
+        ...updatedTask,
+        pointsAwarded: response.pointsAwarded,
+        pointsReason: response.pointsReason
+      };
     } catch (error) {
       throw new Error(`Failed to update task status: ${error.message}`);
     }

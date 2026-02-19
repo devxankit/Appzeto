@@ -145,7 +145,13 @@ export const cpLeadService = {
 
   // Get all converted clients
   getConvertedClients: async (params = {}) => {
-    const queryParams = new URLSearchParams(params).toString();
+    const cleanParams = Object.entries(params).reduce((acc, [key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+    const queryParams = new URLSearchParams(cleanParams).toString();
     const url = `/cp/clients${queryParams ? `?${queryParams}` : ''}`;
     return await apiRequest(url, { method: 'GET' });
   },
@@ -155,36 +161,10 @@ export const cpLeadService = {
     return await apiRequest(`/cp/clients/${clientId}`, { method: 'GET' });
   },
 
-  // Add note to lead
-  addNoteToLead: async (leadId, noteData) => {
-    return await apiRequest(`/cp/leads/${leadId}/notes`, {
-      method: 'POST',
-      body: JSON.stringify(noteData)
-    });
-  },
-
-  // Request demo
-  requestDemo: async (leadId, demoData) => {
-    return await apiRequest(`/cp/leads/${leadId}/request-demo`, {
-      method: 'POST',
-      body: JSON.stringify(demoData)
-    });
-  },
-
-  // Transfer lead (if needed for CP)
-  transferLead: async (leadId, transferData) => {
-    return await apiRequest(`/cp/leads/${leadId}/transfer`, {
-      method: 'POST',
-      body: JSON.stringify(transferData)
-    });
-  },
-
-  // Get sales team (for sharing/transferring)
+  // Get sales team leads (for sharing) - same as getSalesTeamLeads for backward compatibility
   getSalesTeam: async () => {
     try {
-      const response = await apiRequest('/cp/sales-team', {
-        method: 'GET'
-      });
+      const response = await apiRequest('/cp/sales-team-leads', { method: 'GET' });
       return response.data || [];
     } catch (error) {
       console.error('Error fetching sales team:', error);

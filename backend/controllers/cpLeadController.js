@@ -42,10 +42,10 @@ exports.createLead = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Phone number and category are required', 400));
   }
 
-  // Check if lead with phone number already exists
-  const existingLead = await CPLead.findOne({ phone });
+  // Check if this CP already has a lead with this phone (unique per channel partner)
+  const existingLead = await CPLead.findOne({ assignedTo: cpId, phone });
   if (existingLead) {
-    return next(new ErrorResponse('Lead with this phone number already exists', 400));
+    return next(new ErrorResponse('You already have a lead with this phone number', 400));
   }
 
   // Verify category exists
@@ -579,13 +579,27 @@ exports.createLeadProfile = asyncHandler(async (req, res, next) => {
   });
 });
 
+// Allowed fields for lead profile update (prevents overwriting lead, createdBy, etc.)
+const LEAD_PROFILE_UPDATE_FIELDS = [
+  'name', 'businessName', 'email', 'category', 'projectType', 'estimatedCost',
+  'description', 'location', 'businessType', 'quotationSent', 'demoSent', 'proposalSent',
+  'documents', 'notes', 'conversionData'
+];
+
 // @desc    Update lead profile
 // @route   PUT /api/cp/leads/:id/profile
 // @access  Private (Channel Partner only)
 exports.updateLeadProfile = asyncHandler(async (req, res, next) => {
   const cpId = req.channelPartner.id;
   const leadId = req.params.id;
-  const updateData = req.body;
+  const body = req.body;
+
+  const updateData = {};
+  LEAD_PROFILE_UPDATE_FIELDS.forEach(field => {
+    if (body[field] !== undefined) {
+      updateData[field] = body[field];
+    }
+  });
 
   const lead = await CPLead.findOne({
     _id: leadId,

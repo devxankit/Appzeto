@@ -28,8 +28,8 @@ const {
 const { protect, authorize } = require('../middlewares/auth');
 
 // Apply authentication and authorization to all routes
-// router.use(protect);
-// router.use(authorize('admin', 'hr'));
+router.use(protect);
+router.use(authorize('admin', 'hr'));
 
 // @route   GET /api/admin/channel-partners/statistics
 // @desc    Get channel partner statistics

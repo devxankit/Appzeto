@@ -16,7 +16,7 @@ const {
   getPublishedNoticesForEmployee,
   incrementNoticeViews
 } = require('../controllers/noticeController');
-const { protect } = require('../middlewares/auth');
+const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
 
@@ -26,8 +26,8 @@ router.post('/create-demo', createDemoEmployee); // Remove in production
 router.post('/forgot-password', forgotPassword);
 router.put('/reset-password/:resettoken', resetPassword);
 
-// Protected routes
-router.use(protect); // All routes below this middleware are protected
+// Protected routes - employee only
+router.use(protect, authorize('employee')); // All routes below this middleware are for authenticated employees only
 
 router.get('/profile', getEmployeeProfile);
 router.get('/my-team', getMyTeam);

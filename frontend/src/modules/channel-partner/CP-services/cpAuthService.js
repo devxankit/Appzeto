@@ -27,7 +27,7 @@ export const cpAuthService = {
       if (response.data && response.token) {
         clearOtherRoleSessions('cp'); // so refresh doesn't show admin/other role
         tokenUtils.set(response.token);
-        cpStorage.set(response.data);
+        cpStorage.set({ ...response.data, loginTime: new Date().toISOString() });
       }
 
       // Register FCM token after successful login (defer until after navigation to cp-dashboard)

@@ -4,7 +4,6 @@ const cpLeadSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: [true, 'Phone number is required'],
-    unique: true,
     trim: true,
     match: [/^[0-9]{10}$/, 'Please enter a valid 10-digit phone number']
   },
@@ -146,6 +145,8 @@ const cpLeadSchema = new mongoose.Schema({
 
 // Indexes for better performance
 cpLeadSchema.index({ assignedTo: 1 });
+// One lead per phone per channel partner (same phone can exist for different CPs)
+cpLeadSchema.index({ assignedTo: 1, phone: 1 }, { unique: true });
 cpLeadSchema.index({ category: 1 });
 cpLeadSchema.index({ status: 1 });
 cpLeadSchema.index({ createdBy: 1 });

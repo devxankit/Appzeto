@@ -201,9 +201,16 @@ const logoutEmployee = async (req, res) => {
 
 // @desc    Create demo Employee (for development only)
 // @route   POST /api/employee/create-demo
-// @access  Public (remove in production)
+// @access  Public in development only
 const createDemoEmployee = async (req, res) => {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({
+        success: false,
+        message: 'Demo employee endpoint is disabled in production'
+      });
+    }
+
     // Check if demo Employee already exists
     const existingEmployee = await Employee.findOne({ email: 'employee@demo.com' });
 

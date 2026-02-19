@@ -155,11 +155,6 @@ const CP_login = () => {
       const response = await verifyOTP(formData.phoneNumber, formData.otp)
       
       if (response.success) {
-        localStorage.setItem('cpUser', JSON.stringify({ 
-          ...response?.data, 
-          loginTime: new Date().toISOString() 
-        }))
-        
         toast.login(`Welcome back, ${response?.data?.name || 'Channel Partner'}!`, {
           title: 'Login Successful',
           duration: 3000
