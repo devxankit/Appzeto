@@ -623,7 +623,7 @@ const SL_leadProfile = () => {
       return
     }
 
-    // Find client by phone first (most reliable), then by name from my converted clients
+    // Try to find linked client (if lead is already converted), but allow meetings even without a client.
     let clientId = null
     const leadPhone = (lead?.phone || '').toString().trim()
     if (leadPhone) {
@@ -640,11 +640,6 @@ const SL_leadProfile = () => {
       }
     }
 
-    if (!clientId) {
-      toast.error('Client not found. Convert this lead to a client first')
-      return
-    }
-
     const assigneeId = salesTeam.find(m => m.name === meetingForm.assignee)?._id
     if (!assigneeId) {
       toast.error('Please select an assignee')
@@ -653,7 +648,8 @@ const SL_leadProfile = () => {
 
     setIsLoading(true)
     salesMeetingsService.create({
-      client: clientId,
+      client: clientId || undefined,
+      lead: lead?._id || id,
       meetingDate: meetingForm.meetingDate,
       meetingTime: meetingForm.meetingTime,
       meetingType: meetingForm.meetingType,

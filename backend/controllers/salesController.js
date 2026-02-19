@@ -674,6 +674,7 @@ const listSalesMeetings = async (req, res) => {
     }
     const items = await SalesMeeting.find(q)
       .populate('client', 'name phoneNumber')
+      .populate('lead', 'name phone')
       .populate('assignee', 'name')
       .sort({ meetingDate: 1, meetingTime: 1 });
     const todayStr = new Date().toISOString().split('T')[0];

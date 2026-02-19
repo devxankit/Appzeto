@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
@@ -21,6 +22,7 @@ import SL_navbar from '../SL-components/SL_navbar'
 
 const SL_newLeads = () => {
   const { toast } = useToast()
+  const navigate = useNavigate()
   
   // Team lead flag (only team leads can share leads with CP)
   const [isTeamLead, setIsTeamLead] = useState(false)
@@ -72,6 +74,11 @@ const SL_newLeads = () => {
     } catch (error) {
       console.error('Error fetching categories:', error)
     }
+  }
+
+  const handleProfile = (leadId) => {
+    if (!leadId) return
+    navigate(`/lead-profile/${leadId}`)
   }
 
   // Load team lead flag from stored sales data
