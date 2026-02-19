@@ -1471,8 +1471,8 @@ const getDashboardHeroStats = async (req, res) => {
         if (!activeTarget && !isAchieved && !isDeadlinePassed) {
           activeTarget = targetAmount;
           activeTargetNumber = target.targetNumber;
-          // Progress relative to this target only (reset from 0% for this target)
-          progressToTarget = Math.round(targetProgress);
+          // Progress synced with target card: use same cumulative progress as the card (monthlySales / target amount)
+          progressToTarget = Math.round(cumulativeProgress);
         }
 
         // Update previous achieved amount for next iteration
@@ -5393,16 +5393,24 @@ const increaseProjectCost = async (req, res) => {
     const salesPerson = await Sales.findById(salesId).select('name');
     const salesName = salesPerson?.name || 'Sales Employee';
 
-    // Store current cost
+    // Store current cost; for GST projects, treat entered amount as base and add base + 18% to total
     const currentCost = project.financialDetails?.totalCost || project.budget || 0;
-    const newCost = currentCost + increaseAmount;
+    const includeGST = project.financialDetails?.includeGST === true;
+    const amountToAdd = includeGST
+      ? Math.round(increaseAmount * 1.18)
+      : increaseAmount;
+    const newCost = currentCost + amountToAdd;
 
-    // Create request for admin approval
+    const descriptionText = includeGST
+      ? `${salesName} requests to increase project cost by ₹${increaseAmount.toLocaleString()} (base) + GST: ₹${amountToAdd.toLocaleString()} total for project "${project.name || 'Project'}". Current cost: ₹${currentCost.toLocaleString()}, New cost: ₹${newCost.toLocaleString()}. Reason: ${reason.trim()}`
+      : `${salesName} requests to increase project cost by ₹${amountToAdd.toLocaleString()} for project "${project.name || 'Project'}". Current cost: ₹${currentCost.toLocaleString()}, New cost: ₹${newCost.toLocaleString()}. Reason: ${reason.trim()}`;
+
+    // Create request for admin approval (request.amount = amountToAdd so approval adds correct total)
     const request = await Request.create({
       module: 'sales',
       type: 'increase-cost',
-      title: `Increase Project Cost - ₹${increaseAmount.toLocaleString()}`,
-      description: `${salesName} requests to increase project cost by ₹${increaseAmount.toLocaleString()} for project "${project.name || 'Project'}". Current cost: ₹${currentCost.toLocaleString()}, New cost: ₹${newCost.toLocaleString()}. Reason: ${reason.trim()}`,
+      title: `Increase Project Cost - ₹${amountToAdd.toLocaleString()}`,
+      description: descriptionText,
       priority: 'normal',
       requestedBy: salesId,
       requestedByModel: 'Sales',
@@ -5410,7 +5418,7 @@ const increaseProjectCost = async (req, res) => {
       recipientModel: 'Admin',
       client: client._id,
       project: project._id,
-      amount: increaseAmount,
+      amount: amountToAdd,
       status: 'pending',
       metadata: {
         previousCost: currentCost,
@@ -5423,7 +5431,7 @@ const increaseProjectCost = async (req, res) => {
       success: true,
       data: {
         request: request,
-        costIncrease: increaseAmount,
+        costIncrease: amountToAdd,
         previousCost: currentCost,
         newCost: newCost
       },
@@ -5669,10 +5677,11 @@ const getWalletSummary = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
 
-    // Load sales employee for salary, per-client incentive, and team lead info
-    const me = await Sales.findById(salesId).select('fixedSalary incentivePerClient name isTeamLead teamLeadTarget teamLeadTargetReward teamMembers');
+    // Load sales employee for salary, per-client incentive, reward, and team lead info
+    const me = await Sales.findById(salesId).select('fixedSalary incentivePerClient reward name isTeamLead teamLeadTarget teamLeadTargetReward teamMembers');
     const perClient = Number(me?.incentivePerClient || 0);
     const fixedSalary = Number(me?.fixedSalary || 0);
+    const rewardEarned = Number(me?.reward || 0);
     const isTeamLead = me?.isTeamLead || false;
     const teamLeadTarget = Number(me?.teamLeadTarget || 0);
     const teamLeadTargetReward = Number(me?.teamLeadTargetReward || 0);
@@ -5787,6 +5796,28 @@ const getWalletSummary = async (req, res) => {
 
     // Add incentive payments and reward payments from Salary model (when admin pays)
     const Salary = require('../models/Salary');
+
+    // Reward credit status for current month (Sales target reward)
+    // Note: rewardAmount/rewardStatus live on Salary records when admin pays rewards.
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentMonthSalaryRecord = await Salary.findOne({
+      employeeId: salesId,
+      employeeModel: 'Sales',
+      month: currentMonth
+    }).select('rewardStatus rewardAmount').lean();
+
+    const rewardStatus = currentMonthSalaryRecord &&
+      currentMonthSalaryRecord.rewardStatus === 'paid' &&
+      (currentMonthSalaryRecord.rewardAmount || 0) > 0
+      ? 'paid'
+      : 'pending';
+
+    const rewardPayload = {
+      earned: rewardEarned,
+      currentReward: rewardStatus === 'paid' ? 0 : rewardEarned,
+      status: rewardStatus
+    };
+
     const paidSalaryRecords = await Salary.find({
       employeeId: salesId,
       employeeModel: 'Sales',
@@ -5823,14 +5854,9 @@ const getWalletSummary = async (req, res) => {
     // Team target reward: calculate current month earned amount and paid status
     let teamTargetRewardPayload = null;
     if (isTeamLead && teamLeadTarget > 0 && teamLeadTargetReward > 0) {
-      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      const salaryRecord = await Salary.findOne({
-        employeeId: salesId,
-        employeeModel: 'Sales',
-        month: currentMonth
-      }).select('rewardStatus rewardAmount').lean();
-
-      const isPaid = salaryRecord && salaryRecord.rewardStatus === 'paid' && (salaryRecord.rewardAmount || 0) > 0;
+      const isPaid = currentMonthSalaryRecord &&
+        currentMonthSalaryRecord.rewardStatus === 'paid' &&
+        (currentMonthSalaryRecord.rewardAmount || 0) > 0;
       let currentReward = 0;
       let status = 'pending';
 
@@ -5886,6 +5912,8 @@ const getWalletSummary = async (req, res) => {
           allTime, // Regular incentives only
           breakdown
         },
+        rewardEarned, // Backward compatibility (same as reward.earned)
+        reward: rewardPayload,
         isTeamLead: isTeamLead, // Include team lead status
         teamLeadIncentive: {
           total: teamLeadTotalIncentive,

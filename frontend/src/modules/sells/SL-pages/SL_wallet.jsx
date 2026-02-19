@@ -62,6 +62,10 @@ const SL_wallet = () => {
       // Check if user is a team lead
       const isTeamLead = data?.isTeamLead || false
 
+      // Reward earned from achieving sales targets
+      const rewardEarned = Number(data?.rewardEarned ?? 0)
+      const reward = data?.reward || { earned: rewardEarned, currentReward: rewardEarned, status: rewardEarned > 0 ? 'pending' : 'pending' }
+
       // Use backend values directly (backend separates regular and team lead incentives)
       const currentBalance = current // Only regular incentives
       const pendingIncentive = pending // Only regular incentives
@@ -72,6 +76,12 @@ const SL_wallet = () => {
         monthlyEarning: monthly, // Regular incentives only
         totalEarning: allTime, // Regular incentives only
         monthlySalary: fixedSalary,
+        rewardEarned: rewardEarned, // Backward compatibility
+        reward: {
+          earned: Number(reward?.earned ?? rewardEarned),
+          currentReward: Number(reward?.currentReward ?? rewardEarned),
+          status: reward?.status || 'pending'
+        },
         isTeamLead: isTeamLead, // Store team lead status
         teamLeadIncentive: {
           total: teamLeadIncentiveTotal || 0,
@@ -268,6 +278,38 @@ const SL_wallet = () => {
                   <SkeletonLoader className="h-6 w-24" />
                 ) : (
                   <p className="text-gray-900 text-lg font-bold">{formatCurrency(wallet?.monthlySalary)}</p>
+                )}
+              </div>
+            </motion.div>
+
+            {/* Reward Earned (from achieving sales targets) */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.52 }}
+              className="mb-3"
+            >
+              <div className="bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-amber-300/50 shadow-sm">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-amber-800 text-xs font-semibold">Reward Earned</span>
+                  <div className="flex items-center gap-1">
+                    {!loading && wallet?.reward?.status === 'paid' && (
+                      <span className="text-amber-800 text-[10px] font-medium bg-amber-100 px-1.5 py-0.5 rounded">Paid</span>
+                    )}
+                    <FiTarget className="text-amber-600 text-sm" />
+                  </div>
+                </div>
+                {loading ? (
+                  <SkeletonLoader className="h-6 w-24" />
+                ) : (
+                  <p className="text-gray-900 text-lg font-bold">{formatCurrency(wallet?.reward?.earned ?? wallet?.rewardEarned)}</p>
+                )}
+                {!loading && (wallet?.reward?.earned ?? wallet?.rewardEarned) > 0 ? (
+                  <p className="text-amber-600 text-xs mt-0.5">
+                    {wallet?.reward?.status === 'paid' ? 'Reward credited/paid' : `Pending credit: ${formatCurrency(wallet?.reward?.currentReward ?? wallet?.rewardEarned)}`}
+                  </p>
+                ) : (
+                  <p className="text-amber-600 text-xs mt-0.5">From achieving sales targets</p>
                 )}
               </div>
             </motion.div>

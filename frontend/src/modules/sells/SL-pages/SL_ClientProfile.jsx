@@ -1151,6 +1151,11 @@ const SL_ClientProfile = () => {
                     placeholder="Amount"
                     className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                   />
+                  {clientData?.project?.projectDetails?.financialDetails?.includeGST && (
+                    <p className="mt-1 text-xs text-teal-600">
+                      Enter base amount; 18% GST will be added.
+                    </p>
+                  )}
                 </div>
 
                 {/* Reason Input */}

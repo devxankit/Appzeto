@@ -201,13 +201,17 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
     : 0;
 
   // Get sales statistics - apply date filter if provided
+  // Only count converted leads that still have an existing client (so deleted clients don't inflate stats)
   const leadDateFilter = (timeFilter && dateFilter) ? { createdAt: dateFilter } : {};
+  const validOriginLeadIds = await Client.distinct('originLead', { originLead: { $ne: null } });
+  const convertedMatch = {
+    status: 'converted',
+    _id: validOriginLeadIds.length ? { $in: validOriginLeadIds } : { $in: [null] }, // no valid clients -> 0 converted
+    ...((timeFilter && dateFilter) ? { createdAt: dateFilter } : {})
+  };
   const [totalLeads, convertedLeads] = await Promise.all([
     Lead.countDocuments((timeFilter && dateFilter) ? leadDateFilter : {}),
-    Lead.countDocuments({ 
-      status: 'converted',
-      ...((timeFilter && dateFilter) ? { createdAt: dateFilter } : {})
-    })
+    Lead.countDocuments(convertedMatch)
   ]);
 
   const conversionRate = totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0;
@@ -906,10 +910,19 @@ const getAdminLeaderboard = asyncHandler(async (req, res, next) => {
     pm.rank = index + 1;
   });
   
-  // Get sales team with conversion metrics
+  // Get sales team with conversion metrics (only count converted leads that still have a client)
   const salesTeam = await Sales.find({ isActive: true })
     .select('name email salesTarget currentSales currentIncentive');
-  
+
+  const validOriginLeadIds = await Client.distinct('originLead', { originLead: { $ne: null } });
+  const convertedBySales = validOriginLeadIds.length > 0
+    ? await Lead.aggregate([
+        { $match: { status: 'converted', _id: { $in: validOriginLeadIds } } },
+        { $group: { _id: '$assignedTo', convertedLeads: { $sum: 1 }, convertedValue: { $sum: '$value' } } }
+      ])
+    : [];
+  const convertedMap = new Map(convertedBySales.map((r) => [r._id?.toString(), { convertedLeads: r.convertedLeads, convertedValue: r.convertedValue }]));
+
   const salesLeaderboard = await Promise.all(
     salesTeam.map(async (member) => {
       const leadStats = await Lead.aggregate([
@@ -924,17 +937,12 @@ const getAdminLeaderboard = asyncHandler(async (req, res, next) => {
       ]);
       
       const totalLeads = leadStats.reduce((sum, stat) => sum + stat.count, 0);
-      const convertedLeads = leadStats.find(stat => stat._id === 'converted')?.count || 0;
-      const totalRevenue = leadStats.find(stat => stat._id === 'converted')?.totalValue || 0;
+      const corrected = convertedMap.get(member._id.toString()) || { convertedLeads: 0, convertedValue: 0 };
+      const convertedLeads = corrected.convertedLeads;
+      const totalRevenue = corrected.convertedValue;
       const conversionRate = totalLeads > 0 
         ? Math.round((convertedLeads / totalLeads) * 100) 
         : 0;
-      
-      // Get deals count from converted leads
-      const deals = await Lead.countDocuments({ 
-        assignedTo: member._id, 
-        status: 'converted' 
-      });
       
       return {
         _id: member._id,
@@ -953,7 +961,7 @@ const getAdminLeaderboard = asyncHandler(async (req, res, next) => {
         department: 'Sales',
         avgTime: '1.5 days',
         lastActive: member.updatedAt || member.createdAt,
-        projects: deals,
+        projects: convertedLeads, // Deals = converted leads with existing client
         role: 'Sales Executive',
         module: 'sales',
         earnings: member.currentSales || 0,
@@ -964,7 +972,7 @@ const getAdminLeaderboard = asyncHandler(async (req, res, next) => {
           leads: totalLeads,
           conversions: convertedLeads,
           revenue: totalRevenue,
-          deals: deals
+          deals: convertedLeads
         },
         conversionRate: conversionRate
       };

@@ -61,10 +61,11 @@ leadCategorySchema.virtual('convertedLeadCount', {
   match: { status: 'converted' }
 });
 
-// Method to get category performance
+// Method to get category performance (only count converted leads that still have a client)
 leadCategorySchema.methods.getPerformance = async function() {
   const Lead = mongoose.model('Lead');
-  
+  const Client = mongoose.model('Client');
+
   const stats = await Lead.aggregate([
     { $match: { category: this._id } },
     {
@@ -77,9 +78,22 @@ leadCategorySchema.methods.getPerformance = async function() {
   ]);
 
   const totalLeads = stats.reduce((sum, stat) => sum + stat.count, 0);
-  const convertedLeads = stats.find(stat => stat._id === 'converted')?.count || 0;
   const totalValue = stats.reduce((sum, stat) => sum + stat.totalValue, 0);
-  const convertedValue = stats.find(stat => stat._id === 'converted')?.totalValue || 0;
+
+  const validOriginLeadIds = await Client.distinct('originLead', { originLead: { $ne: null } });
+  let convertedLeads = 0;
+  let convertedValue = 0;
+  if (validOriginLeadIds.length > 0) {
+    const convertedAgg = await Lead.aggregate([
+      { $match: { category: this._id, status: 'converted', _id: { $in: validOriginLeadIds } } },
+      { $group: { _id: null, convertedLeads: { $sum: 1 }, convertedValue: { $sum: '$value' } } }
+    ]);
+    const row = convertedAgg[0];
+    if (row) {
+      convertedLeads = row.convertedLeads;
+      convertedValue = row.convertedValue;
+    }
+  }
 
   return {
     totalLeads,
@@ -129,23 +143,37 @@ leadCategorySchema.statics.getCategoryStatistics = async function(dateFilter = {
     projectMatchFilter.createdAt = dateFilter.createdAt;
   }
   
-  // Get lead statistics grouped by category
+  // Get lead statistics grouped by category (only count converted leads that still have a client)
   const leadStats = await Lead.aggregate([
     { $match: leadMatchFilter },
+    {
+      $lookup: {
+        from: 'clients',
+        localField: '_id',
+        foreignField: 'originLead',
+        as: '_clientRef'
+      }
+    },
+    {
+      $addFields: {
+        _isConvertedWithClient: {
+          $and: [
+            { $eq: ['$status', 'converted'] },
+            { $gt: [{ $size: '$_clientRef' }, 0] }
+          ]
+        }
+      }
+    },
     {
       $group: {
         _id: '$category',
         totalLeads: { $sum: 1 },
         convertedLeads: {
-          $sum: {
-            $cond: [{ $eq: ['$status', 'converted'] }, 1, 0]
-          }
+          $sum: { $cond: ['$_isConvertedWithClient', 1, 0] }
         },
         totalValue: { $sum: '$value' },
         convertedValue: {
-          $sum: {
-            $cond: [{ $eq: ['$status', 'converted'] }, '$value', 0]
-          }
+          $sum: { $cond: ['$_isConvertedWithClient', '$value', 0] }
         }
       }
     }

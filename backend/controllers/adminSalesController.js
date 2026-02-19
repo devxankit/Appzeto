@@ -360,6 +360,26 @@ const getLeadStatistics = asyncHandler(async (req, res, next) => {
     unassignedLeads: 0
   };
 
+  // Override converted counts: only count leads that still have an existing client (deleted clients excluded)
+  const validOriginLeadIds = await Client.distinct('originLead', { originLead: { $ne: null } });
+  if (validOriginLeadIds.length > 0) {
+    const convertedAgg = await Lead.aggregate([
+      { $match: { ...dateFilter, status: 'converted', _id: { $in: validOriginLeadIds } } },
+      { $group: { _id: null, convertedLeads: { $sum: 1 }, convertedValue: { $sum: '$value' } } }
+    ]);
+    const corrected = convertedAgg[0];
+    if (corrected) {
+      result.convertedLeads = corrected.convertedLeads;
+      result.convertedValue = corrected.convertedValue;
+    } else {
+      result.convertedLeads = 0;
+      result.convertedValue = 0;
+    }
+  } else {
+    result.convertedLeads = 0;
+    result.convertedValue = 0;
+  }
+
   // Calculate conversion rate
   result.conversionRate = result.totalLeads > 0 ? 
     (result.convertedLeads / result.totalLeads) * 100 : 0;
@@ -415,6 +435,12 @@ const getAllLeadCategories = asyncHandler(async (req, res, next) => {
     .populate('createdBy', 'name')
     .sort({ createdAt: -1 });
 
+  // Only count converted leads that still have an existing client
+  const validOriginLeadIds = await Client.distinct('originLead', { originLead: { $ne: null } });
+  const convertedCategoryMatch = validOriginLeadIds.length
+    ? { _id: { $in: validOriginLeadIds } }
+    : { _id: { $in: [null] } }; // match nothing when no valid clients
+
   // Get lead counts for each category
   const categoriesWithCounts = await Promise.all(
     categories.map(async (category) => {
@@ -425,7 +451,8 @@ const getAllLeadCategories = asyncHandler(async (req, res, next) => {
       });
       const convertedLeadCount = await Lead.countDocuments({ 
         category: category._id, 
-        status: 'converted' 
+        status: 'converted',
+        ...convertedCategoryMatch
       });
 
       return {
@@ -563,6 +590,16 @@ const getAllSalesTeam = asyncHandler(async (req, res, next) => {
     .populate('teamMembers', 'name email')
     .sort({ name: 1 });
 
+  // Only count converted leads that still have an existing client
+  const validOriginLeadIds = await Client.distinct('originLead', { originLead: { $ne: null } });
+  const convertedBySales = validOriginLeadIds.length > 0
+    ? await Lead.aggregate([
+        { $match: { status: 'converted', _id: { $in: validOriginLeadIds } } },
+        { $group: { _id: '$assignedTo', convertedLeads: { $sum: 1 }, convertedValue: { $sum: '$value' } } }
+      ])
+    : [];
+  const convertedMap = new Map(convertedBySales.map((r) => [r._id?.toString(), { convertedLeads: r.convertedLeads, convertedValue: r.convertedValue }]));
+
   // Get performance metrics for each team member
   const teamWithPerformance = await Promise.all(
     salesTeam.map(async (member) => {
@@ -578,9 +615,10 @@ const getAllSalesTeam = asyncHandler(async (req, res, next) => {
       ]);
 
       const totalLeads = leadStats.reduce((sum, stat) => sum + stat.count, 0);
-      const convertedLeads = leadStats.find(stat => stat._id === 'converted')?.count || 0;
       const totalValue = leadStats.reduce((sum, stat) => sum + stat.totalValue, 0);
-      const convertedValue = leadStats.find(stat => stat._id === 'converted')?.totalValue || 0;
+      const corrected = convertedMap.get(member._id.toString()) || { convertedLeads: 0, convertedValue: 0 };
+      const convertedLeads = corrected.convertedLeads;
+      const convertedValue = corrected.convertedValue;
 
       return {
         ...member.toObject(),
@@ -1273,7 +1311,7 @@ const getSalesOverview = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // Get lead statistics
+  // Get lead statistics (converted counts corrected below to only include leads with existing client)
   const leadStats = await Lead.aggregate([
     { $match: dateFilter },
     {
@@ -1294,6 +1332,23 @@ const getSalesOverview = asyncHandler(async (req, res, next) => {
       }
     }
   ]);
+
+  // Override converted counts: only count leads that still have an existing client
+  const validOriginLeadIds = await Client.distinct('originLead', { originLead: { $ne: null } });
+  if (validOriginLeadIds.length > 0) {
+    const convertedOverviewAgg = await Lead.aggregate([
+      { $match: { ...dateFilter, status: 'converted', _id: { $in: validOriginLeadIds } } },
+      { $group: { _id: null, convertedLeads: { $sum: 1 }, convertedValue: { $sum: '$value' } } }
+    ]);
+    const correctedOverview = convertedOverviewAgg[0];
+    if (leadStats[0]) {
+      leadStats[0].convertedLeads = correctedOverview ? correctedOverview.convertedLeads : 0;
+      leadStats[0].convertedValue = correctedOverview ? correctedOverview.convertedValue : 0;
+    }
+  } else if (leadStats[0]) {
+    leadStats[0].convertedLeads = 0;
+    leadStats[0].convertedValue = 0;
+  }
 
   // Get today's new leads specifically
   const todayStart = new Date();
@@ -1530,6 +1585,16 @@ const getTeamPerformance = asyncHandler(async (req, res, next) => {
   const salesTeam = await Sales.find({ isActive: true })
     .select('name email salesTarget currentSales currentIncentive');
 
+  // Only count converted leads that still have an existing client
+  const validOriginLeadIds = await Client.distinct('originLead', { originLead: { $ne: null } });
+  const convertedBySales = validOriginLeadIds.length > 0
+    ? await Lead.aggregate([
+        { $match: { status: 'converted', _id: { $in: validOriginLeadIds } } },
+        { $group: { _id: '$assignedTo', convertedLeads: { $sum: 1 }, convertedValue: { $sum: '$value' } } }
+      ])
+    : [];
+  const convertedMap = new Map(convertedBySales.map((r) => [r._id?.toString(), { convertedLeads: r.convertedLeads, convertedValue: r.convertedValue }]));
+
   const teamPerformance = await Promise.all(
     salesTeam.map(async (member) => {
       const leadStats = await Lead.aggregate([
@@ -1544,9 +1609,10 @@ const getTeamPerformance = asyncHandler(async (req, res, next) => {
       ]);
 
       const totalLeads = leadStats.reduce((sum, stat) => sum + stat.count, 0);
-      const convertedLeads = leadStats.find(stat => stat._id === 'converted')?.count || 0;
       const totalValue = leadStats.reduce((sum, stat) => sum + stat.totalValue, 0);
-      const convertedValue = leadStats.find(stat => stat._id === 'converted')?.totalValue || 0;
+      const corrected = convertedMap.get(member._id.toString()) || { convertedLeads: 0, convertedValue: 0 };
+      const convertedLeads = corrected.convertedLeads;
+      const convertedValue = corrected.convertedValue;
 
       return {
         id: member._id,
