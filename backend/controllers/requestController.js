@@ -254,19 +254,29 @@ const getRequests = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // Filter by direction
-  if (direction === 'incoming') {
-    filter.recipient = user.id;
-    filter.recipientModel = user.model;
-  } else if (direction === 'outgoing') {
-    filter.requestedBy = user.id;
-    filter.requestedByModel = user.model;
+  // Filter by direction - admins see all platform data (no isolation per admin)
+  const isAdmin = user.model === 'Admin';
+  if (isAdmin) {
+    // All admins see all requests; optional direction filter by role only
+    if (direction === 'incoming') {
+      filter.recipientModel = 'Admin';
+    } else if (direction === 'outgoing') {
+      filter.requestedByModel = 'Admin';
+    }
+    // direction === 'all': no recipient/requestedBy filter - show all requests
   } else {
-    // All requests where user is either sender or recipient
-    filter.$or = [
-      { requestedBy: user.id, requestedByModel: user.model },
-      { recipient: user.id, recipientModel: user.model }
-    ];
+    if (direction === 'incoming') {
+      filter.recipient = user.id;
+      filter.recipientModel = user.model;
+    } else if (direction === 'outgoing') {
+      filter.requestedBy = user.id;
+      filter.requestedByModel = user.model;
+    } else {
+      filter.$or = [
+        { requestedBy: user.id, requestedByModel: user.model },
+        { recipient: user.id, recipientModel: user.model }
+      ];
+    }
   }
 
   // Additional filters
@@ -409,11 +419,12 @@ const getRequestById = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Request not found', 404));
   }
 
-  // Check if user is sender or recipient
+  // Check if user is sender or recipient; any admin can view any request (no data isolation)
   const isSender = String(request.requestedBy) === String(user.id) && request.requestedByModel === user.model;
   const isRecipient = String(request.recipient) === String(user.id) && request.recipientModel === user.model;
+  const isAdminViewingAny = user.model === 'Admin';
 
-  if (!isSender && !isRecipient) {
+  if (!isSender && !isRecipient && !isAdminViewingAny) {
     return next(new ErrorResponse('Not authorized to access this request', 403));
   }
 
@@ -452,10 +463,11 @@ const respondToRequest = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Request not found', 404));
   }
 
-  // Check if user is the recipient
+  // Check if user is the recipient; any admin can respond to requests addressed to Admin (no isolation)
   const isRecipient = String(request.recipient) === String(user.id) && request.recipientModel === user.model;
+  const isAdminRespondingToAdminRequest = user.model === 'Admin' && request.recipientModel === 'Admin';
 
-  if (!isRecipient) {
+  if (!isRecipient && !isAdminRespondingToAdminRequest) {
     return next(new ErrorResponse('Only the recipient can respond to this request', 403));
   }
 
@@ -775,21 +787,30 @@ const getRequestStatistics = asyncHandler(async (req, res, next) => {
 
   const { direction = 'all' } = req.query;
 
-  // Build filter
+  // Build filter - admins see stats for all platform requests (no isolation)
   const filter = {};
+  const isAdmin = user.model === 'Admin';
 
-  if (direction === 'incoming') {
-    filter.recipient = user.id;
-    filter.recipientModel = user.model;
-  } else if (direction === 'outgoing') {
-    filter.requestedBy = user.id;
-    filter.requestedByModel = user.model;
+  if (isAdmin) {
+    if (direction === 'incoming') {
+      filter.recipientModel = 'Admin';
+    } else if (direction === 'outgoing') {
+      filter.requestedByModel = 'Admin';
+    }
+    // direction === 'all': no filter - all requests
   } else {
-    // All requests where user is either sender or recipient
-    filter.$or = [
-      { requestedBy: user.id, requestedByModel: user.model },
-      { recipient: user.id, recipientModel: user.model }
-    ];
+    if (direction === 'incoming') {
+      filter.recipient = user.id;
+      filter.recipientModel = user.model;
+    } else if (direction === 'outgoing') {
+      filter.requestedBy = user.id;
+      filter.requestedByModel = user.model;
+    } else {
+      filter.$or = [
+        { requestedBy: user.id, requestedByModel: user.model },
+        { recipient: user.id, recipientModel: user.model }
+      ];
+    }
   }
 
   // Get statistics
