@@ -5,7 +5,8 @@ const {
   logoutAdmin,
   createDemoAdmin,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  updateAdminPassword
 } = require('../controllers/adminController');
 const { protect, authorize, canAccessHR, isAdmin } = require('../middlewares/auth');
 
@@ -21,6 +22,7 @@ router.put('/reset-password/:resettoken', resetPassword);
 router.use(protect); // All routes below this middleware are protected
 
 router.get('/profile', getAdminProfile);
+router.put('/profile/password', updateAdminPassword);
 router.post('/logout', logoutAdmin);
 
 // Admin only routes (full access)
@@ -37,7 +39,7 @@ router.post('/logout', logoutAdmin);
 // Attendance (Admin/HR)
 const upload = require('../middlewares/upload');
 const { uploadAttendance, getAttendance } = require('../controllers/adminAttendanceController');
-router.use(authorize('admin', 'hr'));
+router.use(authorize('admin', 'hr', 'accountant'));
 router.post('/attendance/upload', upload.single('file'), uploadAttendance);
 router.get('/attendance', getAttendance);
 

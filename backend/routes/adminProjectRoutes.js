@@ -19,9 +19,9 @@ const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
 
-// All routes are protected and admin-only
+// All routes are protected; admin and PEM can access (PEM for project expense management page)
 router.use(protect);
-router.use(authorize('admin'));
+router.use(authorize('admin', 'pem'));
 
 // Admin project routes
 router.get('/', getAllProjects);

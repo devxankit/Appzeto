@@ -22,7 +22,8 @@ import {
   FiInfo,
   FiArrowDown,
   FiArrowUp,
-  FiShield
+  FiShield,
+  FiChevronDown
 } from 'react-icons/fi'
 
 const PM_request = () => {
@@ -45,10 +46,12 @@ const PM_request = () => {
     description: '',
     type: 'approval',
     priority: 'normal',
-    recipientType: 'employee', // 'employee', 'client', 'admin'
+    recipientType: 'employee',
     recipientId: '',
+    recipientName: '',
     category: ''
   })
+  const [showRecipientDropdown, setShowRecipientDropdown] = useState(false)
 
   // Data states
   const [requestsData, setRequestsData] = useState({
@@ -161,7 +164,7 @@ const PM_request = () => {
 
   const loadRecipients = async () => {
     try {
-      const types = ['employee', 'client', 'admin']
+      const types = ['employee', 'client', 'admin', 'sales']
       const recipientsData = {}
       
       for (const type of types) {
@@ -206,6 +209,7 @@ const PM_request = () => {
       case 'employee': return 'bg-blue-100 text-blue-700'
       case 'client': return 'bg-purple-100 text-purple-700'
       case 'admin': return 'bg-red-100 text-red-700'
+      case 'sales': return 'bg-teal-100 text-teal-700'
       default: return 'bg-gray-100 text-gray-700'
     }
   }
@@ -214,6 +218,7 @@ const PM_request = () => {
     switch (type) {
       case 'employee': return 'bg-blue-100 text-blue-700'
       case 'client': return 'bg-purple-100 text-purple-700'
+      case 'sales': return 'bg-teal-100 text-teal-700'
       default: return 'bg-gray-100 text-gray-700'
     }
   }
@@ -242,6 +247,7 @@ const PM_request = () => {
       case 'employee': return 'Employee'
       case 'client': return 'Client'
       case 'admin': return 'Admin'
+      case 'sales': return 'Sales'
       default: return type
     }
   }
@@ -250,6 +256,8 @@ const PM_request = () => {
     switch (type) {
       case 'employee': return 'Employee'
       case 'client': return 'Client'
+      case 'admin': return 'Admin'
+      case 'sales': return 'Sales'
       default: return type
     }
   }
@@ -272,6 +280,7 @@ const PM_request = () => {
       priority: 'normal',
       recipientType: 'employee',
       recipientId: '',
+      recipientName: '',
       category: ''
     })
   }
@@ -315,6 +324,7 @@ const PM_request = () => {
           priority: 'normal',
           recipientType: 'employee',
           recipientId: '',
+          recipientName: '',
           category: ''
         })
         setIsCreateDialogOpen(false)
@@ -701,9 +711,10 @@ const PM_request = () => {
                   {/* Recipient Type */}
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-3">Send To *</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <button
-                        onClick={() => setNewRequest({...newRequest, recipientType: 'employee'})}
+                        type="button"
+                        onClick={() => setNewRequest({...newRequest, recipientType: 'employee', recipientId: '', recipientName: ''})}
                         className={`p-3 rounded-lg border-2 transition-all duration-200 ${
                           newRequest.recipientType === 'employee'
                             ? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -716,7 +727,8 @@ const PM_request = () => {
                         </div>
                       </button>
                       <button
-                        onClick={() => setNewRequest({...newRequest, recipientType: 'client'})}
+                        type="button"
+                        onClick={() => setNewRequest({...newRequest, recipientType: 'client', recipientId: '', recipientName: ''})}
                         className={`p-3 rounded-lg border-2 transition-all duration-200 ${
                           newRequest.recipientType === 'client'
                             ? 'border-purple-500 bg-purple-50 text-purple-700'
@@ -729,7 +741,8 @@ const PM_request = () => {
                         </div>
                       </button>
                       <button
-                        onClick={() => setNewRequest({...newRequest, recipientType: 'admin'})}
+                        type="button"
+                        onClick={() => setNewRequest({...newRequest, recipientType: 'admin', recipientId: '', recipientName: ''})}
                         className={`p-3 rounded-lg border-2 transition-all duration-200 ${
                           newRequest.recipientType === 'admin'
                             ? 'border-red-500 bg-red-50 text-red-700'
@@ -741,14 +754,63 @@ const PM_request = () => {
                           <span className="text-sm font-medium">Admin</span>
                         </div>
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewRequest({...newRequest, recipientType: 'sales', recipientId: '', recipientName: ''})}
+                        className={`p-3 rounded-lg border-2 transition-all duration-200 ${
+                          newRequest.recipientType === 'sales'
+                            ? 'border-teal-500 bg-teal-50 text-teal-700'
+                            : 'border-gray-200 hover:border-teal-300 text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center space-x-2">
+                          <FiSend className="w-4 h-4" />
+                          <span className="text-sm font-medium">Sales</span>
+                        </div>
+                      </button>
                     </div>
+                  </div>
+
+                  {/* Recipient selector */}
+                  <div className="relative">
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Select recipient *</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowRecipientDropdown(!showRecipientDropdown)}
+                      className="w-full p-3 border border-gray-300 rounded-lg text-left flex items-center justify-between bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    >
+                      <span className={newRequest.recipientId ? 'text-gray-900' : 'text-gray-500'}>
+                        {newRequest.recipientName || `Select ${formatRecipientType(newRequest.recipientType)}...`}
+                      </span>
+                      <FiChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showRecipientDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    {showRecipientDropdown && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {(recipients[newRequest.recipientType] || []).map((r) => (
+                          <div
+                            key={r.id || r._id}
+                            className="px-3 py-2 hover:bg-teal-50 cursor-pointer text-sm text-gray-800"
+                            onClick={() => {
+                              setNewRequest({ ...newRequest, recipientId: r.id || r._id, recipientName: r.name })
+                              setShowRecipientDropdown(false)
+                            }}
+                          >
+                            {r.name} {r.email && `(${r.email})`}
+                          </div>
+                        ))}
+                        {(!recipients[newRequest.recipientType] || recipients[newRequest.recipientType].length === 0) && (
+                          <div className="px-3 py-2 text-gray-500 text-sm">No {formatRecipientType(newRequest.recipientType)}s found</div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Request Type */}
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-3">Request Type *</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                       <button
+                        type="button"
                         onClick={() => setNewRequest({...newRequest, type: 'approval'})}
                         className={`p-3 rounded-lg border-2 transition-all duration-200 ${
                           newRequest.type === 'approval'
@@ -762,6 +824,7 @@ const PM_request = () => {
                         </div>
                       </button>
                       <button
+                        type="button"
                         onClick={() => setNewRequest({...newRequest, type: 'feedback'})}
                         className={`p-3 rounded-lg border-2 transition-all duration-200 ${
                           newRequest.type === 'feedback'
@@ -775,6 +838,7 @@ const PM_request = () => {
                         </div>
                       </button>
                       <button
+                        type="button"
                         onClick={() => setNewRequest({...newRequest, type: 'confirmation'})}
                         className={`p-3 rounded-lg border-2 transition-all duration-200 ${
                           newRequest.type === 'confirmation'
@@ -785,6 +849,34 @@ const PM_request = () => {
                         <div className="flex items-center justify-center space-x-2">
                           <FiCheckSquare className="w-4 h-4" />
                           <span className="text-sm font-medium">Confirmation</span>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewRequest({...newRequest, type: 'information-request'})}
+                        className={`p-3 rounded-lg border-2 transition-all duration-200 ${
+                          newRequest.type === 'information-request'
+                            ? 'border-teal-500 bg-teal-50 text-teal-700'
+                            : 'border-gray-200 hover:border-teal-300 text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center space-x-2">
+                          <FiInfo className="w-4 h-4" />
+                          <span className="text-sm font-medium">Ask for info</span>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewRequest({...newRequest, type: 'issue'})}
+                        className={`p-3 rounded-lg border-2 transition-all duration-200 ${
+                          newRequest.type === 'issue'
+                            ? 'border-orange-500 bg-orange-50 text-orange-700'
+                            : 'border-gray-200 hover:border-orange-300 text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center space-x-2">
+                          <FiAlertCircle className="w-4 h-4" />
+                          <span className="text-sm font-medium">Raise issue</span>
                         </div>
                       </button>
                     </div>

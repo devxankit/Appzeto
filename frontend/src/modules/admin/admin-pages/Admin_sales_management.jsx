@@ -36,6 +36,7 @@ import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
 import { useToast } from '../../../contexts/ToastContext'
 import { adminSalesService } from '../admin-services'
+import AdminSalesLeaderboard from '../admin-components/AdminSalesLeaderboard'
 
 const Admin_sales_management = () => {
   // Toast context
@@ -2316,7 +2317,8 @@ const Admin_sales_management = () => {
                 { key: 'lead-management', label: 'Lead Management', icon: FiTarget },
                 { key: 'sales-team', label: 'Sales Team', icon: FiUser },
                 { key: 'team-leads', label: 'Team Leads', icon: FiUserPlus },
-                { key: 'category-performance', label: 'Category Performance', icon: FiTrendingUp }
+                { key: 'category-performance', label: 'Category Performance', icon: FiTrendingUp },
+                { key: 'sales-leaderboard', label: 'Sales Leader Board', icon: FiBarChart }
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -2337,7 +2339,7 @@ const Admin_sales_management = () => {
           {/* Tab Content */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             {/* Search and Filter */}
-            {activeTab !== 'lead-management' && (
+            {activeTab !== 'lead-management' && activeTab !== 'sales-leaderboard' && (
             <div className="p-6 border-b border-gray-200">
                <div className="flex flex-col lg:flex-row gap-4 items-center">
                 <div className="w-full lg:w-80 relative">
@@ -3015,6 +3017,12 @@ const Admin_sales_management = () => {
                       )}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {activeTab === 'sales-leaderboard' && (
+                <div className="space-y-6">
+                  <AdminSalesLeaderboard />
                 </div>
               )}
 

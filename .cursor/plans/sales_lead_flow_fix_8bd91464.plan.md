@@ -21,6 +21,7 @@ todos:
       - fix_backend_exclusion
       - fix_frontend_connected
       - verify_hot_leads_page
+isProject: false
 ---
 
 # Sales Lead Flow Analysis and Fix
@@ -99,6 +100,8 @@ flowchart TD
     style NotPicked fill:#FF6B6B
 ```
 
+
+
 ## Issues Found
 
 1. **Frontend removes leads immediately on status change** - Should only remove if status is `not_interested`, `not_picked`, or `converted`
@@ -153,9 +156,10 @@ flowchart TD
 
 ## Testing Checklist
 
-- [ ] Mark connected lead as "hot" → Should remain visible in connected leads
-- [ ] Mark connected lead as "not_interested" → Should disappear from connected leads
-- [ ] Mark connected lead as "not_picked" → Should disappear from connected leads
-- [ ] Mark connected lead as "converted" → Should disappear from connected leads
-- [ ] Hot leads appear in both connected leads page and hot leads page
-- [ ] Dashboard stats show correct connected count (includes hot leads)
+- Mark connected lead as "hot" → Should remain visible in connected leads
+- Mark connected lead as "not_interested" → Should disappear from connected leads
+- Mark connected lead as "not_picked" → Should disappear from connected leads
+- Mark connected lead as "converted" → Should disappear from connected leads
+- Hot leads appear in both connected leads page and hot leads page
+- Dashboard stats show correct connected count (includes hot leads)
+

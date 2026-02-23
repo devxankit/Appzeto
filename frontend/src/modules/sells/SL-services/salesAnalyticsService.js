@@ -1,7 +1,7 @@
 import { apiRequest } from './baseApiService';
 
 // Sales Analytics Service
-// Provides dashboard stats and monthly conversions
+// Provides dashboard stats, monthly conversions, and leaderboard data
 
 const getDashboardStats = async (params = {}) => {
   const query = new URLSearchParams(params).toString();
@@ -25,11 +25,20 @@ const getDashboardHeroStats = async () => {
   return apiRequest(url, { method: 'GET' });
 };
 
+// Get sales leaderboard for sales module
+const getLeaderboard = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const url = `/sales/analytics/leaderboard${query ? `?${query}` : ''}`;
+  const response = await apiRequest(url, { method: 'GET' });
+  return response.data;
+};
+
 export default {
   getDashboardStats,
   getMonthlyConversions,
   getTileCardStats,
-  getDashboardHeroStats
+  getDashboardHeroStats,
+  getLeaderboard
 };
 
 

@@ -158,9 +158,9 @@ const Admin_sidebar = ({ isOpen, onClose }) => {
   const getFilteredMenuItems = () => {
     const role = adminData?.role
     
-    // Accountant can only see Finance Management
+    // Accountant can see Finance Management and HR Management
     if (role === 'accountant') {
-      return menuItems.filter(item => item.id === 'finance-management')
+      return menuItems.filter(item => item.id === 'finance-management' || item.id === 'hr-management')
     }
     
     // PEM can only see Project Expenses Management

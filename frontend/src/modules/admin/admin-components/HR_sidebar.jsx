@@ -1,5 +1,5 @@
 import React from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { 
   Users, 
   Cake, 
@@ -7,12 +7,15 @@ import {
   Banknote, 
   MessageSquare, 
   Gift, 
-  Receipt
+  Receipt,
+  Trophy
 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 
 const HR_sidebar = ({ activeTab, setActiveTab }) => {
   const location = useLocation()
+  const navigate = useNavigate()
+  const isOnLeaderboard = location.pathname === '/admin-leaderboard'
 
   // HR Management sections (tabs from HR management page)
   const hrMenuItems = [
@@ -66,6 +69,37 @@ const HR_sidebar = ({ activeTab, setActiveTab }) => {
     }
   }
 
+  // When on Leaderboard page, show only HR Management link + Leaderboard (active)
+  if (isOnLeaderboard) {
+    return (
+      <div className="fixed left-0 top-16 w-64 bg-white shadow-sm border-r border-gray-200 h-screen z-40">
+        <div className="p-6 h-full flex flex-col">
+          <div className="mb-6 pb-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-800">HR</h2>
+            <p className="text-sm text-gray-500 mt-1">Human Resources</p>
+          </div>
+          <nav className="space-y-2 flex-1">
+            <Button
+              variant="ghost"
+              className="w-full justify-start space-x-3 text-gray-500 hover:bg-gray-50/60 hover:text-gray-600"
+              onClick={() => navigate('/admin-hr-management')}
+            >
+              <Users className="h-5 w-5 text-gray-400" />
+              <span className="font-medium">HR Management</span>
+            </Button>
+            <Button
+              variant="default"
+              className="w-full justify-start space-x-3 bg-teal-50/80 text-teal-600 border-teal-100 shadow-sm"
+            >
+              <Trophy className="h-5 w-5 text-teal-500" />
+              <span className="font-medium">Leaderboard</span>
+            </Button>
+          </nav>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed left-0 top-16 w-64 bg-white shadow-sm border-r border-gray-200 h-screen z-40">
       <div className="p-6 h-full flex flex-col">
@@ -96,6 +130,16 @@ const HR_sidebar = ({ activeTab, setActiveTab }) => {
               </Button>
             )
           })}
+          <div className="pt-4 mt-4 border-t border-gray-200">
+            <Button
+              variant="ghost"
+              className="w-full justify-start space-x-3 text-gray-500 hover:bg-gray-50/60 hover:text-gray-600"
+              onClick={() => navigate('/admin-leaderboard')}
+            >
+              <Trophy className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+              <span className="font-medium">Leaderboard</span>
+            </Button>
+          </div>
         </nav>
       </div>
     </div>

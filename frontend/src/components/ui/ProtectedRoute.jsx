@@ -26,9 +26,10 @@ const ProtectedRoute = ({ children, requiredRole = 'admin' }) => {
       return <Navigate to="/admin-hr-management" replace />
     }
     
-    // Accountant can only access Finance Management
+    // Accountant can only access Finance Management and HR Management
     if (role === 'accountant') {
-      if (currentPath !== '/admin-finance-management') {
+      const allowedPaths = ['/admin-finance-management', '/admin-hr-management']
+      if (!allowedPaths.includes(currentPath)) {
         return <Navigate to="/admin-finance-management" replace />
       }
     }

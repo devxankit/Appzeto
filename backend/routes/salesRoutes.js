@@ -35,7 +35,8 @@ const {
   transferLead,
   addNoteToLead,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  getSalesLeaderboard
 } = require('../controllers/salesController');
 const { getPublishedNoticesForSales, incrementNoticeViews } = require('../controllers/noticeController');
 const { getSalesNotifications } = require('../controllers/salesNotificationController');
@@ -74,6 +75,8 @@ router.get('/dashboard/statistics', getSalesDashboardStats);
 router.get('/dashboard/stats', getDashboardStats);
 // Monthly conversions for bar chart
 router.get('/analytics/conversions/monthly', getMonthlyConversions);
+// Sales leaderboard (for sales module UI)
+router.get('/analytics/leaderboard', getSalesLeaderboard);
 
 // Lead Management
 router.get('/leads', getMyLeads);

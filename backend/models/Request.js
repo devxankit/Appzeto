@@ -24,7 +24,9 @@ const requestSchema = new mongoose.Schema({
       'timeline-extension',
       'budget-approval',
       'resource-allocation',
-      'withdrawal-request'
+      'withdrawal-request',
+      'information-request',
+      'issue'
     ],
     trim: true
   },

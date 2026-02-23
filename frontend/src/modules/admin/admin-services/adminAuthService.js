@@ -3,7 +3,7 @@ import { registerFCMToken } from '../../../services/pushNotificationService';
 import { clearOtherRoleSessions } from '../../../utils/clearOtherRoleSessions';
 
 // Admin Authentication Service - Only for login/logout functionality
-export const adminAuthService = {
+const adminAuthService = {
   // Login admin
   login: async (email, password) => {
     try {
@@ -151,6 +151,19 @@ export const adminAuthService = {
     } catch (error) {
       throw error;
     }
+  },
+
+  // Update password while logged in
+  changePassword: async (currentPassword, newPassword) => {
+    try {
+      const response = await apiRequest('/admin/profile/password', {
+        method: 'PUT',
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 
@@ -167,5 +180,8 @@ export const {
   forgotPassword: forgotPasswordAdmin,
   resetPassword: resetPasswordAdmin
 } = adminAuthService;
+
+// Named export for changePassword helper
+export const changePassword = adminAuthService.changePassword;
 
 export default adminAuthService;

@@ -10,9 +10,10 @@ const {
 } = require('../controllers/adminProjectExpenseController');
 const { protect, authorize } = require('../middlewares/auth');
 
-// Apply authentication and admin authorization to all routes
+// Apply authentication and authorization to all routes
+// Project Expense Manager (PEM) can also manage project expenses
 router.use(protect);
-router.use(authorize('admin'));
+router.use(authorize('admin', 'pem'));
 
 // Project expense routes
 router.route('/')

@@ -59,8 +59,7 @@ const Admin_navbar = ({ onToggleSidebar }) => {
   }
 
   const handleProfile = () => {
-    // Add profile logic here
-    console.log('Profile clicked')
+    navigate('/admin-profile')
   }
 
   // Get admin data for display

@@ -1,0 +1,45 @@
+# Implementation Plan - Separate Sales Leaderboard
+
+Add a dedicated Sales Leaderboard to the Sales Management page, matching the exact UI and logic from the Admin Leaderboard.
+
+## User Review Required
+
+> [!IMPORTANT]
+> The new leaderboard will use the same logic as the admin panel but will be accessible to sales users. I will implement a new backend endpoint specifically for sales users to ensure security and accessibility.
+
+## Proposed Changes
+
+### Backend
+
+#### [MODIFY] [salesController.js](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js)
+- Implement `getSalesLeaderboard` function.
+- This will aggregate [Lead](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js#1902-1993) and [Sales](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js#798-904) data to calculate revenue, conversions, and rankings, matching the logic in [adminAnalyticsController.js](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/adminAnalyticsController.js).
+
+#### [MODIFY] [salesRoutes.js](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/routes/salesRoutes.js)
+- Add route: `GET /api/sales/analytics/leaderboard` linked to `getSalesLeaderboard`.
+
+---
+
+### Frontend
+
+#### [MODIFY] [salesAnalyticsService.js](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/frontend/src/modules/sells/SL-services/salesAnalyticsService.js)
+- Add [getLeaderboard(params)](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/frontend/src/modules/admin/admin-services/adminDashboardService.js#47-68) method to call the new backend endpoint.
+
+#### [NEW] [SalesLeaderboard.jsx](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/frontend/src/modules/sells/SL-components/SalesLeaderboard.jsx)
+- Create a standalone component that renders the sales leaderboard.
+- UI will be a direct port from [Admin_leaderboard.jsx](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/frontend/src/modules/admin/admin-pages/Admin_leaderboard.jsx) (MemberCard, ranking logic, etc.).
+
+#### [MODIFY] [SL_team_management.jsx](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/frontend/src/modules/sells/SL-pages/SL_team_management.jsx)
+- Import and use the `SalesLeaderboard` component as a new section labeled "Sales Leader Board".
+
+## Verification Plan
+
+### Automated Tests
+- None planned for this UI-centric task.
+
+### Manual Verification
+1. **Login as Sales User**: Navigate to the Sales Management (My Team) page.
+2. **Verify Leaderboard Display**: Ensure the "Sales Leader Board" section appears at the bottom.
+3. **Verify Data Accuracy**: Confirm it matches the rankings seen in the Admin panel (if accessible).
+4. **Test Filters**: If any filters (period) are implemented, ensure they update the data correctly.
+5. **Check Interaction**: Test the "expand" functionality of member cards to see detailed metrics.

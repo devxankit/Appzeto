@@ -37,10 +37,18 @@ const SL_requests = () => {
   const [requests, setRequests] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [admins, setAdmins] = useState([])
+  const [pms, setPms] = useState([])
   const [clients, setClients] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showAdminDropdown, setShowAdminDropdown] = useState(false)
+  const [showPMDropdown, setShowPMDropdown] = useState(false)
   const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const [recipientType, setRecipientType] = useState('admin') // 'admin' | 'pm'
+  const [selectedRequest, setSelectedRequest] = useState(null)
+  const [showViewDialog, setShowViewDialog] = useState(false)
+  const [responseType, setResponseType] = useState('approve')
+  const [responseMessage, setResponseMessage] = useState('')
+  const [showResponseConfirm, setShowResponseConfirm] = useState(false)
   
   const [stats, setStats] = useState({
     total: 0,
@@ -56,6 +64,7 @@ const SL_requests = () => {
     priority: 'normal',
     recipientId: '',
     recipientName: '',
+    recipientModel: 'Admin',
     clientId: '',
     clientName: '',
     category: ''
@@ -66,10 +75,11 @@ const SL_requests = () => {
     fetchRequests()
   }, [selectedFilter, selectedDirection, searchTerm])
 
-  // Fetch admins and clients when create dialog opens
+  // Fetch admins, PMs and clients when create dialog opens
   useEffect(() => {
     if (showCreateDialog) {
       fetchAdmins()
+      fetchPMs()
       fetchClients()
     }
   }, [showCreateDialog])
@@ -81,6 +91,16 @@ const SL_requests = () => {
     } catch (error) {
       console.error('Error fetching admins:', error)
       toast.error('Failed to fetch admin list')
+    }
+  }
+
+  const fetchPMs = async () => {
+    try {
+      const response = await salesRequestService.getRecipients('pm')
+      setPms(response?.data || [])
+    } catch (error) {
+      console.error('Error fetching PMs:', error)
+      toast.error('Failed to fetch PM list')
     }
   }
 
@@ -99,7 +119,6 @@ const SL_requests = () => {
     try {
       const params = {
         direction: selectedDirection,
-        module: 'sales',
         status: selectedFilter !== 'all' ? selectedFilter : undefined,
         search: searchTerm || undefined,
         limit: 50
@@ -140,7 +159,7 @@ const SL_requests = () => {
         description: newRequest.description,
         priority: newRequest.priority,
         recipient: newRequest.recipientId,
-        recipientModel: 'Admin',
+        recipientModel: newRequest.recipientModel,
         client: newRequest.clientId || undefined,
         category: newRequest.category || undefined
       }
@@ -148,7 +167,6 @@ const SL_requests = () => {
       await salesRequestService.createRequest(requestData)
       toast.success('Request created successfully')
       
-      // Reset form
       setNewRequest({
         type: 'approval',
         title: '',
@@ -156,16 +174,48 @@ const SL_requests = () => {
         priority: 'normal',
         recipientId: '',
         recipientName: '',
+        recipientModel: 'Admin',
         clientId: '',
         clientName: '',
         category: ''
       })
       
       setShowCreateDialog(false)
-      fetchRequests() // Refresh requests list
+      setRecipientType('admin')
+      fetchRequests()
     } catch (error) {
       console.error('Error creating request:', error)
       toast.error(error.message || 'Failed to create request')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleRequestClick = (request) => {
+    setSelectedRequest(request)
+    setShowViewDialog(true)
+    setResponseType('approve')
+    setResponseMessage('')
+    setShowResponseConfirm(false)
+  }
+
+  const handleRespondToRequest = async () => {
+    if (responseType !== 'approve' && !responseMessage.trim()) {
+      toast.error('Message is required for reject or request changes')
+      return
+    }
+    if (!selectedRequest) return
+    setIsSubmitting(true)
+    try {
+      const id = selectedRequest._id || selectedRequest.id
+      await salesRequestService.respondToRequest(id, responseType, responseMessage)
+      toast.success('Response submitted successfully')
+      setShowViewDialog(false)
+      setSelectedRequest(null)
+      fetchRequests()
+    } catch (error) {
+      console.error('Error responding to request:', error)
+      toast.error(error.message || 'Failed to submit response')
     } finally {
       setIsSubmitting(false)
     }
@@ -188,6 +238,8 @@ const SL_requests = () => {
     { value: 'approval', label: 'Approval Request' },
     { value: 'feedback', label: 'Feedback Request' },
     { value: 'confirmation', label: 'Confirmation Request' },
+    { value: 'information-request', label: 'Ask for Information' },
+    { value: 'issue', label: 'Raise Issue' },
     { value: 'hold-work', label: 'Hold Work' },
     { value: 'accelerate-work', label: 'Accelerate Work' },
     { value: 'increase-cost', label: 'Increase Cost' },
@@ -218,6 +270,10 @@ const SL_requests = () => {
         return FiDollarSign
       case 'access-request':
         return FiUser
+      case 'information-request':
+        return FiUser
+      case 'issue':
+        return FiAlertCircle
       default:
         return FiAlertCircle
     }
@@ -245,6 +301,10 @@ const SL_requests = () => {
         return 'text-green-600 bg-green-50'
       case 'access-request':
         return 'text-pink-600 bg-pink-50'
+      case 'information-request':
+        return 'text-teal-600 bg-teal-50'
+      case 'issue':
+        return 'text-orange-600 bg-orange-50'
       default:
         return 'text-gray-600 bg-gray-50'
     }
@@ -501,7 +561,8 @@ const SL_requests = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
+                  onClick={() => handleRequestClick(request)}
+                  className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300 cursor-pointer"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center space-x-3 flex-1">
@@ -635,26 +696,72 @@ const SL_requests = () => {
                   </select>
                 </div>
 
-                {/* Recipient (Admin) */}
-                <div className="relative">
+                {/* Send To: Admin or PM */}
+                <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Send To (Admin) *
+                    Send To *
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecipientType('admin')
+                        setNewRequest(prev => ({ ...prev, recipientId: '', recipientName: '', recipientModel: 'Admin' }))
+                        setShowAdminDropdown(false)
+                        setShowPMDropdown(false)
+                      }}
+                      className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                        recipientType === 'admin'
+                          ? 'bg-teal-500 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Admin
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecipientType('pm')
+                        setNewRequest(prev => ({ ...prev, recipientId: '', recipientName: '', recipientModel: 'PM' }))
+                        setShowAdminDropdown(false)
+                        setShowPMDropdown(false)
+                      }}
+                      className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                        recipientType === 'pm'
+                          ? 'bg-teal-500 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Project Manager (PM)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Recipient (Admin or PM) */}
+                <div className="relative mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {recipientType === 'admin' ? 'Select Admin *' : 'Select PM *'}
                   </label>
                   <div
                     className="relative w-full cursor-pointer"
                     onClick={() => {
-                      setShowAdminDropdown(!showAdminDropdown)
-                      setShowClientDropdown(false)
+                      if (recipientType === 'admin') {
+                        setShowAdminDropdown(!showAdminDropdown)
+                        setShowPMDropdown(false)
+                      } else {
+                        setShowPMDropdown(!showPMDropdown)
+                        setShowAdminDropdown(false)
+                      }
                     }}
                   >
                     <input
                       type="text"
                       readOnly
-                      value={newRequest.recipientName || 'Select Admin'}
-                      placeholder="Select Admin"
+                      value={newRequest.recipientName || (recipientType === 'admin' ? 'Select Admin' : 'Select PM')}
+                      placeholder={recipientType === 'admin' ? 'Select Admin' : 'Select PM'}
                       className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                     />
-                    <FiChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 transition-transform duration-200 ${showAdminDropdown ? 'rotate-180' : ''}`} />
+                    <FiChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 transition-transform duration-200 ${(showAdminDropdown || showPMDropdown) ? 'rotate-180' : ''}`} />
                   </div>
                   {showAdminDropdown && (
                     <motion.div
@@ -669,7 +776,7 @@ const SL_requests = () => {
                             key={admin.id}
                             className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-gray-800 text-sm"
                             onClick={() => {
-                              setNewRequest(prev => ({ ...prev, recipientId: admin.id, recipientName: admin.name }))
+                              setNewRequest(prev => ({ ...prev, recipientId: admin.id, recipientName: admin.name, recipientModel: 'Admin' }))
                               setShowAdminDropdown(false)
                             }}
                           >
@@ -678,6 +785,31 @@ const SL_requests = () => {
                         ))
                       ) : (
                         <div className="px-4 py-2 text-gray-500 text-sm">No admins found</div>
+                      )}
+                    </motion.div>
+                  )}
+                  {showPMDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute z-20 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto"
+                    >
+                      {pms.length > 0 ? (
+                        pms.map((pm) => (
+                          <div
+                            key={pm.id}
+                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-gray-800 text-sm"
+                            onClick={() => {
+                              setNewRequest(prev => ({ ...prev, recipientId: pm.id, recipientName: pm.name, recipientModel: 'PM' }))
+                              setShowPMDropdown(false)
+                            }}
+                          >
+                            {pm.name} {pm.email && `(${pm.email})`}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-2 text-gray-500 text-sm">No PMs found</div>
                       )}
                     </motion.div>
                   )}
@@ -829,6 +961,145 @@ const SL_requests = () => {
                   {isSubmitting ? 'Creating...' : 'Create Request'}
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* View / Respond to Request Dialog */}
+      <AnimatePresence>
+        {showViewDialog && selectedRequest && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => !showResponseConfirm && setShowViewDialog(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900">{selectedRequest.title}</h2>
+                <button
+                  onClick={() => { setShowViewDialog(false); setShowResponseConfirm(false) }}
+                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <FiX className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-sm">
+                <p className="text-gray-600">{selectedRequest.description}</p>
+                <div className="flex flex-wrap gap-2">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRequestTypeColor(selectedRequest.type)}`}>
+                    {selectedRequest.type}
+                  </span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedRequest.status)}`}>
+                    {selectedRequest.status}
+                  </span>
+                  {selectedRequest.priority && selectedRequest.priority !== 'normal' && (
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                      {selectedRequest.priority}
+                    </span>
+                  )}
+                </div>
+                <p className="text-gray-500">
+                  From: {getRequesterName(selectedRequest)} • To: {getRecipientName(selectedRequest)}
+                </p>
+                <p className="text-gray-500 flex items-center gap-1">
+                  <FiCalendar className="text-sm" />
+                  {formatDate(selectedRequest.createdAt)} {formatTime(selectedRequest.createdAt)}
+                </p>
+              </div>
+
+              {selectedRequest.response && selectedRequest.response.message !== undefined && (
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-xs font-medium text-gray-700 mb-1">
+                    {selectedRequest.response.type === 'approve' ? 'Approved' : selectedRequest.response.type === 'reject' ? 'Rejected' : 'Changes requested'}:
+                  </p>
+                  <p className="text-sm text-gray-600">{selectedRequest.response.message}</p>
+                </div>
+              )}
+
+              {/* Incoming pending: show response form (request was sent to this Sales user) */}
+              {selectedRequest.status === 'pending' && selectedRequest.recipientModel === 'Sales' && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  {!showResponseConfirm ? (
+                    <>
+                      <p className="text-sm font-medium text-gray-700 mb-2">Your response</p>
+                      <div className="flex gap-2 mb-3">
+                        {['approve', 'reject', 'request_changes'].map((r) => (
+                          <button
+                            key={r}
+                            type="button"
+                            onClick={() => setResponseType(r)}
+                            className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                              responseType === r ? 'bg-teal-500 text-white' : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {r === 'approve' ? 'Approve' : r === 'reject' ? 'Reject' : 'Request changes'}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={responseMessage}
+                        onChange={(e) => setResponseMessage(e.target.value)}
+                        placeholder={responseType === 'approve' ? 'Comment (optional)' : 'Message (required)'}
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                      />
+                      <div className="flex justify-end gap-2 mt-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowViewDialog(false)}
+                          className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (responseType !== 'approve' && !responseMessage.trim()) {
+                              toast.error('Message is required')
+                              return
+                            }
+                            setShowResponseConfirm(true)
+                          }}
+                          className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600"
+                        >
+                          Submit response
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm text-gray-600">Confirm: you will respond with &quot;{responseType === 'approve' ? 'Approve' : responseType === 'reject' ? 'Reject' : 'Request changes'}&quot;.</p>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowResponseConfirm(false)}
+                          className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRespondToRequest}
+                          disabled={isSubmitting}
+                          className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 disabled:opacity-70"
+                        >
+                          {isSubmitting ? 'Submitting...' : 'Confirm'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}

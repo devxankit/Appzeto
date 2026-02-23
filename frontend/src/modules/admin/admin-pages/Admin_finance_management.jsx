@@ -6,6 +6,7 @@ import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
 import { adminFinanceService } from '../admin-services/adminFinanceService'
 import adminRequestService from '../admin-services/adminRequestService'
+import { adminStorage } from '../admin-services/baseApiService'
 import { useToast } from '../../../contexts/ToastContext'
 import { 
   FiDollarSign,
@@ -40,6 +41,10 @@ import {
 
 const Admin_finance_management = () => {
   const { toast } = useToast()
+  
+  // Accountant has same power as admin on this page (no role-based restrictions)
+  const adminData = adminStorage.get()
+  const isFullAccessOnPage = !adminData || adminData?.role === 'admin' || adminData?.role === 'accountant'
   
   // State management
   const [loading, setLoading] = useState(true)

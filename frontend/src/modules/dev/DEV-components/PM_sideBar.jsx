@@ -9,7 +9,8 @@ import {
   FiLogOut,
   FiX,
   FiCreditCard,
-  FiFileText
+  FiFileText,
+  FiMessageSquare
 } from 'react-icons/fi'
 import { gradients } from '../../../lib/colors'
 import { 
@@ -158,6 +159,11 @@ const PM_sideBar = ({ isOpen, onClose }) => {
       path: '/pm-tasks', 
       label: 'Tasks', 
       icon: FiCheckSquare
+    },
+    { 
+      path: '/pm-requests',
+      label: 'Requests',
+      icon: FiMessageSquare
     },
     { 
       path: '/pm-notice-board',

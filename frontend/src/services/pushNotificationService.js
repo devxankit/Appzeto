@@ -294,7 +294,7 @@ function setupForegroundNotificationHandler(handler) {
  */
 async function initializePushNotifications() {
   try {
-    const authToken = getAuthToken();
+    const authToken = getAuthTokenForCurrentContext();
     if (!authToken) return;
 
     await getOrRegisterServiceWorker();

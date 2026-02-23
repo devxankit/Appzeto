@@ -235,8 +235,8 @@ const canAccessHR = (req, res, next) => {
     });
   }
 
-  // Admin can access everything, HR can only access HR management
-  if (req.admin.role === 'admin' || req.admin.role === 'hr') {
+  // Admin can access everything; HR and Accountant can access HR management
+  if (req.admin.role === 'admin' || req.admin.role === 'hr' || req.admin.role === 'accountant') {
     next();
   } else {
     return res.status(403).json({

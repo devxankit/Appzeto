@@ -217,8 +217,21 @@ app.get('/status', (req, res) => {
 });
 
 // API routes with /api prefix
-// Note: More specific routes should come before less specific ones
+// Note: More specific routes MUST come before /api/admin (adminRoutes) so PEM etc. can reach project-expenses, projects, etc.
 app.use('/api/admin/users', adminUserRoutes);
+app.use('/api/admin/projects', adminProjectRoutes);
+app.use('/api/admin/analytics', adminAnalyticsRoutes);
+app.use('/api/admin/sales', adminSalesRoutes);
+app.use('/api/admin/finance', adminFinanceRoutes);
+app.use('/api/admin/project-expenses', adminProjectExpenseRoutes);
+app.use('/api/admin/project-expense-categories', adminProjectExpenseCategoryRoutes);
+app.use('/api/admin/project-credentials', adminProjectCredentialRoutes);
+app.use('/api/admin/rewards', adminRewardRoutes);
+app.use('/api/admin/notices', adminNoticeRoutes);
+app.use('/api/admin/backup', adminBackupRoutes);
+app.use('/api/admin/client-tags', adminClientTagRoutes);
+app.use('/api/admin/channel-partners', channelPartnerRoutes);
+app.use('/api/admin/quotations', quotationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/pm', pmRoutes);
 app.use('/api/sales', salesRoutes);
@@ -228,9 +241,21 @@ app.use('/api/channel-partner', cpAuthRoutes);
 app.use('/api/cp', cpRoutes);
 
 // API routes without /api prefix (for reverse proxy compatibility)
-// This allows frontend to call /admin/login instead of /api/admin/login
-// Note: More specific routes must come before less specific ones
+// Note: More specific admin routes MUST come before /admin (adminRoutes)
 app.use('/admin/users', adminUserRoutes);
+app.use('/admin/projects', adminProjectRoutes);
+app.use('/admin/analytics', adminAnalyticsRoutes);
+app.use('/admin/sales', adminSalesRoutes);
+app.use('/admin/finance', adminFinanceRoutes);
+app.use('/admin/project-expenses', adminProjectExpenseRoutes);
+app.use('/admin/project-expense-categories', adminProjectExpenseCategoryRoutes);
+app.use('/admin/project-credentials', adminProjectCredentialRoutes);
+app.use('/admin/rewards', adminRewardRoutes);
+app.use('/admin/notices', adminNoticeRoutes);
+app.use('/admin/backup', adminBackupRoutes);
+app.use('/admin/client-tags', adminClientTagRoutes);
+app.use('/admin/channel-partners', channelPartnerRoutes);
+app.use('/admin/quotations', quotationRoutes);
 app.use('/admin', adminRoutes);
 app.use('/pm', pmRoutes);
 app.use('/sales', salesRoutes);
@@ -262,21 +287,7 @@ app.use('/payments', paymentRoutes);
 app.use('/analytics', analyticsRoutes);
 
 // Role-specific API routes with /api prefix
-// Admin routes
-app.use('/api/admin/projects', adminProjectRoutes);
-app.use('/api/admin/analytics', adminAnalyticsRoutes);
-app.use('/api/admin/sales', adminSalesRoutes);
-app.use('/api/admin/finance', adminFinanceRoutes);
-app.use('/api/admin/project-expenses', adminProjectExpenseRoutes);
-app.use('/api/admin/project-expense-categories', adminProjectExpenseCategoryRoutes);
-app.use('/api/admin/project-credentials', adminProjectCredentialRoutes);
-app.use('/api/admin/rewards', adminRewardRoutes);
-app.use('/api/admin/notices', adminNoticeRoutes);
-app.use('/api/admin/backup', adminBackupRoutes);
-app.use('/api/admin/client-tags', adminClientTagRoutes);
-app.use('/api/admin/channel-partners', channelPartnerRoutes);
-app.use('/api/admin/quotations', quotationRoutes);
-
+// Admin routes already registered above (before adminRoutes)
 // Employee routes
 app.use('/api/employee/projects', employeeProjectRoutes);
 app.use('/api/employee/tasks', employeeTaskRoutes);
@@ -293,21 +304,7 @@ app.use('/api/client/notifications', clientNotificationRoutes);
 app.use('/api/client/explore', clientExploreRoutes);
 
 // Role-specific API routes without /api prefix (for reverse proxy compatibility)
-// Admin routes
-app.use('/admin/projects', adminProjectRoutes);
-app.use('/admin/analytics', adminAnalyticsRoutes);
-app.use('/admin/sales', adminSalesRoutes);
-app.use('/admin/finance', adminFinanceRoutes);
-app.use('/admin/project-expenses', adminProjectExpenseRoutes);
-app.use('/admin/project-expense-categories', adminProjectExpenseCategoryRoutes);
-app.use('/admin/project-credentials', adminProjectCredentialRoutes);
-app.use('/admin/rewards', adminRewardRoutes);
-app.use('/admin/notices', adminNoticeRoutes);
-app.use('/admin/backup', adminBackupRoutes);
-app.use('/admin/client-tags', adminClientTagRoutes);
-app.use('/admin/channel-partners', channelPartnerRoutes);
-app.use('/admin/quotations', quotationRoutes);
-
+// Admin routes already registered above (before adminRoutes)
 // Employee routes
 app.use('/employee/projects', employeeProjectRoutes);
 app.use('/employee/tasks', employeeTaskRoutes);

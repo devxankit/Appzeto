@@ -20,8 +20,8 @@ const HRProtectedRoute = ({ children }) => {
     return <Navigate to="/admin-login" replace />
   }
   
-  // Allow both HR and Admin roles to access HR management
-  if (adminData.role !== 'hr' && adminData.role !== 'admin') {
+  // Allow Admin, HR, or Accountant to access HR management
+  if (adminData.role !== 'hr' && adminData.role !== 'admin' && adminData.role !== 'accountant') {
     return <Navigate to="/admin-login" replace />
   }
   

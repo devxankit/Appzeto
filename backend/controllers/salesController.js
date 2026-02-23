@@ -1899,6 +1899,170 @@ const getMonthlyConversions = async (req, res) => {
   }
 };
 
+// @desc    Get sales leaderboard for sales module
+// @route   GET /api/sales/analytics/leaderboard
+// @access  Private (Sales only)
+const getSalesLeaderboard = async (req, res) => {
+  try {
+    // Get all active sales team members
+    const salesTeam = await Sales.find({ isActive: true })
+      .select('name email salesTarget currentSales currentIncentive updatedAt createdAt');
+
+    // Only count converted leads that still have a client (same logic as admin leaderboard)
+    const validOriginLeadIds = await Client.distinct('originLead', { originLead: { $ne: null } });
+
+    const convertedBySales = validOriginLeadIds.length > 0
+      ? await Lead.aggregate([
+          { $match: { status: 'converted', _id: { $in: validOriginLeadIds } } },
+          {
+            $group: {
+              _id: '$assignedTo',
+              convertedLeads: { $sum: 1 },
+              convertedValue: { $sum: '$value' }
+            }
+          }
+        ])
+      : [];
+
+    const convertedMap = new Map(
+      convertedBySales.map((r) => [
+        r._id?.toString(),
+        { convertedLeads: r.convertedLeads, convertedValue: r.convertedValue }
+      ])
+    );
+
+    // Build leaderboard entries for each sales member
+    const salesLeaderboard = await Promise.all(
+      salesTeam.map(async (member) => {
+        const leadStats = await Lead.aggregate([
+          { $match: { assignedTo: member._id } },
+          {
+            $group: {
+              _id: '$status',
+              count: { $sum: 1 },
+              totalValue: { $sum: '$value' }
+            }
+          }
+        ]);
+
+        const totalLeads = leadStats.reduce((sum, stat) => sum + stat.count, 0);
+        const corrected = convertedMap.get(member._id.toString()) || {
+          convertedLeads: 0,
+          convertedValue: 0
+        };
+
+        const convertedLeads = corrected.convertedLeads;
+        const totalRevenue = corrected.convertedValue;
+        const conversionRate =
+          totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0;
+
+        return {
+          _id: member._id,
+          name: member.name,
+          email: member.email,
+          avatar: (member.name || '?')
+            .toString()
+            .trim()
+            .split(/\s+/)
+            .map((n) => n[0])
+            .slice(0, 2)
+            .join('')
+            .toUpperCase(),
+          score: totalRevenue, // primary score = revenue generated from converting clients
+          rank: 0, // will be set after sorting
+          completed: convertedLeads,
+          overdue: 0,
+          missed: 0,
+          onTime: convertedLeads,
+          rate: conversionRate,
+          trend: 'stable',
+          trendValue: '0%',
+          department: 'Sales',
+          avgTime: '1.5 days',
+          lastActive: member.updatedAt || member.createdAt,
+          projects: convertedLeads, // treat converted leads as deals
+          role: 'Sales Executive',
+          module: 'sales',
+          earnings: member.currentSales || 0,
+          achievements:
+            totalRevenue >= 1000000
+              ? ['Sales Champion', 'Revenue Master']
+              : totalRevenue >= 500000
+              ? ['Sales Champion']
+              : [],
+          salesMetrics: {
+            leads: totalLeads,
+            conversions: convertedLeads,
+            revenue: totalRevenue,
+            deals: convertedLeads
+          },
+          conversionRate
+        };
+      })
+    );
+
+    // Sort by revenue first, then by conversions (same as admin leaderboard)
+    salesLeaderboard.sort((a, b) => {
+      if (b.salesMetrics.revenue !== a.salesMetrics.revenue) {
+        return b.salesMetrics.revenue - a.salesMetrics.revenue;
+      }
+      return b.salesMetrics.conversions - a.salesMetrics.conversions;
+    });
+
+    // Assign ranks
+    salesLeaderboard.forEach((member, index) => {
+      member.rank = index + 1;
+    });
+
+    // Overall statistics for sales-only view
+    const totalMembers = salesLeaderboard.length;
+    const overallStats = {
+      totalMembers,
+      avgScore:
+        totalMembers > 0
+          ? Math.round(
+              salesLeaderboard.reduce((sum, m) => sum + (m.score || 0), 0) / totalMembers
+            )
+          : 0,
+      totalCompleted: salesLeaderboard.reduce((sum, m) => sum + (m.completed || 0), 0),
+      totalProjects: salesLeaderboard.reduce(
+        (sum, m) => sum + (m.salesMetrics?.deals || 0),
+        0
+      ),
+      avgCompletionRate:
+        totalMembers > 0
+          ? Math.round(
+              salesLeaderboard.reduce((sum, m) => sum + (m.rate || 0), 0) / totalMembers
+            )
+          : 0,
+      topPerformer:
+        totalMembers > 0
+          ? salesLeaderboard.reduce(
+              (top, m) => ((m.score || 0) > (top.score || 0) ? m : top),
+              salesLeaderboard[0]
+            )
+          : null,
+      totalRevenue: salesLeaderboard.reduce(
+        (sum, m) => sum + (m.salesMetrics?.revenue || 0),
+        0
+      )
+    };
+
+    res.status(200).json({
+      success: true,
+      data: {
+        sales: salesLeaderboard,
+        overallStats
+      }
+    });
+  } catch (error) {
+    console.error('Get sales leaderboard error:', error);
+    res
+      .status(500)
+      .json({ success: false, message: 'Server error while fetching sales leaderboard' });
+  }
+};
+
 // @desc    Get all leads assigned to sales employee
 // @route   GET /api/sales/leads
 // @access  Private (Sales only)
@@ -6185,5 +6349,6 @@ module.exports = {
   markProjectCompleted,
   getClientTransactions,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  getSalesLeaderboard
 };

@@ -130,6 +130,7 @@ import Admin_leaderboard from './modules/admin/admin-pages/Admin_leaderboard'
 import Admin_reward_management from './modules/admin/admin-pages/Admin_reward_management'
 import Admin_requests_management from './modules/admin/admin-pages/Admin_requests_management'
 import Admin_sales_management from './modules/admin/admin-pages/Admin_sales_management'
+import Admin_profile from './modules/admin/admin-pages/Admin_profile'
 import Admin_user_management from './modules/admin/admin-pages/Admin_user_management'
 import Admin_hr_management from './modules/admin/admin-pages/Admin_hr_management'
 import Admin_channel_partner_management from './modules/admin/admin-pages/Admin_channel_partner_management'
@@ -696,6 +697,11 @@ function App() {
               <Route path="/admin-recent-activities" element={
                 <ProtectedRoute>
                   <Admin_recent_activities />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin-profile" element={
+                <ProtectedRoute>
+                  <Admin_profile />
                 </ProtectedRoute>
               } />
               <Route path="/admin-settings" element={

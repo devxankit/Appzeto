@@ -35,9 +35,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui
 const Admin_project_expenses_management = () => {
   const { toast } = useToast()
   
-  // Get admin role
+  // Get admin role (treat PEM like admin for this page)
   const adminData = adminStorage.get()
-  const isAdmin = adminData?.role === 'admin'
+  const isAdmin = adminData?.role === 'admin' || adminData?.role === 'pem'
   
   // State management
   const [loading, setLoading] = useState(true)

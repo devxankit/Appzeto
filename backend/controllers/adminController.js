@@ -145,6 +145,42 @@ const getAdminProfile = async (req, res) => {
   }
 };
 
+// @desc    Update admin password (while logged in)
+// @route   PUT /api/admin/profile/password
+// @access  Private
+const updateAdminPassword = asyncHandler(async (req, res, next) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return next(new ErrorResponse('Current password and new password are required', 400));
+  }
+
+  if (newPassword.length < 6) {
+    return next(new ErrorResponse('New password must be at least 6 characters', 400));
+  }
+
+  // Find the logged-in admin with password field
+  const admin = await Admin.findById(req.admin.id).select('+password');
+
+  if (!admin) {
+    return next(new ErrorResponse('Admin not found', 404));
+  }
+
+  const isMatch = await admin.comparePassword(currentPassword);
+
+  if (!isMatch) {
+    return next(new ErrorResponse('Current password is incorrect', 400));
+  }
+
+  admin.password = newPassword;
+  await admin.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Password updated successfully'
+  });
+});
+
 // @desc    Logout admin
 // @route   POST /api/admin/logout
 // @access  Private
@@ -307,5 +343,6 @@ module.exports = {
   logoutAdmin,
   createDemoAdmin,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  updateAdminPassword
 };

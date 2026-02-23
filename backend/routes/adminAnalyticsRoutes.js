@@ -9,14 +9,15 @@ const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
 
-// All routes are protected and admin-only
+// All routes require admin panel auth
 router.use(protect);
-router.use(authorize('admin'));
 
-// Admin analytics routes
-router.get('/dashboard', getAdminDashboardStats);
-router.get('/system', getSystemAnalytics);
-router.get('/leaderboard', getAdminLeaderboard);
-router.get('/recent-activities', getRecentActivities);
+// Admin-only analytics routes
+router.get('/dashboard', authorize('admin'), getAdminDashboardStats);
+router.get('/system', authorize('admin'), getSystemAnalytics);
+router.get('/recent-activities', authorize('admin'), getRecentActivities);
+
+// Leaderboard: allowed for both admin and HR
+router.get('/leaderboard', authorize('admin', 'hr'), getAdminLeaderboard);
 
 module.exports = router;

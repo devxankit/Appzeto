@@ -9,16 +9,15 @@ const {
 } = require('../controllers/adminProjectExpenseCategoryController');
 const { protect, authorize } = require('../middlewares/auth');
 
-// Apply authentication to all routes
+// Apply authentication; admin and PEM have full access to categories
 router.use(protect);
+router.use(authorize('admin', 'pem'));
 
-// GET routes - accessible to admin and PEM (for dropdown)
+// All category routes - admin and PEM
 router.get('/', getAllCategories);
 router.get('/:id', getCategoryById);
-
-// POST, PUT, DELETE routes - admin only
-router.post('/', authorize('admin'), createCategory);
-router.put('/:id', authorize('admin'), updateCategory);
-router.delete('/:id', authorize('admin'), deleteCategory);
+router.post('/', createCategory);
+router.put('/:id', updateCategory);
+router.delete('/:id', deleteCategory);
 
 module.exports = router;
