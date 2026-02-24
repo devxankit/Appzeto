@@ -22,24 +22,31 @@ require('../models/LeadProfile');
 
 // Helper: calculate total reward from achieved personal sales targets for the current month
 // Given an array of salesTargets [{ targetNumber, amount, reward, targetDate, ... }]
-// and the current month's sales volume (monthlySales), return the sum of rewards for
-// all targets where monthlySales >= target amount.
-const calculateRewardFromSalesTargets = (salesTargets, monthlySales) => {
+// and the current month's project data [{ amount, date }], return the sum of rewards for
+// all targets where sales achieved on or before targetDate >= target amount.
+const calculateRewardFromSalesTargets = (salesTargets, projects) => {
   if (!Array.isArray(salesTargets) || salesTargets.length === 0) {
     return 0;
   }
 
-  const salesAmount = Number(monthlySales || 0);
-  if (salesAmount <= 0) return 0;
+  if (!Array.isArray(projects) || projects.length === 0) return 0;
 
   let totalReward = 0;
 
   salesTargets.forEach(target => {
     const targetAmount = Number(target?.amount || 0);
     const targetReward = Number(target?.reward || 0);
+    const targetDate = new Date(target?.targetDate);
 
-    if (targetAmount > 0 && targetReward > 0 && salesAmount >= targetAmount) {
-      totalReward += targetReward;
+    if (targetAmount > 0 && targetReward > 0) {
+      // Calculate cumulative sales achieved on or before this target's deadline
+      const salesAtDeadline = projects
+        .filter(p => new Date(p.date) <= targetDate)
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+      if (salesAtDeadline >= targetAmount) {
+        totalReward += targetReward;
+      }
     }
   });
 
@@ -1404,11 +1411,22 @@ const getDashboardHeroStats = async (req, res) => {
 
     // Calculate monthly sales (sum of project base costs for clients converted this month, approved only)
     let monthlySales = 0;
+    const monthlyProjectsData = []; // To track date and amount for deadline enforcement
+
     projects.forEach(p => {
       const clientIdStr = p.client.toString();
       if (monthlyClientIds.includes(clientIdStr)) {
         const costForTarget = getProjectBaseCost(p);
         monthlySales += costForTarget;
+
+        // Find the conversion date for this client to associate with the project
+        const client = convertedClients.find(c => c._id.toString() === clientIdStr);
+        if (client && client.conversionDate) {
+          monthlyProjectsData.push({
+            amount: costForTarget,
+            date: client.conversionDate
+          });
+        }
       }
     });
 
@@ -1541,8 +1559,8 @@ const getDashboardHeroStats = async (req, res) => {
     const approvedClientIds = [...new Set(projects.map(p => p.client.toString()))];
     const totalClients = approvedClientIds.length;
 
-    // Calculate reward from achieved personal sales targets for this month
-    const reward = calculateRewardFromSalesTargets(sales.salesTargets || [], monthlySales);
+    // Calculate reward from achieved personal sales targets for this month (enforcing deadlines)
+    const reward = calculateRewardFromSalesTargets(sales.salesTargets || [], monthlyProjectsData);
 
     // Calculate team lead target progress if user is a team lead (optimized with aggregation)
     let teamLeadTarget = 0;
