@@ -132,6 +132,17 @@ const SL_wallet = () => {
   // Filter out withdrawals from visible history
   const visibleTransactions = wallet?.transactions || []
 
+  // Reward metrics
+  const rewardEarned = !loading ? Number(wallet?.reward?.earned ?? wallet?.rewardEarned ?? 0) : 0
+  const pendingReward = !loading ? Number(wallet?.reward?.currentReward ?? 0) : 0
+  const rewardStatus = wallet?.reward?.status || 'pending'
+  const paidRewardTotal = !loading
+    ? visibleTransactions.reduce((sum, t) => {
+        return t.category === 'Reward Payment' ? sum + (Number(t.amount) || 0) : sum
+      }, 0)
+    : 0
+  const allTimeReward = paidRewardTotal + (rewardStatus === 'paid' ? 0 : pendingReward)
+
   const formatCurrency = (amount) => {
     if (amount === null || amount === undefined) return '₹0'
     return `₹${Number(amount).toLocaleString()}`
@@ -282,7 +293,7 @@ const SL_wallet = () => {
               </div>
             </motion.div>
 
-            {/* Reward Earned (from achieving sales targets) */}
+            {/* Reward Overview (from achieving sales targets) */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -291,10 +302,16 @@ const SL_wallet = () => {
             >
               <div className="bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-amber-300/50 shadow-sm">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-amber-800 text-xs font-semibold">Reward Earned</span>
+                  <span className="text-amber-800 text-xs font-semibold">Reward Overview</span>
                   <div className="flex items-center gap-1">
-                    {!loading && wallet?.reward?.status === 'paid' && (
-                      <span className="text-amber-800 text-[10px] font-medium bg-amber-100 px-1.5 py-0.5 rounded">Paid</span>
+                    {!loading && allTimeReward > 0 && (
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                        rewardStatus === 'paid'
+                          ? 'text-emerald-800 bg-emerald-100'
+                          : 'text-amber-800 bg-amber-100'
+                      }`}>
+                        {rewardStatus === 'paid' ? 'Paid' : 'Pending'}
+                      </span>
                     )}
                     <FiTarget className="text-amber-600 text-sm" />
                   </div>
@@ -302,14 +319,34 @@ const SL_wallet = () => {
                 {loading ? (
                   <SkeletonLoader className="h-6 w-24" />
                 ) : (
-                  <p className="text-gray-900 text-lg font-bold">{formatCurrency(wallet?.reward?.earned ?? wallet?.rewardEarned)}</p>
+                  <div>
+                    {/* Highlight CURRENT pending reward balance */}
+                    <p className="text-gray-900 text-xl font-extrabold">
+                      {formatCurrency(pendingReward)}
+                    </p>
+                    <p className="text-[11px] text-amber-700 font-semibold mt-0.5">
+                      Current pending reward
+                    </p>
+                  </div>
                 )}
-                {!loading && (wallet?.reward?.earned ?? wallet?.rewardEarned) > 0 ? (
-                  <p className="text-amber-600 text-xs mt-0.5">
-                    {wallet?.reward?.status === 'paid' ? 'Reward credited/paid' : `Pending credit: ${formatCurrency(wallet?.reward?.currentReward ?? wallet?.rewardEarned)}`}
-                  </p>
+                {!loading && (rewardEarned > 0 || paidRewardTotal > 0) ? (
+                  <div className="mt-2 text-xs text-amber-700 space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">Total earned:</span>
+                      <span className="font-semibold">{formatCurrency(allTimeReward)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">Already paid:</span>
+                      <span className="font-semibold">{formatCurrency(paidRewardTotal)}</span>
+                    </div>
+                    <p className="text-[11px] text-amber-600 pt-0.5">
+                      Rewards are based on achieving your sales targets. Paid rewards appear in your transaction history.
+                    </p>
+                  </div>
                 ) : (
-                  <p className="text-amber-600 text-xs mt-0.5">From achieving sales targets</p>
+                  <p className="text-amber-600 text-xs mt-0.5">
+                    No rewards yet. Achieve your sales targets to earn rewards.
+                  </p>
                 )}
               </div>
             </motion.div>

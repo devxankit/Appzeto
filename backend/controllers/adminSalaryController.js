@@ -5,6 +5,7 @@ const PM = require('../models/PM');
 const Admin = require('../models/Admin');
 const Incentive = require('../models/Incentive');
 const Project = require('../models/Project');
+const Client = require('../models/Client');
 const mongoose = require('mongoose');
 const asyncHandler = require('../middlewares/asyncHandler');
 
@@ -103,6 +104,89 @@ const calculateTeamTargetRewardForMonth = async (salesEmployeeId, month) => {
   }
 };
 
+// Helper: Calculate personal sales target reward for a sales employee for a given month
+// Uses the same rules as sales wallet/dashboard: sum rewards for all targets
+// where that month's approved project sales volume >= target.amount.
+const calculatePersonalTargetRewardForMonth = async (salesEmployeeId, month) => {
+  try {
+    const sales = await Sales.findById(salesEmployeeId)
+      .select('salesTargets');
+    if (!sales || !Array.isArray(sales.salesTargets) || sales.salesTargets.length === 0) {
+      return 0;
+    }
+
+    const [year, monthNum] = month.split('-');
+    const monthStart = new Date(parseInt(year), parseInt(monthNum) - 1, 1, 0, 0, 0, 0);
+    const monthEnd = new Date(parseInt(year), parseInt(monthNum), 0, 23, 59, 59, 999);
+
+    // Get clients converted by this sales employee
+    const convertedClients = await Client.find({ convertedBy: salesEmployeeId })
+      .select('_id conversionDate')
+      .sort({ conversionDate: -1 });
+
+    if (!convertedClients || convertedClients.length === 0) {
+      return 0;
+    }
+
+    // Filter clients converted in the requested month
+    const monthlyClientIds = convertedClients
+      .filter(c => c.conversionDate && c.conversionDate >= monthStart && c.conversionDate <= monthEnd)
+      .map(c => c._id.toString());
+
+    if (monthlyClientIds.length === 0) {
+      return 0;
+    }
+
+    // Only projects where advance has been approved
+    const allClientIds = convertedClients.map(c => c._id);
+    const projects = await Project.find({
+      client: { $in: allClientIds },
+      'financialDetails.advanceReceived': { $gt: 0 }
+    }).select('client financialDetails.totalCost financialDetails.includeGST budget');
+
+    if (!projects || projects.length === 0) {
+      return 0;
+    }
+
+    // Helper: calculate project base cost excluding GST when included
+    const getProjectBaseCost = (project) => {
+      const rawCost = Number(project.financialDetails?.totalCost || project.budget || 0);
+      const includeGST = !!project.financialDetails?.includeGST;
+      if (!includeGST || rawCost <= 0) return rawCost;
+      const base = Math.round(rawCost / 1.18);
+      return base > 0 ? base : rawCost;
+    };
+
+    let monthlySales = 0;
+    projects.forEach(p => {
+      const clientIdStr = p.client.toString();
+      if (monthlyClientIds.includes(clientIdStr)) {
+        const costForTarget = getProjectBaseCost(p);
+        monthlySales += costForTarget;
+      }
+    });
+
+    if (monthlySales <= 0) {
+      return 0;
+    }
+
+    // Sum rewards for all targets achieved this month
+    let totalReward = 0;
+    sales.salesTargets.forEach(t => {
+      const targetAmount = Number(t?.amount || 0);
+      const targetReward = Number(t?.reward || 0);
+      if (targetAmount > 0 && targetReward > 0 && monthlySales >= targetAmount) {
+        totalReward += targetReward;
+      }
+    });
+
+    return totalReward;
+  } catch (error) {
+    console.error(`Error calculating personal target reward for sales ${salesEmployeeId}, month ${month}:`, error);
+    return 0;
+  }
+};
+
 // @desc    Set employee fixed salary
 // @route   PUT /api/admin/salary/set/:userType/:employeeId
 // @access  Private (Admin/HR)
@@ -163,7 +247,7 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
   for (const month of months) {
     const paymentDate = calculatePaymentDate(joiningDate, month);
     
-    // Calculate incentiveAmount and rewardAmount (team target reward) for sales team
+    // Calculate incentiveAmount and rewardAmount (team + personal target rewards) for sales team
     let incentiveAmount = 0;
     let rewardAmount = 0;
     if (employeeModel === 'Sales') {
@@ -173,7 +257,9 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
           currentBalance: { $gt: 0 }
         });
         incentiveAmount = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
-        rewardAmount = await calculateTeamTargetRewardForMonth(employee._id, month);
+        const teamTargetReward = await calculateTeamTargetRewardForMonth(employee._id, month);
+        const personalTargetReward = await calculatePersonalTargetRewardForMonth(employee._id, month);
+        rewardAmount = teamTargetReward + personalTargetReward;
       } catch (error) {
         console.error(`Error calculating incentive/reward for employee ${employee._id}:`, error);
       }
@@ -277,11 +363,13 @@ exports.getSalaryRecords = asyncHandler(async (req, res) => {
         }
         if (salary.rewardStatus === 'pending') {
           const teamTargetReward = await calculateTeamTargetRewardForMonth(salary.employeeId, salary.month);
+          const personalTargetReward = await calculatePersonalTargetRewardForMonth(salary.employeeId, salary.month);
+          const combinedReward = teamTargetReward + personalTargetReward;
           const existing = salary.rewardAmount || 0;
-          const diff = Math.abs(existing - teamTargetReward) > 0.01;
-          const wouldZero = teamTargetReward === 0 && existing > 0;
+          const diff = Math.abs(existing - combinedReward) > 0.01;
+          const wouldZero = combinedReward === 0 && existing > 0;
           if (diff && !wouldZero) {
-            salary.rewardAmount = teamTargetReward;
+            salary.rewardAmount = combinedReward;
             await salary.save();
           }
         }
