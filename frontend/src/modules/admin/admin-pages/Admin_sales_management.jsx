@@ -1609,6 +1609,7 @@ const Admin_sales_management = () => {
     }
 
     // Validate at least one target is set
+    const validTargets = targets.filter(t => t.amount && t.date && t.time)
     // Validate targets: If targets are present, at least one must be completely valid.
     // If the list is empty, we allow saving to clear all targets.
     if (targets.length > 0 && validTargets.length === 0) {
