@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
+import HR_sidebar from '../admin-components/HR_sidebar'
 import Loading from '../../../components/ui/loading'
 import adminDashboardService from '../admin-services/adminDashboardService'
+import { adminStorage } from '../admin-services/baseApiService'
 import { 
   FiUsers, 
   FiTrendingUp, 
@@ -31,6 +33,10 @@ import {
 } from 'react-icons/fi'
 
 const Admin_leaderboard = () => {
+  // Get admin data to determine if current user is HR
+  const adminData = adminStorage.get()
+  const isHR = adminData?.role === 'hr'
+
   // State management
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -626,7 +632,7 @@ const Admin_leaderboard = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Admin_navbar />
-        <Admin_sidebar />
+        {isHR ? <HR_sidebar /> : <Admin_sidebar />}
         <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">
             <Loading size="large" className="h-96" />
@@ -642,7 +648,7 @@ const Admin_leaderboard = () => {
       <Admin_navbar />
       
       {/* Sidebar */}
-      <Admin_sidebar />
+      {isHR ? <HR_sidebar /> : <Admin_sidebar />}
       
       {/* Main Content */}
       <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">

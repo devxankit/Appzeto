@@ -88,7 +88,9 @@ export const apiRequest = async (url, options = {}) => {
     const data = await safeJsonParse(response);
 
     if (!response.ok) {
-      throw new Error(data.message || data.error || `Server error: ${response.status}`);
+      const err = new Error(data.message || data.error || `Server error: ${response.status}`);
+      if (data.code) err.code = data.code;
+      throw err;
     }
 
     return data;
@@ -132,7 +134,9 @@ export const apiRequest = async (url, options = {}) => {
         const fallbackData = await safeJsonParse(fallbackResponse);
         
         if (!fallbackResponse.ok) {
-          throw new Error(fallbackData.message || fallbackData.error || `Server error: ${fallbackResponse.status}`);
+          const err = new Error(fallbackData.message || fallbackData.error || `Server error: ${fallbackResponse.status}`);
+          if (fallbackData.code) err.code = fallbackData.code;
+          throw err;
         }
         return fallbackData;
       }

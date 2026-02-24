@@ -20,10 +20,13 @@ const ProtectedRoute = ({ children, requiredRole = 'admin' }) => {
     const role = adminData.role
     const currentPath = location.pathname
     
-    // If HR user tries to access any admin-only route, redirect to HR management
-    // HR users can ONLY access HR management page
+    // HR users can access HR Management and the main Leaderboard page
+    // Any other admin-only routes should redirect them back to HR Management
     if (role === 'hr' && requiredRole === 'admin') {
-      return <Navigate to="/admin-hr-management" replace />
+      const hrAllowedPaths = ['/admin-hr-management', '/admin-leaderboard']
+      if (!hrAllowedPaths.includes(currentPath)) {
+        return <Navigate to="/admin-hr-management" replace />
+      }
     }
     
     // Accountant can only access Finance Management and HR Management

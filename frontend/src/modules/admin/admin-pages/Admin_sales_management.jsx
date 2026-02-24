@@ -135,11 +135,9 @@ const Admin_sales_management = () => {
   const [uploadedFile, setUploadedFile] = useState(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [targetAmount, setTargetAmount] = useState('')
-  // Multiple targets state
+  // Multiple targets state (admin can define any number of targets)
   const [targets, setTargets] = useState([
-    { targetNumber: 1, amount: '', reward: '', date: '', time: '' },
-    { targetNumber: 2, amount: '', reward: '', date: '', time: '' },
-    { targetNumber: 3, amount: '', reward: '', date: '', time: '' }
+    { targetNumber: 1, amount: '', reward: '', date: '', time: '' }
   ])
   const [leadsToAssign, setLeadsToAssign] = useState('')
   const [incentiveAmount, setIncentiveAmount] = useState('')
@@ -1585,37 +1583,19 @@ const Admin_sales_management = () => {
     
     // Initialize targets from member data or defaults
     if (member.salesTargets && member.salesTargets.length > 0) {
-      const memberTargets = member.salesTargets
-      const getTarget = (n) => memberTargets.find(t => t.targetNumber === n)
-      setTargets([
-        {
-          targetNumber: 1,
-          amount: getTarget(1)?.amount?.toString() || '',
-          reward: getTarget(1)?.reward?.toString() || '',
-          date: getTarget(1)?.targetDate ? new Date(getTarget(1).targetDate).toISOString().split('T')[0] : '',
-          time: getTarget(1)?.targetDate ? new Date(getTarget(1).targetDate).toTimeString().slice(0, 5) : ''
-        },
-        {
-          targetNumber: 2,
-          amount: getTarget(2)?.amount?.toString() || '',
-          reward: getTarget(2)?.reward?.toString() || '',
-          date: getTarget(2)?.targetDate ? new Date(getTarget(2).targetDate).toISOString().split('T')[0] : '',
-          time: getTarget(2)?.targetDate ? new Date(getTarget(2).targetDate).toTimeString().slice(0, 5) : ''
-        },
-        {
-          targetNumber: 3,
-          amount: getTarget(3)?.amount?.toString() || '',
-          reward: getTarget(3)?.reward?.toString() || '',
-          date: getTarget(3)?.targetDate ? new Date(getTarget(3).targetDate).toISOString().split('T')[0] : '',
-          time: getTarget(3)?.targetDate ? new Date(getTarget(3).targetDate).toTimeString().slice(0, 5) : ''
-        }
-      ])
+      const memberTargets = [...member.salesTargets].sort((a, b) => a.targetNumber - b.targetNumber)
+      const mappedTargets = memberTargets.map(t => ({
+        targetNumber: t.targetNumber,
+        amount: t.amount != null ? t.amount.toString() : '',
+        reward: t.reward != null ? t.reward.toString() : '',
+        date: t.targetDate ? new Date(t.targetDate).toISOString().split('T')[0] : '',
+        time: t.targetDate ? new Date(t.targetDate).toTimeString().slice(0, 5) : ''
+      }))
+      setTargets(mappedTargets)
     } else {
-      // Reset to defaults
+      // Reset to a single empty target
       setTargets([
-        { targetNumber: 1, amount: '', reward: '', date: '', time: '' },
-        { targetNumber: 2, amount: '', reward: '', date: '', time: '' },
-        { targetNumber: 3, amount: '', reward: '', date: '', time: '' }
+        { targetNumber: 1, amount: '', reward: '', date: '', time: '' }
       ])
     }
     
@@ -1678,9 +1658,7 @@ const Admin_sales_management = () => {
         await loadStatistics()
         setShowTargetModal(false)
         setTargets([
-          { targetNumber: 1, amount: '', reward: '', date: '', time: '' },
-          { targetNumber: 2, amount: '', reward: '', date: '', time: '' },
-          { targetNumber: 3, amount: '', reward: '', date: '', time: '' }
+          { targetNumber: 1, amount: '', reward: '', date: '', time: '' }
         ])
         setSelectedItem(null)
         setTargetAmount('')
@@ -1702,6 +1680,27 @@ const Admin_sales_management = () => {
       [field]: value
     }
     setTargets(updatedTargets)
+  }
+
+  const handleAddTarget = () => {
+    setTargets(prev => {
+      const nextNumber = prev.length > 0 ? Math.max(...prev.map(t => t.targetNumber || 0)) + 1 : 1
+      return [
+        ...prev,
+        { targetNumber: nextNumber, amount: '', reward: '', date: '', time: '' }
+      ]
+    })
+  }
+
+  const handleRemoveTarget = (index) => {
+    setTargets(prev => {
+      const updated = prev.filter((_, i) => i !== index)
+      // Re-number targets sequentially starting from 1 for cleaner UI and API
+      return updated.map((t, i) => ({
+        ...t,
+        targetNumber: i + 1
+      }))
+    })
   }
 
   // Handle lead assignment
@@ -3987,7 +3986,7 @@ const Admin_sales_management = () => {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">Set Multiple Targets</h3>
-                  <p className="text-gray-600 text-sm mt-1">Set up to 3 revenue targets with reward amounts and dates for {selectedItem.name}</p>
+                  <p className="text-gray-600 text-sm mt-1">Define any number of revenue targets with reward amounts and dates for {selectedItem.name}</p>
                 </div>
                 <button
                   onClick={closeModals}
@@ -4029,16 +4028,34 @@ const Admin_sales_management = () => {
               <div className="space-y-6 mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-gray-900">Set Multiple Targets</h3>
-                  <p className="text-xs text-gray-500">Set up to 3 targets with reward amounts, dates and times</p>
+                  <div className="flex items-center space-x-3">
+                    <p className="text-xs text-gray-500">Add as many targets as you need</p>
+                    <button
+                      type="button"
+                      onClick={handleAddTarget}
+                      className="px-3 py-1.5 text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-lg shadow-sm transition-colors"
+                    >
+                      + Add Target
+                    </button>
+                  </div>
                 </div>
 
                 {targets.map((target, index) => (
-                  <div key={target.targetNumber} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div key={`${target.targetNumber}-${index}`} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                     <div className="flex items-center space-x-2 mb-3">
                       <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
                         {target.targetNumber}
                       </div>
-                      <h4 className="font-semibold text-gray-900">Target {target.targetNumber}</h4>
+                      <h4 className="font-semibold text-gray-900 flex-1">Target {target.targetNumber}</h4>
+                      {targets.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTarget(index)}
+                          className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded"
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -4127,7 +4144,7 @@ const Admin_sales_management = () => {
                 </button>
                 <button
                   onClick={handleSaveTarget}
-                  disabled={!targetAmount || parseFloat(targetAmount) < 0 || loadingTarget}
+                  disabled={loadingTarget}
                   className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
                   {loadingTarget ? (

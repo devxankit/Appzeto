@@ -20,6 +20,32 @@ const ChannelPartner = require('../models/ChannelPartner');
 // Ensure LeadProfile model is registered before any populate calls
 require('../models/LeadProfile');
 
+// Helper: calculate total reward from achieved personal sales targets for the current month
+// Given an array of salesTargets [{ targetNumber, amount, reward, targetDate, ... }]
+// and the current month's sales volume (monthlySales), return the sum of rewards for
+// all targets where monthlySales >= target amount.
+const calculateRewardFromSalesTargets = (salesTargets, monthlySales) => {
+  if (!Array.isArray(salesTargets) || salesTargets.length === 0) {
+    return 0;
+  }
+
+  const salesAmount = Number(monthlySales || 0);
+  if (salesAmount <= 0) return 0;
+
+  let totalReward = 0;
+
+  salesTargets.forEach(target => {
+    const targetAmount = Number(target?.amount || 0);
+    const targetReward = Number(target?.reward || 0);
+
+    if (targetAmount > 0 && targetReward > 0 && salesAmount >= targetAmount) {
+      totalReward += targetReward;
+    }
+  });
+
+  return totalReward;
+};
+
 // Generate JWT Token
 const generateToken = (id) => {
   return jwt.sign({ id, role: 'sales' }, process.env.JWT_SECRET, {
@@ -1514,8 +1540,8 @@ const getDashboardHeroStats = async (req, res) => {
     const approvedClientIds = [...new Set(projects.map(p => p.client.toString()))];
     const totalClients = approvedClientIds.length;
 
-    // Get reward
-    const reward = sales.reward || 0;
+    // Calculate reward from achieved personal sales targets for this month
+    const reward = calculateRewardFromSalesTargets(sales.salesTargets || [], monthlySales);
 
     // Calculate team lead target progress if user is a team lead (optimized with aggregation)
     let teamLeadTarget = 0;
@@ -5842,11 +5868,10 @@ const getWalletSummary = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
 
-    // Load sales employee for salary, per-client incentive, reward, and team lead info
-    const me = await Sales.findById(salesId).select('fixedSalary incentivePerClient reward name isTeamLead teamLeadTarget teamLeadTargetReward teamMembers');
+    // Load sales employee for salary, per-client incentive, targets, reward, and team lead info
+    const me = await Sales.findById(salesId).select('fixedSalary incentivePerClient reward salesTargets name isTeamLead teamLeadTarget teamLeadTargetReward teamMembers');
     const perClient = Number(me?.incentivePerClient || 0);
     const fixedSalary = Number(me?.fixedSalary || 0);
-    const rewardEarned = Number(me?.reward || 0);
     const isTeamLead = me?.isTeamLead || false;
     const teamLeadTarget = Number(me?.teamLeadTarget || 0);
     const teamLeadTargetReward = Number(me?.teamLeadTargetReward || 0);
@@ -5931,6 +5956,42 @@ const getWalletSummary = async (req, res) => {
 
     const allTime = totalIncentive; // Regular incentives only
 
+    // ----- Calculate monthly sales volume for current month (for personal target rewards) -----
+    // Get clients converted by this sales employee
+    const convertedClients = await Client.find({ convertedBy: salesId })
+      .select('_id conversionDate')
+      .sort({ conversionDate: -1 });
+
+    // Filter clients converted this month
+    const monthlyClientIds = convertedClients
+      .filter(c => c.conversionDate && c.conversionDate >= monthStart && c.conversionDate <= monthEnd)
+      .map(c => c._id.toString());
+
+    // Only projects where advance has been approved
+    const allClientIds = convertedClients.map(c => c._id);
+    const projects = await Project.find({
+      client: { $in: allClientIds },
+      'financialDetails.advanceReceived': { $gt: 0 }
+    }).select('client financialDetails.totalCost financialDetails.includeGST budget createdAt');
+
+    // Helper: calculate project base cost excluding GST when included
+    const getProjectBaseCost = (project) => {
+      const rawCost = Number(project.financialDetails?.totalCost || project.budget || 0);
+      const includeGST = !!project.financialDetails?.includeGST;
+      if (!includeGST || rawCost <= 0) return rawCost;
+      const base = Math.round(rawCost / 1.18);
+      return base > 0 ? base : rawCost;
+    };
+
+    let monthlySales = 0;
+    projects.forEach(p => {
+      const clientIdStr = p.client.toString();
+      if (monthlyClientIds.includes(clientIdStr)) {
+        const costForTarget = getProjectBaseCost(p);
+        monthlySales += costForTarget;
+      }
+    });
+
     // Transactions view: incentive records + salary (current month)
     const transactions = breakdown
       .map(b => ({
@@ -5970,6 +6031,9 @@ const getWalletSummary = async (req, res) => {
       employeeModel: 'Sales',
       month: currentMonth
     }).select('rewardStatus rewardAmount').lean();
+
+    // Calculate reward earned from personal sales targets for the current month
+    const rewardEarned = calculateRewardFromSalesTargets(me?.salesTargets || [], monthlySales);
 
     const rewardStatus = currentMonthSalaryRecord &&
       currentMonthSalaryRecord.rewardStatus === 'paid' &&

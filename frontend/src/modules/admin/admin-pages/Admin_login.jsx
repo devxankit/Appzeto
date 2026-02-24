@@ -1,23 +1,28 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FaEye, FaEyeSlash, FaUser, FaLock, FaArrowRight } from 'react-icons/fa'
+import { FaEye, FaEyeSlash, FaUser, FaLock, FaArrowRight, FaArrowLeft, FaTimes } from 'react-icons/fa'
 import { Button } from '../../../components/ui/button'
 import { Input } from '../../../components/ui/input'
 import logo from '../../../assets/images/logo.png'
-import { loginAdmin, isAdminAuthenticated } from '../admin-services/adminAuthService'
+import { loginAdmin, isAdminAuthenticated, forgotPasswordAdmin } from '../admin-services/adminAuthService'
 import { useToast } from '../../../contexts/ToastContext'
 
 const Admin_login = () => {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
     email: '',
-    password: ''
+    password: '',
+    securityCode: ''
   })
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState({})
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
+  const [isSendingReset, setIsSendingReset] = useState(false)
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -34,21 +39,24 @@ const Admin_login = () => {
     }
   }
 
-  const validateForm = () => {
+  const validateForm = (forStep = 1) => {
     const newErrors = {}
-    
-    if (!formData.email) {
-      newErrors.email = 'Email is required'
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email'
+    if (forStep === 1) {
+      if (!formData.email) {
+        newErrors.email = 'Email is required'
+      } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+        newErrors.email = 'Please enter a valid email'
+      }
+      if (!formData.password) {
+        newErrors.password = 'Password is required'
+      } else if (formData.password.length < 6) {
+        newErrors.password = 'Password must be at least 6 characters'
+      }
+    } else {
+      if (!formData.securityCode || !formData.securityCode.trim()) {
+        newErrors.securityCode = 'Security code is required'
+      }
     }
-    
-    if (!formData.password) {
-      newErrors.password = 'Password is required'
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters'
-    }
-    
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -71,55 +79,68 @@ const Admin_login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
-    if (!validateForm()) {
+
+    if (step === 1) {
+      if (!validateForm(1)) return
+      setIsLoading(true)
+      setErrors({})
+      try {
+        const response = await loginAdmin(formData.email, formData.password)
+        if (response.success) {
+          localStorage.setItem('adminUser', JSON.stringify({
+            ...response.data.admin,
+            loginTime: new Date().toISOString()
+          }))
+          toast.login(`Welcome back, ${response.data.admin.name}!`, {
+            title: 'Login Successful',
+            duration: 3000
+          })
+          setTimeout(() => {
+            const role = response.data.admin.role
+            if (role === 'hr') navigate('/admin-hr-management')
+            else if (role === 'accountant') navigate('/admin-finance-management')
+            else navigate('/admin-dashboard')
+          }, 1000)
+          return
+        }
+      } catch (error) {
+        if (error.code === 'SECURITY_CODE_REQUIRED') {
+          setStep(2)
+          setErrors({ general: 'Enter your security code to continue.' })
+          toast.info('Admin account detected. Enter your security code.', { duration: 3000 })
+        } else {
+          const errorMessage = error.message || 'Login failed. Please check your credentials and try again.'
+          toast.error(errorMessage, { title: 'Login Failed', duration: 4000 })
+          setErrors({ general: errorMessage })
+        }
+        setIsLoading(false)
+        return
+      }
+      setIsLoading(false)
       return
     }
-    
+
+    // Step 2: Security code for admin
+    if (!validateForm(2)) return
     setIsLoading(true)
     setErrors({})
-    
     try {
-      const response = await loginAdmin(formData.email, formData.password)
-      
+      const response = await loginAdmin(formData.email, formData.password, formData.securityCode.trim())
       if (response.success) {
-        // Store admin data
         localStorage.setItem('adminUser', JSON.stringify({
           ...response.data.admin,
           loginTime: new Date().toISOString()
         }))
-        
-        // Show success toast
         toast.login(`Welcome back, ${response.data.admin.name}!`, {
           title: 'Login Successful',
           duration: 3000
         })
-        
-        // Small delay to show the toast before redirect
-        setTimeout(() => {
-          const role = response.data.admin.role
-          // Redirect based on role
-          if (role === 'hr') {
-            navigate('/admin-hr-management')
-          } else if (role === 'accountant') {
-            navigate('/admin-finance-management')
-          } else {
-            navigate('/admin-dashboard')
-          }
-        }, 1000)
+        setTimeout(() => navigate('/admin-dashboard'), 1000)
       }
     } catch (error) {
-      const errorMessage = error.message || 'Login failed. Please check your credentials and try again.'
-      
-      // Show error toast
-      toast.error(errorMessage, {
-        title: 'Login Failed',
-        duration: 4000
-      })
-      
-      setErrors({ 
-        general: errorMessage
-      })
+      const errorMessage = error.message || 'Invalid security code. Please try again.'
+      toast.error(errorMessage, { title: 'Login Failed', duration: 4000 })
+      setErrors({ general: errorMessage })
     } finally {
       setIsLoading(false)
     }
@@ -171,7 +192,9 @@ const Admin_login = () => {
               />
             </div>
             
-            <p className="text-gray-600 text-sm">Sign in to your admin account</p>
+            <p className="text-gray-600 text-sm">
+              {step === 1 ? 'Sign in to your admin account' : 'Admin security code required'}
+            </p>
           </motion.div>
 
           {/* Error/Success Message */}
@@ -203,116 +226,193 @@ const Admin_login = () => {
             onSubmit={handleSubmit}
             className="space-y-6 relative z-10"
           >
-            {/* Email Field */}
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-semibold text-gray-700">
-                Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaUser className="h-4 w-4 text-gray-400" />
+            {step === 1 ? (
+              <>
+                {/* Email Field */}
+                <div className="space-y-2">
+                  <label htmlFor="email" className="text-sm font-semibold text-gray-700">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <FaUser className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      placeholder="Enter your email"
+                      className={`pl-10 h-12 text-base border-2 transition-all duration-200 ${
+                        errors.email 
+                          ? 'border-red-300 focus:border-red-500 focus:ring-red-200' 
+                          : 'border-gray-200 focus:border-teal-500 focus:ring-teal-200'
+                      }`}
+                      disabled={isLoading}
+                    />
+                  </div>
+                  {errors.email && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-red-500 text-xs"
+                    >
+                      {errors.email}
+                    </motion.p>
+                  )}
                 </div>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="Enter your email"
-                  className={`pl-10 h-12 text-base border-2 transition-all duration-200 ${
-                    errors.email 
-                      ? 'border-red-300 focus:border-red-500 focus:ring-red-200' 
-                      : 'border-gray-200 focus:border-teal-500 focus:ring-teal-200'
-                  }`}
-                  disabled={isLoading}
-                />
-              </div>
-              {errors.email && (
-                <motion.p
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-red-500 text-xs"
-                >
-                  {errors.email}
-                </motion.p>
-              )}
-            </div>
 
-            {/* Password Field */}
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-semibold text-gray-700">
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaLock className="h-4 w-4 text-gray-400" />
+                {/* Password Field */}
+                <div className="space-y-2">
+                  <label htmlFor="password" className="text-sm font-semibold text-gray-700">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <FaLock className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <Input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      placeholder="Enter your password"
+                      className={`pl-10 pr-10 h-12 text-base border-2 transition-all duration-200 ${
+                        errors.password 
+                          ? 'border-red-300 focus:border-red-500 focus:ring-red-200' 
+                          : 'border-gray-200 focus:border-teal-500 focus:ring-teal-200'
+                      }`}
+                      disabled={isLoading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                      disabled={isLoading}
+                    >
+                      {showPassword ? <FaEyeSlash className="h-4 w-4" /> : <FaEye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-red-500 text-xs"
+                    >
+                      {errors.password}
+                    </motion.p>
+                  )}
                 </div>
-                <Input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  placeholder="Enter your password"
-                  className={`pl-10 pr-10 h-12 text-base border-2 transition-all duration-200 ${
-                    errors.password 
-                      ? 'border-red-300 focus:border-red-500 focus:ring-red-200' 
-                      : 'border-gray-200 focus:border-teal-500 focus:ring-teal-200'
-                  }`}
-                  disabled={isLoading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
-                  disabled={isLoading}
-                >
-                  {showPassword ? <FaEyeSlash className="h-4 w-4" /> : <FaEye className="h-4 w-4" />}
-                </button>
-              </div>
-              {errors.password && (
-                <motion.p
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-red-500 text-xs"
-                >
-                  {errors.password}
-                </motion.p>
-              )}
-            </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 focus:ring-offset-0"
-                />
-                <span className="ml-2 text-gray-600">Remember me</span>
-              </label>
-              <span className="text-gray-400 font-medium cursor-not-allowed">
-                Forgot password?
-              </span>
-            </div>
+                {/* Remember Me & Forgot Password */}
+                <div className="flex items-center justify-between text-sm">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 focus:ring-offset-0"
+                    />
+                    <span className="ml-2 text-gray-600">Remember me</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(true)}
+                    className="text-teal-600 hover:text-teal-700 font-medium transition-colors"
+                    disabled={isLoading}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
 
-            {/* Login Button */}
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="w-full h-12 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white font-semibold text-base rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            >
-              {isLoading ? (
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Signing in...</span>
+                {/* Login Button */}
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full h-12 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white font-semibold text-base rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                >
+                  {isLoading ? (
+                    <div className="flex items-center justify-center space-x-2">
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>Signing in...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center space-x-2">
+                      <span>Sign In</span>
+                      <FaArrowRight className="w-4 h-4" />
+                    </div>
+                  )}
+                </Button>
+              </>
+            ) : (
+              <>
+                {/* Step 2: Security Code only for admin */}
+                <p className="text-sm text-gray-600 text-center">
+                  This account requires a security code. Enter the code to continue.
+                </p>
+                <div className="space-y-2">
+                  <label htmlFor="securityCode" className="text-sm font-semibold text-gray-700">
+                    Security Code
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <FaLock className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <Input
+                      id="securityCode"
+                      name="securityCode"
+                      type="text"
+                      value={formData.securityCode}
+                      onChange={handleInputChange}
+                      placeholder="Enter your security code"
+                      className={`pl-10 h-12 text-base border-2 transition-all duration-200 ${
+                        errors.securityCode 
+                          ? 'border-red-300 focus:border-red-500 focus:ring-red-200' 
+                          : 'border-gray-200 focus:border-teal-500 focus:ring-teal-200'
+                      }`}
+                      disabled={isLoading}
+                      autoFocus
+                    />
+                  </div>
+                  {errors.securityCode && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-red-500 text-xs"
+                    >
+                      {errors.securityCode}
+                    </motion.p>
+                  )}
                 </div>
-              ) : (
-                <div className="flex items-center justify-center space-x-2">
-                  <span>Sign In</span>
-                  <FaArrowRight className="w-4 h-4" />
+
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isLoading}
+                    onClick={() => { setStep(1); setErrors({}); setFormData(prev => ({ ...prev, securityCode: '' })); }}
+                    className="flex-1 h-12 border-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    <FaArrowLeft className="w-4 h-4 mr-2" />
+                    Back
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="flex-1 h-12 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white font-semibold rounded-lg transition-all duration-200"
+                  >
+                    {isLoading ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div>
+                    ) : (
+                      <>
+                        <span>Verify & Sign In</span>
+                        <FaArrowRight className="w-4 h-4 ml-2" />
+                      </>
+                    )}
+                  </Button>
                 </div>
-              )}
-            </Button>
+              </>
+            )}
           </motion.form>
 
           {/* Footer */}
@@ -332,6 +432,108 @@ const Admin_login = () => {
         </div>
 
       </motion.div>
+
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setShowForgotPassword(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 relative z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Forgot Password</h2>
+              <button
+                onClick={() => setShowForgotPassword(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FaTimes className="h-6 w-6" />
+              </button>
+            </div>
+
+            <p className="text-gray-600 mb-6">
+              Enter your email address and we'll send you a link to reset your password.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+
+                if (!forgotPasswordEmail) {
+                  toast.error('Please enter your email address', { title: 'Email Required' })
+                  return
+                }
+
+                setIsSendingReset(true)
+                try {
+                  const response = await forgotPasswordAdmin(forgotPasswordEmail)
+                  if (response.success) {
+                    toast.success('Password reset link has been sent to your email', {
+                      title: 'Email Sent',
+                      duration: 4000
+                    })
+                    setShowForgotPassword(false)
+                    setForgotPasswordEmail('')
+                  }
+                } catch (error) {
+                  toast.error(error?.message || 'Failed to send reset email', {
+                    title: 'Error',
+                    duration: 4000
+                  })
+                } finally {
+                  setIsSendingReset(false)
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label htmlFor="forgotEmail" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <Input
+                  id="forgotEmail"
+                  type="email"
+                  value={forgotPasswordEmail}
+                  onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  className="w-full h-12 text-base border-2 border-gray-200 focus:border-teal-500 focus:ring-teal-200"
+                  disabled={isSendingReset}
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotPassword(false)
+                    setForgotPasswordEmail('')
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  disabled={isSendingReset}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSendingReset}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSendingReset ? 'Sending...' : 'Send Reset Link'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
     </div>
   )
 }

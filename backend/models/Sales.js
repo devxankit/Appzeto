@@ -84,12 +84,12 @@ const salesSchema = new mongoose.Schema({
     min: 0,
     default: 0
   },
-  // Multiple targets with dates
+  // Multiple targets with dates (admin can define any number of targets)
   salesTargets: [{
     targetNumber: {
       type: Number,
       required: true,
-      enum: [1, 2, 3] // Target 1, Target 2, Target 3
+      min: 1
     },
     amount: {
       type: Number,

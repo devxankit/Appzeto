@@ -17,7 +17,7 @@ const generateToken = (id) => {
 // @access  Public
 const loginAdmin = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, securityCode } = req.body;
 
     // Validate input
     if (!email || !password) {
@@ -64,6 +64,26 @@ const loginAdmin = async (req, res) => {
         success: false,
         message: 'Invalid credentials'
       });
+    }
+
+    // Additional security code check for main admin role only
+    if (admin.role === 'admin') {
+      const requiredCode = (process.env.ADMIN_SECURITY_CODE || '').trim();
+      if (requiredCode) {
+        if (!securityCode) {
+          return res.status(400).json({
+            success: false,
+            code: 'SECURITY_CODE_REQUIRED',
+            message: 'Security code is required for admin login'
+          });
+        }
+        if (securityCode !== requiredCode) {
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid security code'
+          });
+        }
+      }
     }
 
     // Reset login attempts and update last login
@@ -260,14 +280,12 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Please provide an email address', 400));
   }
 
-  const admin = await Admin.findOne({ email });
+  // Normalize email and ensure it exists before sending reset link
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const admin = await Admin.findOne({ email: normalizedEmail });
 
   if (!admin) {
-    // Don't reveal if email exists or not for security
-    return res.status(200).json({
-      success: true,
-      message: 'If that email exists, a password reset link has been sent'
-    });
+    return next(new ErrorResponse('No account found with this email address', 404));
   }
 
   // Generate reset token

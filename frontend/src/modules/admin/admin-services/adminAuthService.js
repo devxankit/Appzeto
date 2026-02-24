@@ -5,11 +5,16 @@ import { clearOtherRoleSessions } from '../../../utils/clearOtherRoleSessions';
 // Admin Authentication Service - Only for login/logout functionality
 const adminAuthService = {
   // Login admin
-  login: async (email, password) => {
+  login: async (email, password, securityCode) => {
     try {
+      const body = { email, password };
+      if (securityCode) {
+        body.securityCode = securityCode;
+      }
+
       const response = await apiRequest('/admin/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify(body)
       });
 
       console.log('📦 Login response:', {

@@ -800,11 +800,11 @@ const setSalesTarget = asyncHandler(async (req, res, next) => {
   if (targets && Array.isArray(targets)) {
     // Validate targets
     for (const t of targets) {
-      if (!t.targetNumber || !t.amount || !t.targetDate) {
-        return next(new ErrorResponse('Each target must have targetNumber (1-3), amount, and targetDate', 400));
+      if (t.targetNumber === undefined || t.targetNumber === null || !t.amount || !t.targetDate) {
+        return next(new ErrorResponse('Each target must have targetNumber, amount, and targetDate', 400));
       }
-      if (![1, 2, 3].includes(t.targetNumber)) {
-        return next(new ErrorResponse('Target number must be 1, 2, or 3', 400));
+      if (t.targetNumber <= 0) {
+        return next(new ErrorResponse('Target number must be a positive number', 400));
       }
       if (t.amount < 0) {
         return next(new ErrorResponse('Target amount cannot be negative', 400));

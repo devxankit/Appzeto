@@ -125,8 +125,12 @@ adminSchema.methods.comparePassword = async function(candidatePassword) {
   }
 };
 
-// Increment login attempts
+// Increment login attempts (configurable via env)
 adminSchema.methods.incLoginAttempts = function() {
+  const maxAttempts = parseInt(process.env.ADMIN_MAX_LOGIN_ATTEMPTS || '5', 10);
+  const lockMinutes = parseInt(process.env.ADMIN_LOCK_TIME_MINUTES || '120', 10);
+  const lockDurationMs = lockMinutes * 60 * 1000;
+
   // If we have a previous lock that has expired, restart at 1
   if (this.lockUntil && this.lockUntil < Date.now()) {
     return this.updateOne({
@@ -137,9 +141,9 @@ adminSchema.methods.incLoginAttempts = function() {
   
   const updates = { $inc: { loginAttempts: 1 } };
   
-  // Lock account after 5 failed attempts for 2 hours
-  if (this.loginAttempts + 1 >= 5 && !this.isLocked) {
-    updates.$set = { lockUntil: Date.now() + 2 * 60 * 60 * 1000 }; // 2 hours
+  // Lock account after configured number of failed attempts
+  if (this.loginAttempts + 1 >= maxAttempts && !this.isLocked) {
+    updates.$set = { lockUntil: Date.now() + lockDurationMs };
   }
   
   return this.updateOne(updates);
