@@ -1255,6 +1255,7 @@ const getTileCardStats = async (req, res) => {
     // 2. Demo Requests Stats
     const demoRequests = await Lead.find({
       assignedTo: salesId,
+      status: { $ne: 'converted' },
       $or: [
         { 'demoRequest.status': { $exists: true } },
         { status: 'demo_requested' }
@@ -1727,12 +1728,14 @@ const getSalesDashboardStats = async (req, res) => {
     // Count demo_sent leads (leads with leadProfile.demoSent = true)
     const demoSentCount = await Lead.countDocuments({
       assignedTo: new mongoose.Types.ObjectId(salesId),
+      status: { $ne: 'converted' },
       leadProfile: { $exists: true, $ne: null }
     });
 
     // Get all leads with profiles and count those with flags
     const leadsWithProfiles = await Lead.find({
       assignedTo: new mongoose.Types.ObjectId(salesId),
+      status: { $ne: 'converted' },
       leadProfile: { $exists: true, $ne: null }
     }).populate('leadProfile', 'demoSent quotationSent projectType').lean();
 
@@ -1801,6 +1804,7 @@ const getSalesDashboardStats = async (req, res) => {
 
     const followupLeads = await Lead.find({
       assignedTo: new mongoose.Types.ObjectId(salesId),
+      status: { $ne: 'converted' },
       followUps: {
         $elemMatch: {
           scheduledDate: { $gte: todayStart },
@@ -2245,18 +2249,20 @@ const getLeadsByStatus = async (req, res) => {
         status: { $nin: ['converted', 'lost', 'not_interested', 'not_picked'] }
       };
     } else if (status === 'quotation_sent') {
-      // Show leads with status='quotation_sent' OR leadProfile.quotationSent=true
+      // Show leads with status='quotation_sent' OR leadProfile.quotationSent=true (excluding converted)
       filter = {
         assignedTo: assignedToValue,
+        status: { $ne: 'converted' },
         $or: [
           { status: 'quotation_sent' },
           { leadProfile: { $exists: true, $ne: null } }
         ]
       };
     } else if (status === 'demo_sent') {
-      // Filter leads where leadProfile.demoSent is true
+      // Filter leads where leadProfile.demoSent is true (excluding converted)
       filter = {
         assignedTo: assignedToValue,
+        status: { $ne: 'converted' },
         leadProfile: { $exists: true, $ne: null }
       };
     } else if (status === 'app_client') {
@@ -2264,6 +2270,7 @@ const getLeadsByStatus = async (req, res) => {
       // Note: Category filtering will be done in post-query filter since MongoDB doesn't support nested field filtering easily
       filter = {
         assignedTo: assignedToValue,
+        status: { $ne: 'converted' },
         $or: [
           { status: 'app_client' },
           { leadProfile: { $exists: true, $ne: null } }
@@ -2274,15 +2281,17 @@ const getLeadsByStatus = async (req, res) => {
       // Note: Category filtering will be done in post-query filter since MongoDB doesn't support nested field filtering easily
       filter = {
         assignedTo: assignedToValue,
+        status: { $ne: 'converted' },
         $or: [
           { status: 'web' },
           { leadProfile: { $exists: true, $ne: null } }
         ]
       };
     } else if (actualStatus === 'followup') {
-      // For followup status, don't filter by status - show leads with pending follow-ups regardless of status
+      // For followup status, don't filter by status - show leads with pending follow-ups regardless of status (excluding converted)
       filter = {
-        assignedTo: assignedToValue
+        assignedTo: assignedToValue,
+        status: { $ne: 'converted' }
         // Status filter is NOT applied here - we want leads with pending follow-ups from any status
       };
     } else {
