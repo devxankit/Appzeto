@@ -132,7 +132,11 @@ const leadSchema = new mongoose.Schema({
     description: String,
     performedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Sales' },
     timestamp: { type: Date, default: Date.now }
-  }]
+  }],
+  // Conversion timestamp (for accurate filtering)
+  convertedAt: {
+    type: Date
+  }
 }, {
   timestamps: true
 });
@@ -146,7 +150,7 @@ leadSchema.index({ priority: 1 });
 leadSchema.index({ createdAt: -1 });
 
 // Virtual for formatted phone number
-leadSchema.virtual('formattedPhone').get(function() {
+leadSchema.virtual('formattedPhone').get(function () {
   if (this.phone && this.phone.length === 10) {
     return `+91 ${this.phone.slice(0, 5)} ${this.phone.slice(5)}`;
   }
@@ -154,7 +158,7 @@ leadSchema.virtual('formattedPhone').get(function() {
 });
 
 // Virtual for days since last contact
-leadSchema.virtual('daysSinceLastContact').get(function() {
+leadSchema.virtual('daysSinceLastContact').get(function () {
   if (!this.lastContactDate) return null;
   const now = new Date();
   const diffTime = Math.abs(now - this.lastContactDate);
@@ -162,7 +166,7 @@ leadSchema.virtual('daysSinceLastContact').get(function() {
 });
 
 // Virtual for days until next follow-up
-leadSchema.virtual('daysUntilFollowUp').get(function() {
+leadSchema.virtual('daysUntilFollowUp').get(function () {
   if (!this.nextFollowUpDate) return null;
   const now = new Date();
   const diffTime = this.nextFollowUpDate - now;
@@ -170,7 +174,7 @@ leadSchema.virtual('daysUntilFollowUp').get(function() {
 });
 
 // Method to update status
-leadSchema.methods.updateStatus = function(newStatus) {
+leadSchema.methods.updateStatus = function (newStatus) {
   const validTransitions = {
     'new': ['connected', 'not_picked', 'not_interested', 'lost'],
     'connected': ['hot', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'not_interested', 'lost'],
@@ -199,30 +203,30 @@ leadSchema.methods.updateStatus = function(newStatus) {
 };
 
 // Method to assign to sales employee
-leadSchema.methods.assignToSales = function(salesId) {
+leadSchema.methods.assignToSales = function (salesId) {
   this.assignedTo = salesId;
   this.lastContactDate = new Date();
   return this.save();
 };
 
 // Method to add follow-up
-leadSchema.methods.addFollowUp = function(followUpData) {
+leadSchema.methods.addFollowUp = function (followUpData) {
   this.followUps.push(followUpData);
-  
+
   // Update nextFollowUpDate to the nearest upcoming follow-up
   const upcomingFollowUps = this.followUps
     .filter(fu => fu.status === 'pending' && fu.scheduledDate >= new Date())
     .sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
-  
+
   if (upcomingFollowUps.length > 0) {
     this.nextFollowUpDate = upcomingFollowUps[0].scheduledDate;
   }
-  
+
   return this.save();
 };
 
 // Method to complete follow-up
-leadSchema.methods.completeFollowUp = function(followUpId) {
+leadSchema.methods.completeFollowUp = function (followUpId) {
   const followUp = this.followUps.id(followUpId);
   if (followUp) {
     followUp.status = 'completed';
@@ -233,13 +237,13 @@ leadSchema.methods.completeFollowUp = function(followUpId) {
 };
 
 // Method to add meeting
-leadSchema.methods.addMeeting = function(meetingData) {
+leadSchema.methods.addMeeting = function (meetingData) {
   this.meetings.push(meetingData);
   return this.save();
 };
 
 // Method to complete meeting
-leadSchema.methods.completeMeeting = function(meetingId) {
+leadSchema.methods.completeMeeting = function (meetingId) {
   const meeting = this.meetings.id(meetingId);
   if (meeting) {
     meeting.status = 'completed';
@@ -250,14 +254,14 @@ leadSchema.methods.completeMeeting = function(meetingId) {
 };
 
 // Method to add activity
-leadSchema.methods.addActivity = function(activityData) {
+leadSchema.methods.addActivity = function (activityData) {
   this.activities.push(activityData);
   this.lastContactDate = new Date();
   return this.save();
 };
 
 // Method to transfer lead to another sales employee
-leadSchema.methods.transferToSales = function(fromSalesId, toSalesId, reason) {
+leadSchema.methods.transferToSales = function (fromSalesId, toSalesId, reason) {
   this.transferHistory.push({
     fromSales: fromSalesId,
     toSales: toSalesId,
@@ -269,22 +273,22 @@ leadSchema.methods.transferToSales = function(fromSalesId, toSalesId, reason) {
 };
 
 // Static method to get leads by status
-leadSchema.statics.getLeadsByStatus = function(status) {
+leadSchema.statics.getLeadsByStatus = function (status) {
   return this.find({ status }).populate('category', 'name color').populate('assignedTo', 'name email');
 };
 
 // Static method to get unassigned leads
-leadSchema.statics.getUnassignedLeads = function() {
+leadSchema.statics.getUnassignedLeads = function () {
   return this.find({ assignedTo: null }).populate('category', 'name color');
 };
 
 // Static method to get leads by category
-leadSchema.statics.getLeadsByCategory = function(categoryId) {
+leadSchema.statics.getLeadsByCategory = function (categoryId) {
   return this.find({ category: categoryId }).populate('assignedTo', 'name email');
 };
 
 // Static method to get conversion rate
-leadSchema.statics.getConversionRate = function() {
+leadSchema.statics.getConversionRate = function () {
   return this.aggregate([
     {
       $group: {
@@ -313,7 +317,7 @@ leadSchema.statics.getConversionRate = function() {
 };
 
 // Remove sensitive data from JSON output
-leadSchema.methods.toJSON = function() {
+leadSchema.methods.toJSON = function () {
   const lead = this.toObject();
   return lead;
 };

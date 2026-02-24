@@ -42,6 +42,7 @@ const SalesProjectConversionDialog = ({
     advanceAccount: '',
     includeGST: false,
     clientDateOfBirth: '',
+    conversionDate: '', // Added for custom conversion date
     description: '',
     screenshot: null
   })
@@ -54,7 +55,8 @@ const SalesProjectConversionDialog = ({
       ...prev,
       projectName: prev.projectName || businessName || '',
       categoryId: initialCategoryId || '',
-      description: prev.description || ''
+      description: prev.description || '',
+      conversionDate: prev.conversionDate || new Date().toISOString().split('T')[0]
     }))
 
     const loadAux = async () => {
@@ -136,6 +138,7 @@ const SalesProjectConversionDialog = ({
         advanceAccount: conversionData.advanceAccount || '',
         includeGST: conversionData.includeGST || false,
         clientDateOfBirth: mode === 'fromLead' ? (conversionData.clientDateOfBirth || undefined) : undefined,
+        conversionDate: conversionData.conversionDate || undefined,
         description: conversionData.description.trim() || '',
         screenshot: conversionData.screenshot || null
       }
@@ -158,6 +161,7 @@ const SalesProjectConversionDialog = ({
         advanceAccount: '',
         includeGST: false,
         clientDateOfBirth: '',
+        conversionDate: new Date().toISOString().split('T')[0],
         description: '',
         screenshot: null
       })
@@ -482,6 +486,33 @@ const SalesProjectConversionDialog = ({
                 </p>
               </div>
             )}
+
+            {/* Conversion Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Conversion Date <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                  <FiCalendar className="text-lg" />
+                </div>
+                <input
+                  type="date"
+                  value={conversionData.conversionDate}
+                  onChange={(e) =>
+                    setConversionData(prev => ({
+                      ...prev,
+                      conversionDate: e.target.value
+                    }))
+                  }
+                  required
+                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Default is today. You can select a past date if the actual conversion happened earlier.
+              </p>
+            </div>
 
             {/* Include GST */}
             <div>

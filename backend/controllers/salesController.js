@@ -1939,15 +1939,15 @@ const getSalesLeaderboard = async (req, res) => {
 
     const convertedBySales = validOriginLeadIds.length > 0
       ? await Lead.aggregate([
-          { $match: { status: 'converted', _id: { $in: validOriginLeadIds } } },
-          {
-            $group: {
-              _id: '$assignedTo',
-              convertedLeads: { $sum: 1 },
-              convertedValue: { $sum: '$value' }
-            }
+        { $match: { status: 'converted', _id: { $in: validOriginLeadIds } } },
+        {
+          $group: {
+            _id: '$assignedTo',
+            convertedLeads: { $sum: 1 },
+            convertedValue: { $sum: '$value' }
           }
-        ])
+        }
+      ])
       : [];
 
     const convertedMap = new Map(
@@ -2014,8 +2014,8 @@ const getSalesLeaderboard = async (req, res) => {
             totalRevenue >= 1000000
               ? ['Sales Champion', 'Revenue Master']
               : totalRevenue >= 500000
-              ? ['Sales Champion']
-              : [],
+                ? ['Sales Champion']
+                : [],
           salesMetrics: {
             leads: totalLeads,
             conversions: convertedLeads,
@@ -2047,8 +2047,8 @@ const getSalesLeaderboard = async (req, res) => {
       avgScore:
         totalMembers > 0
           ? Math.round(
-              salesLeaderboard.reduce((sum, m) => sum + (m.score || 0), 0) / totalMembers
-            )
+            salesLeaderboard.reduce((sum, m) => sum + (m.score || 0), 0) / totalMembers
+          )
           : 0,
       totalCompleted: salesLeaderboard.reduce((sum, m) => sum + (m.completed || 0), 0),
       totalProjects: salesLeaderboard.reduce(
@@ -2058,15 +2058,15 @@ const getSalesLeaderboard = async (req, res) => {
       avgCompletionRate:
         totalMembers > 0
           ? Math.round(
-              salesLeaderboard.reduce((sum, m) => sum + (m.rate || 0), 0) / totalMembers
-            )
+            salesLeaderboard.reduce((sum, m) => sum + (m.rate || 0), 0) / totalMembers
+          )
           : 0,
       topPerformer:
         totalMembers > 0
           ? salesLeaderboard.reduce(
-              (top, m) => ((m.score || 0) > (top.score || 0) ? m : top),
-              salesLeaderboard[0]
-            )
+            (top, m) => ((m.score || 0) > (top.score || 0) ? m : top),
+            salesLeaderboard[0]
+          )
           : null,
       totalRevenue: salesLeaderboard.reduce(
         (sum, m) => sum + (m.salesMetrics?.revenue || 0),
@@ -2329,9 +2329,11 @@ const getLeadsByStatus = async (req, res) => {
 
       // If filter already has $or (from quotation_sent, web, app_client), use $and
       if (filter.$or) {
+        const existingOr = filter.$or;
+        delete filter.$or;
         filter.$and = filter.$and || [];
+        filter.$and.push({ $or: existingOr });
         filter.$and.push(searchConditions);
-        delete filter.$or; // Remove the old $or, it's now in $and
       } else {
         filter.$or = searchConditions.$or;
       }
@@ -2383,8 +2385,9 @@ const getLeadsByStatus = async (req, res) => {
     } else if (timeFrame && timeFrame !== 'all') {
       // For status-specific queries, determine which date field to use for filtering
       // - 'new' status: Use createdAt (leads are created as new, not updated to new)
+      // - 'converted' status: Use convertedAt (accurate conversion date)
       // - Other statuses: Use updatedAt (when status was changed to this status)
-      const dateField = actualStatus === 'new' ? 'createdAt' : 'updatedAt';
+      const dateField = actualStatus === 'new' ? 'createdAt' : (actualStatus === 'converted' ? 'convertedAt' : 'updatedAt');
       const now = new Date();
       let startDate, endDate;
 
@@ -2496,11 +2499,21 @@ const getLeadsByStatus = async (req, res) => {
 
     // For converted leads, populate associated project with financial details
     if (status === 'converted') {
-      const leadIds = leads.map(lead => lead._id);
       const salesObjectId = safeObjectId(salesId);
 
-      // Get clients that belong to this sales employee first
-      const clientDocs = await Client.find({ convertedBy: salesObjectId })
+      // Build client filter
+      const clientFilter = { convertedBy: salesObjectId };
+      if (search) {
+        clientFilter.$or = [
+          { name: { $regex: search, $options: 'i' } },
+          { phoneNumber: { $regex: search, $options: 'i' } },
+          { companyName: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // Get clients that belong to this sales employee with search filter
+      const clientDocs = await Client.find(clientFilter)
         .select('_id originLead phoneNumber name companyName convertedBy transferHistory')
         .populate({
           path: 'transferHistory.fromSales',
@@ -2513,17 +2526,27 @@ const getLeadsByStatus = async (req, res) => {
       const clients = clientDocs.map(doc => doc.toObject());
       const clientIds = clients.map(c => c._id);
 
-      // Get projects for both leads and clients
-      const projects = await Project.find({
+      // Get leads IDs
+      const leadIds = leads.map(lead => lead._id);
+
+      // Build project filter
+      const projectFilter = {
         $or: [
           { originLead: { $in: leadIds } },
           { client: { $in: clientIds } }
         ]
-      })
-        .select('originLead client financialDetails budget projectType category status progress')
+      };
+      // Apply category filter to projects if provided
+      if (category && category !== 'all') {
+        const catObjectId = safeObjectId(category);
+        projectFilter.category = catObjectId;
+      }
+
+      // Get projects matching filter
+      const projects = await Project.find(projectFilter)
+        .select('originLead client financialDetails budget projectType category status progress updatedAt createdAt name')
         .populate('category', 'name')
         .lean();
-      // Clients are already fetched above, no need to query again
 
       // Create maps: leadId -> project and clientId -> project
       const projectMapByLead = {};
@@ -2550,7 +2573,7 @@ const getLeadsByStatus = async (req, res) => {
 
       // Attach project data to each lead and filter out leads whose clients were transferred
       // For converted status, only show leads that have a client AND that client belongs to this sales employee
-      leads = leads
+      let mergedLeads = leads
         .map(lead => {
           const leadObj = lead.toObject();
           const project = projectMapByLead[lead._id.toString()];
@@ -2562,16 +2585,12 @@ const getLeadsByStatus = async (req, res) => {
             (lead.phone ? clientMapByPhone.get(lead.phone) : null);
 
           if (clientDoc) {
-            // Verify client belongs to this sales employee
-            // Since we already filtered by convertedBy in the query, this should always match
-            // But we double-check here for safety - handle both ObjectId and string cases
             const clientConvertedBy = clientDoc.convertedBy
               ? String(clientDoc.convertedBy._id || clientDoc.convertedBy)
               : null;
             const currentSalesIdStr = String(salesId);
 
             if (clientConvertedBy && clientConvertedBy !== currentSalesIdStr) {
-              // Client doesn't belong to this sales employee, exclude this lead
               return null;
             }
 
@@ -2580,20 +2599,16 @@ const getLeadsByStatus = async (req, res) => {
                 ? clientDoc._id.toString()
                 : clientDoc._id;
 
-            // Check if this client was transferred to the current sales employee
             const transferHistory = clientDoc.transferHistory || [];
             const latestTransfer = transferHistory.length > 0
               ? transferHistory[transferHistory.length - 1]
               : null;
 
-            // Check if transferred TO current sales employee (toSales matches current salesId)
-            // Handle both ObjectId and populated object cases
             let isTransferred = false;
             let transferredByName = 'Unknown';
             let fromSalesName = 'Unknown';
 
             if (latestTransfer) {
-              // Get IDs - handle both populated objects and raw ObjectIds
               const toSalesId = latestTransfer.toSales?._id
                 ? String(latestTransfer.toSales._id)
                 : String(latestTransfer.toSales || '');
@@ -2601,12 +2616,7 @@ const getLeadsByStatus = async (req, res) => {
                 ? String(latestTransfer.fromSales._id)
                 : String(latestTransfer.fromSales || '');
 
-              // Client was transferred TO this sales employee if:
-              // 1. toSales matches current salesId
-              // 2. fromSales is different from current salesId (was transferred from someone else)
               isTransferred = toSalesId === currentSalesIdStr && fromSalesId !== currentSalesIdStr && fromSalesId !== '';
-
-              // Get names from populated objects
               transferredByName = latestTransfer.transferredBy?.name || 'Unknown';
               fromSalesName = latestTransfer.fromSales?.name || 'Unknown';
             }
@@ -2626,26 +2636,20 @@ const getLeadsByStatus = async (req, res) => {
             leadObj.convertedClientId = clientIdStr;
             return leadObj;
           } else {
-            // For converted status, if there's no client found, exclude the lead
-            // (This can happen if client was deleted or transferred before the query)
             return null;
           }
         })
-        .filter(lead => lead !== null && lead.convertedClientId !== null); // Remove leads without valid clients
+        .filter(lead => lead !== null && lead.convertedClientId !== null);
 
       // Also include clients that belong to this sales employee but don't have matching leads
-      // This handles cases where clients were transferred but the original lead isn't assigned to this sales employee
-      const clientIdsInLeads = new Set(leads.map(l => l.convertedClientId).filter(Boolean));
+      const clientIdsInLeads = new Set(mergedLeads.map(l => l.convertedClientId).filter(Boolean));
       const clientsWithoutLeads = clients.filter(client => {
         const clientIdStr = String(client._id);
         return !clientIdsInLeads.has(clientIdStr);
       });
 
-      // Create lead-like objects for clients without matching leads
       for (const clientDoc of clientsWithoutLeads) {
         const clientIdStr = String(clientDoc._id);
-
-        // Check if this client was transferred to the current sales employee
         const transferHistory = clientDoc.transferHistory || [];
         const latestTransfer = transferHistory.length > 0
           ? transferHistory[transferHistory.length - 1]
@@ -2663,19 +2667,15 @@ const getLeadsByStatus = async (req, res) => {
             ? String(latestTransfer.fromSales._id)
             : String(latestTransfer.fromSales || '');
           const currentSalesIdStr = String(salesId);
-
           isTransferred = toSalesId === currentSalesIdStr && fromSalesId !== currentSalesIdStr && fromSalesId !== '';
-
           transferredByName = latestTransfer.transferredBy?.name || 'Unknown';
           fromSalesName = latestTransfer.fromSales?.name || 'Unknown';
         }
 
-        // Find associated project for this client
         const clientProject = projectMapByClient[clientIdStr];
 
-        // Create a lead-like object
         const clientLeadObj = {
-          _id: clientDoc.originLead || clientDoc._id, // Use originLead if available, otherwise use client ID
+          _id: clientDoc.originLead || clientDoc._id,
           phone: clientDoc.phoneNumber,
           name: clientDoc.name,
           company: clientDoc.companyName,
@@ -2696,69 +2696,83 @@ const getLeadsByStatus = async (req, res) => {
           updatedAt: latestTransfer?.transferredAt || clientDoc.updatedAt || new Date()
         };
 
-        leads.push(clientLeadObj);
-      }
-    }
-
-    // For status-specific queries that check leadProfile flags, count needs special handling
-    let totalLeads;
-    if (status === 'demo_sent') {
-      const allLeads = await Lead.find(filter)
-        .populate('leadProfile', 'demoSent');
-      totalLeads = allLeads.filter(lead => lead.leadProfile && lead.leadProfile.demoSent === true).length;
-    } else if (status === 'quotation_sent') {
-      const allLeads = await Lead.find(filter)
-        .populate('leadProfile', 'quotationSent');
-      totalLeads = allLeads.filter(lead =>
-        lead.status === 'quotation_sent' ||
-        (lead.leadProfile && lead.leadProfile.quotationSent === true)
-      ).length;
-    } else if (status === 'app_client') {
-      const LeadCategory = require('../models/LeadCategory');
-      let appCategoryId = null;
-      try {
-        const appCategory = await LeadCategory.findOne({ name: 'App' });
-        if (appCategory) appCategoryId = appCategory._id.toString();
-      } catch (err) {
-        console.error('Error finding App category:', err);
+        mergedLeads.push(clientLeadObj);
       }
 
-      const allLeads = await Lead.find(filter)
-        .populate('leadProfile', 'projectType category');
-      totalLeads = allLeads.filter(lead => {
-        if (lead.status === 'app_client') return true;
-        if (lead.leadProfile) {
-          // Check category first (preferred)
-          if (appCategoryId && lead.leadProfile.category && lead.leadProfile.category.toString() === appCategoryId) return true;
-          // Legacy: fall back to projectType flag
-          if (lead.leadProfile.projectType && lead.leadProfile.projectType.app === true) return true;
-        }
-        return false;
-      }).length;
-    } else if (status === 'web') {
-      const LeadCategory = require('../models/LeadCategory');
-      let webCategoryId = null;
-      try {
-        const webCategory = await LeadCategory.findOne({ name: 'Web' });
-        if (webCategory) webCategoryId = webCategory._id.toString();
-      } catch (err) {
-        console.error('Error finding Web category:', err);
+      // If category filter is active, only show leads/clients that have at least one project in that category
+      if (category && category !== 'all') {
+        mergedLeads = mergedLeads.filter(lead =>
+          lead.project &&
+          String(lead.project.category?._id || lead.project.category || '') === String(category)
+        );
       }
 
-      const allLeads = await Lead.find(filter)
-        .populate('leadProfile', 'projectType category');
-      totalLeads = allLeads.filter(lead => {
-        if (lead.status === 'web') return true;
-        if (lead.leadProfile) {
-          // Check category first (preferred)
-          if (webCategoryId && lead.leadProfile.category && lead.leadProfile.category.toString() === webCategoryId) return true;
-          // Legacy: fall back to projectType flag
-          if (lead.leadProfile.projectType && lead.leadProfile.projectType.web === true) return true;
-        }
-        return false;
-      }).length;
+      // Sort by conversion date or updated at
+      mergedLeads.sort((a, b) => {
+        const dateA = new Date(a.convertedAt || a.updatedAt || 0);
+        const dateB = new Date(b.convertedAt || b.updatedAt || 0);
+        return dateB - dateA;
+      });
+
+      // Update output variables for the final response
+      totalLeads = mergedLeads.length;
+      leads = mergedLeads.slice(skip, skip + limitNum);
     } else {
-      totalLeads = await Lead.countDocuments(filter);
+      // For status-specific queries that check leadProfile flags, count needs special handling
+      if (status === 'demo_sent') {
+        const allLeads = await Lead.find(filter)
+          .populate('leadProfile', 'demoSent');
+        totalLeads = allLeads.filter(lead => lead.leadProfile && lead.leadProfile.demoSent === true).length;
+      } else if (status === 'quotation_sent') {
+        const allLeads = await Lead.find(filter)
+          .populate('leadProfile', 'quotationSent');
+        totalLeads = allLeads.filter(lead =>
+          lead.status === 'quotation_sent' ||
+          (lead.leadProfile && lead.leadProfile.quotationSent === true)
+        ).length;
+      } else if (status === 'app_client') {
+        const LeadCategory = require('../models/LeadCategory');
+        let appCategoryId = null;
+        try {
+          const appCategory = await LeadCategory.findOne({ name: 'App' });
+          if (appCategory) appCategoryId = appCategory._id.toString();
+        } catch (err) {
+          console.error('Error finding App category:', err);
+        }
+
+        const allLeads = await Lead.find(filter)
+          .populate('leadProfile', 'projectType category');
+        totalLeads = allLeads.filter(lead => {
+          if (lead.status === 'app_client') return true;
+          if (lead.leadProfile) {
+            if (appCategoryId && lead.leadProfile.category && lead.leadProfile.category.toString() === appCategoryId) return true;
+            if (lead.leadProfile.projectType && lead.leadProfile.projectType.app === true) return true;
+          }
+          return false;
+        }).length;
+      } else if (status === 'web') {
+        const LeadCategory = require('../models/LeadCategory');
+        let webCategoryId = null;
+        try {
+          const webCategory = await LeadCategory.findOne({ name: 'Web' });
+          if (webCategory) webCategoryId = webCategory._id.toString();
+        } catch (err) {
+          console.error('Error finding Web category:', err);
+        }
+
+        const allLeads = await Lead.find(filter)
+          .populate('leadProfile', 'projectType category');
+        totalLeads = allLeads.filter(lead => {
+          if (lead.status === 'web') return true;
+          if (lead.leadProfile) {
+            if (webCategoryId && lead.leadProfile.category && lead.leadProfile.category.toString() === webCategoryId) return true;
+            if (lead.leadProfile.projectType && lead.leadProfile.projectType.web === true) return true;
+          }
+          return false;
+        }).length;
+      } else {
+        totalLeads = await Lead.countDocuments(filter);
+      }
     }
 
     res.status(200).json({
@@ -4102,7 +4116,8 @@ const convertLeadToClient = async (req, res) => {
         advanceAccount: req.body.advanceAccount || undefined,
         includeGST: req.body.includeGST === 'true' || req.body.includeGST === true,
         clientDateOfBirth: req.body.clientDateOfBirth || undefined,
-        description: req.body.description || ''
+        description: req.body.description || '',
+        conversionDate: req.body.conversionDate || undefined
       };
     }
 
@@ -4111,6 +4126,7 @@ const convertLeadToClient = async (req, res) => {
     const totalCost = parseAmount(projectData?.totalCost ?? projectData?.estimatedBudget);
     const advanceReceived = parseAmount(projectData?.advanceReceived);
     let description = (projectData?.description ?? projectData?.notes ?? '').trim();
+    const conversionDateStr = projectData?.conversionDate;
 
     // Validate required financial fields
     if (totalCost <= 0) {
@@ -4213,6 +4229,7 @@ const convertLeadToClient = async (req, res) => {
     const clientDateOfBirth = projectData?.clientDateOfBirth
       ? (projectData.clientDateOfBirth instanceof Date ? projectData.clientDateOfBirth : new Date(projectData.clientDateOfBirth))
       : undefined;
+    const conversionDateFull = conversionDateStr ? new Date(conversionDateStr) : new Date();
 
     let client = await Client.findOne({ phoneNumber });
     if (!client) {
@@ -4223,7 +4240,8 @@ const convertLeadToClient = async (req, res) => {
         email: lead.email || undefined,
         isActive: true,
         convertedBy: req.sales.id,
-        conversionDate: new Date(),
+        conversionDate: conversionDateFull,
+        joiningDate: conversionDateFull,
         originLead: lead._id
       };
       if (clientDateOfBirth) clientFields.dateOfBirth = clientDateOfBirth;
@@ -4233,7 +4251,8 @@ const convertLeadToClient = async (req, res) => {
       let needsSave = false;
       if (!client.convertedBy) {
         client.convertedBy = req.sales.id;
-        client.conversionDate = new Date();
+        client.conversionDate = conversionDateFull;
+        client.joiningDate = conversionDateFull;
         client.originLead = lead._id;
         needsSave = true;
       }
@@ -4313,7 +4332,7 @@ const convertLeadToClient = async (req, res) => {
       projectType, // Legacy support for existing projects
       status: 'pending-assignment',
       budget: totalCost,
-      startDate: new Date(),
+      startDate: conversionDateFull,
       submittedBy: req.sales.id,
       originLead: lead._id,
       financialDetails: {
@@ -4401,25 +4420,23 @@ const convertLeadToClient = async (req, res) => {
     // Update lead status/value
     lead.status = 'converted';
     lead.value = totalCost;
-    lead.lastContactDate = new Date();
-    if (!lead.convertedAt) {
-      lead.convertedAt = new Date();
-    }
+    lead.lastContactDate = conversionDateFull;
+    lead.convertedAt = conversionDateFull; // Set convertedAt directly
     await lead.save();
 
-   // Update sales stats
-   const sales = await Sales.findById(req.sales.id);
-   if (sales && sales.updateLeadStats) {
-     await sales.updateLeadStats();
-   }
+    // Update sales stats
+    const sales = await Sales.findById(req.sales.id);
+    if (sales && sales.updateLeadStats) {
+      await sales.updateLeadStats();
+    }
 
-   /**
-    * NOTE: Conversion-based incentives are now created only AFTER
-    * the first payment receipt for this project is approved.
-    * See PaymentReceipt model post-save hook for incentive creation logic.
-    * This ensures incentives do not appear in pending/current lists
-    * until advance payment has actually been approved.
-    */
+    /**
+     * NOTE: Conversion-based incentives are now created only AFTER
+     * the first payment receipt for this project is approved.
+     * See PaymentReceipt model post-save hook for incentive creation logic.
+     * This ensures incentives do not appear in pending/current lists
+     * until advance payment has actually been approved.
+     */
 
     // Check if this lead was shared from a Channel Partner and distribute commission
     let cpCommissionData = null;
@@ -4501,8 +4518,8 @@ const createProjectForExistingClient = async (req, res) => {
         categoryId: req.body.categoryId || req.body.category,
         projectType: req.body.projectType
           ? (typeof req.body.projectType === 'string'
-              ? JSON.parse(req.body.projectType)
-              : req.body.projectType)
+            ? JSON.parse(req.body.projectType)
+            : req.body.projectType)
           : null,
         totalCost: req.body.totalCost
           ? Math.round(Number(String(req.body.totalCost).replace(/,/g, '')) || 0)

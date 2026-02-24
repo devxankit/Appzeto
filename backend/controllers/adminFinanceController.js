@@ -126,8 +126,8 @@ const createTransaction = asyncHandler(async (req, res, next) => {
   if (employeeId) transactionData.employee = employeeId;
   if (vendor) transactionData.vendor = vendor;
 
-  // Handle account ID if provided (only for incoming transactions)
-  if (account && type === 'incoming') {
+  // Handle account ID if provided
+  if (account) {
     // Check if account is a valid ObjectId
     if (account.match(/^[0-9a-fA-F]{24}$/)) {
       const accountDoc = await Account.findById(account);
@@ -153,7 +153,7 @@ const createTransaction = asyncHandler(async (req, res, next) => {
       { path: 'client', select: 'name email phoneNumber companyName' },
       { path: 'project', select: 'name status' },
       { path: 'employee', select: 'name email department' },
-      { path: 'account', select: 'name bankName accountNumber' },
+      { path: 'account', select: 'accountName bankName accountNumber' },
       { path: 'createdBy', select: 'name email' }
     ]);
 
@@ -234,7 +234,7 @@ const getTransactions = asyncHandler(async (req, res, next) => {
       // If it's a sales employee, we'll handle it separately
       model: 'Employee'
     })
-    .populate('account', 'name bankName accountNumber')
+    .populate('account', 'accountName bankName accountNumber')
     .populate('createdBy', 'name email')
     .sort({ transactionDate: -1, createdAt: -1 })
     .skip(skip)
@@ -294,7 +294,7 @@ const getTransaction = asyncHandler(async (req, res, next) => {
     .populate('client', 'name email phoneNumber companyName')
     .populate('project', 'name status')
     .populate('employee', 'name email department')
-    .populate('account', 'name bankName accountNumber')
+    .populate('account', 'accountName bankName accountNumber')
     .populate('createdBy', 'name email');
 
   if (!transaction) {
@@ -415,7 +415,7 @@ const updateTransaction = asyncHandler(async (req, res, next) => {
     { path: 'client', select: 'name email phoneNumber companyName' },
     { path: 'project', select: 'name status' },
     { path: 'employee', select: 'name email department' },
-    { path: 'account', select: 'name bankName accountNumber' },
+    { path: 'account', select: 'accountName bankName accountNumber' },
     { path: 'createdBy', select: 'name email' }
   ]);
 

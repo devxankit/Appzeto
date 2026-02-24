@@ -8,7 +8,7 @@ import { adminFinanceService } from '../admin-services/adminFinanceService'
 import adminRequestService from '../admin-services/adminRequestService'
 import { adminStorage } from '../admin-services/baseApiService'
 import { useToast } from '../../../contexts/ToastContext'
-import { 
+import {
   FiDollarSign,
   FiTrendingUp,
   FiTrendingDown,
@@ -41,11 +41,11 @@ import {
 
 const Admin_finance_management = () => {
   const { toast } = useToast()
-  
+
   // Accountant has same power as admin on this page (no role-based restrictions)
   const adminData = adminStorage.get()
   const isFullAccessOnPage = !adminData || adminData?.role === 'admin' || adminData?.role === 'accountant'
-  
+
   // State management
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('transactions')
@@ -62,7 +62,7 @@ const Admin_finance_management = () => {
   const [showBreakdownModal, setShowBreakdownModal] = useState(false)
   const [error, setError] = useState(null)
   const [exporting, setExporting] = useState(false)
-  
+
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -266,7 +266,7 @@ const Admin_finance_management = () => {
         params.endDate = dateRange.endDate
       }
       const response = await adminFinanceService.getFinanceStatistics(timeFilter, params)
-      
+
       if (response && response.success && response.data) {
         setStatistics({
           totalRevenue: response.data.totalRevenue || 0,
@@ -433,18 +433,18 @@ const Admin_finance_management = () => {
     try {
       setExpensesLoading(true)
       setError(null)
-      
+
       const params = {
         page: currentPage,
         limit: itemsPerPage
       }
-      
+
       const dateRange = getDateRange()
       if (dateRange.startDate) params.startDate = dateRange.startDate
       if (dateRange.endDate) params.endDate = dateRange.endDate
-      
+
       const response = await adminFinanceService.getExpenses(params)
-      
+
       if (response.success && response.data) {
         setExpenses(response.data)
         setExpensesTotal(response.total || response.data.length)
@@ -465,18 +465,18 @@ const Admin_finance_management = () => {
     try {
       setProjectExpensesLoading(true)
       setError(null)
-      
+
       const params = {
         page: currentPage,
         limit: itemsPerPage
       }
-      
+
       const dateRange = getDateRange()
       if (dateRange.startDate) params.startDate = dateRange.startDate
       if (dateRange.endDate) params.endDate = dateRange.endDate
-      
+
       const response = await adminFinanceService.getProjectExpenses(params)
-      
+
       if (response && response.success) {
         const expensesData = response.data || []
         setProjectExpenses(expensesData)
@@ -620,7 +620,7 @@ const Admin_finance_management = () => {
               clientName = project.client
             }
           }
-          
+
           return {
             value: project._id || project.id,
             label: project.name || 'Unnamed Project',
@@ -637,8 +637,8 @@ const Admin_finance_management = () => {
 
   // Handle project selection change to auto-fill vendor
   const handleProjectChange = async (projectId) => {
-    setProjectExpenseFormData(prev => ({...prev, projectId}))
-    
+    setProjectExpenseFormData(prev => ({ ...prev, projectId }))
+
     // Find the selected project and auto-fill vendor with client name
     const selectedProject = projectsList.find(p => p.value === projectId)
     if (selectedProject && selectedProject.clientName) {
@@ -663,7 +663,7 @@ const Admin_finance_management = () => {
               clientName = project.client
             }
           }
-          
+
           if (clientName) {
             setProjectExpenseFormData(prev => ({
               ...prev,
@@ -683,18 +683,18 @@ const Admin_finance_management = () => {
     try {
       setBudgetsLoading(true)
       setError(null)
-      
+
       const params = {
         page: currentPage,
         limit: itemsPerPage
       }
-      
+
       const dateRange = getDateRange()
       if (dateRange.startDate) params.startDate = dateRange.startDate
       if (dateRange.endDate) params.endDate = dateRange.endDate
-      
+
       const response = await adminFinanceService.getBudgets(params)
-      
+
       if (response.success && response.data) {
         // Map backend fields to frontend fields
         const mappedBudgets = response.data.map(budget => ({
@@ -728,18 +728,18 @@ const Admin_finance_management = () => {
     try {
       setTransactionsLoading(true)
       setError(null)
-      
+
       const params = {
         page: currentPage,
         limit: itemsPerPage
       }
-      
+
       const dateRange = getDateRange()
       if (dateRange.startDate) params.startDate = dateRange.startDate
       if (dateRange.endDate) params.endDate = dateRange.endDate
-      
+
       const response = await adminFinanceService.getTransactions(params)
-      
+
       if (response.success && response.data) {
         setTransactions(response.data)
         setTransactionsTotal(response.total || response.data.length)
@@ -1130,9 +1130,9 @@ const Admin_finance_management = () => {
 
   const handleSaveProjectExpense = async () => {
     // Validation
-    if (!projectExpenseFormData.projectId || !projectExpenseFormData.name || 
-        !projectExpenseFormData.category || !projectExpenseFormData.amount || 
-        !projectExpenseFormData.expenseDate) {
+    if (!projectExpenseFormData.projectId || !projectExpenseFormData.name ||
+      !projectExpenseFormData.category || !projectExpenseFormData.amount ||
+      !projectExpenseFormData.expenseDate) {
       toast.error('Please fill in all required fields')
       return
     }
@@ -1222,12 +1222,12 @@ const Admin_finance_management = () => {
   // Note: Transactions, expenses, and budgets are filtered on the backend, so we skip client-side filtering for them
   const filteredData = useMemo(() => {
     const data = getCurrentData()
-    
+
     // For transactions, expenses, budgets, project-expenses, and payment-approvals, backend handles filtering
     if (activeTab === 'transactions' || activeTab === 'expenses' || activeTab === 'budgets' || activeTab === 'project-expenses' || activeTab === 'payment-approvals' || activeTab === 'pending-recovery' || activeTab === 'gst-projects') {
       return data
     }
-    
+
     // For other tabs (e.g. accounts), return data as-is (no client-side filters)
     return data
   }, [activeTab, transactions, expenses, budgets, projectExpenses, paymentApprovalRequests, pendingRecoveryList, gstProjectsList, accounts])
@@ -1243,21 +1243,21 @@ const Admin_finance_management = () => {
     return filteredData.slice(startIndex, startIndex + itemsPerPage)
   }, [filteredData, currentPage, itemsPerPage, activeTab])
 
-  const totalPages = activeTab === 'transactions' 
-    ? transactionsPages 
+  const totalPages = activeTab === 'transactions'
+    ? transactionsPages
     : activeTab === 'expenses'
-    ? expensesPages
-    : activeTab === 'budgets'
-    ? budgetsPages
-    : activeTab === 'project-expenses'
-    ? projectExpensesPages
-    : activeTab === 'payment-approvals'
-    ? paymentApprovalPages
-    : activeTab === 'pending-recovery'
-    ? 1
-    : activeTab === 'gst-projects'
-    ? 1
-    : Math.ceil(filteredData.length / itemsPerPage)
+      ? expensesPages
+      : activeTab === 'budgets'
+        ? budgetsPages
+        : activeTab === 'project-expenses'
+          ? projectExpensesPages
+          : activeTab === 'payment-approvals'
+            ? paymentApprovalPages
+            : activeTab === 'pending-recovery'
+              ? 1
+              : activeTab === 'gst-projects'
+                ? 1
+                : Math.ceil(filteredData.length / itemsPerPage)
 
   // Management functions
   const handleCreate = () => {
@@ -1297,12 +1297,12 @@ const Admin_finance_management = () => {
 
   const handleEditTransaction = async (transaction) => {
     setSelectedItem(transaction)
-    
+
     // Ensure accounts are loaded before opening edit modal
     if (accounts.length === 0) {
       await fetchAccounts()
     }
-    
+
     setTransactionFormData({
       type: transaction.transactionType || transaction.type || 'incoming',
       category: transaction.category || '',
@@ -1442,7 +1442,7 @@ const Admin_finance_management = () => {
     try {
       setLoading(true)
       const response = await adminFinanceService.createAccount(accountFormData)
-      
+
       if (response && response.success) {
         toast.success(response.message || 'Account created successfully')
         setShowAccountModal(false)
@@ -1490,7 +1490,7 @@ const Admin_finance_management = () => {
       setLoading(true)
       const accountId = selectedItem._id || selectedItem.id
       const response = await adminFinanceService.updateAccount(accountId, accountFormData)
-      
+
       if (response && response.success) {
         toast.success(response.message || 'Account updated successfully')
         setShowAccountEditModal(false)
@@ -1563,7 +1563,7 @@ const Admin_finance_management = () => {
     setExpenseFormData({
       category: expense.category || '',
       amount: expense.amount || '',
-      date: expense.transactionDate || expense.date || expense.createdAt 
+      date: expense.transactionDate || expense.date || expense.createdAt
         ? new Date(expense.transactionDate || expense.date || expense.createdAt).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
       description: expense.description || ''
@@ -1577,15 +1577,17 @@ const Admin_finance_management = () => {
       return
     }
 
-    // For incoming transactions, account is required
-    if (transactionFormData.type === 'incoming' && !transactionFormData.account) {
-      toast.error('Please select an account for incoming transactions')
+    // Account is recommended but not strictly required by backend for outgoing, 
+    // but we can keep it optional for now or make it required for better tracking.
+    // The user's request specificies "ensure it's shown whenever a new transaction is added"
+    if (!transactionFormData.account) {
+      toast.error('Please select an account')
       return
     }
 
     try {
       setLoading(true)
-      
+
       const transactionData = {
         type: transactionFormData.type,
         category: transactionFormData.category,
@@ -1594,8 +1596,8 @@ const Admin_finance_management = () => {
         description: transactionFormData.description || ''
       }
 
-      // Add account only for incoming transactions
-      if (transactionFormData.type === 'incoming' && transactionFormData.account) {
+      // Add account if selected
+      if (transactionFormData.account) {
         transactionData.account = transactionFormData.account
       }
 
@@ -1612,7 +1614,7 @@ const Admin_finance_management = () => {
         response = await adminFinanceService.createTransaction(transactionData)
         console.log('Transaction creation response:', response)
       }
-      
+
       if (response && response.success) {
         toast.success(response.message || (selectedItem ? 'Transaction updated successfully' : 'Transaction created successfully'))
         setShowTransactionModal(false)
@@ -1640,7 +1642,7 @@ const Admin_finance_management = () => {
 
     try {
       setLoading(true)
-      
+
       const budgetData = {
         name: budgetFormData.name,
         category: budgetFormData.category,
@@ -1653,7 +1655,7 @@ const Admin_finance_management = () => {
       console.log('Creating budget with data:', budgetData)
       const response = await adminFinanceService.createBudget(budgetData)
       console.log('Budget creation response:', response)
-      
+
       if (response && response.success) {
         toast.success(response.message || 'Budget created successfully')
         setShowBudgetModal(false)
@@ -1684,7 +1686,7 @@ const Admin_finance_management = () => {
 
     try {
       setLoading(true)
-      
+
       const budgetData = {
         name: budgetFormData.name,
         category: budgetFormData.category,
@@ -1697,7 +1699,7 @@ const Admin_finance_management = () => {
 
       const budgetId = selectedItem._id || selectedItem.id
       const response = await adminFinanceService.updateBudget(budgetId, budgetData)
-      
+
       if (response && response.success) {
         toast.success(response.message || 'Budget updated successfully')
         setShowBudgetEditModal(false)
@@ -1734,7 +1736,7 @@ const Admin_finance_management = () => {
 
     try {
       setLoading(true)
-      
+
       // Create an outgoing transaction with the budget's category
       const budgetCategory = selectedItem.category || selectedItem.budgetCategory
       const expenseData = {
@@ -1746,7 +1748,7 @@ const Admin_finance_management = () => {
 
       // Create the expense (which is an outgoing transaction)
       const expenseResponse = await adminFinanceService.createExpense(expenseData)
-      
+
       if (expenseResponse && expenseResponse.success) {
         toast.success(`₹${spendAmount.toLocaleString()} spent from budget successfully`)
         setShowBudgetSpendModal(false)
@@ -1773,7 +1775,7 @@ const Admin_finance_management = () => {
 
     try {
       setLoading(true)
-      
+
       const expenseData = {
         category: expenseFormData.category,
         amount: parseFloat(expenseFormData.amount),
@@ -1794,7 +1796,7 @@ const Admin_finance_management = () => {
         response = await adminFinanceService.createExpense(expenseData)
         console.log('Expense creation response:', response)
       }
-      
+
       if (response && response.success) {
         toast.success(response.message || (selectedItem ? 'Expense updated successfully' : 'Expense created successfully'))
         setShowExpenseModal(false)
@@ -1838,22 +1840,22 @@ const Admin_finance_management = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <Admin_navbar />
-      
+
       {/* Sidebar */}
       <Admin_sidebar />
-      
+
       {/* Main Content */}
       <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
         <div className="max-w-7xl mx-auto space-y-4 lg:space-y-6">
-          
+
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Finance Management
-            </h1>
-            <p className="text-gray-600">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                  Finance Management
+                </h1>
+                <p className="text-gray-600">
                   Comprehensive financial oversight and management dashboard
                 </p>
               </div>
@@ -1896,9 +1898,8 @@ const Admin_finance_management = () => {
                                 setFilterType(type)
                                 setShowFilterDropdown(false)
                               }}
-                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all text-left ${
-                                filterType === type ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                              }`}
+                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all text-left ${filterType === type ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                }`}
                             >
                               <span className="flex-1">{label}</span>
                               {filterType === type && <FiCheck className="h-4 w-4 text-blue-600 shrink-0" />}
@@ -1914,9 +1915,8 @@ const Admin_finance_management = () => {
                             setFilterType('custom')
                             setShowDateRangePicker(true)
                           }}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all text-left ${
-                            filterType === 'custom' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                          }`}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all text-left ${filterType === 'custom' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                            }`}
                         >
                           <FiCalendar className="h-3.5 w-3.5" />
                           <span className="flex-1">Custom range</span>
@@ -2144,429 +2144,419 @@ const Admin_finance_management = () => {
               <Loading size="medium" />
             </div>
           ) : (
-          <>
-          {/* PRIMARY KPIs - Hero Cards */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5"
-          >
-            {/* Total Revenue - Hero Card */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-green-500/10">
-                    <FiTrendingUp className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-green-700">Total</p>
-                    <p className="text-xs text-green-600">revenue</p>
+            <>
+              {/* PRIMARY KPIs - Hero Cards */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5"
+              >
+                {/* Total Revenue - Hero Card */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-green-500/10">
+                        <FiTrendingUp className="h-4 w-4 text-green-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-green-700">Total</p>
+                        <p className="text-xs text-green-600">revenue</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-green-700 mb-1">Total Revenue</p>
+                      <p className="text-xl font-bold text-green-800 mb-1">{formatCurrency(statistics.totalRevenue)}</p>
+                      <p className={`text-xs font-semibold ${parseFloat(statistics.revenueChange) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {parseFloat(statistics.revenueChange) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(statistics.revenueChange))}%
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-green-700 mb-1">Total Revenue</p>
-                  <p className="text-xl font-bold text-green-800 mb-1">{formatCurrency(statistics.totalRevenue)}</p>
-                  <p className={`text-xs font-semibold ${parseFloat(statistics.revenueChange) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {parseFloat(statistics.revenueChange) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(statistics.revenueChange))}%
-                  </p>
-                </div>
-              </div>
-            </div>
 
-            {/* Total Expenses - Hero Card */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-red-500/10">
-                    <FiTrendingDown className="h-4 w-4 text-red-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-red-700">Total</p>
-                    <p className="text-xs text-red-600">expenses</p>
+                {/* Total Expenses - Hero Card */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-red-500/10">
+                        <FiTrendingDown className="h-4 w-4 text-red-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-red-700">Total</p>
+                        <p className="text-xs text-red-600">expenses</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-red-700 mb-1">Total Expenses</p>
+                      <p className="text-xl font-bold text-red-800 mb-1">{formatCurrency(statistics.totalExpenses)}</p>
+                      <p className={`text-xs font-semibold ${parseFloat(statistics.expensesChange) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {parseFloat(statistics.expensesChange) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(statistics.expensesChange))}%
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-red-700 mb-1">Total Expenses</p>
-                  <p className="text-xl font-bold text-red-800 mb-1">{formatCurrency(statistics.totalExpenses)}</p>
-                  <p className={`text-xs font-semibold ${parseFloat(statistics.expensesChange) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {parseFloat(statistics.expensesChange) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(statistics.expensesChange))}%
-                  </p>
-                </div>
-              </div>
-            </div>
 
-            {/* Net Profit - Hero Card */}
-            <div className={`group relative overflow-hidden rounded-xl p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border ${
-              statistics.netProfit >= 0 
-                ? 'bg-gradient-to-br from-blue-50 to-indigo-100 border-blue-200/50' 
-                : 'bg-gradient-to-br from-red-50 to-rose-100 border-red-200/50'
-            }`}>
-              <div className={`absolute top-0 right-0 w-12 h-12 rounded-full -translate-y-6 translate-x-6 ${
-                statistics.netProfit >= 0 
-                  ? 'bg-gradient-to-br from-blue-400/20 to-indigo-500/20' 
-                  : 'bg-gradient-to-br from-red-400/20 to-rose-500/20'
-              }`}></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`p-2 rounded-lg ${
-                    statistics.netProfit >= 0 
-                      ? 'bg-blue-500/10' 
-                      : 'bg-red-500/10'
+                {/* Net Profit - Hero Card */}
+                <div className={`group relative overflow-hidden rounded-xl p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border ${statistics.netProfit >= 0
+                    ? 'bg-gradient-to-br from-blue-50 to-indigo-100 border-blue-200/50'
+                    : 'bg-gradient-to-br from-red-50 to-rose-100 border-red-200/50'
                   }`}>
-                    {statistics.netProfit >= 0 ? (
-                      <FiTrendingUp className={`h-4 w-4 ${statistics.netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`} />
-                    ) : (
-                      <FiTrendingDown className={`h-4 w-4 text-red-600`} />
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-xs font-medium ${statistics.netProfit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>Net</p>
-                    <p className={`text-xs ${statistics.netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>profit</p>
+                  <div className={`absolute top-0 right-0 w-12 h-12 rounded-full -translate-y-6 translate-x-6 ${statistics.netProfit >= 0
+                      ? 'bg-gradient-to-br from-blue-400/20 to-indigo-500/20'
+                      : 'bg-gradient-to-br from-red-400/20 to-rose-500/20'
+                    }`}></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={`p-2 rounded-lg ${statistics.netProfit >= 0
+                          ? 'bg-blue-500/10'
+                          : 'bg-red-500/10'
+                        }`}>
+                        {statistics.netProfit >= 0 ? (
+                          <FiTrendingUp className={`h-4 w-4 ${statistics.netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`} />
+                        ) : (
+                          <FiTrendingDown className={`h-4 w-4 text-red-600`} />
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-xs font-medium ${statistics.netProfit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>Net</p>
+                        <p className={`text-xs ${statistics.netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>profit</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className={`text-xs font-medium mb-1 ${statistics.netProfit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>Net Profit</p>
+                      <p className={`text-xl font-bold mb-1 ${statistics.netProfit >= 0 ? 'text-blue-800' : 'text-red-800'}`}>{formatCurrency(statistics.netProfit)}</p>
+                      <p className={`text-xs font-semibold ${parseFloat(statistics.profitChange) >= 0 ? (statistics.netProfit >= 0 ? 'text-blue-600' : 'text-red-600') : 'text-red-600'}`}>
+                        {parseFloat(statistics.profitChange) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(statistics.profitChange))}%
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className={`text-xs font-medium mb-1 ${statistics.netProfit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>Net Profit</p>
-                  <p className={`text-xl font-bold mb-1 ${statistics.netProfit >= 0 ? 'text-blue-800' : 'text-red-800'}`}>{formatCurrency(statistics.netProfit)}</p>
-                  <p className={`text-xs font-semibold ${parseFloat(statistics.profitChange) >= 0 ? (statistics.netProfit >= 0 ? 'text-blue-600' : 'text-red-600') : 'text-red-600'}`}>
-                    {parseFloat(statistics.profitChange) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(statistics.profitChange))}%
-                  </p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+              </motion.div>
 
-          {/* ALL STATISTICS IN COMPACT GRID - Single Section */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 mb-6"
-          >
-            {/* 1. Total Sales */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-purple-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-purple-400/20 to-indigo-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                    <span className="text-sm font-semibold text-purple-600">₹</span>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-purple-700">Total</p>
-                    <p className="text-xs text-purple-600">sales</p>
+              {/* ALL STATISTICS IN COMPACT GRID - Single Section */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 mb-6"
+              >
+                {/* 1. Total Sales */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-purple-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-purple-400/20 to-indigo-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                        <span className="text-sm font-semibold text-purple-600">₹</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-purple-700">Total</p>
+                        <p className="text-xs text-purple-600">sales</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-purple-700 mb-1">Total Sales</p>
+                      <p className="text-lg font-bold text-purple-800">{formatCurrency(statistics.totalSales || 0)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-purple-700 mb-1">Total Sales</p>
-                  <p className="text-lg font-bold text-purple-800">{formatCurrency(statistics.totalSales || 0)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 2. Pending Receivables */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-green-500/10">
-                    <FiTrendingUp className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-green-700">Pending</p>
-                    <p className="text-xs text-green-600">receivables</p>
+                {/* 2. Pending Receivables */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-green-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-green-400/20 to-emerald-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-green-500/10">
+                        <FiTrendingUp className="h-4 w-4 text-green-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-green-700">Pending</p>
+                        <p className="text-xs text-green-600">receivables</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-green-700 mb-1">Pending Receivables</p>
+                      <p className="text-lg font-bold text-green-800">{formatCurrency(statistics.pendingAmounts?.totalPendingReceivables || 0)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-green-700 mb-1">Pending Receivables</p>
-                  <p className="text-lg font-bold text-green-800">{formatCurrency(statistics.pendingAmounts?.totalPendingReceivables || 0)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 3. Today Earnings */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-emerald-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-emerald-400/20 to-green-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                    <span className="text-sm font-semibold text-emerald-600">₹</span>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-emerald-700">Today</p>
-                    <p className="text-xs text-emerald-600">earnings</p>
+                {/* 3. Today Earnings */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-emerald-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-emerald-400/20 to-green-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                        <span className="text-sm font-semibold text-emerald-600">₹</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-emerald-700">Today</p>
+                        <p className="text-xs text-emerald-600">earnings</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-emerald-700 mb-1">Today Earnings</p>
+                      <p className="text-lg font-bold text-emerald-800">{formatCurrency(getTimeBasedStats().todayEarnings)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-emerald-700 mb-1">Today Earnings</p>
-                  <p className="text-lg font-bold text-emerald-800">{formatCurrency(getTimeBasedStats().todayEarnings)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 3. Today Profit */}
-            <div className={`group relative overflow-hidden rounded-xl p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border ${
-              (statistics.todayProfit || 0) >= 0 
-                ? 'bg-gradient-to-br from-teal-50 to-cyan-100 border-teal-200/50' 
-                : 'bg-gradient-to-br from-red-50 to-rose-100 border-red-200/50'
-            }`}>
-              <div className={`absolute top-0 right-0 w-12 h-12 rounded-full -translate-y-6 translate-x-6 ${
-                (statistics.todayProfit || 0) >= 0 
-                  ? 'bg-gradient-to-br from-teal-400/20 to-cyan-500/20' 
-                  : 'bg-gradient-to-br from-red-400/20 to-rose-500/20'
-              }`}></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`p-2 rounded-lg ${
-                    (statistics.todayProfit || 0) >= 0 
-                      ? 'bg-teal-500/10' 
-                      : 'bg-red-500/10'
+                {/* 3. Today Profit */}
+                <div className={`group relative overflow-hidden rounded-xl p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border ${(statistics.todayProfit || 0) >= 0
+                    ? 'bg-gradient-to-br from-teal-50 to-cyan-100 border-teal-200/50'
+                    : 'bg-gradient-to-br from-red-50 to-rose-100 border-red-200/50'
                   }`}>
-                    {(statistics.todayProfit || 0) >= 0 ? (
-                      <FiTrendingUp className={`h-4 w-4 text-teal-600`} />
-                    ) : (
-                      <FiTrendingDown className={`h-4 w-4 text-red-600`} />
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-xs font-medium ${
-                      (statistics.todayProfit || 0) >= 0 
-                        ? 'text-teal-700' 
-                        : 'text-red-700'
-                    }`}>
-                      Today
-                    </p>
-                    <p className={`text-xs ${
-                      (statistics.todayProfit || 0) >= 0 
-                        ? 'text-teal-600' 
-                        : 'text-red-600'
-                    }`}>
-                      profit
-                    </p>
+                  <div className={`absolute top-0 right-0 w-12 h-12 rounded-full -translate-y-6 translate-x-6 ${(statistics.todayProfit || 0) >= 0
+                      ? 'bg-gradient-to-br from-teal-400/20 to-cyan-500/20'
+                      : 'bg-gradient-to-br from-red-400/20 to-rose-500/20'
+                    }`}></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={`p-2 rounded-lg ${(statistics.todayProfit || 0) >= 0
+                          ? 'bg-teal-500/10'
+                          : 'bg-red-500/10'
+                        }`}>
+                        {(statistics.todayProfit || 0) >= 0 ? (
+                          <FiTrendingUp className={`h-4 w-4 text-teal-600`} />
+                        ) : (
+                          <FiTrendingDown className={`h-4 w-4 text-red-600`} />
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-xs font-medium ${(statistics.todayProfit || 0) >= 0
+                            ? 'text-teal-700'
+                            : 'text-red-700'
+                          }`}>
+                          Today
+                        </p>
+                        <p className={`text-xs ${(statistics.todayProfit || 0) >= 0
+                            ? 'text-teal-600'
+                            : 'text-red-600'
+                          }`}>
+                          profit
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className={`text-xs font-medium mb-1 ${(statistics.todayProfit || 0) >= 0
+                          ? 'text-teal-700'
+                          : 'text-red-700'
+                        }`}>
+                        Today Profit
+                      </p>
+                      <p className={`text-lg font-bold ${(statistics.todayProfit || 0) >= 0
+                          ? 'text-teal-800'
+                          : 'text-red-800'
+                        }`}>
+                        {formatCurrency(Math.abs(statistics.todayProfit || 0))}
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className={`text-xs font-medium mb-1 ${
-                    (statistics.todayProfit || 0) >= 0 
-                      ? 'text-teal-700' 
-                      : 'text-red-700'
-                  }`}>
-                    Today Profit
-                  </p>
-                  <p className={`text-lg font-bold ${
-                    (statistics.todayProfit || 0) >= 0 
-                      ? 'text-teal-800' 
-                      : 'text-red-800'
-                  }`}>
-                    {formatCurrency(Math.abs(statistics.todayProfit || 0))}
-                  </p>
-                </div>
-              </div>
-            </div>
 
-            {/* 3. Sales Incentives */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 to-yellow-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-amber-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-amber-400/20 to-yellow-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-amber-500/10">
-                    <FiTarget className="h-4 w-4 text-amber-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-amber-700">Sales</p>
-                    <p className="text-xs text-amber-600">incentives</p>
+                {/* 3. Sales Incentives */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 to-yellow-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-amber-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-amber-400/20 to-yellow-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-amber-500/10">
+                        <FiTarget className="h-4 w-4 text-amber-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-amber-700">Sales</p>
+                        <p className="text-xs text-amber-600">incentives</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-amber-700 mb-1">Sales Incentives (Paid)</p>
+                      <p className="text-lg font-bold text-amber-800">{formatCurrency(statistics.expenseBreakdown?.incentiveExpenses || 0)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-amber-700 mb-1">Sales Incentives (Paid)</p>
-                  <p className="text-lg font-bold text-amber-800">{formatCurrency(statistics.expenseBreakdown?.incentiveExpenses || 0)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 4. Reward Money */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-50 to-violet-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-purple-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-purple-400/20 to-violet-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-purple-500/10">
-                    <FiAward className="h-4 w-4 text-purple-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-purple-700">Rewards</p>
-                    <p className="text-xs text-purple-600">bonuses</p>
+                {/* 4. Reward Money */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-50 to-violet-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-purple-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-purple-400/20 to-violet-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-purple-500/10">
+                        <FiAward className="h-4 w-4 text-purple-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-purple-700">Rewards</p>
+                        <p className="text-xs text-purple-600">bonuses</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-purple-700 mb-1">Reward Money (Paid)</p>
+                      <p className="text-lg font-bold text-purple-800">{formatCurrency(statistics.expenseBreakdown?.rewardExpenses || 0)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-purple-700 mb-1">Reward Money (Paid)</p>
-                  <p className="text-lg font-bold text-purple-800">{formatCurrency(statistics.expenseBreakdown?.rewardExpenses || 0)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 7. Project Advances */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-teal-50 to-cyan-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-teal-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-teal-400/20 to-cyan-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-teal-500/10">
-                    <FiHome className="h-4 w-4 text-teal-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-teal-700">Project</p>
-                    <p className="text-xs text-teal-600">advances</p>
+                {/* 7. Project Advances */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-teal-50 to-cyan-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-teal-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-teal-400/20 to-cyan-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-teal-500/10">
+                        <FiHome className="h-4 w-4 text-teal-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-teal-700">Project</p>
+                        <p className="text-xs text-teal-600">advances</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-teal-700 mb-1">Project Advances</p>
+                      <p className="text-lg font-bold text-teal-800">{formatCurrency(statistics.revenueBreakdown?.projectAdvanceRevenue || 0)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-teal-700 mb-1">Project Advances</p>
-                  <p className="text-lg font-bold text-teal-800">{formatCurrency(statistics.revenueBreakdown?.projectAdvanceRevenue || 0)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 8. Employee Salary */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-orange-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-orange-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-orange-500/10">
-                    <FiUsers className="h-4 w-4 text-orange-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-orange-700">Monthly</p>
-                    <p className="text-xs text-orange-600">payroll</p>
+                {/* 8. Employee Salary */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-orange-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-orange-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-orange-500/10">
+                        <FiUsers className="h-4 w-4 text-orange-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-orange-700">Monthly</p>
+                        <p className="text-xs text-orange-600">payroll</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-orange-700 mb-1">Employee Salary</p>
+                      <p className="text-lg font-bold text-orange-800">{formatCurrency(getTimeBasedStats().employeeSalary)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-orange-700 mb-1">Employee Salary</p>
-                  <p className="text-lg font-bold text-orange-800">{formatCurrency(getTimeBasedStats().employeeSalary)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 9. Pending Salaries */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-orange-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-orange-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-orange-500/10">
-                    <FiUsers className="h-4 w-4 text-orange-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-orange-700">Pending</p>
-                    <p className="text-xs text-orange-600">salaries</p>
+                {/* 9. Pending Salaries */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-orange-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-orange-400/20 to-amber-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-orange-500/10">
+                        <FiUsers className="h-4 w-4 text-orange-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-orange-700">Pending</p>
+                        <p className="text-xs text-orange-600">salaries</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-orange-700 mb-1">Pending Salaries</p>
+                      <p className="text-lg font-bold text-orange-800">{formatCurrency(statistics.pendingAmounts?.pendingSalaries || 0)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-orange-700 mb-1">Pending Salaries</p>
-                  <p className="text-lg font-bold text-orange-800">{formatCurrency(statistics.pendingAmounts?.pendingSalaries || 0)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 12. Today Expenses */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-rose-50 to-red-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-rose-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-400/20 to-red-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-rose-500/10">
-                    <FiCalendar className="h-4 w-4 text-rose-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-rose-700">Today</p>
-                    <p className="text-xs text-rose-600">expenses</p>
+                {/* 12. Today Expenses */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-rose-50 to-red-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-rose-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-400/20 to-red-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-rose-500/10">
+                        <FiCalendar className="h-4 w-4 text-rose-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-rose-700">Today</p>
+                        <p className="text-xs text-rose-600">expenses</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-rose-700 mb-1">Today Expenses</p>
+                      <p className="text-lg font-bold text-rose-800">{formatCurrency(statistics.todayExpenses || 0)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-rose-700 mb-1">Today Expenses</p>
-                  <p className="text-lg font-bold text-rose-800">{formatCurrency(statistics.todayExpenses || 0)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 13. Recurring Expenses */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-red-500/10">
-                    <FiCalendar className="h-4 w-4 text-red-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-red-700">Recurring</p>
-                    <p className="text-xs text-red-600">expenses</p>
+                {/* 13. Recurring Expenses */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-red-500/10">
+                        <FiCalendar className="h-4 w-4 text-red-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-red-700">Recurring</p>
+                        <p className="text-xs text-red-600">expenses</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-red-700 mb-1">Recurring Expenses</p>
+                      <p className="text-lg font-bold text-red-800">{formatCurrency(statistics.expenseBreakdown?.recurringExpenses || 0)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-red-700 mb-1">Recurring Expenses</p>
-                  <p className="text-lg font-bold text-red-800">{formatCurrency(statistics.expenseBreakdown?.recurringExpenses || 0)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 14. Pending Payables */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-red-500/10">
-                    <FiTrendingDown className="h-4 w-4 text-red-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-red-700">Pending</p>
-                    <p className="text-xs text-red-600">payables</p>
+                {/* 14. Pending Payables */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-red-50 to-rose-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-red-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-red-400/20 to-rose-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-red-500/10">
+                        <FiTrendingDown className="h-4 w-4 text-red-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-red-700">Pending</p>
+                        <p className="text-xs text-red-600">payables</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-red-700 mb-1">Pending Payables</p>
+                      <p className="text-lg font-bold text-red-800">{formatCurrency(statistics.pendingAmounts?.totalPendingPayables || 0)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-red-700 mb-1">Pending Payables</p>
-                  <p className="text-lg font-bold text-red-800">{formatCurrency(statistics.pendingAmounts?.totalPendingPayables || 0)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 15. Project Expenses Total */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-blue-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-blue-400/20 to-indigo-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-blue-500/10">
-                    <FiFileText className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-blue-700">Project</p>
-                    <p className="text-xs text-blue-600">expenses</p>
+                {/* 15. Project Expenses Total */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-blue-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-blue-400/20 to-indigo-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-blue-500/10">
+                        <FiFileText className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-blue-700">Project</p>
+                        <p className="text-xs text-blue-600">expenses</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-blue-700 mb-1">Project Expenses</p>
+                      <p className="text-lg font-bold text-blue-800">{formatCurrency(statistics.expenseBreakdown?.projectExpenses || 0)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-blue-700 mb-1">Project Expenses</p>
-                  <p className="text-lg font-bold text-blue-800">{formatCurrency(statistics.expenseBreakdown?.projectExpenses || 0)}</p>
-                </div>
-              </div>
-            </div>
 
-            {/* 16. Other Expenses */}
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-rose-50 to-pink-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-rose-200/50">
-              <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-400/20 to-pink-500/20 rounded-full -translate-y-6 translate-x-6"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 rounded-lg bg-rose-500/10">
-                    <FiFileText className="h-4 w-4 text-rose-600" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-rose-700">Misc</p>
-                    <p className="text-xs text-rose-600">expenses</p>
+                {/* 16. Other Expenses */}
+                <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-rose-50 to-pink-100 p-4 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border border-rose-200/50">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-br from-rose-400/20 to-pink-500/20 rounded-full -translate-y-6 translate-x-6"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-rose-500/10">
+                        <FiFileText className="h-4 w-4 text-rose-600" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-rose-700">Misc</p>
+                        <p className="text-xs text-rose-600">expenses</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-rose-700 mb-1">Other Expenses</p>
+                      <p className="text-lg font-bold text-rose-800">{formatCurrency(getTimeBasedStats().otherExpenses)}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-rose-700 mb-1">Other Expenses</p>
-                  <p className="text-lg font-bold text-rose-800">{formatCurrency(getTimeBasedStats().otherExpenses)}</p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+              </motion.div>
 
-          </>
+            </>
           )}
 
           {/* Navigation Tabs */}
@@ -2593,16 +2583,14 @@ const Admin_finance_management = () => {
                       onClick={() => setActiveTab(tab.id)}
                       className={
                         isPaymentApprovals
-                          ? `flex items-center space-x-2 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all duration-200 shadow-sm ${
-                              isActive
-                                ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white border-2 border-emerald-500 shadow-md ring-2 ring-emerald-200 ring-offset-2'
-                                : 'bg-emerald-50 text-emerald-700 border-2 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400 hover:shadow'
-                            }`
-                          : `flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${
-                              isActive
-                                ? 'border-blue-500 text-blue-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }`
+                          ? `flex items-center space-x-2 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all duration-200 shadow-sm ${isActive
+                            ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white border-2 border-emerald-500 shadow-md ring-2 ring-emerald-200 ring-offset-2'
+                            : 'bg-emerald-50 text-emerald-700 border-2 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400 hover:shadow'
+                          }`
+                          : `flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${isActive
+                            ? 'border-blue-500 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          }`
                       }
                     >
                       {isPendingRecovery ? (
@@ -3207,7 +3195,7 @@ const Admin_finance_management = () => {
                       <>Showing <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> of <span className="font-semibold">{filteredData.length}</span> results</>
                     )}
                   </span>
-                  
+
                   {/* Items Per Page Selector */}
                   {activeTab === 'transactions' && (
                     <div className="flex items-center gap-2">
@@ -3241,7 +3229,7 @@ const Admin_finance_management = () => {
                   >
                     <FiChevronLeft className="h-4 w-4" />
                   </button>
-                  
+
                   {/* Previous Page */}
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
@@ -3258,7 +3246,7 @@ const Admin_finance_management = () => {
                       const maxVisiblePages = 5
                       let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
                       let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
-                      
+
                       if (endPage - startPage < maxVisiblePages - 1) {
                         startPage = Math.max(1, endPage - maxVisiblePages + 1)
                       }
@@ -3289,11 +3277,10 @@ const Admin_finance_management = () => {
                           <button
                             key={i}
                             onClick={() => setCurrentPage(i)}
-                            className={`px-3 py-2 border rounded-md text-sm font-medium transition-colors ${
-                              currentPage === i
+                            className={`px-3 py-2 border rounded-md text-sm font-medium transition-colors ${currentPage === i
                                 ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                                 : 'border-gray-300 hover:bg-gray-50'
-                            }`}
+                              }`}
                           >
                             {i}
                           </button>
@@ -3391,7 +3378,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={accountFormData.accountName}
-                    onChange={(e) => setAccountFormData({...accountFormData, accountName: e.target.value})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, accountName: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter account name"
                     required
@@ -3402,7 +3389,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={accountFormData.bankName}
-                    onChange={(e) => setAccountFormData({...accountFormData, bankName: e.target.value})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, bankName: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter bank name"
                     required
@@ -3416,7 +3403,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={accountFormData.accountNumber}
-                    onChange={(e) => setAccountFormData({...accountFormData, accountNumber: e.target.value})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, accountNumber: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter account number"
                     required
@@ -3427,7 +3414,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={accountFormData.ifscCode}
-                    onChange={(e) => setAccountFormData({...accountFormData, ifscCode: e.target.value.toUpperCase()})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, ifscCode: e.target.value.toUpperCase() })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter IFSC code"
                     required
@@ -3441,7 +3428,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={accountFormData.branchName}
-                    onChange={(e) => setAccountFormData({...accountFormData, branchName: e.target.value})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, branchName: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter branch name"
                   />
@@ -3450,7 +3437,7 @@ const Admin_finance_management = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Account Type</label>
                   <select
                     value={accountFormData.accountType}
-                    onChange={(e) => setAccountFormData({...accountFormData, accountType: e.target.value})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, accountType: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="current">Current Account</option>
@@ -3466,7 +3453,7 @@ const Admin_finance_management = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
                   value={accountFormData.description}
-                  onChange={(e) => setAccountFormData({...accountFormData, description: e.target.value})}
+                  onChange={(e) => setAccountFormData({ ...accountFormData, description: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter account description"
@@ -3478,7 +3465,7 @@ const Admin_finance_management = () => {
                   <input
                     type="checkbox"
                     checked={accountFormData.isActive}
-                    onChange={(e) => setAccountFormData({...accountFormData, isActive: e.target.checked})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, isActive: e.target.checked })}
                     className="mr-2"
                   />
                   <span className="text-sm text-gray-700">Active Account</span>
@@ -3527,9 +3514,8 @@ const Admin_finance_management = () => {
                   <h4 className="font-semibold text-gray-900">{selectedItem.accountName}</h4>
                   <p className="text-sm text-gray-600">{selectedItem.bankName}</p>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  selectedItem.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${selectedItem.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
                   {selectedItem.isActive ? 'Active' : 'Inactive'}
                 </span>
               </div>
@@ -3634,7 +3620,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={accountFormData.accountName}
-                    onChange={(e) => setAccountFormData({...accountFormData, accountName: e.target.value})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, accountName: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter account name"
                     required
@@ -3645,7 +3631,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={accountFormData.bankName}
-                    onChange={(e) => setAccountFormData({...accountFormData, bankName: e.target.value})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, bankName: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter bank name"
                     required
@@ -3659,7 +3645,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={accountFormData.accountNumber}
-                    onChange={(e) => setAccountFormData({...accountFormData, accountNumber: e.target.value})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, accountNumber: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter account number"
                     required
@@ -3670,7 +3656,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={accountFormData.ifscCode}
-                    onChange={(e) => setAccountFormData({...accountFormData, ifscCode: e.target.value.toUpperCase()})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, ifscCode: e.target.value.toUpperCase() })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter IFSC code"
                     required
@@ -3684,7 +3670,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={accountFormData.branchName}
-                    onChange={(e) => setAccountFormData({...accountFormData, branchName: e.target.value})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, branchName: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter branch name"
                   />
@@ -3693,7 +3679,7 @@ const Admin_finance_management = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Account Type</label>
                   <select
                     value={accountFormData.accountType}
-                    onChange={(e) => setAccountFormData({...accountFormData, accountType: e.target.value})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, accountType: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="current">Current Account</option>
@@ -3708,7 +3694,7 @@ const Admin_finance_management = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
                   value={accountFormData.description}
-                  onChange={(e) => setAccountFormData({...accountFormData, description: e.target.value})}
+                  onChange={(e) => setAccountFormData({ ...accountFormData, description: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter account description"
@@ -3720,7 +3706,7 @@ const Admin_finance_management = () => {
                   <input
                     type="checkbox"
                     checked={accountFormData.isActive}
-                    onChange={(e) => setAccountFormData({...accountFormData, isActive: e.target.checked})}
+                    onChange={(e) => setAccountFormData({ ...accountFormData, isActive: e.target.checked })}
                     className="mr-2"
                   />
                   <span className="text-sm text-gray-700">Active Account</span>
@@ -3918,9 +3904,9 @@ const Admin_finance_management = () => {
               </button>
             </div>
 
-            <form onSubmit={async (e) => { 
-              e.preventDefault(); 
-              await handleSaveTransaction(); 
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              await handleSaveTransaction();
             }} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -3930,7 +3916,7 @@ const Admin_finance_management = () => {
                     onChange={(e) => {
                       const newType = e.target.value
                       setTransactionFormData({
-                        ...transactionFormData, 
+                        ...transactionFormData,
                         type: newType,
                         account: newType === 'outgoing' ? '' : transactionFormData.account // Clear account if switching to outgoing
                       })
@@ -3947,7 +3933,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={transactionFormData.category}
-                    onChange={(e) => setTransactionFormData({...transactionFormData, category: e.target.value})}
+                    onChange={(e) => setTransactionFormData({ ...transactionFormData, category: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter category (e.g., Client Payment, Salary, etc.)"
                     required
@@ -3963,7 +3949,7 @@ const Admin_finance_management = () => {
                     step="0.01"
                     min="0"
                     value={transactionFormData.amount}
-                    onChange={(e) => setTransactionFormData({...transactionFormData, amount: e.target.value})}
+                    onChange={(e) => setTransactionFormData({ ...transactionFormData, amount: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter amount"
                     required
@@ -3974,7 +3960,7 @@ const Admin_finance_management = () => {
                   <input
                     type="date"
                     value={transactionFormData.date}
-                    onChange={(e) => setTransactionFormData({...transactionFormData, date: e.target.value})}
+                    onChange={(e) => setTransactionFormData({ ...transactionFormData, date: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
@@ -3996,7 +3982,7 @@ const Admin_finance_management = () => {
                   ) : (
                     <select
                       value={transactionFormData.account}
-                      onChange={(e) => setTransactionFormData({...transactionFormData, account: e.target.value})}
+                      onChange={(e) => setTransactionFormData({ ...transactionFormData, account: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       required
                     >
@@ -4015,7 +4001,7 @@ const Admin_finance_management = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
                   value={transactionFormData.description}
-                  onChange={(e) => setTransactionFormData({...transactionFormData, description: e.target.value})}
+                  onChange={(e) => setTransactionFormData({ ...transactionFormData, description: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter transaction description"
@@ -4073,7 +4059,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={budgetFormData.name}
-                    onChange={(e) => setBudgetFormData({...budgetFormData, name: e.target.value})}
+                    onChange={(e) => setBudgetFormData({ ...budgetFormData, name: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter budget name"
                     required
@@ -4084,7 +4070,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={budgetFormData.category}
-                    onChange={(e) => setBudgetFormData({...budgetFormData, category: e.target.value})}
+                    onChange={(e) => setBudgetFormData({ ...budgetFormData, category: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter category"
                     required
@@ -4097,7 +4083,7 @@ const Admin_finance_management = () => {
                 <input
                   type="number"
                   value={budgetFormData.allocated}
-                  onChange={(e) => setBudgetFormData({...budgetFormData, allocated: e.target.value})}
+                  onChange={(e) => setBudgetFormData({ ...budgetFormData, allocated: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter allocated amount"
                   required
@@ -4110,7 +4096,7 @@ const Admin_finance_management = () => {
                   <input
                     type="date"
                     value={budgetFormData.startDate}
-                    onChange={(e) => setBudgetFormData({...budgetFormData, startDate: e.target.value})}
+                    onChange={(e) => setBudgetFormData({ ...budgetFormData, startDate: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
@@ -4120,7 +4106,7 @@ const Admin_finance_management = () => {
                   <input
                     type="date"
                     value={budgetFormData.endDate}
-                    onChange={(e) => setBudgetFormData({...budgetFormData, endDate: e.target.value})}
+                    onChange={(e) => setBudgetFormData({ ...budgetFormData, endDate: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -4130,7 +4116,7 @@ const Admin_finance_management = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
                   value={budgetFormData.description}
-                  onChange={(e) => setBudgetFormData({...budgetFormData, description: e.target.value})}
+                  onChange={(e) => setBudgetFormData({ ...budgetFormData, description: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter budget description"
@@ -4216,13 +4202,12 @@ const Admin_finance_management = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Progress</label>
                 <div className="w-full bg-gray-200 rounded-full h-4">
                   <div
-                    className={`h-4 rounded-full ${
-                      ((selectedItem.spent || selectedItem.spentAmount || 0) / (selectedItem.allocated || selectedItem.allocatedAmount)) > 0.9
+                    className={`h-4 rounded-full ${((selectedItem.spent || selectedItem.spentAmount || 0) / (selectedItem.allocated || selectedItem.allocatedAmount)) > 0.9
                         ? 'bg-red-600'
                         : ((selectedItem.spent || selectedItem.spentAmount || 0) / (selectedItem.allocated || selectedItem.allocatedAmount)) > 0.7
-                        ? 'bg-yellow-600'
-                        : 'bg-blue-600'
-                    }`}
+                          ? 'bg-yellow-600'
+                          : 'bg-blue-600'
+                      }`}
                     style={{
                       width: `${Math.min(100, ((selectedItem.spent || selectedItem.spentAmount || 0) / (selectedItem.allocated || selectedItem.allocatedAmount)) * 100)}%`
                     }}
@@ -4301,7 +4286,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={budgetFormData.name}
-                    onChange={(e) => setBudgetFormData({...budgetFormData, name: e.target.value})}
+                    onChange={(e) => setBudgetFormData({ ...budgetFormData, name: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter budget name"
                     required
@@ -4312,7 +4297,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={budgetFormData.category}
-                    onChange={(e) => setBudgetFormData({...budgetFormData, category: e.target.value})}
+                    onChange={(e) => setBudgetFormData({ ...budgetFormData, category: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter category"
                     required
@@ -4327,7 +4312,7 @@ const Admin_finance_management = () => {
                   step="0.01"
                   min="0"
                   value={budgetFormData.allocated}
-                  onChange={(e) => setBudgetFormData({...budgetFormData, allocated: e.target.value})}
+                  onChange={(e) => setBudgetFormData({ ...budgetFormData, allocated: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter allocated amount"
                   required
@@ -4340,7 +4325,7 @@ const Admin_finance_management = () => {
                   <input
                     type="date"
                     value={budgetFormData.startDate}
-                    onChange={(e) => setBudgetFormData({...budgetFormData, startDate: e.target.value})}
+                    onChange={(e) => setBudgetFormData({ ...budgetFormData, startDate: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
@@ -4350,7 +4335,7 @@ const Admin_finance_management = () => {
                   <input
                     type="date"
                     value={budgetFormData.endDate}
-                    onChange={(e) => setBudgetFormData({...budgetFormData, endDate: e.target.value})}
+                    onChange={(e) => setBudgetFormData({ ...budgetFormData, endDate: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
@@ -4361,7 +4346,7 @@ const Admin_finance_management = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
                   value={budgetFormData.description}
-                  onChange={(e) => setBudgetFormData({...budgetFormData, description: e.target.value})}
+                  onChange={(e) => setBudgetFormData({ ...budgetFormData, description: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter budget description"
@@ -4414,7 +4399,7 @@ const Admin_finance_management = () => {
             <form onSubmit={(e) => { e.preventDefault(); handleSpendFromBudget(); }} className="space-y-4">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                 <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> Recording a spend will create an outgoing transaction with category "{selectedItem.category || selectedItem.budgetCategory}" 
+                  <strong>Note:</strong> Recording a spend will create an outgoing transaction with category "{selectedItem.category || selectedItem.budgetCategory}"
                   and automatically update the budget's spent amount.
                 </p>
               </div>
@@ -4427,7 +4412,7 @@ const Admin_finance_management = () => {
                   min="0.01"
                   max={selectedItem.remaining || selectedItem.remainingAmount}
                   value={budgetSpendFormData.amount}
-                  onChange={(e) => setBudgetSpendFormData({...budgetSpendFormData, amount: e.target.value})}
+                  onChange={(e) => setBudgetSpendFormData({ ...budgetSpendFormData, amount: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter amount to spend"
                   required
@@ -4442,7 +4427,7 @@ const Admin_finance_management = () => {
                 <input
                   type="date"
                   value={budgetSpendFormData.date}
-                  onChange={(e) => setBudgetSpendFormData({...budgetSpendFormData, date: e.target.value})}
+                  onChange={(e) => setBudgetSpendFormData({ ...budgetSpendFormData, date: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
@@ -4452,7 +4437,7 @@ const Admin_finance_management = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
                   value={budgetSpendFormData.description}
-                  onChange={(e) => setBudgetSpendFormData({...budgetSpendFormData, description: e.target.value})}
+                  onChange={(e) => setBudgetSpendFormData({ ...budgetSpendFormData, description: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter description for this spend"
@@ -4505,9 +4490,9 @@ const Admin_finance_management = () => {
               </button>
             </div>
 
-            <form onSubmit={(e) => { 
-              e.preventDefault(); 
-              handleSaveExpense(); 
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveExpense();
             }} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -4515,7 +4500,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={expenseFormData.category}
-                    onChange={(e) => setExpenseFormData({...expenseFormData, category: e.target.value})}
+                    onChange={(e) => setExpenseFormData({ ...expenseFormData, category: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter category (e.g., Salaries, Rent, Software, etc.)"
                     required
@@ -4528,7 +4513,7 @@ const Admin_finance_management = () => {
                     step="0.01"
                     min="0"
                     value={expenseFormData.amount}
-                    onChange={(e) => setExpenseFormData({...expenseFormData, amount: e.target.value})}
+                    onChange={(e) => setExpenseFormData({ ...expenseFormData, amount: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter amount"
                     required
@@ -4541,7 +4526,7 @@ const Admin_finance_management = () => {
                 <input
                   type="date"
                   value={expenseFormData.date}
-                  onChange={(e) => setExpenseFormData({...expenseFormData, date: e.target.value})}
+                  onChange={(e) => setExpenseFormData({ ...expenseFormData, date: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
@@ -4551,7 +4536,7 @@ const Admin_finance_management = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
                   value={expenseFormData.description}
-                  onChange={(e) => setExpenseFormData({...expenseFormData, description: e.target.value})}
+                  onChange={(e) => setExpenseFormData({ ...expenseFormData, description: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter expense description"
@@ -4603,9 +4588,9 @@ const Admin_finance_management = () => {
           <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold text-gray-900">
-                {projectExpenseModalMode === 'create' ? 'Add New Project Expense' : 
-                 projectExpenseModalMode === 'edit' ? 'Edit Project Expense' : 
-                 'View Project Expense'}
+                {projectExpenseModalMode === 'create' ? 'Add New Project Expense' :
+                  projectExpenseModalMode === 'edit' ? 'Edit Project Expense' :
+                    'View Project Expense'}
               </h3>
               <button
                 onClick={() => setShowProjectExpenseModal(false)}
@@ -4615,10 +4600,10 @@ const Admin_finance_management = () => {
               </button>
             </div>
 
-            <form onSubmit={(e) => { 
-              e.preventDefault(); 
+            <form onSubmit={(e) => {
+              e.preventDefault();
               if (projectExpenseModalMode !== 'view') {
-                handleSaveProjectExpense(); 
+                handleSaveProjectExpense();
               }
             }} className="space-y-4">
               <div>
@@ -4643,7 +4628,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={projectExpenseFormData.name}
-                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, name: e.target.value})}
+                    onChange={(e) => setProjectExpenseFormData({ ...projectExpenseFormData, name: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="e.g., Domain Purchase, Server Hosting"
                     required
@@ -4654,7 +4639,7 @@ const Admin_finance_management = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
                   <select
                     value={projectExpenseFormData.category}
-                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, category: e.target.value})}
+                    onChange={(e) => setProjectExpenseFormData({ ...projectExpenseFormData, category: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                     disabled={projectExpenseModalMode === 'view'}
@@ -4678,7 +4663,7 @@ const Admin_finance_management = () => {
                     step="0.01"
                     min="0"
                     value={projectExpenseFormData.amount}
-                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, amount: e.target.value})}
+                    onChange={(e) => setProjectExpenseFormData({ ...projectExpenseFormData, amount: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter amount"
                     required
@@ -4690,7 +4675,7 @@ const Admin_finance_management = () => {
                   <input
                     type="date"
                     value={projectExpenseFormData.expenseDate}
-                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, expenseDate: e.target.value})}
+                    onChange={(e) => setProjectExpenseFormData({ ...projectExpenseFormData, expenseDate: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                     disabled={projectExpenseModalMode === 'view'}
@@ -4704,7 +4689,7 @@ const Admin_finance_management = () => {
                   <input
                     type="text"
                     value={projectExpenseFormData.vendor}
-                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, vendor: e.target.value})}
+                    onChange={(e) => setProjectExpenseFormData({ ...projectExpenseFormData, vendor: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Vendor/provider name"
                     disabled={projectExpenseModalMode === 'view'}
@@ -4714,7 +4699,7 @@ const Admin_finance_management = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method *</label>
                   <select
                     value={projectExpenseFormData.paymentMethod}
-                    onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, paymentMethod: e.target.value})}
+                    onChange={(e) => setProjectExpenseFormData({ ...projectExpenseFormData, paymentMethod: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                     disabled={projectExpenseModalMode === 'view'}
@@ -4734,7 +4719,7 @@ const Admin_finance_management = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
                   value={projectExpenseFormData.description}
-                  onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, description: e.target.value})}
+                  onChange={(e) => setProjectExpenseFormData({ ...projectExpenseFormData, description: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter additional notes or description"
@@ -4791,9 +4776,9 @@ const Admin_finance_management = () => {
                   <div>
                     <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Project Name</label>
                     <p className="text-base font-semibold text-gray-900 mt-1">
-                      {selectedProjectExpense.project?.name || 
-                       (projectExpenseFormData.projectId && projectsList.find(p => p.value === projectExpenseFormData.projectId)?.label) || 
-                       'N/A'}
+                      {selectedProjectExpense.project?.name ||
+                        (projectExpenseFormData.projectId && projectsList.find(p => p.value === projectExpenseFormData.projectId)?.label) ||
+                        'N/A'}
                     </p>
                   </div>
                   <div>
@@ -4806,9 +4791,9 @@ const Admin_finance_management = () => {
                     <div>
                       <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Client Company</label>
                       <p className="text-base text-gray-800 mt-1">
-                        {selectedProjectExpense.project.client?.companyName || 
-                         selectedProjectExpense.project.client?.name || 
-                         'N/A'}
+                        {selectedProjectExpense.project.client?.companyName ||
+                          selectedProjectExpense.project.client?.name ||
+                          'N/A'}
                       </p>
                     </div>
                   )}
