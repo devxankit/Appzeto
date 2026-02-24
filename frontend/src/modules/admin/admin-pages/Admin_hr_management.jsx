@@ -1578,7 +1578,7 @@ const Admin_hr_management = () => {
 
     // Validation for department field when role is employee and team is developer
     if (formData.role === 'employee' && formData.team === 'developer' && !formData.department) {
-      addToast({ type: 'error', message: 'Please select a department for developer employees' })
+      addToast({ type: 'error', message: 'Please enter a department for developer employees' })
       return
     }
 
@@ -2638,17 +2638,6 @@ const Admin_hr_management = () => {
   const teamOptions = [
     { value: 'developer', label: 'Developer', icon: Code },
     { value: 'sales', label: 'Sales Team', icon: TrendingUp }
-  ]
-
-  const departmentOptions = [
-    { value: 'full-stack', label: 'Full Stack', icon: Code },
-    { value: 'nodejs', label: 'Node.js', icon: Code },
-    { value: 'web', label: 'Web', icon: Code },
-    { value: 'app', label: 'App', icon: Code }
-  ]
-
-  const salesDepartmentOptions = [
-    { value: 'sales', label: 'Sales', icon: TrendingUp }
   ]
 
   const statusOptions = [
@@ -4341,12 +4330,12 @@ const Admin_hr_management = () => {
                         <label className="text-sm font-semibold text-gray-700 flex items-center">
                           Department <span className="text-red-500 ml-1">*</span>
                         </label>
-                        <Combobox
-                          options={departmentOptions}
+                        <input
+                          type="text"
                           value={formData.department}
-                          onChange={(value) => setFormData({...formData, department: value})}
-                          placeholder="Select department"
-                          className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                          className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                          placeholder="Enter department (e.g. Full Stack, Web, App)"
                         />
                       </motion.div>
                     )}
@@ -4362,12 +4351,12 @@ const Admin_hr_management = () => {
                         <label className="text-sm font-semibold text-gray-700 flex items-center">
                           Department <span className="text-red-500 ml-1">*</span>
                         </label>
-                        <Combobox
-                          options={salesDepartmentOptions}
+                        <input
+                          type="text"
                           value={formData.department}
-                          onChange={(value) => setFormData({...formData, department: value})}
-                          placeholder="Select department"
-                          className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                          className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                          placeholder="Enter department (e.g. Sales)"
                         />
                       </motion.div>
                     )}
@@ -6755,12 +6744,21 @@ const Admin_hr_management = () => {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {expenseEntries.map((entry) => (
+                        {([...expenseEntries].sort((a, b) => {
+                          const aPaid = a.status === 'paid'
+                          const bPaid = b.status === 'paid'
+                          if (aPaid && !bPaid) return 1  // paid entries go to bottom
+                          if (!aPaid && bPaid) return -1 // unpaid/overdue first
+                          // Within same status, sort by dueDate ascending
+                          const aDate = a.dueDate ? new Date(a.dueDate) : new Date(0)
+                          const bDate = b.dueDate ? new Date(b.dueDate) : new Date(0)
+                          return aDate - bDate
+                        })).map((entry) => (
                           <div
                             key={entry._id}
                             className={`border rounded-lg p-4 ${
                               entry.status === 'paid'
-                                ? 'bg-green-50 border-green-200'
+                                ? 'bg-gray-100 border-gray-300'
                                 : entry.status === 'overdue'
                                 ? 'bg-red-50 border-red-200'
                                 : 'bg-gray-50 border-gray-200'
@@ -6771,7 +6769,7 @@ const Admin_hr_management = () => {
                                 <div className="flex items-center gap-3 mb-2">
                                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                     entry.status === 'paid'
-                                      ? 'bg-green-100 text-green-800'
+                                      ? 'bg-gray-200 text-gray-800'
                                       : entry.status === 'overdue'
                                       ? 'bg-red-100 text-red-800'
                                       : 'bg-yellow-100 text-yellow-800'
