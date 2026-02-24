@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { 
-  FiPhone, 
+import {
+  FiPhone,
   FiMoreVertical,
   FiFilter,
   FiUser,
@@ -25,7 +25,7 @@ import { useToast } from '../../../contexts/ToastContext'
 const SL_not_picked = () => {
   const navigate = useNavigate()
   const { toast } = useToast()
-  
+
   // State for filters and UI
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -33,16 +33,16 @@ const SL_not_picked = () => {
   const [selectedLeadId, setSelectedLeadId] = useState(null)
   const [showActionsMenu, setShowActionsMenu] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
-  
+
   // State for real data
   const [leadsData, setLeadsData] = useState([])
   const [categories, setCategories] = useState([])
   const [isLoading, setIsLoading] = useState(false)
-  
+
   // State for Follow-up dialog
   const [showFollowupDialog, setShowFollowupDialog] = useState(false)
   const [selectedLeadForFollowup, setSelectedLeadForFollowup] = useState(null)
-  
+
   // State for Contacted form modal
   const [showContactedForm, setShowContactedForm] = useState(false)
   const [selectedLeadForForm, setSelectedLeadForForm] = useState(null)
@@ -106,7 +106,7 @@ const SL_not_picked = () => {
     if (!categoryIdOrObject) {
       return { name: 'Unknown', color: '#999999', icon: '📋' }
     }
-    
+
     // If category is already populated (object with properties like name, color, icon), return it directly
     if (typeof categoryIdOrObject === 'object' && categoryIdOrObject.name) {
       return {
@@ -115,7 +115,7 @@ const SL_not_picked = () => {
         icon: categoryIdOrObject.icon || '📋'
       }
     }
-    
+
     // If category is an ID (string or ObjectId), find it in categories array
     const categoryId = typeof categoryIdOrObject === 'object' ? categoryIdOrObject._id : categoryIdOrObject
     if (categoryId) {
@@ -124,7 +124,7 @@ const SL_not_picked = () => {
         return category
       }
     }
-    
+
     // Return default if not found
     return { name: 'Unknown', color: '#999999', icon: '📋' }
   }
@@ -133,16 +133,27 @@ const SL_not_picked = () => {
   const handleStatusChange = async (leadId, newStatus) => {
     try {
       if (newStatus === 'connected') {
+        const targetLead = leadsData.find(l => l._id === leadId)
+        if (targetLead) {
+          setContactedFormData({
+            name: targetLead.name || '',
+            description: '',
+            categoryId: targetLead.category?._id || targetLead.category || '',
+            estimatedPrice: '50000',
+            quotationSent: false,
+            demoSent: false
+          })
+        }
         // Show contacted form
         setSelectedLeadForForm(leadId)
         setShowContactedForm(true)
       } else {
         await salesLeadService.updateLeadStatus(leadId, newStatus)
         toast.success(`Lead status updated to ${salesLeadService.getStatusDisplayName(newStatus)}`)
-        
+
         // Remove lead from current list
         setLeadsData(prev => prev.filter(lead => lead._id !== leadId))
-        
+
         // Refresh dashboard stats
         if (window.refreshDashboardStats) {
           window.refreshDashboardStats()
@@ -175,12 +186,12 @@ const SL_not_picked = () => {
       // Use addFollowUp instead of updateLeadStatus to avoid changing lead status
       await salesLeadService.addFollowUp(selectedLeadForFollowup, followUpPayload)
       toast.success('Follow-up scheduled successfully')
-      
+
       // Refresh dashboard stats
       if (window.refreshDashboardStats) {
         window.refreshDashboardStats()
       }
-      
+
       setShowFollowupDialog(false)
       setSelectedLeadForFollowup(null)
     } catch (error) {
@@ -195,7 +206,7 @@ const SL_not_picked = () => {
     try {
       // First update lead status to connected
       await salesLeadService.updateLeadStatus(selectedLeadForForm, 'connected')
-      
+
       // Then create/update lead profile
       const profileData = {
         name: contactedFormData.name,
@@ -207,19 +218,19 @@ const SL_not_picked = () => {
         quotationSent: contactedFormData.quotationSent,
         demoSent: contactedFormData.demoSent
       }
-      
+
       await salesLeadService.createLeadProfile(selectedLeadForForm, profileData)
-      
+
       toast.success('Lead marked as contacted and profile created')
-      
+
       // Remove lead from current list
       setLeadsData(prev => prev.filter(lead => lead._id !== selectedLeadForForm))
-      
+
       // Refresh dashboard stats
       if (window.refreshDashboardStats) {
         window.refreshDashboardStats()
       }
-      
+
       // Reset form and close modal
       setContactedFormData({
         name: '',
@@ -231,7 +242,7 @@ const SL_not_picked = () => {
       })
       setShowContactedForm(false)
       setSelectedLeadForForm(null)
-      
+
     } catch (error) {
       console.error('Error creating lead profile:', error)
       toast.error('Failed to create lead profile')
@@ -309,7 +320,7 @@ const SL_not_picked = () => {
           {/* Call Button */}
           <button onClick={() => handleCall(lead.phone)} className="bg-white text-teal-600 border border-teal-200 px-2.5 py-1.5 rounded-lg hover:bg-teal-50 text-xs font-medium">Call</button>
           <button onClick={() => handleWhatsApp(lead.phone)} className="bg-green-500 text-white p-1.5 rounded-lg hover:bg-green-600">
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/></svg>
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883" /></svg>
           </button>
           <button onClick={() => { setSelectedLeadForForm(lead._id); setShowContactedForm(true) }} className="bg-teal-500 text-white px-2.5 py-1.5 rounded-lg hover:bg-teal-600 text-xs font-medium">Connect</button>
           <div className="relative">
@@ -354,7 +365,7 @@ const SL_not_picked = () => {
         <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => handleCall(lead.phone)} className="px-3 py-1.5 bg-white text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 text-sm font-medium flex items-center space-x-1"><FiPhone className="w-4 h-4" /><span>Call</span></button>
           <button onClick={() => handleWhatsApp(lead.phone)} className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center space-x-1">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883"/></svg>
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c0 5.449-4.434 9.883-9.881 9.883" /></svg>
             <span>WhatsApp</span>
           </button>
           <button onClick={() => { setSelectedLeadForForm(lead._id); setShowContactedForm(true) }} className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 text-sm font-medium">Connect</button>
@@ -380,52 +391,52 @@ const SL_not_picked = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <SL_navbar />
-      
+
       <main className="max-w-4xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
-        
-         {/* Responsive Layout */}
-         <div>
-           {/* Header Section */}
-           <motion.div 
-             initial={{ opacity: 0, y: 20 }}
-             animate={{ opacity: 1, y: 0 }}
-             transition={{ duration: 0.6 }}
-             className="mb-6"
-           >
-             <div className="bg-gradient-to-br from-rose-50 to-rose-100 rounded-xl p-4 shadow-md border border-rose-200/30">
-               <div className="flex items-center justify-between">
-                 {/* Left Section - Icon and Text */}
-                 <div className="flex items-center space-x-3 flex-1">
-                   {/* Icon */}
-                   <div className="w-10 h-10 bg-gradient-to-br from-rose-500 to-rose-600 rounded-lg flex items-center justify-center shadow-md">
-                     <FiPhoneOff className="text-white text-lg" />
-                   </div>
-                   
-                   {/* Text Content */}
-                   <div className="flex-1">
-                     <h1 className="text-xl font-bold text-rose-900 leading-tight">
-                       Not Picked<br />Leads
-                     </h1>
-                     <p className="text-rose-700 text-xs font-medium mt-0.5">
-                       Leads that didn't answer calls
-                     </p>
-                   </div>
-                 </div>
-                 
-                 {/* Right Section - Total Count Card */}
-                 <div className="bg-white rounded-lg px-4 py-3 shadow-md border border-white/20 ml-3">
-                   <div className="text-center">
-                     <p className="text-xs text-rose-600 font-medium mb-0.5">Total</p>
-                     <p className="text-2xl font-bold text-rose-900 leading-none">{leadsData.length}</p>
-                     <p className="text-xs text-rose-600 font-medium mt-0.5">Not Picked</p>
-                   </div>
-                 </div>
-               </div>
-             </div>
-           </motion.div>
+
+        {/* Responsive Layout */}
+        <div>
+          {/* Header Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="mb-6"
+          >
+            <div className="bg-gradient-to-br from-rose-50 to-rose-100 rounded-xl p-4 shadow-md border border-rose-200/30">
+              <div className="flex items-center justify-between">
+                {/* Left Section - Icon and Text */}
+                <div className="flex items-center space-x-3 flex-1">
+                  {/* Icon */}
+                  <div className="w-10 h-10 bg-gradient-to-br from-rose-500 to-rose-600 rounded-lg flex items-center justify-center shadow-md">
+                    <FiPhoneOff className="text-white text-lg" />
+                  </div>
+
+                  {/* Text Content */}
+                  <div className="flex-1">
+                    <h1 className="text-xl font-bold text-rose-900 leading-tight">
+                      Not Picked<br />Leads
+                    </h1>
+                    <p className="text-rose-700 text-xs font-medium mt-0.5">
+                      Leads that didn't answer calls
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right Section - Total Count Card */}
+                <div className="bg-white rounded-lg px-4 py-3 shadow-md border border-white/20 ml-3">
+                  <div className="text-center">
+                    <p className="text-xs text-rose-600 font-medium mb-0.5">Total</p>
+                    <p className="text-2xl font-bold text-rose-900 leading-none">{leadsData.length}</p>
+                    <p className="text-xs text-rose-600 font-medium mt-0.5">Not Picked</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
 
           {/* Simple Filter Section */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
@@ -442,11 +453,10 @@ const SL_not_picked = () => {
               />
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-lg transition-all duration-200 ${
-                  showFilters 
-                    ? 'bg-teal-500 text-white shadow-md' 
+                className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-lg transition-all duration-200 ${showFilters
+                    ? 'bg-teal-500 text-white shadow-md'
                     : 'text-gray-500 hover:text-teal-600 hover:bg-teal-50 border border-teal-200'
-                }`}
+                  }`}
               >
                 <FiFilter className="text-base" />
               </button>
@@ -455,7 +465,7 @@ const SL_not_picked = () => {
 
           {/* Filters - Conditional Display */}
           {showFilters && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -470,11 +480,10 @@ const SL_not_picked = () => {
                     <button
                       key={filter.id}
                       onClick={() => setSelectedFilter(filter.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                        selectedFilter === filter.id
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${selectedFilter === filter.id
                           ? 'bg-teal-500 text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                        }`}
                     >
                       {filter.label}
                     </button>
@@ -488,11 +497,10 @@ const SL_not_picked = () => {
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => setSelectedCategory('all')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      selectedCategory === 'all'
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${selectedCategory === 'all'
                         ? 'bg-teal-500 text-white shadow-md'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                      }`}
                   >
                     All Categories
                   </button>
@@ -500,11 +508,10 @@ const SL_not_picked = () => {
                     <button
                       key={category._id}
                       onClick={() => setSelectedCategory(category._id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
-                        selectedCategory === category._id
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${selectedCategory === category._id
                           ? 'text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                        }`}
                       style={{
                         backgroundColor: selectedCategory === category._id ? category.color : undefined
                       }}
@@ -519,7 +526,7 @@ const SL_not_picked = () => {
           )}
 
           {/* Results Count */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.4 }}
@@ -531,7 +538,7 @@ const SL_not_picked = () => {
           </motion.div>
 
           {/* Mobile Leads List */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.6 }}
@@ -561,18 +568,18 @@ const SL_not_picked = () => {
             ) : (
               <AnimatePresence>
                 {leadsData.map((lead, index) => (
-                <motion.div
-                  key={lead._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
-                >
-                  <MobileLeadCard lead={lead} />
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                  <motion.div
+                    key={lead._id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300"
+                  >
+                    <MobileLeadCard lead={lead} />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             )}
 
             {/* Empty State */}
@@ -722,7 +729,7 @@ const SL_not_picked = () => {
                       Quotation sent
                     </label>
                   </div>
-                  
+
                   <div className="flex items-center space-x-3">
                     <input
                       type="checkbox"

@@ -2,10 +2,10 @@ import React, { useRef, useState, useEffect, memo, useMemo } from 'react'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Sparklines, SparklinesLine, SparklinesSpots } from 'react-sparklines'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
-import { 
-  FaRupeeSign, 
-  FaVideo, 
-  FaCheckCircle, 
+import {
+  FaRupeeSign,
+  FaVideo,
+  FaCheckCircle,
   FaUsers,
   FaArrowUp,
   FaArrowDown,
@@ -19,11 +19,11 @@ import {
   FaUser,
   FaExclamationCircle
 } from 'react-icons/fa'
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Zap, 
-  Target, 
+import {
+  TrendingUp,
+  TrendingDown,
+  Zap,
+  Target,
   Award,
   Activity,
   BarChart3,
@@ -45,11 +45,11 @@ import { getStoredSalesData } from '../SL-services/salesAuthService'
 const SL_dashboard = () => {
   // Unique component ID to track renders
   const componentId = useRef(Math.random().toString(36).substr(2, 9))
-  
+
   // Refs for scroll-triggered animations
   const tileCardsRef = useRef(null)
   const chartRef = useRef(null)
-  
+
   // Check if elements are in view
   const tileCardsInView = useInView(tileCardsRef, { once: true, margin: "-100px" })
   const chartInView = useInView(chartRef, { once: true, margin: "-100px" })
@@ -60,7 +60,7 @@ const SL_dashboard = () => {
       // Try to get cached data from localStorage
       const cachedData = localStorage.getItem('sales_dashboard_lastConversion')
       let cacheValid = false
-      
+
       if (cachedData) {
         try {
           const parsed = JSON.parse(cachedData)
@@ -81,7 +81,7 @@ const SL_dashboard = () => {
               today.setHours(0, 0, 0, 0)
               lastConversion.setHours(0, 0, 0, 0)
               const daysCount = Math.floor((today - lastConversion) / (1000 * 60 * 60 * 24))
-              
+
               return {
                 isInDangerZone: daysCount >= 7,
                 daysSinceLastConversion: daysCount,
@@ -94,7 +94,7 @@ const SL_dashboard = () => {
           console.warn('Failed to parse cached conversion date:', e)
         }
       }
-      
+
       // If no valid cache, check stored sales data for joining date
       const storedSalesData = getStoredSalesData()
       if (storedSalesData?.joiningDate) {
@@ -103,7 +103,7 @@ const SL_dashboard = () => {
         today.setHours(0, 0, 0, 0)
         joiningDate.setHours(0, 0, 0, 0)
         const daysSinceJoining = Math.floor((today - joiningDate) / (1000 * 60 * 60 * 24))
-        
+
         // Only show danger zone if employee has been active for 7+ days with no conversions
         if (daysSinceJoining >= 7) {
           return {
@@ -113,7 +113,7 @@ const SL_dashboard = () => {
           }
         }
       }
-      
+
       // Default: NOT in danger zone (optimistic default - better UX)
       // This prevents showing red colors initially for employees who are doing well
       return {
@@ -135,7 +135,7 @@ const SL_dashboard = () => {
   // Initialize danger zone state immediately from cache (no API wait)
   // Default to NOT in danger zone for better UX (prevents red flash)
   const [dangerZoneState, setDangerZoneState] = useState(() => calculateDangerZoneFromCache())
-  
+
   // Destructure for easier use
   const { isInDangerZone, daysSinceLastConversion, calculated: dangerZoneCalculated } = dangerZoneState
 
@@ -204,7 +204,7 @@ const SL_dashboard = () => {
         setMonthlyLoading(true)
         setTileStatsLoading(true)
         setHeroStatsLoading(true)
-        
+
         // Fetch all data in parallel
         const [dashboardStats, monthlyData, tileData, heroData] = await Promise.allSettled([
           salesAnalyticsService.getDashboardStats(),
@@ -212,18 +212,18 @@ const SL_dashboard = () => {
           salesAnalyticsService.getTileCardStats(),
           salesAnalyticsService.getDashboardHeroStats()
         ])
-        
+
         if (!active) return
-        
+
         // Process dashboard stats
         if (dashboardStats.status === 'fulfilled') {
           const s = dashboardStats.value
           const statusCounts = s?.data?.statusCounts || {}
-          const total = s?.data?.totalLeads ?? Object.values(statusCounts).reduce((a,b)=>a+b,0)
+          const total = s?.data?.totalLeads ?? Object.values(statusCounts).reduce((a, b) => a + b, 0)
           setTotalLeads(total)
           setFunnelData(prev => prev.map(row => {
             const val = Number(statusCounts[row.key] || 0)
-            return { ...row, value: total ? Math.round((val/total)*100) : 0, amount: `${val} leads` }
+            return { ...row, value: total ? Math.round((val / total) * 100) : 0, amount: `${val} leads` }
           }))
           setStatsError(null)
         } else {
@@ -269,30 +269,30 @@ const SL_dashboard = () => {
         if (heroData.status === 'fulfilled') {
           const hero = heroData.value
           const stats = hero?.data || {
-          employeeName: 'Employee',
-          monthlySales: 0,
-          target: 0,
-          targetNumber: null,
-          progressToTarget: 0,
-          allTargets: [],
-          reward: 0,
-          todaysSales: 0,
-          todaysIncentive: 0,
-          monthlyIncentive: 0,
-          totalLeads: 0,
-          totalClients: 0,
-          isTeamLead: false,
-          teamLeadTarget: 0,
-          teamLeadTargetReward: 0,
-          teamMonthlySales: 0,
-          teamLeadProgress: 0,
-          lastConversionDate: null
-        }
-        
+            employeeName: 'Employee',
+            monthlySales: 0,
+            target: 0,
+            targetNumber: null,
+            progressToTarget: 0,
+            allTargets: [],
+            reward: 0,
+            todaysSales: 0,
+            todaysIncentive: 0,
+            monthlyIncentive: 0,
+            totalLeads: 0,
+            totalClients: 0,
+            isTeamLead: false,
+            teamLeadTarget: 0,
+            teamLeadTargetReward: 0,
+            teamMonthlySales: 0,
+            teamLeadProgress: 0,
+            lastConversionDate: null
+          }
+
           // Recalculate danger zone with fresh data
           let dangerZoneStatus = false
           let daysCount = 0
-          
+
           if (stats.lastConversionDate) {
             const lastConversion = new Date(stats.lastConversionDate)
             const today = new Date()
@@ -300,7 +300,7 @@ const SL_dashboard = () => {
             lastConversion.setHours(0, 0, 0, 0)
             daysCount = Math.floor((today - lastConversion) / (1000 * 60 * 60 * 24))
             dangerZoneStatus = daysCount >= 7
-            
+
             // Cache lastConversionDate AND danger zone status for instant calculation on next load
             try {
               localStorage.setItem('sales_dashboard_lastConversion', JSON.stringify({
@@ -324,7 +324,7 @@ const SL_dashboard = () => {
               dangerZoneStatus = daysCount >= 7
             }
           }
-          
+
           // Update stats and danger zone atomically
           // Use a single state update to prevent flash
           setHeroStats(stats)
@@ -356,7 +356,7 @@ const SL_dashboard = () => {
   const incentiveTrendData = [0.8, 0.9, 1.0, 0.7, 1.1, 0.9, 1.2, 1.0, 1.0]
 
   return (
-    <div 
+    <div
       id={`sl-dashboard-${componentId.current}`}
       className="min-h-screen bg-gray-50"
       data-component-id={componentId.current}
@@ -366,388 +366,392 @@ const SL_dashboard = () => {
         <div className="space-y-6">
           {/* Hero Dashboard Card */}
           {dangerZoneCalculated && !heroStatsLoading ? (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
-              className={`relative rounded-2xl p-5 lg:p-6 text-gray-900 shadow-2xl overflow-hidden ${
-                isInDangerZone 
-                  ? 'bg-gradient-to-br from-red-50 via-red-100 to-red-200 border border-red-300/40' 
+              className={`relative rounded-2xl p-5 lg:p-6 text-gray-900 shadow-2xl overflow-hidden ${isInDangerZone
+                  ? 'bg-gradient-to-br from-red-50 via-red-100 to-red-200 border border-red-300/40'
                   : 'bg-gradient-to-br from-teal-50 via-teal-100 to-teal-200 border border-teal-300/40'
-              }`}
+                }`}
               style={{
                 boxShadow: isInDangerZone
                   ? '0 25px 50px -12px rgba(239, 68, 68, 0.2), 0 0 0 1px rgba(239, 68, 68, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
                   : '0 25px 50px -12px rgba(20, 184, 166, 0.2), 0 0 0 1px rgba(20, 184, 166, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
               }}
             >
-            {/* Subtle Background Pattern */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              {isInDangerZone ? (
-                <>
-                  <div className="absolute top-4 right-8 w-2 h-2 bg-red-200/30 rounded-full animate-pulse"></div>
-                  <div className="absolute top-12 right-16 w-1.5 h-1.5 bg-red-300/25 rounded-full animate-pulse delay-1000"></div>
-                  <div className="absolute top-20 right-10 w-1 h-1 bg-red-400/20 rounded-full animate-pulse delay-2000"></div>
-                  <div className="absolute bottom-16 left-8 w-1.5 h-1.5 bg-red-200/25 rounded-full animate-pulse delay-500"></div>
-                  <div className="absolute bottom-8 left-16 w-2 h-2 bg-red-300/15 rounded-full animate-pulse delay-1500"></div>
-                  <div className="absolute top-32 right-24 w-1 h-1 bg-red-400/15 rounded-full animate-pulse delay-3000"></div>
-                  <div className="absolute bottom-24 left-24 w-1.5 h-1.5 bg-red-200/20 rounded-full animate-pulse delay-4000"></div>
-                  <div className="absolute inset-0 opacity-3">
-                    <div className="w-full h-full" style={{
-                      backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(239, 68, 68, 0.08) 1px, transparent 0)',
-                      backgroundSize: '20px 20px'
-                    }}></div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="absolute top-4 right-8 w-2 h-2 bg-teal-200/30 rounded-full animate-pulse"></div>
-                  <div className="absolute top-12 right-16 w-1.5 h-1.5 bg-teal-300/25 rounded-full animate-pulse delay-1000"></div>
-                  <div className="absolute top-20 right-10 w-1 h-1 bg-teal-400/20 rounded-full animate-pulse delay-2000"></div>
-                  <div className="absolute bottom-16 left-8 w-1.5 h-1.5 bg-teal-200/25 rounded-full animate-pulse delay-500"></div>
-                  <div className="absolute bottom-8 left-16 w-2 h-2 bg-teal-300/15 rounded-full animate-pulse delay-1500"></div>
-                  <div className="absolute top-32 right-24 w-1 h-1 bg-teal-400/15 rounded-full animate-pulse delay-3000"></div>
-                  <div className="absolute bottom-24 left-24 w-1.5 h-1.5 bg-teal-200/20 rounded-full animate-pulse delay-4000"></div>
-                  <div className="absolute inset-0 opacity-3">
-                    <div className="w-full h-full" style={{
-                      backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(20, 184, 166, 0.08) 1px, transparent 0)',
-                      backgroundSize: '20px 20px'
-                    }}></div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Enhanced Header Section */}
-            <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              className="flex items-center justify-between mb-4 relative z-10"
-            >
-              <div className="flex items-center space-x-3">
-                <motion.div 
-                  whileHover={{ scale: 1.05 }}
-                  className={`relative w-11 h-11 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-xl ${
-                    isInDangerZone 
-                      ? 'border border-red-300/40' 
-                      : 'border border-teal-300/40'
-                  }`}
-                  style={{
-                    boxShadow: isInDangerZone
-                      ? '0 12px 35px -8px rgba(239, 68, 68, 0.25), 0 6px 15px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
-                      : '0 12px 35px -8px rgba(20, 184, 166, 0.25), 0 6px 15px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
-                  }}
-                >
-                  <FaUser className={`text-lg ${isInDangerZone ? 'text-red-700' : 'text-teal-700'}`} />
-                </motion.div>
-                <div>
-                  <h1 className="text-lg font-bold mb-0.5 text-gray-900">Hi, {heroStats.employeeName}</h1>
-                  <p className={`text-xs font-medium ${isInDangerZone ? 'text-red-700' : 'text-teal-700'}`}>
-                    {isInDangerZone ? 'Action Required!' : 'Welcome back!'}
-                  </p>
-                </div>
+              {/* Subtle Background Pattern */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                {isInDangerZone ? (
+                  <>
+                    <div className="absolute top-4 right-8 w-2 h-2 bg-red-200/30 rounded-full animate-pulse"></div>
+                    <div className="absolute top-12 right-16 w-1.5 h-1.5 bg-red-300/25 rounded-full animate-pulse delay-1000"></div>
+                    <div className="absolute top-20 right-10 w-1 h-1 bg-red-400/20 rounded-full animate-pulse delay-2000"></div>
+                    <div className="absolute bottom-16 left-8 w-1.5 h-1.5 bg-red-200/25 rounded-full animate-pulse delay-500"></div>
+                    <div className="absolute bottom-8 left-16 w-2 h-2 bg-red-300/15 rounded-full animate-pulse delay-1500"></div>
+                    <div className="absolute top-32 right-24 w-1 h-1 bg-red-400/15 rounded-full animate-pulse delay-3000"></div>
+                    <div className="absolute bottom-24 left-24 w-1.5 h-1.5 bg-red-200/20 rounded-full animate-pulse delay-4000"></div>
+                    <div className="absolute inset-0 opacity-3">
+                      <div className="w-full h-full" style={{
+                        backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(239, 68, 68, 0.08) 1px, transparent 0)',
+                        backgroundSize: '20px 20px'
+                      }}></div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="absolute top-4 right-8 w-2 h-2 bg-teal-200/30 rounded-full animate-pulse"></div>
+                    <div className="absolute top-12 right-16 w-1.5 h-1.5 bg-teal-300/25 rounded-full animate-pulse delay-1000"></div>
+                    <div className="absolute top-20 right-10 w-1 h-1 bg-teal-400/20 rounded-full animate-pulse delay-2000"></div>
+                    <div className="absolute bottom-16 left-8 w-1.5 h-1.5 bg-teal-200/25 rounded-full animate-pulse delay-500"></div>
+                    <div className="absolute bottom-8 left-16 w-2 h-2 bg-teal-300/15 rounded-full animate-pulse delay-1500"></div>
+                    <div className="absolute top-32 right-24 w-1 h-1 bg-teal-400/15 rounded-full animate-pulse delay-3000"></div>
+                    <div className="absolute bottom-24 left-24 w-1.5 h-1.5 bg-teal-200/20 rounded-full animate-pulse delay-4000"></div>
+                    <div className="absolute inset-0 opacity-3">
+                      <div className="w-full h-full" style={{
+                        backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(20, 184, 166, 0.08) 1px, transparent 0)',
+                        backgroundSize: '20px 20px'
+                      }}></div>
+                    </div>
+                  </>
+                )}
               </div>
-              
-              {/* Danger Zone Badge - Compact; hover on desktop, tap to show on mobile */}
-              {isInDangerZone && (
-                <div className="relative group">
+
+              {/* Enhanced Header Section */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+                className="flex items-center justify-between mb-4 relative z-10"
+              >
+                <div className="flex items-center space-x-3">
                   <motion.div
-                    role="button"
-                    tabIndex={0}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    onClick={() => setDangerTooltipOpen(prev => !prev)}
-                    onBlur={() => setDangerTooltipOpen(false)}
-                    className="flex items-center space-x-1 sm:space-x-1.5 bg-red-500/90 backdrop-blur-sm rounded-md px-1.5 py-1 sm:px-2 sm:py-1.5 border-2 border-red-600 shadow-lg cursor-pointer touch-manipulation select-none"
+                    whileHover={{ scale: 1.05 }}
+                    className={`relative w-11 h-11 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-xl ${isInDangerZone
+                        ? 'border border-red-300/40'
+                        : 'border border-teal-300/40'
+                      }`}
                     style={{
-                      boxShadow: '0 6px 20px -4px rgba(239, 68, 68, 0.4), 0 3px 10px -2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                      boxShadow: isInDangerZone
+                        ? '0 12px 35px -8px rgba(239, 68, 68, 0.25), 0 6px 15px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                        : '0 12px 35px -8px rgba(20, 184, 166, 0.25), 0 6px 15px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
                     }}
                   >
-                    <FaExclamationCircle className="text-white text-[10px] sm:text-xs animate-pulse flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-white text-[9px] sm:text-[10px] font-bold leading-tight">Danger Zone</p>
-                      <p className="text-red-100 text-[8px] sm:text-[9px] font-medium leading-tight">
-                        {daysSinceLastConversion}d
-                      </p>
-                    </div>
+                    <FaUser className={`text-lg ${isInDangerZone ? 'text-red-700' : 'text-teal-700'}`} />
                   </motion.div>
-                  
-                  {/* Tooltip: hover on desktop, tap to show on mobile; responsive width & position */}
-                  <div
-                    className={`absolute top-full mt-2 z-50 bg-red-100/95 backdrop-blur-sm border-2 border-red-300 rounded-lg p-2.5 sm:p-3 shadow-2xl transition-all duration-200
+                  <div>
+                    <h1 className="text-lg font-bold mb-0.5 text-gray-900">Hi, {heroStats.employeeName}</h1>
+                    <p className={`text-xs font-medium ${isInDangerZone ? 'text-red-700' : 'text-teal-700'}`}>
+                      {isInDangerZone ? 'Action Required!' : 'Welcome back!'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Danger Zone Badge - Compact; hover on desktop, tap to show on mobile */}
+                {isInDangerZone && (
+                  <div className="relative group">
+                    <motion.div
+                      role="button"
+                      tabIndex={0}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      onClick={() => setDangerTooltipOpen(prev => !prev)}
+                      onBlur={() => setDangerTooltipOpen(false)}
+                      className="flex items-center space-x-1 sm:space-x-1.5 bg-red-500/90 backdrop-blur-sm rounded-md px-1.5 py-1 sm:px-2 sm:py-1.5 border-2 border-red-600 shadow-lg cursor-pointer touch-manipulation select-none"
+                      style={{
+                        boxShadow: '0 6px 20px -4px rgba(239, 68, 68, 0.4), 0 3px 10px -2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                      }}
+                    >
+                      <FaExclamationCircle className="text-white text-[10px] sm:text-xs animate-pulse flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-white text-[9px] sm:text-[10px] font-bold leading-tight">Danger Zone</p>
+                        <p className="text-red-100 text-[8px] sm:text-[9px] font-medium leading-tight">
+                          {daysSinceLastConversion}d
+                        </p>
+                      </div>
+                    </motion.div>
+
+                    {/* Tooltip: hover on desktop, tap to show on mobile; responsive width & position */}
+                    <div
+                      className={`absolute top-full mt-2 z-50 bg-red-100/95 backdrop-blur-sm border-2 border-red-300 rounded-lg p-2.5 sm:p-3 shadow-2xl transition-all duration-200
                       right-0 w-[calc(100vw-2rem)] max-w-[20rem]
                       opacity-0 invisible
                       ${dangerTooltipOpen ? '!opacity-100 !visible' : ''}
                       md:group-hover:opacity-100 md:group-hover:visible`}
-                    style={{ pointerEvents: dangerTooltipOpen ? 'auto' : 'none' }}
-                  >
-                    <div className="flex items-start gap-2">
-                      <FaExclamationCircle className="text-red-600 text-xs sm:text-sm mt-0.5 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-red-900 text-[11px] sm:text-xs font-bold mb-0.5 sm:mb-1">⚠️ Conversion Alert</p>
-                        <p className="text-red-800 text-[10px] sm:text-[11px] leading-relaxed">
-                          You haven&apos;t converted a lead to client in the last {daysSinceLastConversion} days.{' '}
-                          <span className="font-semibold">Convert a lead immediately to return to normal status.</span>
-                        </p>
+                      style={{ pointerEvents: dangerTooltipOpen ? 'auto' : 'none' }}
+                    >
+                      <div className="flex items-start gap-2">
+                        <FaExclamationCircle className="text-red-600 text-xs sm:text-sm mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-red-900 text-[11px] sm:text-xs font-bold mb-0.5 sm:mb-1">⚠️ Conversion Alert</p>
+                          <p className="text-red-800 text-[10px] sm:text-[11px] leading-relaxed">
+                            You haven&apos;t converted a lead to client in the last {daysSinceLastConversion} days.{' '}
+                            <span className="font-semibold">Convert a lead immediately to return to normal status.</span>
+                          </p>
+                        </div>
                       </div>
+                      {/* Arrow pointing up */}
+                      <div className="absolute -top-2 right-3 sm:right-4 w-3 h-3 sm:w-4 sm:h-4 bg-red-100 border-l-2 border-t-2 border-red-300 transform rotate-45" aria-hidden></div>
                     </div>
-                    {/* Arrow pointing up */}
-                    <div className="absolute -top-2 right-3 sm:right-4 w-3 h-3 sm:w-4 sm:h-4 bg-red-100 border-l-2 border-t-2 border-red-300 transform rotate-45" aria-hidden></div>
-                  </div>
-                  {/* Tap outside to close (mobile) */}
-                  {dangerTooltipOpen && (
-                    <button
-                      type="button"
-                      aria-label="Close warning"
-                      className="fixed inset-0 z-40 cursor-default"
-                      onClick={() => setDangerTooltipOpen(false)}
-                    />
-                  )}
-                </div>
-              )}
-            </motion.div>
-
-
-            {/* Enhanced Sales Metrics */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.4 }}
-              className="grid grid-cols-2 gap-3 mb-5"
-            >
-              <motion.div 
-                whileHover={{ scale: 1.01, y: -1 }}
-                className={`bg-white/60 backdrop-blur-sm rounded-lg p-3 border transition-all duration-300 shadow-md ${
-                  isInDangerZone 
-                    ? 'border-red-300/50 hover:border-red-400/70' 
-                    : 'border-teal-300/50 hover:border-teal-400/70'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className={`text-xs font-semibold ${isInDangerZone ? 'text-red-800' : 'text-teal-800'}`}>Monthly Sales</p>
-                  <div className={`w-5 h-5 bg-gradient-to-br rounded-md flex items-center justify-center shadow-sm ${
-                    isInDangerZone 
-                      ? 'from-red-500 to-red-600' 
-                      : 'from-teal-500 to-teal-600'
-                  }`}>
-                    <FaChartLine className="text-white text-[10px]" />
-                  </div>
-                </div>
-                <p className="text-lg font-bold text-gray-900">₹{heroStats.monthlySales.toLocaleString()}</p>
-              </motion.div>
-              
-              <motion.div 
-                whileHover={{ scale: 1.01, y: -1 }}
-                onClick={() => {
-                  if (heroStats.allTargets && heroStats.allTargets.length > 0) {
-                    setShowAllTargetsModal(true);
-                  }
-                }}
-                className={`bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-emerald-300/50 hover:border-emerald-400/70 transition-all duration-300 shadow-md relative ${
-                  heroStats.allTargets && heroStats.allTargets.length > 0 ? 'cursor-pointer' : ''
-                }`}
-                title={heroStats.allTargets && heroStats.allTargets.length > 0 ? "Click to view all targets" : ""}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center space-x-1.5 flex-1 min-w-0">
-                    <p className="text-emerald-800 text-xs font-semibold truncate">
-                      {heroStats.targetNumber ? `Target ${heroStats.targetNumber}` : 'Target'}
-                    </p>
-                    {heroStats.allTargets && heroStats.allTargets.length > 1 && (
-                      <span className="text-[10px] text-emerald-600 flex-shrink-0">
-                        ({heroStats.allTargets.length})
-                      </span>
+                    {/* Tap outside to close (mobile) */}
+                    {dangerTooltipOpen && (
+                      <button
+                        type="button"
+                        aria-label="Close warning"
+                        className="fixed inset-0 z-40 cursor-default"
+                        onClick={() => setDangerTooltipOpen(false)}
+                      />
                     )}
                   </div>
-                  <div className="w-5 h-5 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-md flex items-center justify-center shadow-sm flex-shrink-0 ml-1">
-                    <FaStar className="text-white text-[10px]" />
-                  </div>
-                </div>
-                <p className="text-lg font-bold text-gray-900 mb-0.5">₹{heroStats.target.toLocaleString()}</p>
-                {heroStats.allTargets && heroStats.allTargets.length > 0 && heroStats.targetNumber && (() => {
-                  const activeTargetData = heroStats.allTargets.find(t => t.targetNumber === heroStats.targetNumber);
-                  if (activeTargetData) {
-                    const reward = activeTargetData.reward || 0;
-                    const deadline = activeTargetData.deadline ? new Date(activeTargetData.deadline) : null;
-                    const now = new Date();
-                    const daysLeft = deadline ? Math.ceil((deadline - now) / (1000 * 60 * 60 * 24)) : null;
-                    return (
-                      <div className="space-y-0.5">
-                        {reward > 0 && (
-                          <p className="text-[10px] font-semibold text-green-600">Reward: ₹{reward.toLocaleString('en-IN')}</p>
-                        )}
-                        {deadline && (
-                          <p className="text-[10px] text-emerald-600 leading-tight">
-                            {deadline.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} 
-                            {daysLeft >= 0 && (
-                              <span className={`ml-1 font-semibold ${daysLeft <= 7 ? 'text-red-600' : 'text-emerald-600'}`}>
-                                ({daysLeft}d)
-                              </span>
-                            )}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
+                )}
               </motion.div>
-            </motion.div>
 
-            {/* Enhanced Progress Section */}
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, delay: 0.6 }}
-              className="mb-5"
-            >
-              <div className="flex justify-between items-center mb-3">
-                <span className={`text-sm font-semibold ${isInDangerZone ? 'text-red-800' : 'text-teal-800'}`}>Progress to Target</span>
-                <span className="text-gray-900 font-bold text-lg">{heroStats.progressToTarget}%</span>
-              </div>
-              <div className="relative w-full bg-white/50 rounded-full h-2.5 overflow-hidden shadow-inner">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${heroStats.progressToTarget}%` }}
-                  transition={{ duration: 1.5, delay: 0.8, ease: "easeOut" }}
-                  className={`h-2.5 rounded-full relative shadow-sm ${
-                    isInDangerZone 
-                      ? 'bg-gradient-to-r from-red-500 via-red-600 to-red-700' 
-                      : 'bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700'
-                  }`}
+
+              {/* Enhanced Sales Metrics */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.4 }}
+                className="grid grid-cols-2 gap-3 mb-5"
+              >
+                <motion.div
+                  whileHover={{ scale: 1.01, y: -1 }}
+                  className={`bg-white/60 backdrop-blur-sm rounded-lg p-3 border transition-all duration-300 shadow-md ${isInDangerZone
+                      ? 'border-red-300/50 hover:border-red-400/70'
+                      : 'border-teal-300/50 hover:border-teal-400/70'
+                    }`}
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
-                  <div className="absolute right-0 top-0 w-1 h-2.5 bg-white/90 rounded-full"></div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className={`text-xs font-semibold ${isInDangerZone ? 'text-red-800' : 'text-teal-800'}`}>Monthly Sales</p>
+                    <div className={`w-5 h-5 bg-gradient-to-br rounded-md flex items-center justify-center shadow-sm ${isInDangerZone
+                        ? 'from-red-500 to-red-600'
+                        : 'from-teal-500 to-teal-600'
+                      }`}>
+                      <FaChartLine className="text-white text-[10px]" />
+                    </div>
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">₹{heroStats.monthlySales.toLocaleString()}</p>
                 </motion.div>
-              </div>
-            </motion.div>
 
-            {/* Team Lead Target Progress Section - Only for Team Leads */}
-            {heroStats.isTeamLead && heroStats.teamLeadTarget > 0 ? (
-              <motion.div 
+                <motion.div
+                  whileHover={{ scale: 1.01, y: -1 }}
+                  onClick={() => {
+                    if (heroStats.allTargets && heroStats.allTargets.length > 0) {
+                      setShowAllTargetsModal(true);
+                    }
+                  }}
+                  className={`bg-white/60 backdrop-blur-sm rounded-lg p-3 border border-emerald-300/50 hover:border-emerald-400/70 transition-all duration-300 shadow-md relative ${heroStats.allTargets && heroStats.allTargets.length > 0 ? 'cursor-pointer' : ''
+                    }`}
+                  title={heroStats.allTargets && heroStats.allTargets.length > 0 ? "Click to view all targets" : ""}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center space-x-1.5 flex-1 min-w-0">
+                      <p className="text-emerald-800 text-xs font-semibold truncate">
+                        {heroStats.targetNumber ? `Target ${heroStats.targetNumber}` : 'Target'}
+                      </p>
+                      {heroStats.allTargets && heroStats.allTargets.length > 1 && (
+                        <span className="text-[10px] text-emerald-600 flex-shrink-0">
+                          ({heroStats.allTargets.length})
+                        </span>
+                      )}
+                    </div>
+                    <div className="w-5 h-5 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-md flex items-center justify-center shadow-sm flex-shrink-0 ml-1">
+                      <FaStar className="text-white text-[10px]" />
+                    </div>
+                  </div>
+                  <p className="text-lg font-bold text-gray-900 mb-0.5">₹{heroStats.target.toLocaleString()}</p>
+                  {heroStats.allTargets && heroStats.allTargets.length > 0 && heroStats.targetNumber && (() => {
+                    const activeTargetData = heroStats.allTargets.find(t => t.targetNumber === heroStats.targetNumber);
+                    if (activeTargetData) {
+                      const targetReward = activeTargetData.reward || 0;
+                      const isAchieved = activeTargetData.isAchieved;
+                      const deadline = activeTargetData.deadline ? new Date(activeTargetData.deadline) : null;
+                      const now = new Date();
+                      const daysLeft = deadline ? Math.ceil((deadline - now) / (1000 * 60 * 60 * 24)) : null;
+                      return (
+                        <div className="space-y-0.5">
+                          {isAchieved ? (
+                            <p className="text-[10px] font-bold text-green-600 flex items-center gap-1">
+                              <FaCheckCircle className="text-[8px]" /> Target Achieved
+                            </p>
+                          ) : (
+                            targetReward > 0 && (
+                              <p className="text-[10px] font-semibold text-blue-600">Next Reward: ₹{targetReward.toLocaleString('en-IN')}</p>
+                            )
+                          )}
+                          {heroStats.reward > 0 && (
+                            <p className="text-[10px] font-bold text-emerald-600">Total Rewards: ₹{heroStats.reward.toLocaleString('en-IN')}</p>
+                          )}
+                          {deadline && (
+                            <p className="text-[10px] text-emerald-600 leading-tight">
+                              {deadline.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              {!isAchieved && daysLeft >= 0 && (
+                                <span className={`ml-1 font-semibold ${daysLeft <= 7 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                  ({daysLeft}d)
+                                </span>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </motion.div>
+              </motion.div>
+
+              {/* Enhanced Progress Section */}
+              <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.8, delay: 0.8 }}
+                transition={{ duration: 0.8, delay: 0.6 }}
                 className="mb-5"
               >
                 <div className="flex justify-between items-center mb-3">
-                  <span className={`text-sm font-semibold ${isInDangerZone ? 'text-red-800' : 'text-teal-800'}`}>Team Target Progress</span>
-                  <span className="text-gray-900 font-bold text-lg">{Math.round(heroStats.teamLeadProgress)}%</span>
+                  <span className={`text-sm font-semibold ${isInDangerZone ? 'text-red-800' : 'text-teal-800'}`}>Progress to Target</span>
+                  <span className="text-gray-900 font-bold text-lg">{heroStats.progressToTarget}%</span>
                 </div>
                 <div className="relative w-full bg-white/50 rounded-full h-2.5 overflow-hidden shadow-inner">
-                  <motion.div 
+                  <motion.div
                     initial={{ width: 0 }}
-                    animate={{ width: `${Math.min(heroStats.teamLeadProgress, 100)}%` }}
-                    transition={{ duration: 1.5, delay: 1.0, ease: "easeOut" }}
-                    className="bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-700 h-2.5 rounded-full relative shadow-sm"
+                    animate={{ width: `${heroStats.progressToTarget}%` }}
+                    transition={{ duration: 1.5, delay: 0.8, ease: "easeOut" }}
+                    className={`h-2.5 rounded-full relative shadow-sm ${isInDangerZone
+                        ? 'bg-gradient-to-r from-red-500 via-red-600 to-red-700'
+                        : 'bg-gradient-to-r from-teal-500 via-teal-600 to-teal-700'
+                      }`}
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
                     <div className="absolute right-0 top-0 w-1 h-2.5 bg-white/90 rounded-full"></div>
                   </motion.div>
                 </div>
-                <div className={`flex justify-between items-center mt-2 text-xs ${isInDangerZone ? 'text-red-700' : 'text-teal-700'}`}>
-                  <span className="font-bold">Team Sales: ₹{heroStats.teamMonthlySales.toLocaleString()}</span>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-bold">Target: ₹{heroStats.teamLeadTarget.toLocaleString()}</span>
-                    {heroStats.teamLeadTargetReward > 0 && (
-                      <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">Reward: ₹{heroStats.teamLeadTargetReward.toLocaleString()}</span>
-                    )}
-                  </div>
-                </div>
               </motion.div>
-            ) : null}
 
-            {/* Enhanced Sub-cards */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 1.0 }}
-              className="grid grid-cols-2 gap-4 mb-5"
-            >
-              <motion.div 
-                whileHover={{ scale: 1.02, y: -2 }}
-                className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-cyan-300/50 hover:border-cyan-400/70 transition-all duration-300 shadow-xl"
-                style={{
-                  boxShadow: '0 10px 30px -6px rgba(6, 182, 212, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
-                }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-cyan-800 text-sm font-semibold">Today's Sales</p>
-                  <div className="w-6 h-6 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center shadow-lg"
-                    style={{
-                      boxShadow: '0 6px 18px -3px rgba(6, 182, 212, 0.4), 0 3px 8px -2px rgba(0, 0, 0, 0.15), 0 1px 4px -1px rgba(0, 0, 0, 0.08)'
-                    }}
-                  >
-                    <FaArrowUp className="text-white text-sm" />
+              {/* Team Lead Target Progress Section - Only for Team Leads */}
+              {heroStats.isTeamLead && heroStats.teamLeadTarget > 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.8, delay: 0.8 }}
+                  className="mb-5"
+                >
+                  <div className="flex justify-between items-center mb-3">
+                    <span className={`text-sm font-semibold ${isInDangerZone ? 'text-red-800' : 'text-teal-800'}`}>Team Target Progress</span>
+                    <span className="text-gray-900 font-bold text-lg">{Math.round(heroStats.teamLeadProgress)}%</span>
                   </div>
-                </div>
-                <p className="text-xl font-bold text-gray-900">₹{heroStats.todaysSales >= 1000 ? `${(heroStats.todaysSales / 1000).toFixed(heroStats.todaysSales % 1000 === 0 ? 0 : 1)}k` : heroStats.todaysSales.toLocaleString()}</p>
-              </motion.div>
-              
-              <motion.div 
-                whileHover={{ scale: 1.02, y: -2 }}
-                className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-indigo-300/50 hover:border-indigo-400/70 transition-all duration-300 shadow-xl"
-                style={{
-                  boxShadow: '0 10px 30px -6px rgba(99, 102, 241, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
-                }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-indigo-800 text-sm font-semibold">Today's Incentive</p>
-                  <div className="w-6 h-6 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg"
-                    style={{
-                      boxShadow: '0 6px 18px -3px rgba(99, 102, 241, 0.4), 0 3px 8px -2px rgba(0, 0, 0, 0.15), 0 1px 4px -1px rgba(0, 0, 0, 0.08)'
-                    }}
-                  >
-                    <FaChartLine className="text-white text-sm" />
+                  <div className="relative w-full bg-white/50 rounded-full h-2.5 overflow-hidden shadow-inner">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(heroStats.teamLeadProgress, 100)}%` }}
+                      transition={{ duration: 1.5, delay: 1.0, ease: "easeOut" }}
+                      className="bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-700 h-2.5 rounded-full relative shadow-sm"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
+                      <div className="absolute right-0 top-0 w-1 h-2.5 bg-white/90 rounded-full"></div>
+                    </motion.div>
                   </div>
-                </div>
-                <p className="text-xl font-bold text-gray-900">₹{heroStats.todaysIncentive.toLocaleString()}</p>
-              </motion.div>
-            </motion.div>
+                  <div className={`flex justify-between items-center mt-2 text-xs ${isInDangerZone ? 'text-red-700' : 'text-teal-700'}`}>
+                    <span className="font-bold">Team Sales: ₹{heroStats.teamMonthlySales.toLocaleString()}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold">Target: ₹{heroStats.teamLeadTarget.toLocaleString()}</span>
+                      {heroStats.teamLeadTargetReward > 0 && (
+                        <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">Reward: ₹{heroStats.teamLeadTargetReward.toLocaleString()}</span>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              ) : null}
 
-            {/* Enhanced Bottom Metrics */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 1.2 }}
-              className="grid grid-cols-3 gap-4"
-            >
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-sky-300/50 text-center hover:border-sky-400/70 transition-all duration-300 shadow-xl"
-                style={{
-                  boxShadow: '0 8px 25px -5px rgba(14, 165, 233, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
-                }}
+              {/* Enhanced Sub-cards */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 1.0 }}
+                className="grid grid-cols-2 gap-4 mb-5"
               >
-                <p className="text-sky-800 text-sm mb-1.5 font-semibold">Total Clients</p>
-                <p className="text-gray-900 text-lg font-bold">{heroStats.totalClients}</p>
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-cyan-300/50 hover:border-cyan-400/70 transition-all duration-300 shadow-xl"
+                  style={{
+                    boxShadow: '0 10px 30px -6px rgba(6, 182, 212, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-cyan-800 text-sm font-semibold">Today's Sales</p>
+                    <div className="w-6 h-6 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center shadow-lg"
+                      style={{
+                        boxShadow: '0 6px 18px -3px rgba(6, 182, 212, 0.4), 0 3px 8px -2px rgba(0, 0, 0, 0.15), 0 1px 4px -1px rgba(0, 0, 0, 0.08)'
+                      }}
+                    >
+                      <FaArrowUp className="text-white text-sm" />
+                    </div>
+                  </div>
+                  <p className="text-xl font-bold text-gray-900">₹{heroStats.todaysSales >= 1000 ? `${(heroStats.todaysSales / 1000).toFixed(heroStats.todaysSales % 1000 === 0 ? 0 : 1)}k` : heroStats.todaysSales.toLocaleString()}</p>
+                </motion.div>
+
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-indigo-300/50 hover:border-indigo-400/70 transition-all duration-300 shadow-xl"
+                  style={{
+                    boxShadow: '0 10px 30px -6px rgba(99, 102, 241, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.1), 0 3px 8px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-indigo-800 text-sm font-semibold">Today's Incentive</p>
+                    <div className="w-6 h-6 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg"
+                      style={{
+                        boxShadow: '0 6px 18px -3px rgba(99, 102, 241, 0.4), 0 3px 8px -2px rgba(0, 0, 0, 0.15), 0 1px 4px -1px rgba(0, 0, 0, 0.08)'
+                      }}
+                    >
+                      <FaChartLine className="text-white text-sm" />
+                    </div>
+                  </div>
+                  <p className="text-xl font-bold text-gray-900">₹{heroStats.todaysIncentive.toLocaleString()}</p>
+                </motion.div>
               </motion.div>
-              
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-emerald-300/50 text-center hover:border-emerald-400/70 transition-all duration-300 shadow-xl"
-                style={{
-                  boxShadow: '0 8px 25px -5px rgba(16, 185, 129, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
-                }}
+
+              {/* Enhanced Bottom Metrics */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 1.2 }}
+                className="grid grid-cols-3 gap-4"
               >
-                <p className="text-emerald-800 text-sm mb-1.5 font-semibold">Total Leads</p>
-                <p className="text-gray-900 text-lg font-bold">
-                  {typeof totalLeads === 'number' ? totalLeads.toLocaleString('en-IN') : totalLeads}
-                </p>
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  className="bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-sky-300/50 text-center hover:border-sky-400/70 transition-all duration-300 shadow-xl"
+                  style={{
+                    boxShadow: '0 8px 25px -5px rgba(14, 165, 233, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                  }}
+                >
+                  <p className="text-sky-800 text-sm mb-1.5 font-semibold">Total Clients</p>
+                  <p className="text-gray-900 text-lg font-bold">{heroStats.totalClients}</p>
+                </motion.div>
+
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  className="bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-emerald-300/50 text-center hover:border-emerald-400/70 transition-all duration-300 shadow-xl"
+                  style={{
+                    boxShadow: '0 8px 25px -5px rgba(16, 185, 129, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                  }}
+                >
+                  <p className="text-emerald-800 text-sm mb-1.5 font-semibold">Total Leads</p>
+                  <p className="text-gray-900 text-lg font-bold">
+                    {typeof totalLeads === 'number' ? totalLeads.toLocaleString('en-IN') : totalLeads}
+                  </p>
+                </motion.div>
+
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  className="bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-violet-300/50 text-center hover:border-violet-400/70 transition-all duration-300 shadow-xl"
+                  style={{
+                    boxShadow: '0 8px 25px -5px rgba(139, 92, 246, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                  }}
+                >
+                  <p className="text-violet-800 text-sm mb-1.5 font-semibold">Monthly Incentive</p>
+                  <p className="text-gray-900 text-lg font-bold">₹{heroStats.monthlyIncentive.toLocaleString()}</p>
+                </motion.div>
               </motion.div>
-              
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-violet-300/50 text-center hover:border-violet-400/70 transition-all duration-300 shadow-xl"
-                style={{
-                  boxShadow: '0 8px 25px -5px rgba(139, 92, 246, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
-                }}
-              >
-                <p className="text-violet-800 text-sm mb-1.5 font-semibold">Monthly Incentive</p>
-                <p className="text-gray-900 text-lg font-bold">₹{heroStats.monthlyIncentive.toLocaleString()}</p>
-              </motion.div>
-            </motion.div>
 
             </motion.div>
           ) : (
@@ -846,7 +850,7 @@ const SL_dashboard = () => {
           )}
 
           {/* Enhanced Tile Cards Grid */}
-          <motion.div 
+          <motion.div
             ref={tileCardsRef}
             initial={{ opacity: 0, y: 50 }}
             animate={tileCardsInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
@@ -855,183 +859,183 @@ const SL_dashboard = () => {
           >
             {/* Payment Recovery */}
             <Link to="/payments-recovery">
-              <div 
+              <div
                 className="bg-emerald-50 rounded-xl p-4 text-emerald-800 transition-all duration-300 cursor-pointer border border-emerald-200/30"
                 style={{
                   boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
                 }}
               >
-              <div className="flex flex-col h-full">
-                {/* Enhanced Icon Section */}
-                <div className="flex justify-center mb-3">
-                  <div className="w-12 h-12 bg-emerald-100 backdrop-blur-sm rounded-xl flex items-center justify-center border border-emerald-200/30"
-                    style={{
-                      boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.15), 0 3px 10px -2px rgba(0, 0, 0, 0.08), 0 1px 5px -1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.25)'
-                    }}
-                  >
-                    <FaRupeeSign className="text-xl text-emerald-600" />
-                  </div>
-                </div>
-                
-                {/* Enhanced Content Section */}
-                <div className="flex-1 flex flex-col justify-between text-center">
-                  <div>
-                    <h3 className="font-bold text-sm mb-1.5 leading-tight text-emerald-800">Payment Recovery</h3>
-                    <div className="flex items-center justify-center space-x-2 mb-2.5">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                      <p className="text-xs font-semibold opacity-95 text-emerald-700">{tileStats.paymentRecovery.pending} Pendings</p>
+                <div className="flex flex-col h-full">
+                  {/* Enhanced Icon Section */}
+                  <div className="flex justify-center mb-3">
+                    <div className="w-12 h-12 bg-emerald-100 backdrop-blur-sm rounded-xl flex items-center justify-center border border-emerald-200/30"
+                      style={{
+                        boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.15), 0 3px 10px -2px rgba(0, 0, 0, 0.08), 0 1px 5px -1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.25)'
+                      }}
+                    >
+                      <FaRupeeSign className="text-xl text-emerald-600" />
                     </div>
                   </div>
-                  
-                  {/* Enhanced Trend Section */}
-                  <div className="flex items-center justify-center space-x-1.5 mt-auto bg-emerald-100 rounded-lg px-2.5 py-1.5">
-                    {tileStats.paymentRecovery.changeThisWeek >= 0 ? (
-                      <FaArrowUp className="text-xs text-emerald-600" />
-                    ) : (
-                      <FaArrowDown className="text-xs text-emerald-600" />
-                    )}
-                    <span className="text-xs font-semibold text-emerald-600">
-                      {tileStats.paymentRecovery.changeThisWeek >= 0 ? '+' : ''}{tileStats.paymentRecovery.changeThisWeek} this week
-                    </span>
+
+                  {/* Enhanced Content Section */}
+                  <div className="flex-1 flex flex-col justify-between text-center">
+                    <div>
+                      <h3 className="font-bold text-sm mb-1.5 leading-tight text-emerald-800">Payment Recovery</h3>
+                      <div className="flex items-center justify-center space-x-2 mb-2.5">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                        <p className="text-xs font-semibold opacity-95 text-emerald-700">{tileStats.paymentRecovery.pending} Pendings</p>
+                      </div>
+                    </div>
+
+                    {/* Enhanced Trend Section */}
+                    <div className="flex items-center justify-center space-x-1.5 mt-auto bg-emerald-100 rounded-lg px-2.5 py-1.5">
+                      {tileStats.paymentRecovery.changeThisWeek >= 0 ? (
+                        <FaArrowUp className="text-xs text-emerald-600" />
+                      ) : (
+                        <FaArrowDown className="text-xs text-emerald-600" />
+                      )}
+                      <span className="text-xs font-semibold text-emerald-600">
+                        {tileStats.paymentRecovery.changeThisWeek >= 0 ? '+' : ''}{tileStats.paymentRecovery.changeThisWeek} this week
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
               </div>
             </Link>
 
             {/* Demo Requests */}
             <Link to="/demo-requests">
-              <div 
+              <div
                 className="bg-blue-50 rounded-xl p-4 text-blue-800 transition-all duration-300 cursor-pointer border border-blue-200/30"
                 style={{
                   boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
                 }}
               >
-              <div className="flex flex-col h-full">
-                {/* Enhanced Icon Section */}
-                <div className="flex justify-center mb-3">
-                  <div className="w-12 h-12 bg-blue-100 backdrop-blur-sm rounded-xl flex items-center justify-center border border-blue-200/30"
-                    style={{
-                      boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.15), 0 3px 10px -2px rgba(0, 0, 0, 0.08), 0 1px 5px -1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.25)'
-                    }}
-                  >
-                    <FaVideo className="text-xl text-blue-600" />
-                  </div>
-                </div>
-                
-                {/* Enhanced Content Section */}
-                <div className="flex-1 flex flex-col justify-between text-center">
-                  <div>
-                    <h3 className="font-bold text-sm mb-1.5 leading-tight text-blue-800">Demo Requests</h3>
-                    <div className="flex items-center justify-center space-x-2 mb-2.5">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shadow-sm"></div>
-                      <p className="text-xs font-semibold opacity-95 text-blue-700">{tileStats.demoRequests.new} New</p>
+                <div className="flex flex-col h-full">
+                  {/* Enhanced Icon Section */}
+                  <div className="flex justify-center mb-3">
+                    <div className="w-12 h-12 bg-blue-100 backdrop-blur-sm rounded-xl flex items-center justify-center border border-blue-200/30"
+                      style={{
+                        boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.15), 0 3px 10px -2px rgba(0, 0, 0, 0.08), 0 1px 5px -1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.25)'
+                      }}
+                    >
+                      <FaVideo className="text-xl text-blue-600" />
                     </div>
                   </div>
-                  
-                  {/* Enhanced Trend Section */}
-                  <div className="flex items-center justify-center space-x-1.5 mt-auto bg-blue-100 rounded-lg px-2.5 py-1.5">
-                    {tileStats.demoRequests.today > 0 ? (
-                      <FaArrowUp className="text-xs text-blue-600" />
-                    ) : null}
-                    <span className="text-xs font-semibold text-blue-600">
-                      {tileStats.demoRequests.today > 0 ? '+' : ''}{tileStats.demoRequests.today} today
-                    </span>
+
+                  {/* Enhanced Content Section */}
+                  <div className="flex-1 flex flex-col justify-between text-center">
+                    <div>
+                      <h3 className="font-bold text-sm mb-1.5 leading-tight text-blue-800">Demo Requests</h3>
+                      <div className="flex items-center justify-center space-x-2 mb-2.5">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shadow-sm"></div>
+                        <p className="text-xs font-semibold opacity-95 text-blue-700">{tileStats.demoRequests.new} New</p>
+                      </div>
+                    </div>
+
+                    {/* Enhanced Trend Section */}
+                    <div className="flex items-center justify-center space-x-1.5 mt-auto bg-blue-100 rounded-lg px-2.5 py-1.5">
+                      {tileStats.demoRequests.today > 0 ? (
+                        <FaArrowUp className="text-xs text-blue-600" />
+                      ) : null}
+                      <span className="text-xs font-semibold text-blue-600">
+                        {tileStats.demoRequests.today > 0 ? '+' : ''}{tileStats.demoRequests.today} today
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
               </div>
             </Link>
 
             {/* Tasks */}
             <Link to="/tasks">
-              <div 
+              <div
                 className="bg-purple-50 rounded-xl p-4 text-purple-800 transition-all duration-300 cursor-pointer border border-purple-200/30"
                 style={{
                   boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
                 }}
               >
-              <div className="flex flex-col h-full">
-                {/* Enhanced Icon Section */}
-                <div className="flex justify-center mb-3">
-                  <div className="w-12 h-12 bg-purple-100 backdrop-blur-sm rounded-xl flex items-center justify-center border border-purple-200/30"
-                    style={{
-                      boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.15), 0 3px 10px -2px rgba(0, 0, 0, 0.08), 0 1px 5px -1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.25)'
-                    }}
-                  >
-                    <FaCheckCircle className="text-xl text-purple-600" />
-                  </div>
-                </div>
-                
-                {/* Enhanced Content Section */}
-                <div className="flex-1 flex flex-col justify-between text-center">
-                  <div>
-                    <h3 className="font-bold text-sm mb-1.5 leading-tight text-purple-800">Tasks</h3>
-                    <div className="flex items-center justify-center space-x-2 mb-2.5">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full shadow-sm"></div>
-                      <p className="text-xs font-semibold opacity-95 text-purple-700">{tileStats.tasks.pending} Pending</p>
+                <div className="flex flex-col h-full">
+                  {/* Enhanced Icon Section */}
+                  <div className="flex justify-center mb-3">
+                    <div className="w-12 h-12 bg-purple-100 backdrop-blur-sm rounded-xl flex items-center justify-center border border-purple-200/30"
+                      style={{
+                        boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.15), 0 3px 10px -2px rgba(0, 0, 0, 0.08), 0 1px 5px -1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.25)'
+                      }}
+                    >
+                      <FaCheckCircle className="text-xl text-purple-600" />
                     </div>
                   </div>
-                  
-                  {/* Enhanced Trend Section */}
-                  <div className="flex items-center justify-center space-x-1.5 mt-auto bg-purple-100 rounded-lg px-2.5 py-1.5">
-                    {tileStats.tasks.change >= 0 ? (
-                      <FaArrowUp className="text-xs text-purple-600" />
-                    ) : (
-                      <FaArrowDown className="text-xs text-purple-600" />
-                    )}
-                    <span className="text-xs font-semibold text-purple-600">
-                      {tileStats.tasks.change >= 0 ? '+' : ''}{tileStats.tasks.change} completed
-                    </span>
+
+                  {/* Enhanced Content Section */}
+                  <div className="flex-1 flex flex-col justify-between text-center">
+                    <div>
+                      <h3 className="font-bold text-sm mb-1.5 leading-tight text-purple-800">Tasks</h3>
+                      <div className="flex items-center justify-center space-x-2 mb-2.5">
+                        <div className="w-2 h-2 bg-purple-500 rounded-full shadow-sm"></div>
+                        <p className="text-xs font-semibold opacity-95 text-purple-700">{tileStats.tasks.pending} Pending</p>
+                      </div>
+                    </div>
+
+                    {/* Enhanced Trend Section */}
+                    <div className="flex items-center justify-center space-x-1.5 mt-auto bg-purple-100 rounded-lg px-2.5 py-1.5">
+                      {tileStats.tasks.change >= 0 ? (
+                        <FaArrowUp className="text-xs text-purple-600" />
+                      ) : (
+                        <FaArrowDown className="text-xs text-purple-600" />
+                      )}
+                      <span className="text-xs font-semibold text-purple-600">
+                        {tileStats.tasks.change >= 0 ? '+' : ''}{tileStats.tasks.change} completed
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
               </div>
             </Link>
 
             {/* Meetings */}
             <Link to="/meetings">
-              <div 
+              <div
                 className="bg-orange-50 rounded-xl p-4 text-orange-800 transition-all duration-300 cursor-pointer border border-orange-200/30"
                 style={{
                   boxShadow: '0 10px 30px -8px rgba(0, 0, 0, 0.2), 0 6px 16px -4px rgba(0, 0, 0, 0.12), 0 3px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
                 }}
               >
-              <div className="flex flex-col h-full">
-                {/* Enhanced Icon Section */}
-                <div className="flex justify-center mb-3">
-                  <div className="w-12 h-12 bg-orange-100 backdrop-blur-sm rounded-xl flex items-center justify-center border border-orange-200/30"
-                    style={{
-                      boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.15), 0 3px 10px -2px rgba(0, 0, 0, 0.08), 0 1px 5px -1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.25)'
-                    }}
-                  >
-                    <FaUsers className="text-xl text-orange-600" />
-                  </div>
-                </div>
-                
-                {/* Enhanced Content Section */}
-                <div className="flex-1 flex flex-col justify-between text-center">
-                  <div>
-                    <h3 className="font-bold text-sm mb-1.5 leading-tight text-orange-800">Meetings</h3>
-                    <div className="flex items-center justify-center space-x-2 mb-2.5">
-                      <div className="w-2 h-2 bg-orange-500 rounded-full shadow-sm"></div>
-                      <p className="text-xs font-semibold opacity-95 text-orange-700">{tileStats.meetings.today} Today</p>
+                <div className="flex flex-col h-full">
+                  {/* Enhanced Icon Section */}
+                  <div className="flex justify-center mb-3">
+                    <div className="w-12 h-12 bg-orange-100 backdrop-blur-sm rounded-xl flex items-center justify-center border border-orange-200/30"
+                      style={{
+                        boxShadow: '0 6px 20px -4px rgba(0, 0, 0, 0.15), 0 3px 10px -2px rgba(0, 0, 0, 0.08), 0 1px 5px -1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.25)'
+                      }}
+                    >
+                      <FaUsers className="text-xl text-orange-600" />
                     </div>
                   </div>
-                  
-                  {/* Enhanced Trend Section */}
-                  <div className="flex items-center justify-center space-x-1.5 mt-auto bg-orange-100 rounded-lg px-2.5 py-1.5">
-                    <FaClock className="text-xs text-orange-600" />
-                    <span className="text-xs font-semibold text-orange-600">{tileStats.meetings.upcoming} upcoming</span>
+
+                  {/* Enhanced Content Section */}
+                  <div className="flex-1 flex flex-col justify-between text-center">
+                    <div>
+                      <h3 className="font-bold text-sm mb-1.5 leading-tight text-orange-800">Meetings</h3>
+                      <div className="flex items-center justify-center space-x-2 mb-2.5">
+                        <div className="w-2 h-2 bg-orange-500 rounded-full shadow-sm"></div>
+                        <p className="text-xs font-semibold opacity-95 text-orange-700">{tileStats.meetings.today} Today</p>
+                      </div>
+                    </div>
+
+                    {/* Enhanced Trend Section */}
+                    <div className="flex items-center justify-center space-x-1.5 mt-auto bg-orange-100 rounded-lg px-2.5 py-1.5">
+                      <FaClock className="text-xs text-orange-600" />
+                      <span className="text-xs font-semibold text-orange-600">{tileStats.meetings.upcoming} upcoming</span>
+                    </div>
                   </div>
                 </div>
-              </div>
               </div>
             </Link>
           </motion.div>
 
           {/* Enhanced Sales Analytics Section */}
-          <motion.div 
+          <motion.div
             ref={chartRef}
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={chartInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 50, scale: 0.95 }}
@@ -1069,15 +1073,14 @@ const SL_dashboard = () => {
                       </Pie>
                     </PieChart>
                   </ResponsiveContainer>
-                  
+
                   {/* Center Text - responsive size so large numbers fit */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="text-center px-2 min-w-0 max-w-full">
-                      <p className={`font-bold text-gray-900 leading-tight truncate max-w-full ${
-                        totalLeads >= 10000 ? 'text-base sm:text-lg lg:text-xl' :
-                        totalLeads >= 1000 ? 'text-lg sm:text-xl lg:text-2xl' :
-                        'text-xl sm:text-2xl lg:text-3xl'
-                      }`}>
+                      <p className={`font-bold text-gray-900 leading-tight truncate max-w-full ${totalLeads >= 10000 ? 'text-base sm:text-lg lg:text-xl' :
+                          totalLeads >= 1000 ? 'text-lg sm:text-xl lg:text-2xl' :
+                            'text-xl sm:text-2xl lg:text-3xl'
+                        }`}>
                         {typeof totalLeads === 'number' ? totalLeads.toLocaleString('en-IN') : totalLeads}
                       </p>
                       <p className="text-xs sm:text-sm lg:text-base text-gray-600 mt-0.5">Total Leads</p>
@@ -1089,7 +1092,7 @@ const SL_dashboard = () => {
               {/* Enhanced Legend */}
               <div className="space-y-3">
                 {funnelData.map((item, index) => (
-                  <motion.div 
+                  <motion.div
                     key={index}
                     initial={{ opacity: 0, x: -30 }}
                     animate={chartInView ? { opacity: 1, x: 0 } : { opacity: 0, x: -30 }}
@@ -1097,8 +1100,8 @@ const SL_dashboard = () => {
                     className="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200/50 hover:shadow-md transition-all duration-300"
                   >
                     <div className="flex items-center space-x-3">
-                      <div 
-                        className="w-4 h-4 lg:w-5 lg:h-5 rounded-full shadow-sm" 
+                      <div
+                        className="w-4 h-4 lg:w-5 lg:h-5 rounded-full shadow-sm"
                         style={{ backgroundColor: item.color }}
                       ></div>
                       <div>
@@ -1109,7 +1112,7 @@ const SL_dashboard = () => {
                     <div className="text-right">
                       <p className="text-lg lg:text-xl font-bold text-gray-900">{item.value}%</p>
                       <div className="w-16 lg:w-20 h-1.5 lg:h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <motion.div 
+                        <motion.div
                           initial={{ width: 0 }}
                           animate={chartInView ? { width: `${item.value}%` } : { width: 0 }}
                           transition={{ duration: 1.2, delay: 0.5 + (index * 0.1), ease: "easeOut" }}
@@ -1123,117 +1126,117 @@ const SL_dashboard = () => {
               </div>
 
               {/* Summary Stats */}
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 animate={chartInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
                 transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
                 className="mt-6 grid grid-cols-2 gap-4"
               >
-                 <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-3 border border-emerald-200/50">
-                   <div className="flex items-center space-x-1.5 mb-1.5">
-                     <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-                     <p className="text-xs font-semibold text-emerald-700">Conversion Rate</p>
-                   </div>
-                   <p className="text-base font-bold text-emerald-900">{(funnelData.find(f=>f.key==='converted')?.value ?? 0)}%</p>
-                   <p className="text-xs text-emerald-600">{(funnelData.find(f=>f.key==='converted')?.amount)||'0 leads'} converted</p>
-                 </div>
-                 
-                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200/50">
-                   <div className="flex items-center space-x-1.5 mb-1.5">
-                     <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                     <p className="text-xs font-semibold text-blue-700">Connected Rate</p>
-                   </div>
-                   <p className="text-base font-bold text-blue-900">{(funnelData.find(f=>f.key==='connected')?.value ?? 0)}%</p>
-                   <p className="text-xs text-blue-600">{(funnelData.find(f=>f.key==='connected')?.amount)||'0 leads'} connected</p>
-                 </div>
-               </motion.div>
-             </div>
-           </motion.div>
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-3 border border-emerald-200/50">
+                  <div className="flex items-center space-x-1.5 mb-1.5">
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
+                    <p className="text-xs font-semibold text-emerald-700">Conversion Rate</p>
+                  </div>
+                  <p className="text-base font-bold text-emerald-900">{(funnelData.find(f => f.key === 'converted')?.value ?? 0)}%</p>
+                  <p className="text-xs text-emerald-600">{(funnelData.find(f => f.key === 'converted')?.amount) || '0 leads'} converted</p>
+                </div>
 
-           {/* Monthly Conversion Bar Chart */}
-           <motion.div 
-             initial={{ opacity: 0, y: 30 }}
-             animate={chartInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-             transition={{ duration: 0.8, delay: 0.8, ease: "easeOut" }}
-             className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 lg:p-8 shadow-xl border border-gray-200/50"
-             style={{
-               boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.05)'
-             }}
-           >
-             {/* Header Section */}
-             <div className="text-center mb-4">
-               <h3 className="text-lg lg:text-xl font-bold text-gray-900">Monthly Conversions</h3>
-               <p className="text-gray-600 text-xs lg:text-sm">Swipe to see past months</p>
-             </div>
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200/50">
+                  <div className="flex items-center space-x-1.5 mb-1.5">
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                    <p className="text-xs font-semibold text-blue-700">Connected Rate</p>
+                  </div>
+                  <p className="text-base font-bold text-blue-900">{(funnelData.find(f => f.key === 'connected')?.value ?? 0)}%</p>
+                  <p className="text-xs text-blue-600">{(funnelData.find(f => f.key === 'connected')?.amount) || '0 leads'} connected</p>
+                </div>
+              </motion.div>
+            </div>
+          </motion.div>
 
-             {/* Scrollable Bar Chart Container */}
-             <div className="h-64 lg:h-80 overflow-x-auto">
-               <div className="min-w-[600px] lg:min-w-full h-full">
-                 <ResponsiveContainer width="100%" height="100%">
-                   <BarChart
-                     data={monthlyData}
-                     margin={{
-                       top: 10,
-                       right: 10,
-                       left: 10,
-                       bottom: 10,
-                     }}
-                   >
-                     <CartesianGrid strokeDasharray="2 2" stroke="#f3f4f6" />
-                     <XAxis 
-                       dataKey="month" 
-                       stroke="#6b7280"
-                       fontSize={11}
-                       tickLine={false}
-                       axisLine={false}
-                     />
-                     <YAxis 
-                       stroke="#6b7280"
-                       fontSize={11}
-                       tickLine={false}
-                       axisLine={false}
-                       width={30}
-                     />
-                     <Tooltip 
-                       contentStyle={{
-                         backgroundColor: 'white',
-                         border: '1px solid #e5e7eb',
-                         borderRadius: '6px',
-                         boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-                         fontSize: '12px'
-                       }}
-                       formatter={(value) => [`${value} clients`, 'Converted']}
-                       labelFormatter={(label) => `${label}`}
-                     />
-                     <Bar 
-                       dataKey="converted" 
-                       fill="#10B981" 
-                       radius={[2, 2, 0, 0]}
-                       name="converted"
-                     />
-                   </BarChart>
-                 </ResponsiveContainer>
-               </div>
-             </div>
+          {/* Monthly Conversion Bar Chart */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={chartInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+            transition={{ duration: 0.8, delay: 0.8, ease: "easeOut" }}
+            className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 lg:p-8 shadow-xl border border-gray-200/50"
+            style={{
+              boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.05)'
+            }}
+          >
+            {/* Header Section */}
+            <div className="text-center mb-4">
+              <h3 className="text-lg lg:text-xl font-bold text-gray-900">Monthly Conversions</h3>
+              <p className="text-gray-600 text-xs lg:text-sm">Swipe to see past months</p>
+            </div>
 
-             {/* Chart Summary - Compact Rectangle Cards */}
-             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-               <div className="bg-emerald-50 rounded-md p-2 border border-emerald-200/50">
-                 <p className="text-xs font-semibold text-emerald-700 mb-0.5">Best Month</p>
-                 <p className="text-xs font-bold text-emerald-900">{bestMonth.label}</p>
-                 <p className="text-xs text-emerald-600">{bestMonth.converted} converted</p>
-               </div>
-               <div className="bg-blue-50 rounded-md p-2 border border-blue-200/50">
-                 <p className="text-xs font-semibold text-blue-700 mb-0.5">Avg Conversion</p>
-                 <p className="text-xs font-bold text-blue-900">{avgRate}</p>
-                 <p className="text-xs text-blue-600">per month</p>
-               </div>
-               <div className="bg-purple-50 rounded-md p-2 border border-purple-200/50">
-                 <p className="text-xs font-semibold text-purple-700 mb-0.5">Total Converted</p>
-                 <p className="text-xs font-bold text-purple-900">{totalConverted}</p>
-                 <p className="text-xs text-purple-600">12 months</p>
-               </div>
-             </div>
+            {/* Scrollable Bar Chart Container */}
+            <div className="h-64 lg:h-80 overflow-x-auto">
+              <div className="min-w-[600px] lg:min-w-full h-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={monthlyData}
+                    margin={{
+                      top: 10,
+                      right: 10,
+                      left: 10,
+                      bottom: 10,
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="2 2" stroke="#f3f4f6" />
+                    <XAxis
+                      dataKey="month"
+                      stroke="#6b7280"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      stroke="#6b7280"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      width={30}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'white',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                        fontSize: '12px'
+                      }}
+                      formatter={(value) => [`${value} clients`, 'Converted']}
+                      labelFormatter={(label) => `${label}`}
+                    />
+                    <Bar
+                      dataKey="converted"
+                      fill="#10B981"
+                      radius={[2, 2, 0, 0]}
+                      name="converted"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Chart Summary - Compact Rectangle Cards */}
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="bg-emerald-50 rounded-md p-2 border border-emerald-200/50">
+                <p className="text-xs font-semibold text-emerald-700 mb-0.5">Best Month</p>
+                <p className="text-xs font-bold text-emerald-900">{bestMonth.label}</p>
+                <p className="text-xs text-emerald-600">{bestMonth.converted} converted</p>
+              </div>
+              <div className="bg-blue-50 rounded-md p-2 border border-blue-200/50">
+                <p className="text-xs font-semibold text-blue-700 mb-0.5">Avg Conversion</p>
+                <p className="text-xs font-bold text-blue-900">{avgRate}</p>
+                <p className="text-xs text-blue-600">per month</p>
+              </div>
+              <div className="bg-purple-50 rounded-md p-2 border border-purple-200/50">
+                <p className="text-xs font-semibold text-purple-700 mb-0.5">Total Converted</p>
+                <p className="text-xs font-bold text-purple-900">{totalConverted}</p>
+                <p className="text-xs text-purple-600">12 months</p>
+              </div>
+            </div>
           </motion.div>
         </div>
       </main>
@@ -1269,6 +1272,21 @@ const SL_dashboard = () => {
               </div>
 
               <div className="space-y-3 sm:space-y-4">
+                {heroStats.reward > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl p-4 text-white shadow-lg mb-6 flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="text-emerald-100 text-xs font-medium uppercase tracking-wider mb-1">Total Rewards Earned</p>
+                      <h4 className="text-2xl font-bold">₹{heroStats.reward.toLocaleString('en-IN')}</h4>
+                    </div>
+                    <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30">
+                      <FaGem className="text-2xl text-white animate-bounce-slow" />
+                    </div>
+                  </motion.div>
+                )}
                 {heroStats.allTargets.map((target, index) => {
                   const deadline = new Date(target.deadline);
                   const now = new Date();
@@ -1280,10 +1298,10 @@ const SL_dashboard = () => {
                   const statusAccent = isActive
                     ? 'border-l-emerald-500 bg-gradient-to-r from-emerald-50/80 to-white'
                     : isAchieved
-                    ? 'border-l-gray-400 bg-gradient-to-r from-gray-50/80 to-white'
-                    : isDeadlinePassed
-                    ? 'border-l-red-400 bg-gradient-to-r from-red-50/50 to-white'
-                    : 'border-l-emerald-300/70 bg-white';
+                      ? 'border-l-gray-400 bg-gradient-to-r from-gray-50/80 to-white'
+                      : isDeadlinePassed
+                        ? 'border-l-red-400 bg-gradient-to-r from-red-50/50 to-white'
+                        : 'border-l-emerald-300/70 bg-white';
 
                   return (
                     <motion.div
@@ -1296,15 +1314,14 @@ const SL_dashboard = () => {
                       <div className="p-3.5 sm:p-4">
                         {/* Row 1: Number + Title + Badge */}
                         <div className="flex items-start gap-3 mb-3">
-                          <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-bold text-sm sm:text-base shadow-sm ${
-                            isActive
+                          <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-bold text-sm sm:text-base shadow-sm ${isActive
                               ? 'bg-emerald-500 text-white ring-2 ring-emerald-200'
                               : isAchieved
-                              ? 'bg-gray-400 text-white ring-2 ring-gray-200'
-                              : isDeadlinePassed
-                              ? 'bg-red-400 text-white ring-2 ring-red-100'
-                              : 'bg-gray-200 text-gray-700 ring-2 ring-gray-100'
-                          }`}>
+                                ? 'bg-gray-400 text-white ring-2 ring-gray-200'
+                                : isDeadlinePassed
+                                  ? 'bg-red-400 text-white ring-2 ring-red-100'
+                                  : 'bg-gray-200 text-gray-700 ring-2 ring-gray-100'
+                            }`}>
                             {target.targetNumber}
                           </div>
                           <div className="flex-1 min-w-0 flex flex-wrap items-center gap-2">
@@ -1363,9 +1380,8 @@ const SL_dashboard = () => {
                                 initial={{ width: 0 }}
                                 animate={{ width: `${target.progress}%` }}
                                 transition={{ duration: 0.8, delay: 0.2 }}
-                                className={`h-2 rounded-full ${
-                                  isActive ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' : 'bg-gray-400'
-                                }`}
+                                className={`h-2 rounded-full ${isActive ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' : 'bg-gray-400'
+                                  }`}
                               />
                             </div>
                             <p className="text-[10px] sm:text-xs text-gray-500 mt-1.5">
@@ -1374,10 +1390,16 @@ const SL_dashboard = () => {
                           </div>
                         )}
 
-                        {heroStats.reward > 0 && (
-                          <div className="mt-3 flex items-center gap-2 text-[10px] sm:text-xs font-medium bg-amber-50/90 text-amber-800 rounded-lg px-2.5 py-2 border border-amber-200/60">
-                            <FaGem className="text-amber-500 flex-shrink-0" />
-                            <span>Reward: ₹{heroStats.reward.toLocaleString('en-IN')}</span>
+                        {target.reward > 0 && target.isAchieved && (
+                          <div className="mt-3 flex items-center gap-2 text-[10px] sm:text-xs font-medium bg-emerald-50 text-emerald-800 rounded-lg px-2.5 py-2 border border-emerald-200/60">
+                            <FaCheckCircle className="text-emerald-500 flex-shrink-0" />
+                            <span>Target Reward Achieved: ₹{target.reward.toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+                        {target.reward > 0 && !target.isAchieved && !target.isDeadlinePassed && (
+                          <div className="mt-3 flex items-center gap-2 text-[10px] sm:text-xs font-medium bg-blue-50 text-blue-800 rounded-lg px-2.5 py-2 border border-blue-200/60">
+                            <FaStar className="text-blue-500 flex-shrink-0" />
+                            <span>Target Reward: ₹{target.reward.toLocaleString('en-IN')}</span>
                           </div>
                         )}
                       </div>

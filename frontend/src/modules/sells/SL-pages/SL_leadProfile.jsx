@@ -3,8 +3,8 @@ import { motion } from 'framer-motion'
 import { useParams, useNavigate } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { 
-  FiPhone, 
+import {
+  FiPhone,
   FiPlus,
   FiUser,
   FiSave,
@@ -38,7 +38,7 @@ const SL_leadProfile = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   const { toast } = useToast()
-  
+
   // State management
   const [lead, setLead] = useState(null)
   const [leadProfile, setLeadProfile] = useState(null)
@@ -115,6 +115,16 @@ const SL_leadProfile = () => {
   const [myClients, setMyClients] = useState([])
   const [selectedStatus, setSelectedStatus] = useState('')
   const [accounts, setAccounts] = useState([])
+  const [showConnectedForm, setShowConnectedForm] = useState(false)
+  const [profileFormData, setProfileFormData] = useState({
+    name: '',
+    businessName: '',
+    categoryId: '',
+    estimatedPrice: '50000',
+    description: '',
+    quotationSent: false,
+    demoSent: false
+  })
 
   // Fetch lead data on component mount
   useEffect(() => {
@@ -150,10 +160,10 @@ const SL_leadProfile = () => {
         setLead(response)
         setLeadProfile(response.leadProfile)
         setSelectedStatus(response.status)
-        
+
         // Update form data with lead information
         const lp = response.leadProfile
-        
+
         // Update status checkboxes based on lead status and profile data
         updateStatusFromLeadStatus(response.status, lp)
         // Project Type = Category (preferred)
@@ -166,7 +176,7 @@ const SL_leadProfile = () => {
           description: '',
           reference: ''
         })
-        
+
         setConversionData({
           projectName: lp?.businessName || '',
           categoryId: leadCategoryIdStr,
@@ -182,12 +192,12 @@ const SL_leadProfile = () => {
           description: lp?.description || '',
           screenshot: null
         })
-        
+
         setMeetingForm(prev => ({
           ...prev,
           clientName: lp?.name || response.name || ''
         }))
-        
+
         // Set notes if available
         if (lp?.notes) {
           setNotes(lp.notes)
@@ -214,12 +224,12 @@ const SL_leadProfile = () => {
       app: false,
       taxi: false
     }
-    
+
     // Set status flags from leadProfile (can be multiple)
     if (leadProfileData) {
       newStatus.quotationSent = leadProfileData.quotationSent || false
       newStatus.demoSent = leadProfileData.demoSent || false
-      
+
       // Set project type from leadProfile (only one at a time)
       if (leadProfileData.projectType) {
         newStatus.web = leadProfileData.projectType.web || false
@@ -227,7 +237,7 @@ const SL_leadProfile = () => {
         newStatus.taxi = leadProfileData.projectType.taxi || false
       }
     }
-    
+
     // Set status flags based on lead status
     // Hot Lead: if status is 'hot', always set hotLead to true
     if (leadStatus === 'hot') {
@@ -241,7 +251,7 @@ const SL_leadProfile = () => {
     if (leadStatus === 'demo_requested') {
       newStatus.demoSent = true
     }
-    
+
     // Set project type based on lead status (if not already set from profile)
     if (leadStatus === 'web' && !newStatus.web && !newStatus.app && !newStatus.taxi) {
       newStatus.web = true
@@ -250,7 +260,7 @@ const SL_leadProfile = () => {
     } else if (leadStatus === 'taxi' && !newStatus.taxi && !newStatus.web && !newStatus.app) {
       newStatus.taxi = true
     }
-    
+
     setStatus(newStatus)
   }
 
@@ -270,14 +280,14 @@ const SL_leadProfile = () => {
 
       // Status flags (quotationSent, demoSent, hotLead) can be multiple - checkbox behavior
       newStatus[statusKey] = !prev[statusKey] // Toggle
-      
+
       return newStatus
     })
   }
 
   const handleSave = async () => {
     if (!lead) return
-    
+
     setIsLoading(true)
     try {
       // Determine primary lead status based on priority:
@@ -287,7 +297,7 @@ const SL_leadProfile = () => {
       // 4. Default to 'connected'
       // Note: quotationSent and demoSent are stored as flags in leadProfile, allowing leads to appear in multiple pages
       let newLeadStatus = 'connected'
-      
+
       if (status.hotLead) {
         // Hot lead is a status - takes priority over everything else
         newLeadStatus = 'hot'
@@ -305,18 +315,18 @@ const SL_leadProfile = () => {
           newLeadStatus = 'demo_requested'
         }
       }
-      
+
       // Update lead status (this determines which status-specific page the lead appears on)
       // But quotationSent and demoSent flags allow leads to appear in multiple pages
       // Always update status to ensure Hot Lead and other statuses are properly saved
       if (newLeadStatus !== lead.status) {
         await salesLeadService.updateLeadStatus(id, newLeadStatus)
         setSelectedStatus(newLeadStatus)
-        
+
         // Update the lead object locally
         setLead(prev => ({ ...prev, status: newLeadStatus }))
       }
-      
+
       // Always update leadProfile with status flags and project type
       // This allows leads to appear in multiple pages (quotation_sent, demo_sent) based on flags
       if (leadProfile) {
@@ -341,9 +351,9 @@ const SL_leadProfile = () => {
         // For now, just update the status flags if possible
         toast.error('Lead profile is required to set status flags. Please create a profile first.')
       }
-      
+
       toast.success('Status updated successfully')
-      
+
       // Refresh dashboard stats if available
       if (window.refreshDashboardStats) {
         window.refreshDashboardStats()
@@ -370,10 +380,10 @@ const SL_leadProfile = () => {
         notes: followUpData.notes || '',
         priority: followUpData.priority || 'medium'
       }
-      
+
       // Use addFollowUp instead of updateLeadStatus to avoid changing lead status
       const updatedLead = await salesLeadService.addFollowUp(id, followUpPayload)
-      
+
       // Update local state with the response data instead of full refresh
       if (updatedLead) {
         setLead(updatedLead)
@@ -381,10 +391,10 @@ const SL_leadProfile = () => {
           setLeadProfile(updatedLead.leadProfile)
         }
       }
-      
+
       toast.success('Follow-up scheduled successfully')
       setShowFollowUpDialog(false)
-      
+
       // Refresh dashboard stats if available (non-blocking)
       if (window.refreshDashboardStats) {
         window.refreshDashboardStats()
@@ -410,11 +420,11 @@ const SL_leadProfile = () => {
     setIsLoading(true)
     try {
       await salesLeadService.addNoteToLead(id, { content: newNote.trim() })
-      
+
       toast.success('Note added successfully')
       setShowNotesDialog(false)
       setNewNote('')
-      
+
       // Refresh data to get updated notes
       fetchLeadData()
     } catch (err) {
@@ -450,12 +460,12 @@ const SL_leadProfile = () => {
         reference: demoData.reference,
         mobileNumber: demoData.mobileNumber
       }
-      
+
       await salesLeadService.requestDemo(id, demoRequestData)
-      
+
       toast.success('Demo request submitted successfully')
       setShowRequestDemoDialog(false)
-      
+
       // Reset form
       setDemoData({
         clientName: leadProfile?.name || lead?.name || '',
@@ -463,7 +473,7 @@ const SL_leadProfile = () => {
         description: '',
         reference: ''
       })
-      
+
       // Refresh data
       fetchLeadData()
     } catch (err) {
@@ -502,13 +512,13 @@ const SL_leadProfile = () => {
       const lostData = {
         lostReason: lostReason.trim() || 'No reason provided'
       }
-      
+
       await salesLeadService.updateLeadStatus(id, 'lost', lostData)
-      
+
       toast.success('Lead marked as lost')
       setShowLostDialog(false)
       setLostReason('')
-      
+
       // Refresh data
       fetchLeadData()
     } catch (err) {
@@ -548,13 +558,13 @@ const SL_leadProfile = () => {
         toSalesId: selectedTransferPerson,
         reason: 'Transferred from lead profile'
       }
-      
+
       await salesLeadService.transferLead(id, transferData)
-      
+
       toast.success('Lead transferred successfully')
       setShowTransferDialog(false)
       setSelectedTransferPerson('')
-      
+
       // Navigate back to leads list
       navigate('/leads')
     } catch (err) {
@@ -723,74 +733,233 @@ const SL_leadProfile = () => {
     )
   }
 
+  const handleProfileFormSubmit = async (e) => {
+    e.preventDefault()
+    setIsLoading(true)
+    try {
+      // First update lead status to connected
+      await salesLeadService.updateLeadStatus(id, 'connected')
+
+      // Then create lead profile
+      const profileData = {
+        name: profileFormData.name || lead?.name || '',
+        businessName: profileFormData.businessName || lead?.company || profileFormData.name || '',
+        email: lead?.email || '',
+        categoryId: profileFormData.categoryId || projectCategoryId,
+        estimatedCost: Math.round(Number(String(profileFormData.estimatedPrice || '').replace(/,/g, '')) || 0),
+        description: profileFormData.description,
+        quotationSent: profileFormData.quotationSent,
+        demoSent: profileFormData.demoSent
+      }
+
+      await salesLeadService.createLeadProfile(id, profileData)
+
+      toast.success('Lead profile created successfully')
+
+      // Refresh dashboard stats if available
+      if (window.refreshDashboardStats) {
+        window.refreshDashboardStats()
+      }
+
+      // Reset form and refresh data
+      setShowConnectedForm(false)
+      fetchLeadData()
+    } catch (error) {
+      console.error('Error creating lead profile:', error)
+      toast.error('Failed to create lead profile')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Show create profile CTA if no profile exists
   if (lead && !leadProfile) {
     const isLostLead = lead.status === 'lost'
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         <SL_navbar />
-        <main className="max-w-md mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
-          <motion.div 
+        <main className="flex-1 max-w-md mx-auto px-4 pt-16 pb-20 w-full">
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200 text-center"
+            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200"
           >
-            <div className="text-6xl mb-4">📝</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {isLostLead ? 'Recover Lead' : 'Create Lead Profile'}
-            </h2>
-            <p className="text-gray-600 mb-6">
-              {isLostLead 
-                ? 'This lost lead doesn\'t have a profile. Recover it to create a profile and move it back to active leads.'
-                : 'This lead doesn\'t have a profile yet. Create one to manage all lead information.'}
-            </p>
-            <div className="flex flex-col space-y-3">
-              {isLostLead ? (
-                <>
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="text-6xl mb-4">📝</div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                {isLostLead ? 'Recover Lead' : 'Create Lead Profile'}
+              </h2>
+              <p className="text-gray-600">
+                {isLostLead
+                  ? 'This lost lead doesn\'t have a profile. Recover it to create a profile and move it back to active leads.'
+                  : 'This lead doesn\'t have a profile yet. Create one to manage all lead information.'}
+              </p>
+            </div>
+
+            {/* Basic Info Display */}
+            <div className="bg-teal-50 rounded-xl p-4 mb-6 border border-teal-100">
+              <h3 className="font-semibold text-teal-900 mb-2 flex items-center">
+                <FiUser className="mr-2" /> Lead Information
+              </h3>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <p className="text-gray-600"><strong>Name:</strong> {lead.name || 'N/A'}</p>
+                <p className="text-gray-600"><strong>Phone:</strong> {lead.phone || 'N/A'}</p>
+                <p className="text-gray-600"><strong>Company:</strong> {lead.company || 'N/A'}</p>
+                <p className="text-gray-600"><strong>Status:</strong> <span className="capitalize">{lead.status || 'N/A'}</span></p>
+              </div>
+            </div>
+
+            {!showConnectedForm ? (
+              <div className="flex flex-col space-y-3">
+                <button
+                  onClick={() => {
+                    setProfileFormData({
+                      name: lead.name || '',
+                      businessName: lead.company || '',
+                      categoryId: projectCategoryId || '',
+                      estimatedPrice: '50000',
+                      description: '',
+                      quotationSent: false,
+                      demoSent: false
+                    })
+                    setShowConnectedForm(true)
+                  }}
+                  className="w-full bg-gradient-to-r from-teal-500 to-teal-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all flex items-center justify-center space-x-2"
+                >
+                  <FiPlus className="text-xl" />
+                  <span>Connect & Create Profile</span>
+                </button>
+
+                <div className="grid grid-cols-2 gap-3">
                   <button
-                    onClick={() => navigate('/lost')}
-                    className="bg-teal-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-teal-600 transition-colors"
+                    onClick={() => navigate(isLostLead ? '/lost' : '/new-leads')}
+                    className="bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
                   >
-                    Go to Lost Leads
+                    {isLostLead ? 'Go to Lost' : 'Go to New Leads'}
                   </button>
                   <button
                     onClick={() => navigate(-1)}
-                    className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                    className="bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
                   >
                     Go Back
                   </button>
-                </>
-              ) : (
-                <>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleProfileFormSubmit} className="space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-teal-800 uppercase mb-1 ml-1">Client Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={profileFormData.name}
+                      onChange={(e) => setProfileFormData({ ...profileFormData, name: e.target.value })}
+                      placeholder="Enter client name"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-teal-800 uppercase mb-1 ml-1">Business Name</label>
+                    <input
+                      type="text"
+                      value={profileFormData.businessName}
+                      onChange={(e) => setProfileFormData({ ...profileFormData, businessName: e.target.value })}
+                      placeholder="Enter company/business name"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-teal-800 uppercase mb-1 ml-1">Category</label>
+                      <select
+                        value={profileFormData.categoryId}
+                        onChange={(e) => setProfileFormData({ ...profileFormData, categoryId: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all outline-none"
+                      >
+                        <option value="">Select Category</option>
+                        {categories.map(cat => (
+                          <option key={cat._id} value={cat._id}>{cat.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-teal-800 uppercase mb-1 ml-1">Est. Price (k)</label>
+                      <input
+                        type="number"
+                        value={profileFormData.estimatedPrice}
+                        onChange={(e) => setProfileFormData({ ...profileFormData, estimatedPrice: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-teal-800 uppercase mb-1 ml-1">Description</label>
+                    <textarea
+                      value={profileFormData.description}
+                      onChange={(e) => setProfileFormData({ ...profileFormData, description: e.target.value })}
+                      rows="2"
+                      placeholder="Add any notes about the client..."
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all outline-none resize-none"
+                    ></textarea>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 pt-2">
+                    <label className="flex items-center space-x-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={profileFormData.quotationSent}
+                        onChange={(e) => setProfileFormData({ ...profileFormData, quotationSent: e.target.checked })}
+                        className="w-5 h-5 text-teal-500 rounded border-gray-300 focus:ring-teal-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Quotation Sent</span>
+                    </label>
+                    <label className="flex items-center space-x-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={profileFormData.demoSent}
+                        onChange={(e) => setProfileFormData({ ...profileFormData, demoSent: e.target.checked })}
+                        className="w-5 h-5 text-teal-500 rounded border-gray-300 focus:ring-teal-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Demo Sent</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex space-x-3 pt-4">
                   <button
-                    onClick={() => navigate('/new-leads')}
-                    className="bg-teal-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-teal-600 transition-colors"
+                    type="button"
+                    onClick={() => setShowConnectedForm(false)}
+                    className="flex-1 py-3 px-4 border border-gray-200 text-gray-600 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
                   >
-                    Go to New Leads
+                    Cancel
                   </button>
                   <button
-                    onClick={() => navigate(-1)}
-                    className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                    type="submit"
+                    disabled={isLoading}
+                    className="flex-[2] py-3 px-4 bg-teal-500 text-white rounded-xl font-bold shadow-md hover:bg-teal-600 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
                   >
-                    Go Back
+                    {isLoading ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <FiCheck className="text-lg" />
+                    )}
+                    <span>{isLoading ? 'Processing...' : 'Save & Connect'}</span>
                   </button>
-                </>
-              )}
-            </div>
-            {/* Show basic lead info */}
-            <div className="mt-6 pt-6 border-t border-gray-200 text-left">
-              <h3 className="font-semibold text-gray-900 mb-2">Lead Information</h3>
-              <p className="text-sm text-gray-600"><strong>Name:</strong> {lead.name || 'N/A'}</p>
-              <p className="text-sm text-gray-600"><strong>Phone:</strong> {lead.phone || 'N/A'}</p>
-              <p className="text-sm text-gray-600"><strong>Company:</strong> {lead.company || 'N/A'}</p>
-              <p className="text-sm text-gray-600"><strong>Status:</strong> {lead.status || 'N/A'}</p>
-            </div>
+                </div>
+              </form>
+            )}
           </motion.div>
         </main>
       </div>
     )
   }
+
 
   // Get display data
   const displayName = leadProfile?.name || lead?.name || 'Unknown'
@@ -802,14 +971,14 @@ const SL_leadProfile = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <SL_navbar />
-      
+
       <main className="max-w-md mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8">
-        
+
         {/* Layout - Same for mobile and desktop */}
         <div>
 
           {/* Profile Card */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
@@ -822,7 +991,7 @@ const SL_leadProfile = () => {
                   <span className="text-2xl font-bold text-white">{avatar}</span>
                 </div>
               </div>
-              
+
               <h2 className="text-2xl font-bold text-gray-900 mb-1">{displayName}</h2>
               <p className="text-lg text-teal-600 mb-1 font-medium">{displayPhone}</p>
               <p className="text-sm text-gray-500 bg-gray-50 px-3 py-1 rounded-full inline-block">{displayBusiness}</p>
@@ -848,7 +1017,7 @@ const SL_leadProfile = () => {
           </motion.div>
 
           {/* Action Card */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.15 }}
@@ -858,18 +1027,18 @@ const SL_leadProfile = () => {
               <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
                 E-cost: {displayCost}
               </div>
-            <button 
-              onClick={handleAddMeeting}
-              className="flex items-center space-x-2 p-2 hover:bg-teal-50 rounded-full transition-colors duration-200"
-            >
-              <FiPlus className="text-xl text-teal-600" />
-              <span className="text-sm font-medium text-teal-600">Add Meeting</span>
-            </button>
+              <button
+                onClick={handleAddMeeting}
+                className="flex items-center space-x-2 p-2 hover:bg-teal-50 rounded-full transition-colors duration-200"
+              >
+                <FiPlus className="text-xl text-teal-600" />
+                <span className="text-sm font-medium text-teal-600">Add Meeting</span>
+              </button>
             </div>
           </motion.div>
 
           {/* Status Checkboxes */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
@@ -892,7 +1061,7 @@ const SL_leadProfile = () => {
                   />
                   <span className="text-sm font-medium text-teal-800">Quotation Sent</span>
                 </label>
-                
+
                 <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
                   <input
                     type="checkbox"
@@ -902,7 +1071,7 @@ const SL_leadProfile = () => {
                   />
                   <span className="text-sm font-medium text-teal-800">Demo Sent</span>
                 </label>
-                
+
                 <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-teal-50 transition-colors duration-200">
                   <input
                     type="checkbox"
@@ -937,7 +1106,7 @@ const SL_leadProfile = () => {
           </motion.div>
 
           {/* Save Button */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
@@ -958,7 +1127,7 @@ const SL_leadProfile = () => {
           </motion.div>
 
           {/* Action Buttons Grid */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
@@ -970,36 +1139,35 @@ const SL_leadProfile = () => {
             >
               Add Follow Up
             </button>
-            
+
             <button
               onClick={handleAddNote}
               className="bg-gradient-to-r from-purple-500 to-purple-600 text-white py-3 px-4 rounded-xl font-semibold text-sm hover:from-purple-600 hover:to-purple-700 transition-all duration-200"
             >
               Add Note
             </button>
-            
+
             <button
               onClick={handleRequestDemo}
               className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-3 px-4 rounded-xl font-semibold text-sm hover:from-orange-600 hover:to-orange-700 transition-all duration-200"
             >
               Request Demo
             </button>
-            
+
             <button
               onClick={handleLost}
               disabled={lead?.status === 'lost'}
-              className={`py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-200 ${
-                lead?.status === 'lost'
+              className={`py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-200 ${lead?.status === 'lost'
                   ? 'bg-gray-400 text-white cursor-not-allowed'
                   : 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700'
-              }`}
+                }`}
             >
               {lead?.status === 'lost' ? 'Already Lost' : 'Lost'}
             </button>
           </motion.div>
 
           {/* Transfer Client Button */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.5 }}
@@ -1015,7 +1183,7 @@ const SL_leadProfile = () => {
           </motion.div>
 
           {/* Converted Button */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.6 }}
@@ -1273,11 +1441,10 @@ const SL_leadProfile = () => {
                   {salesTeam.map((person) => (
                     <label
                       key={person._id}
-                      className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
-                        selectedTransferPerson === person._id
+                      className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-all duration-200 ${selectedTransferPerson === person._id
                           ? 'border-teal-500 bg-teal-50'
                           : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
+                        }`}
                     >
                       <input
                         type="radio"
@@ -1496,7 +1663,7 @@ const SL_leadProfile = () => {
                       </div>
                       <FiArrowLeft className={`text-gray-400 transition-transform duration-200 ${showMeetingTypeDropdown ? 'rotate-90' : '-rotate-90'}`} />
                     </button>
-                    
+
                     {showMeetingTypeDropdown && (
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
@@ -1511,9 +1678,8 @@ const SL_leadProfile = () => {
                               key={type.id}
                               type="button"
                               onClick={() => handleMeetingTypeSelect(type.id)}
-                              className={`w-full px-4 py-3 text-left hover:bg-teal-50 transition-colors duration-200 flex items-center space-x-3 ${
-                                meetingForm.meetingType === type.id ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
-                              }`}
+                              className={`w-full px-4 py-3 text-left hover:bg-teal-50 transition-colors duration-200 flex items-center space-x-3 ${meetingForm.meetingType === type.id ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
+                                }`}
                             >
                               <Icon className="text-sm" />
                               <span>{type.label}</span>
@@ -1546,7 +1712,7 @@ const SL_leadProfile = () => {
                       </div>
                       <FiArrowLeft className={`text-gray-400 transition-transform duration-200 ${showAssigneeDropdown ? 'rotate-90' : '-rotate-90'}`} />
                     </button>
-                    
+
                     {showAssigneeDropdown && (
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
@@ -1559,9 +1725,8 @@ const SL_leadProfile = () => {
                             key={member._id || member.name}
                             type="button"
                             onClick={() => handleAssigneeSelect(member.name)}
-                            className={`w-full px-4 py-3 text-left hover:bg-teal-50 transition-colors duration-200 flex items-center space-x-3 ${
-                              meetingForm.assignee === member.name ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
-                            }`}
+                            className={`w-full px-4 py-3 text-left hover:bg-teal-50 transition-colors duration-200 flex items-center space-x-3 ${meetingForm.assignee === member.name ? 'bg-teal-50 text-teal-700' : 'text-gray-700'
+                              }`}
                           >
                             <FiUser className="text-sm" />
                             <span>{member.name}</span>

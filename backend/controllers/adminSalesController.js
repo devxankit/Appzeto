@@ -127,13 +127,13 @@ const createBulkLeads = asyncHandler(async (req, res, next) => {
 // @route   GET /api/admin/sales/leads
 // @access  Private (Admin/HR only)
 const getAllLeads = asyncHandler(async (req, res, next) => {
-  const { 
-    status, 
-    category, 
-    assignedTo, 
-    priority, 
-    search, 
-    page = 1, 
+  const {
+    status,
+    category,
+    assignedTo,
+    priority,
+    search,
+    page = 1,
     limit = 12,
     sortBy = 'createdAt',
     sortOrder = 'desc'
@@ -381,11 +381,11 @@ const getLeadStatistics = asyncHandler(async (req, res, next) => {
   }
 
   // Calculate conversion rate
-  result.conversionRate = result.totalLeads > 0 ? 
+  result.conversionRate = result.totalLeads > 0 ?
     (result.convertedLeads / result.totalLeads) * 100 : 0;
 
   // Calculate average deal value
-  result.averageDealValue = result.convertedLeads > 0 ? 
+  result.averageDealValue = result.convertedLeads > 0 ?
     result.convertedValue / result.convertedLeads : 0;
 
   res.status(200).json({
@@ -445,12 +445,12 @@ const getAllLeadCategories = asyncHandler(async (req, res, next) => {
   const categoriesWithCounts = await Promise.all(
     categories.map(async (category) => {
       const leadCount = await Lead.countDocuments({ category: category._id });
-      const activeLeadCount = await Lead.countDocuments({ 
-        category: category._id, 
-        status: { $in: ['new', 'connected', 'hot'] } 
+      const activeLeadCount = await Lead.countDocuments({
+        category: category._id,
+        status: { $in: ['new', 'connected', 'hot'] }
       });
-      const convertedLeadCount = await Lead.countDocuments({ 
-        category: category._id, 
+      const convertedLeadCount = await Lead.countDocuments({
+        category: category._id,
         status: 'converted',
         ...convertedCategoryMatch
       });
@@ -571,7 +571,7 @@ const getCategoryPerformance = asyncHandler(async (req, res, next) => {
       dateFilter.createdAt.$lte = new Date(req.query.endDate);
     }
   }
-  
+
   const stats = await LeadCategory.getCategoryStatistics(dateFilter);
 
   res.status(200).json({
@@ -594,9 +594,9 @@ const getAllSalesTeam = asyncHandler(async (req, res, next) => {
   const validOriginLeadIds = await Client.distinct('originLead', { originLead: { $ne: null } });
   const convertedBySales = validOriginLeadIds.length > 0
     ? await Lead.aggregate([
-        { $match: { status: 'converted', _id: { $in: validOriginLeadIds } } },
-        { $group: { _id: '$assignedTo', convertedLeads: { $sum: 1 }, convertedValue: { $sum: '$value' } } }
-      ])
+      { $match: { status: 'converted', _id: { $in: validOriginLeadIds } } },
+      { $group: { _id: '$assignedTo', convertedLeads: { $sum: 1 }, convertedValue: { $sum: '$value' } } }
+    ])
     : [];
   const convertedMap = new Map(convertedBySales.map((r) => [r._id?.toString(), { convertedLeads: r.convertedLeads, convertedValue: r.convertedValue }]));
 
@@ -628,7 +628,7 @@ const getAllSalesTeam = asyncHandler(async (req, res, next) => {
           conversionRate: totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0,
           totalValue,
           convertedValue,
-          targetAchievement: member.salesTarget > 0 ? 
+          targetAchievement: member.salesTarget > 0 ?
             (member.currentSales / member.salesTarget) * 100 : 0,
           // Performance score is now based on revenue generated from converting clients
           performanceScore: calculatePerformanceScore(convertedValue)
@@ -708,7 +708,7 @@ const getSalesTeamMember = asyncHandler(async (req, res, next) => {
   ]);
 
   // Get conversion-based incentive history only (both individual and team lead incentives)
-  const incentiveHistory = await Incentive.find({ 
+  const incentiveHistory = await Incentive.find({
     salesEmployee: member._id,
     isConversionBased: true
   })
@@ -739,7 +739,7 @@ const getSalesTeamMember = asyncHandler(async (req, res, next) => {
   let teamLeadIncentiveTotal = 0;
   let teamLeadIncentiveCurrent = 0;
   let teamLeadIncentivePending = 0;
-  
+
   if (teamMemberIncentives.length > 0) {
     teamMemberIncentives.forEach(inc => {
       teamLeadIncentiveTotal += inc.amount || 0;
@@ -814,43 +814,35 @@ const setSalesTarget = asyncHandler(async (req, res, next) => {
       }
     }
 
-    // Update or create targets
-    if (!member.salesTargets) {
-      member.salesTargets = [];
-    }
-
-    targets.forEach(newTarget => {
-      const existingIndex = member.salesTargets.findIndex(
+    // Synchronize targets: Replace existing targets with the new set
+    const syncedTargets = targets.map(newTarget => {
+      const existingTarget = member.salesTargets.find(
         t => t.targetNumber === newTarget.targetNumber
       );
+
       const rewardAmount = newTarget.reward !== undefined && newTarget.reward !== null
         ? Math.max(0, Number(newTarget.reward))
         : 0;
 
-      if (existingIndex >= 0) {
-        // Update existing target
-        member.salesTargets[existingIndex].amount = newTarget.amount;
-        member.salesTargets[existingIndex].targetDate = new Date(newTarget.targetDate);
-        member.salesTargets[existingIndex].reward = rewardAmount;
-        member.salesTargets[existingIndex].updatedAt = new Date();
-      } else {
-        // Add new target
-        member.salesTargets.push({
-          targetNumber: newTarget.targetNumber,
-          amount: newTarget.amount,
-          reward: rewardAmount,
-          targetDate: new Date(newTarget.targetDate),
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-      }
+      return {
+        targetNumber: newTarget.targetNumber,
+        amount: newTarget.amount,
+        reward: rewardAmount,
+        targetDate: new Date(newTarget.targetDate),
+        createdAt: existingTarget ? existingTarget.createdAt : new Date(),
+        updatedAt: new Date()
+      };
     });
+
+    member.salesTargets = syncedTargets;
 
     // Sort by target number
     member.salesTargets.sort((a, b) => a.targetNumber - b.targetNumber);
 
     // Update legacy salesTarget to highest target amount
-    const maxTarget = Math.max(...member.salesTargets.map(t => t.amount), 0);
+    const maxTarget = member.salesTargets.length > 0
+      ? Math.max(...member.salesTargets.map(t => t.amount), 0)
+      : 0;
     member.salesTarget = maxTarget;
 
     await member.save();
@@ -952,10 +944,10 @@ const distributeLeads = asyncHandler(async (req, res, next) => {
 
   // Assign leads to member
   const leadIds = unassignedLeads.map(lead => lead._id);
-  
+
   await Lead.updateMany(
     { _id: { $in: leadIds } },
-    { 
+    {
       assignedTo: member._id,
       lastContactDate: new Date()
     }
@@ -1022,7 +1014,7 @@ const getLeadsForMember = asyncHandler(async (req, res, next) => {
 const getLeadsByCategory = asyncHandler(async (req, res, next) => {
   const { status, priority, page = 1, limit = 12 } = req.query;
 
-  let filter = { 
+  let filter = {
     assignedTo: req.params.id,
     category: req.params.categoryId
   };
@@ -1236,11 +1228,11 @@ const updateIncentiveRecord = asyncHandler(async (req, res, next) => {
       await incentive.approve(req.admin.id);
     } else if (status === 'paid' && incentive.status === 'approved') {
       await incentive.markAsPaid();
-      
+
       // Create finance transaction when incentive is marked as paid
       try {
         const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
-        
+
         if (previousStatus !== 'paid') {
           await createOutgoingTransaction({
             amount: incentive.amount,
@@ -1357,11 +1349,11 @@ const getSalesOverview = asyncHandler(async (req, res, next) => {
   todayEnd.setHours(23, 59, 59, 999);
 
   const todayLeadsStats = await Lead.aggregate([
-    { 
-      $match: { 
+    {
+      $match: {
         createdAt: { $gte: todayStart, $lte: todayEnd },
         status: 'new'
-      } 
+      }
     },
     {
       $group: {
@@ -1396,14 +1388,14 @@ const getSalesOverview = asyncHandler(async (req, res, next) => {
         _id: null,
         totalClients: { $sum: 1 },
         totalSpent: { $sum: '$totalSpent' },
-        activeClients: { 
-          $sum: { 
+        activeClients: {
+          $sum: {
             $cond: [
-              { $gte: ['$lastActivity', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)] }, 
-              1, 
+              { $gte: ['$lastActivity', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)] },
+              1,
               0
-            ] 
-          } 
+            ]
+          }
         }
       }
     }
@@ -1491,11 +1483,11 @@ const getSalesOverview = asyncHandler(async (req, res, next) => {
       hot: leadData.hotLeads,
       converted: leadData.convertedLeads,
       lost: leadData.lostLeads,
-      conversionRate: leadData.totalLeads > 0 ? 
+      conversionRate: leadData.totalLeads > 0 ?
         (leadData.convertedLeads / leadData.totalLeads) * 100 : 0,
       totalValue: leadData.totalValue,
       convertedValue: leadData.convertedValue,
-      averageDealValue: leadData.convertedLeads > 0 ? 
+      averageDealValue: leadData.convertedLeads > 0 ?
         leadData.convertedValue / leadData.convertedLeads : 0
     },
     sales: {
@@ -1503,23 +1495,23 @@ const getSalesOverview = asyncHandler(async (req, res, next) => {
       // This uses the same business rule as finance statistics, so if no projects
       // have any advance payments, total sales will be 0.
       total: confirmedSalesTotal,
-      conversion: leadData.totalLeads > 0 ? 
+      conversion: leadData.totalLeads > 0 ?
         Math.round((leadData.convertedLeads / leadData.totalLeads) * 100 * 100) / 100 : 0
     },
     team: {
       total: teamData.totalTeamMembers,
       totalTarget: teamData.totalTarget,
       totalCurrentSales: teamData.totalCurrentSales,
-      targetAchievement: teamData.totalTarget > 0 ? 
+      targetAchievement: teamData.totalTarget > 0 ?
         (teamData.totalCurrentSales / teamData.totalTarget) * 100 : 0,
       totalIncentive: teamData.totalIncentive,
-      performance: teamData.totalTarget > 0 ? 
+      performance: teamData.totalTarget > 0 ?
         (teamData.totalCurrentSales / teamData.totalTarget) * 100 : 0
     },
     clients: {
       total: clientData.totalClients,
       totalSpent: clientData.totalSpent,
-      retention: clientData.totalClients > 0 ? 
+      retention: clientData.totalClients > 0 ?
         (clientData.activeClients / clientData.totalClients) * 100 : 0
     },
     incentives: {
@@ -1555,7 +1547,7 @@ const getCategoryAnalytics = asyncHandler(async (req, res, next) => {
       dateFilter.createdAt.$lte = endDate;
     }
   }
-  
+
   const stats = await LeadCategory.getCategoryStatistics(dateFilter);
 
   res.status(200).json({
@@ -1570,7 +1562,7 @@ const getCategoryAnalytics = asyncHandler(async (req, res, next) => {
 // @access  Private (Admin/HR only)
 const getCategoryFinancialDetails = asyncHandler(async (req, res, next) => {
   const details = await LeadCategory.getCategoryFinancialDetails();
-  
+
   res.status(200).json({
     success: true,
     count: details.length,
@@ -1589,9 +1581,9 @@ const getTeamPerformance = asyncHandler(async (req, res, next) => {
   const validOriginLeadIds = await Client.distinct('originLead', { originLead: { $ne: null } });
   const convertedBySales = validOriginLeadIds.length > 0
     ? await Lead.aggregate([
-        { $match: { status: 'converted', _id: { $in: validOriginLeadIds } } },
-        { $group: { _id: '$assignedTo', convertedLeads: { $sum: 1 }, convertedValue: { $sum: '$value' } } }
-      ])
+      { $match: { status: 'converted', _id: { $in: validOriginLeadIds } } },
+      { $group: { _id: '$assignedTo', convertedLeads: { $sum: 1 }, convertedValue: { $sum: '$value' } } }
+    ])
     : [];
   const convertedMap = new Map(convertedBySales.map((r) => [r._id?.toString(), { convertedLeads: r.convertedLeads, convertedValue: r.convertedValue }]));
 
@@ -1627,7 +1619,7 @@ const getTeamPerformance = asyncHandler(async (req, res, next) => {
           conversionRate: totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0,
           totalValue,
           convertedValue,
-          targetAchievement: member.salesTarget > 0 ? 
+          targetAchievement: member.salesTarget > 0 ?
             (member.currentSales / member.salesTarget) * 100 : 0,
           // Performance score is now based on revenue generated from converting clients
           performanceScore: calculatePerformanceScore(convertedValue)
@@ -1667,19 +1659,19 @@ const deleteSalesMember = asyncHandler(async (req, res, next) => {
   // If this is a team lead, unassign all their team members first
   if (member.isTeamLead && member.teamMembers && member.teamMembers.length > 0) {
     const teamMemberIds = member.teamMembers;
-    
+
     // Clear teamMembers from the team lead before deletion
     member.teamMembers = [];
     await member.save();
-    
+
     // Also remove these team members from any other team leads' arrays (in case of duplicates)
     // This ensures team members are completely unassigned
     await Sales.updateMany(
-      { 
+      {
         _id: { $ne: member._id },
         teamMembers: { $in: teamMemberIds }
       },
-      { 
+      {
         $pull: { teamMembers: { $in: teamMemberIds } }
       }
     );
@@ -1693,7 +1685,7 @@ const deleteSalesMember = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     success: true,
-    message: member.isTeamLead 
+    message: member.isTeamLead
       ? 'Team lead deleted successfully. Team members have been unassigned.'
       : 'Sales team member deleted successfully'
   });
