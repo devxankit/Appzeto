@@ -21,10 +21,10 @@ const { uploadFile, deleteFile } = require('../services/cloudinaryService');
 // @access  Private (Admin only)
 const getAllUsers = asyncHandler(async (req, res, next) => {
   const { role, team, department, status, search, page = 1, limit = 20, includeStats = false } = req.query;
-  
+
   // Build filter object
   let filter = {};
-  
+
   // Role filter
   if (role && role !== 'all') {
     if (role === 'admin-hr') {
@@ -34,22 +34,22 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
       filter.role = role;
     }
   }
-  
+
   // Team filter (for employees)
   if (team && team !== 'all') {
     filter.team = team;
   }
-  
+
   // Department filter (for employees)
   if (department && department !== 'all') {
     filter.department = department;
   }
-  
+
   // Status filter
   if (status && status !== 'all') {
     filter.isActive = status === 'active';
   }
-  
+
   // Search filter
   if (search) {
     filter.$or = [
@@ -87,15 +87,15 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
   // Process clients with project data
   const clientsWithProjects = await Promise.all(clients.map(async user => {
     const userObj = user.toObject();
-    
+
     // Get projects for this client
     const clientProjects = await Project.find({ client: user._id }).select('name status budget');
     const totalProjects = clientProjects.length;
-    const activeProjects = clientProjects.filter(p => 
+    const activeProjects = clientProjects.filter(p =>
       ['untouched', 'started', 'active'].includes(p.status)
     ).length;
     const totalSpent = clientProjects.reduce((sum, p) => sum + (p.budget || 0), 0);
-    
+
     return {
       ...userObj,
       userType: 'client',
@@ -112,46 +112,46 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
     ...pms.map(user => {
       const userObj = user.toObject();
       const now = new Date();
-      
+
       // Filter projects by status
-      const activeProjects = user.projectsManaged.filter(p => 
+      const activeProjects = user.projectsManaged.filter(p =>
         ['untouched', 'started', 'active', 'on-hold', 'testing'].includes(p.status)
       );
-      const completedProjects = user.projectsManaged.filter(p => 
+      const completedProjects = user.projectsManaged.filter(p =>
         p.status === 'completed'
       );
       const totalProjects = user.projectsManaged.length;
-      
+
       // Calculate completion rate
-      const completionRate = totalProjects > 0 ? 
+      const completionRate = totalProjects > 0 ?
         Math.round((completedProjects.length / totalProjects) * 100) : 0;
-      
+
       // Calculate overdue projects (not completed/cancelled and past due date)
       const overdueProjects = activeProjects.filter(p => {
         if (!p.dueDate) return false; // No due date means not overdue
         const dueDate = new Date(p.dueDate);
         return dueDate < now && !['completed', 'cancelled'].includes(p.status);
       }).length;
-      
+
       // Calculate performance based on completion rate and overdue projects
       let performance = 0;
-      
+
       if (totalProjects > 0) {
         performance = completionRate;
-        
+
         // Penalty for overdue projects: -5% per overdue project, max -30%
         const overduePenalty = Math.min(30, overdueProjects * 5);
         performance -= overduePenalty;
-        
+
         // Bonus for zero overdue projects: +10%
         if (overdueProjects === 0) {
           performance += 10;
         }
       }
-      
+
       // Ensure performance is between 0 and 100
       performance = Math.min(100, Math.max(0, Math.round(performance)));
-      
+
       return {
         ...userObj,
         userType: 'project-manager',
@@ -165,25 +165,25 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
     ...sales.map(user => ({ ...user.toObject(), userType: 'sales', createdAt: user.createdAt || user._id.getTimestamp() })),
     ...(await Promise.all(employees.map(async (user) => {
       const userObj = user.toObject();
-      
+
       // Calculate projects count: projects where employee is in assignedTeam (all non-cancelled projects)
       const projectsCount = await Project.countDocuments({
         assignedTeam: { $in: [user._id] },
         status: { $ne: 'cancelled' } // Count all projects except cancelled
       });
-      
+
       // Calculate tasks count: tasks assigned to employee (all non-cancelled tasks)
       const tasksCount = await Task.countDocuments({
         assignedTo: { $in: [user._id] },
         status: { $ne: 'cancelled' } // Count all tasks except cancelled
       });
-      
+
       return {
         ...userObj,
         userType: 'employee',
         projects: projectsCount || 0,
         tasks: tasksCount || 0,
-        performance: Math.min(100, Math.max(0, 
+        performance: Math.min(100, Math.max(0,
           (tasksCount > 0 ? 85 : 70) + (projectsCount > 0 ? 10 : 0)
         )),
         createdAt: userObj.createdAt || user._id.getTimestamp()
@@ -251,10 +251,10 @@ const getAllUsers = asyncHandler(async (req, res, next) => {
 // @access  Private (Admin only)
 const getUser = asyncHandler(async (req, res, next) => {
   const { userType, id } = req.params;
-  
+
   let user;
   let Model;
-  
+
   switch (userType) {
     case 'admin':
     case 'accountant':
@@ -282,14 +282,14 @@ const getUser = asyncHandler(async (req, res, next) => {
   } else {
     user = await Model.findById(id);
   }
-  
+
   // Set userType based on role for admin types
   if (userType === 'admin' && user) {
     if (user.role === 'accountant') userType = 'accountant';
     else if (user.role === 'pem') userType = 'pem';
     else if (user.role === 'hr') userType = 'admin';
   }
-  
+
   if (!user) {
     return next(new ErrorResponse('User not found', 404));
   }
@@ -304,7 +304,7 @@ const getUser = asyncHandler(async (req, res, next) => {
 // @route   POST /api/admin/users
 // @access  Private (Admin only)
 const createUser = asyncHandler(async (req, res, next) => {
-  const { role, team, department, name, email, phone, dateOfBirth, joiningDate, status, password, confirmPassword } = req.body;
+  const { role, team, department, name, email, phone, dateOfBirth, joiningDate, status, password, confirmPassword, linkedSalesEmployee } = req.body;
 
   // Validation
   if (!name || !email || !phone || !dateOfBirth || !joiningDate) {
@@ -366,33 +366,36 @@ const createUser = asyncHandler(async (req, res, next) => {
       userData.password = password;
       user = await Admin.create(userData);
       break;
-      
+
     case 'project-manager':
       userData.role = 'project-manager';
       userData.password = password;
       user = await PM.create(userData);
       break;
-      
+
     case 'employee':
       userData.role = 'employee';
       userData.team = team;
       userData.department = department;
       userData.password = password;
       userData.position = 'Developer'; // Default position
-      
+
       if (team === 'sales') {
         user = await Sales.create(userData);
       } else {
         user = await Employee.create(userData);
       }
       break;
-      
+
     case 'client':
       userData.role = 'client';
       userData.phoneNumber = phone; // Client uses phoneNumber field
+      if (linkedSalesEmployee) {
+        userData.linkedSalesEmployee = linkedSalesEmployee;
+      }
       user = await Client.create(userData);
       break;
-      
+
     default:
       return next(new ErrorResponse('Invalid role', 400));
   }
@@ -400,7 +403,7 @@ const createUser = asyncHandler(async (req, res, next) => {
   // Send welcome email based on role
   try {
     const emailService = require('../services/emailService');
-    
+
     if (role === 'client') {
       // Send welcome-only email for clients (no credentials - OTP login)
       await emailService.sendClientWelcomeEmail(email, name, phone);
@@ -425,11 +428,11 @@ const createUser = asyncHandler(async (req, res, next) => {
 // @access  Private (Admin only)
 const updateUser = asyncHandler(async (req, res, next) => {
   const { userType, id } = req.params;
-  const { name, email, phone, dateOfBirth, joiningDate, status, password, confirmPassword, team, department, tag } = req.body;
+  const { name, email, phone, dateOfBirth, joiningDate, status, password, confirmPassword, team, department, tag, linkedSalesEmployee } = req.body;
 
   let user;
   let Model;
-  
+
   switch (userType) {
     case 'admin':
       Model = Admin;
@@ -451,7 +454,7 @@ const updateUser = asyncHandler(async (req, res, next) => {
   }
 
   user = await Model.findById(id);
-  
+
   if (!user) {
     return next(new ErrorResponse('User not found', 404));
   }
@@ -484,7 +487,7 @@ const updateUser = asyncHandler(async (req, res, next) => {
   if (status !== undefined) user.isActive = status === 'active';
   if (team) user.team = team;
   if (department) user.department = department;
-  
+
   // Handle tag assignment for clients
   if (userType === 'client' && tag !== undefined) {
     if (tag === '' || tag === null) {
@@ -504,10 +507,10 @@ const updateUser = asyncHandler(async (req, res, next) => {
   // Only require password update if password is provided and not empty
   // Check if password is a non-empty string (handles null, undefined, empty string, whitespace)
   const hasPassword = password && typeof password === 'string' && password.trim().length > 0;
-  
+
   if (userType !== 'client' && hasPassword) {
     const hasConfirmPassword = confirmPassword && typeof confirmPassword === 'string' && confirmPassword.trim().length > 0;
-    
+
     if (!hasConfirmPassword) {
       return next(new ErrorResponse('Please confirm password', 400));
     }
@@ -526,7 +529,7 @@ const updateUser = asyncHandler(async (req, res, next) => {
     if (user.document && user.document.public_id) {
       await deleteFile(user.document.public_id);
     }
-    
+
     // Set new document data
     user.document = req.body.document;
   }
@@ -544,10 +547,10 @@ const updateUser = asyncHandler(async (req, res, next) => {
 // @access  Private (Admin only)
 const deleteUser = asyncHandler(async (req, res, next) => {
   const { userType, id } = req.params;
-  
+
   let user;
   let Model;
-  
+
   switch (userType) {
     case 'admin':
       Model = Admin;
@@ -569,7 +572,7 @@ const deleteUser = asyncHandler(async (req, res, next) => {
   }
 
   user = await Model.findById(id);
-  
+
   if (!user) {
     return next(new ErrorResponse('User not found', 404));
   }

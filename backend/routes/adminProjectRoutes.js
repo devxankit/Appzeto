@@ -13,7 +13,8 @@ const {
   getProjectManagementStatistics,
   getPendingProjects,
   assignPMToPendingProject,
-  getPMsForAssignment
+  getPMsForAssignment,
+  addProjectRecovery
 } = require('../controllers/adminProjectController');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -37,6 +38,7 @@ router.put('/:id/cost', updateProjectCost);
 router.post('/:id/installments', addProjectInstallments);
 router.put('/:id/installments/:installmentId', updateProjectInstallment);
 router.delete('/:id/installments/:installmentId', deleteProjectInstallment);
+router.post('/:id/recoveries', addProjectRecovery);
 router.delete('/:id', deleteProject);
 
 module.exports = router;

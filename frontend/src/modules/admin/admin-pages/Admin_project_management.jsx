@@ -118,6 +118,8 @@ const Admin_project_management = () => {
     account: '',
     amount: '',
     dueDate: '',
+    paymentMethod: 'bank_transfer',
+    referenceId: '',
     notes: ''
   })
   const [manualInstallmentError, setManualInstallmentError] = useState('')
@@ -1858,12 +1860,12 @@ function getFinancialSummary(project) {
 
     const amountValue = Number(manualInstallmentFormData.amount)
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
-      setManualInstallmentError('Please enter a valid installment amount greater than 0')
+      setManualInstallmentError('Please enter a valid recovery amount greater than 0')
       return
     }
 
     if (!manualInstallmentFormData.dueDate) {
-      setManualInstallmentError('Please select a due date for the installment')
+      setManualInstallmentError('Please select a payment date')
       return
     }
 
@@ -1871,36 +1873,39 @@ function getFinancialSummary(project) {
     setIsSavingManualInstallment(true)
 
     try {
-      const response = await adminProjectService.addProjectInstallments(projectId, [
-        {
-          amount: amountValue,
-          dueDate: manualInstallmentFormData.dueDate,
-          notes: manualInstallmentFormData.notes || '',
-          account: manualInstallmentFormData.account,
-          status: 'paid' // ✅ Mark as paid immediately for manual installments
-        }
-      ])
+      const payload = {
+        amount: amountValue,
+        accountId: manualInstallmentFormData.account,
+        paymentMethod: manualInstallmentFormData.paymentMethod || 'bank_transfer',
+        paymentDate: manualInstallmentFormData.dueDate,
+        referenceId: manualInstallmentFormData.referenceId || undefined,
+        notes: manualInstallmentFormData.notes || undefined
+      }
+
+      const response = await adminProjectService.addProjectRecovery(projectId, payload)
 
       if (response?.success) {
-        toast.success('Manual installment added successfully!')
+        toast.success('Recovery payment recorded successfully!')
         await loadData(false)
-        if (response.data) {
-          setSelectedItem(response.data)
+        if (response.data?.project) {
+          setSelectedItem(response.data.project)
         }
         setShowManualInstallmentModal(false)
         setManualInstallmentFormData({
           account: '',
           amount: '',
           dueDate: '',
+          paymentMethod: 'bank_transfer',
+          referenceId: '',
           notes: ''
         })
         setManualInstallmentError('')
       } else {
-        setManualInstallmentError(response?.message || 'Failed to save manual installment')
+        setManualInstallmentError(response?.message || 'Failed to save recovery payment')
       }
     } catch (error) {
-      console.error('Error saving manual installment:', error)
-      setManualInstallmentError(error?.response?.data?.message || error?.message || 'Failed to save manual installment')
+      console.error('Error saving recovery payment:', error)
+      setManualInstallmentError(error?.response?.data?.message || error?.message || 'Failed to save recovery payment')
     } finally {
       setIsSavingManualInstallment(false)
     }
@@ -1998,6 +2003,11 @@ function getFinancialSummary(project) {
       errors.client = 'Select a client for this project.'
     }
 
+  // Require project category so admin-created projects are classified
+  if (!projectForm.category || !projectForm.category.toString().trim()) {
+    errors.category = 'Select a project category.'
+  }
+
     if (!projectForm.projectManager) {
       errors.projectManager = 'Select a project manager.'
     }
@@ -2044,10 +2054,30 @@ function getFinancialSummary(project) {
 
     try {
       const totalCostValue = Number(projectForm.totalCost)
+
+    // Validate and convert category to ObjectId if needed (same logic as update)
+    let categoryValue = undefined
+    if (projectForm.category && projectForm.category.trim() !== '') {
+      const categoryStr = projectForm.category.trim()
+      const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(categoryStr)
+      if (isValidObjectId) {
+        categoryValue = categoryStr
+      } else {
+        const matchingCategory = categories.find(cat =>
+          (cat.name || cat.categoryName) === categoryStr ||
+          cat._id === categoryStr ||
+          cat.id === categoryStr
+        )
+        categoryValue = matchingCategory ? (matchingCategory._id || matchingCategory.id) : undefined
+      }
+    }
+
       const payload = {
         name: projectForm.name.trim(),
         description: projectForm.description.trim(),
         client: projectForm.client,
+      category: categoryValue,
+      categoryId: categoryValue,
         projectManager: projectForm.projectManager,
         status: projectForm.status,
         priority: projectForm.priority,
@@ -4225,19 +4255,24 @@ function getFinancialSummary(project) {
                           )}
                         </div>
                         <div>
-                          <label className="mb-2 block text-sm font-medium text-gray-700">Category</label>
+                          <label className="mb-2 block text-sm font-medium text-gray-700">
+                            Category <span className="text-red-500">*</span>
+                          </label>
                           <select
                             value={projectForm.category}
                             onChange={(e) => setProjectForm(prev => ({ ...prev, category: e.target.value }))}
                             className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary"
                           >
-                            <option value="">Select Category (Optional)</option>
+                            <option value="">Select project category</option>
                             {categories.map((cat) => (
                               <option key={cat._id || cat.id} value={cat._id || cat.id}>
                                 {cat.name || cat.categoryName}
                               </option>
                             ))}
                           </select>
+                          {projectFormErrors.category && (
+                            <p className="mt-1 text-xs text-red-500">{projectFormErrors.category}</p>
+                          )}
                         </div>
                         <div>
                           <label className="mb-2 block text-sm font-medium text-gray-700">Client</label>
@@ -4742,26 +4777,19 @@ function getFinancialSummary(project) {
                       <div>
                         <h5 className="text-lg font-semibold text-gray-900 flex items-center">
                           <FiCalendar className="h-5 w-5 mr-2 text-emerald-600" />
-                          Payment Installments
+                          Recovery & Installment Overview
                         </h5>
                         <p className="text-sm text-gray-500">
-                          Break down the project cost into scheduled payments for the client.
+                          Admin can record manual recovery payments here. Client installments are auto-calculated in the wallet (30% / 30% / 40%) and adjusted as payments are received.
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={handleAddInstallment}
+                          onClick={handleAddManualInstallment}
                           className="inline-flex items-center px-3 py-2 bg-emerald-500 text-white text-sm font-semibold rounded-lg hover:bg-emerald-600 transition-colors"
                         >
                           <FiPlus className="h-4 w-4 mr-1" />
-                          Add Installment
-                        </button>
-                        <button
-                          onClick={handleAddManualInstallment}
-                          className="inline-flex items-center px-3 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 transition-colors"
-                        >
-                          <FiPlus className="h-4 w-4 mr-1" />
-                          Add manually
+                          Add Recovery Payment
                         </button>
                       </div>
                     </div>
@@ -4846,7 +4874,7 @@ function getFinancialSummary(project) {
                               <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Due Date</th>
                               <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                               <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Notes</th>
-                              <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                              <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Info</th>
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-100">
@@ -4865,29 +4893,8 @@ function getFinancialSummary(project) {
                                     </span>
                                   </td>
                                   <td className="px-4 py-2 text-sm text-gray-600 max-w-xs truncate">{installment.notes || '-'}</td>
-                                  <td className="px-4 py-2 text-sm">
-                                    <div className="flex items-center justify-end gap-2">
-                                      <button
-                                        onClick={() => handleEditInstallment(installment)}
-                                        className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md"
-                                      >
-                                        Edit
-                                      </button>
-                                      {!isPaid && (
-                                        <button
-                                          onClick={() => handleMarkInstallmentPaid(installment)}
-                                          className="px-2 py-1 text-xs font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded-md"
-                                        >
-                                          Mark Paid
-                                        </button>
-                                      )}
-                                      <button
-                                        onClick={() => handleDeleteInstallment(installment)}
-                                        className="px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md"
-                                      >
-                                        Delete
-                                      </button>
-                                    </div>
+                                  <td className="px-4 py-2 text-sm text-gray-400 text-right">
+                                    Auto-generated or legacy installment (read-only)
                                   </td>
                                 </tr>
                               )
@@ -4897,7 +4904,7 @@ function getFinancialSummary(project) {
                       </div>
                     ) : (
                       <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg p-6 text-center text-sm text-gray-500">
-                        No installments defined yet. Click <span className="font-semibold text-gray-700">Add Installment</span> to create a payment schedule.
+                        No installment schedule defined for this project. The client wallet will still show auto-calculated 30% / 30% / 40% installments based on the total cost.
                       </div>
                     )}
                   </div>
@@ -5776,19 +5783,21 @@ function getFinancialSummary(project) {
           </motion.div>
         )}
 
-        {/* Add Manual Installment Modal */}
+        {/* Add Recovery Payment Modal (Admin) */}
         {showManualInstallmentModal && selectedItem && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-start md:items-center justify-center z-50 p-2 md:p-4 overflow-y-auto"
             onClick={() => {
               setShowManualInstallmentModal(false)
               setManualInstallmentFormData({
                 account: '',
                 amount: '',
                 dueDate: '',
+                paymentMethod: 'bank_transfer',
+                referenceId: '',
                 notes: ''
               })
               setManualInstallmentError('')
@@ -5798,16 +5807,16 @@ function getFinancialSummary(project) {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 max-w-md w-full mx-4"
+              className="bg-white rounded-xl p-4 md:p-6 max-w-md w-full mx-2 md:mx-4 max-h-[95vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">
-                    Add manually
+                    Add Recovery Payment
                   </h3>
                   <p className="text-gray-600 text-sm mt-1">
-                    Create a manual installment with account selection
+                    Record a manual recovery amount received from the client with account and date selection.
                   </p>
                 </div>
                 <button
@@ -5817,6 +5826,8 @@ function getFinancialSummary(project) {
                       account: '',
                       amount: '',
                       dueDate: '',
+                paymentMethod: 'bank_transfer',
+                referenceId: '',
                       notes: ''
                     })
                     setManualInstallmentError('')
@@ -5880,7 +5891,7 @@ function getFinancialSummary(project) {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Due Date <span className="text-red-500">*</span>
+                    Payment Date <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
@@ -5892,6 +5903,45 @@ function getFinancialSummary(project) {
                       }))
                     }
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Payment Method
+                  </label>
+                  <select
+                    value={manualInstallmentFormData.paymentMethod}
+                    onChange={(e) =>
+                      setManualInstallmentFormData((prev) => ({
+                        ...prev,
+                        paymentMethod: e.target.value
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="upi">UPI</option>
+                    <option value="cash">Cash</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Reference ID
+                  </label>
+                  <input
+                    type="text"
+                    value={manualInstallmentFormData.referenceId}
+                    onChange={(e) =>
+                      setManualInstallmentFormData((prev) => ({
+                        ...prev,
+                        referenceId: e.target.value
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                    placeholder="Optional transaction / UTR reference"
                   />
                 </div>
 
@@ -5919,6 +5969,8 @@ function getFinancialSummary(project) {
                         account: '',
                         amount: '',
                         dueDate: '',
+                    paymentMethod: 'bank_transfer',
+                    referenceId: '',
                         notes: ''
                       })
                       setManualInstallmentError('')
@@ -5933,7 +5985,7 @@ function getFinancialSummary(project) {
                     className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold disabled:opacity-70"
                     disabled={isSavingManualInstallment}
                   >
-                    {isSavingManualInstallment ? 'Saving...' : 'Add manually'}
+                  {isSavingManualInstallment ? 'Saving...' : 'Add Recovery Payment'}
                   </button>
                 </div>
               </div>

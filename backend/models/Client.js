@@ -117,6 +117,10 @@ const clientSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Sales'
   },
+  linkedSalesEmployee: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Sales'
+  },
   // Conversion date
   conversionDate: {
     type: Date

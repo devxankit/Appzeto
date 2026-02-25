@@ -98,17 +98,6 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
     status: 'approved'
   }).select('project amount').lean();
   
-  // Create a map of projectId -> total approved receipts
-  const receiptsByProject = allApprovedReceipts.reduce((map, receipt) => {
-    const projectId = receipt.project?.toString();
-    if (!projectId) return map;
-    if (!map.has(projectId)) {
-      map.set(projectId, 0);
-    }
-    map.set(projectId, map.get(projectId) + Number(receipt.amount || 0));
-    return map;
-  }, new Map());
-
   const projectSummaries = projects.map((project) => {
     const key = project._id.toString();
     const stats = paymentStatsByProject.get(key) || {
@@ -119,74 +108,50 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
 
     const totalCost = project.financialDetails?.totalCost || 0;
     const advanceReceived = project.financialDetails?.advanceReceived || 0;
-    const installments = Array.isArray(project.installmentPlan)
-      ? project.installmentPlan
-      : [];
+    // Virtual installments: 30%, 30%, 40% of total cost
+    const virtualInstallments = [];
+    if (totalCost > 0) {
+      const first = Math.round(totalCost * 0.3);
+      const second = Math.round(totalCost * 0.3);
+      const third = Math.max(0, totalCost - first - second);
+      virtualInstallments.push(
+        { label: 'Installment 1', amount: first },
+        { label: 'Installment 2', amount: second },
+        { label: 'Installment 3', amount: third }
+      );
+    }
 
-    const now = new Date();
-    let totalInstallmentAmount = 0;
-    let paidInstallmentAmount = 0;
-    let pendingInstallmentAmount = 0;
-    const pendingInstallments = [];
+    const paymentRecordsPaid = stats.paidAmount || 0;
+    // Total paid for this project from all sources captured in advanceReceived + payment records
+    const totalPaidAmount = Math.max(
+      0,
+      Math.min(totalCost, (advanceReceived || 0) + paymentRecordsPaid)
+    );
+    let remainingForVirtual = totalPaidAmount;
 
-    installments.forEach((installment) => {
-      const amount = Number(installment.amount) || 0;
-      totalInstallmentAmount += amount;
-      if (installment.status === 'paid') {
-        paidInstallmentAmount += amount;
-        return;
-      }
-
-      pendingInstallmentAmount += amount;
-
-      const dueDate = installment.dueDate ? new Date(installment.dueDate) : null;
-      const status =
-        installment.status === 'paid'
-          ? 'paid'
-          : dueDate && dueDate < now
-          ? 'overdue'
-          : 'pending';
-
-      pendingInstallments.push({
-        ...installment,
-        status
-      });
+    const virtualInstallmentPlan = virtualInstallments.map((inst, index) => {
+      const total = inst.amount;
+      const paidOnThis = Math.min(remainingForVirtual, total);
+      remainingForVirtual -= paidOnThis;
+      const remaining = Math.max(total - paidOnThis, 0);
+      return {
+        sequence: index + 1,
+        label: inst.label,
+        amount: total,
+        paidAmount: paidOnThis,
+        remainingAmount: remaining
+      };
     });
-
-    pendingInstallments.sort((a, b) => {
-      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
-      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
-      return dateA - dateB;
-    });
-
-    const nextInstallment = pendingInstallments.length
-      ? pendingInstallments[0]
-      : null;
 
     // IMPORTANT: advanceReceived already includes:
     // - Initial advance (set during conversion)
-    // - Approved PaymentReceipts (created by sales team)
-    // - Paid installments (from installmentPlan)
-    // So we should NOT add paidInstallmentAmount again to avoid double-counting
-    
-    // Get approved receipts for this project (from the pre-fetched map)
-    const totalApprovedPayments = receiptsByProject.get(key) || 0;
-    
-    // Calculate what advanceReceived actually contains:
-    // advanceReceived = initialAdvance + approvedReceipts + paidInstallments
-    // So: initialAdvance + approvedReceipts = advanceReceived - paidInstallments
-    const advanceAndReceipts = Math.max(0, advanceReceived - paidInstallmentAmount);
-    
-    // Payment records (from Payment model) are separate and should be added
-    const paymentRecordsPaid = stats.paidAmount || 0;
-    
-    // Total paid = advanceReceived (which already includes installments) + payment records
-    // OR: advanceAndReceipts + paidInstallments + paymentRecordsPaid
-    // Both should give the same result since advanceReceived = advanceAndReceipts + paidInstallments
-    const totalPaidAmount = advanceReceived + paymentRecordsPaid;
-    
+    // - Approved PaymentReceipts (created by sales team or admin)
+    // - Admin manual recoveries (adminManualRecovery)
+    // We only need to add Payment model payments on top of this.
+    const totalPaidAmountForRemaining = (advanceReceived || 0) + paymentRecordsPaid;
+
     // Calculate remaining amount
-    const remainingAmount = Math.max(totalCost - totalPaidAmount, 0);
+    const remainingAmount = Math.max(totalCost - totalPaidAmountForRemaining, 0);
 
     return {
       id: project._id,
@@ -195,47 +160,27 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
       dueDate: project.dueDate,
       progress: project.progress || 0,
       totalCost,
-      paidAmount: totalPaidAmount, // advanceReceived (includes advance + receipts + installments) + payment records
-      advanceReceived: advanceAndReceipts, // Initial advance + approved receipts (excluding installments for clarity)
-      installmentPaidAmount: paidInstallmentAmount,
+      paidAmount: totalPaidAmountForRemaining, // advance + receipts + manual recoveries + payment records
+      advanceReceived: advanceReceived, // Initial advance + approved receipts + manual recoveries
+      installmentPaidAmount: 0,
       paymentRecordsPaid: paymentRecordsPaid,
       pendingAmount: stats.pendingAmount,
       refundedAmount: stats.refundedAmount,
       remainingAmount,
-      installmentPlan: installments.map((inst, idx) => ({
-        _id: inst._id || `inst-${idx}`,
-        amount: inst.amount || 0,
-        dueDate: inst.dueDate,
-        status: inst.status || 'pending',
-        paidDate: inst.paidDate,
-        notes: inst.notes,
-        createdAt: inst.createdAt,
-        updatedAt: inst.updatedAt,
-        sequence: idx + 1
-      })),
+      installmentPlan: virtualInstallmentPlan,
       installmentSummary: {
-        totalInstallments: installments.length,
-        pendingInstallments: installments.filter(
-          (installment) => installment.status !== 'paid'
+        totalInstallments: virtualInstallmentPlan.length,
+        pendingInstallments: virtualInstallmentPlan.filter(
+          (inst) => (inst.remainingAmount || 0) > 0
         ).length,
-        paidInstallments: installments.filter(
-          (installment) => installment.status === 'paid'
+        paidInstallments: virtualInstallmentPlan.filter(
+          (inst) => (inst.remainingAmount || 0) === 0 && (inst.amount || 0) > 0
         ).length,
-        overdueInstallments: installments.filter(
-          (installment) => installment.status === 'overdue' || 
-          (installment.status !== 'paid' && installment.dueDate && new Date(installment.dueDate) < now)
-        ).length,
-        totalAmount: totalInstallmentAmount,
-        pendingAmount: pendingInstallmentAmount,
-        paidAmount: paidInstallmentAmount,
-        nextInstallment: nextInstallment
-          ? {
-              id: nextInstallment._id,
-              amount: nextInstallment.amount,
-              dueDate: nextInstallment.dueDate,
-              status: nextInstallment.status
-            }
-          : null
+        overdueInstallments: 0,
+        totalAmount: virtualInstallmentPlan.reduce((sum, inst) => sum + (inst.amount || 0), 0),
+        pendingAmount: virtualInstallmentPlan.reduce((sum, inst) => sum + (inst.remainingAmount || 0), 0),
+        paidAmount: virtualInstallmentPlan.reduce((sum, inst) => sum + (inst.paidAmount || 0), 0),
+        nextInstallment: virtualInstallmentPlan.find(inst => (inst.remainingAmount || 0) > 0) || null
       }
     };
   });
@@ -245,18 +190,13 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
     0
   );
 
-  // Calculate totals - note: advanceReceived in projectSummaries is now advanceAndReceipts (excluding installments)
   const totalAdvanceAndReceipts = projectSummaries.reduce(
     (sum, project) => sum + (project.advanceReceived || 0),
     0
   );
-  const totalInstallmentPaid = projectSummaries.reduce(
-    (sum, project) => sum + (project.installmentPaidAmount || 0),
-    0
-  );
   const totalPaymentRecordsPaid = paymentTotals.paid || 0;
-  // Total paid = advance + receipts + installments + payment records
-  const totalPaid = totalAdvanceAndReceipts + totalInstallmentPaid + totalPaymentRecordsPaid;
+  // Total paid = advance + receipts + payment records
+  const totalPaid = totalAdvanceAndReceipts + totalPaymentRecordsPaid;
 
   const currencyDoc = await Payment.findOne({ client: clientObjectId })
     .select('currency')
@@ -269,9 +209,12 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
       summary: {
         currency,
         totalCost: totalProjectCost,
-        totalPaid: totalPaid, // advance + receipts + installments + payment records
-        totalAdvanceReceived: totalAdvanceAndReceipts, // Initial advance + approved receipts (excluding installments)
-        totalInstallmentPaid: totalInstallmentPaid,
+        totalPaid: totalPaid,
+        totalAdvanceReceived: totalAdvanceAndReceipts,
+        totalInstallmentPaid: projectSummaries.reduce(
+          (sum, project) => sum + (project.installmentSummary?.paidAmount || 0),
+          0
+        ),
         totalPaymentRecordsPaid: totalPaymentRecordsPaid,
         totalPending: paymentTotals.pending,
         totalRefunded: paymentTotals.refunded,

@@ -161,7 +161,8 @@ const SL_converted = () => {
   const getCategoryInfo = (categoryIdOrObject) => {
     // Handle null/undefined
     if (!categoryIdOrObject) {
-      return { name: 'Unknown', color: '#999999', icon: '📋' }
+      // For clients without any lead/category, show a friendly message instead of "Unknown"
+      return { name: 'No category', color: '#999999', icon: '📋' }
     }
     
     // If category is already populated (object with properties like name, color, icon), return it directly
@@ -183,7 +184,7 @@ const SL_converted = () => {
     }
     
     // Return default if not found
-    return { name: 'Unknown', color: '#999999', icon: '📋' }
+    return { name: 'No category', color: '#999999', icon: '📋' }
   }
 
   const filters = [

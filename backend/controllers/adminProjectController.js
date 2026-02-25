@@ -5,11 +5,13 @@ const Employee = require('../models/Employee');
 const Client = require('../models/Client');
 const PM = require('../models/PM');
 const Payment = require('../models/Payment');
+const Account = require('../models/Account');
 const Admin = require('../models/Admin');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const socketService = require('../services/socketService');
 const { createIncomingTransaction, findExistingTransaction } = require('../utils/financeTransactionHelper');
+const { mapPaymentMethodToFinance } = require('../utils/paymentMethodMapper');
 
 const populateProjectForAdmin = async (projectId) => {
   if (!projectId) return null;
@@ -116,69 +118,56 @@ const recalculateProjectFinancials = async (project, totals) => {
   }
 
   const totalCost = Number(project.financialDetails.totalCost || project.budget || 0);
-  
-  // Get initial advanceReceived (set during conversion)
-  const initialAdvanceReceived = Number(project.financialDetails.advanceReceived || 0);
-  
+
   // Calculate paid installments
   const installmentTotals = totals || calculateInstallmentTotals(project.installmentPlan);
   const collectedFromInstallments = Number(installmentTotals.paid || 0);
-  
+
   // Calculate approved PaymentReceipts
   const PaymentReceipt = require('../models/PaymentReceipt');
   const approvedReceipts = await PaymentReceipt.find({
     project: project._id,
     status: 'approved'
   }).select('amount');
-  const totalApprovedPayments = approvedReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
-  
-  // Calculate total received from all sources:
-  // 1. Initial advanceReceived (set during conversion, stored in project.financialDetails.advanceReceived)
-  // 2. Approved PaymentReceipts (created by sales team)
-  // 3. Paid installments (from installmentPlan)
+  const totalApprovedPayments = approvedReceipts.reduce(
+    (sum, receipt) => sum + Number(receipt.amount || 0),
+    0
+  );
+
+  // Include admin-recorded manual recoveries from AdminFinance
+  const AdminFinance = require('../models/AdminFinance');
+  const manualRecoveries = await AdminFinance.aggregate([
+    {
+      $match: {
+        recordType: 'transaction',
+        transactionType: 'incoming',
+        status: { $ne: 'cancelled' },
+        project: project._id,
+        'metadata.sourceType': 'adminManualRecovery'
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalAmount: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const totalManualRecoveries = manualRecoveries[0]?.totalAmount || 0;
+
+  // Calculate total received from all sources purely from data:
+  // 1. Approved PaymentReceipts (created by sales team or admin)
+  // 2. Paid installments (from installmentPlan)
+  // 3. Admin manual recoveries (from AdminFinance with metadata.sourceType = 'adminManualRecovery')
   //
-  // Strategy: Always recalculate from actual data sources to ensure accuracy
-  // The stored advanceReceived might have been updated by PaymentReceipt hook,
-  // but we need to ensure it includes all sources correctly
-  
-  // Calculate total received from all sources:
-  // 1. Approved PaymentReceipts (from PaymentReceipt model)
-  // 2. Paid installments (from installmentPlan with status 'paid')
-  // 
-  // Note: We always recalculate from actual data sources to ensure accuracy
-  // This ensures that when a new paid installment is added or marked as paid,
-  // the totalReceived is correctly updated and outstanding balance is recalculated
-  
-  const totalFromReceiptsAndInstallments = totalApprovedPayments + collectedFromInstallments;
-  const storedAdvance = Number(project.financialDetails.advanceReceived || 0);
-  
-  // Calculate total received correctly:
-  // Strategy: Always use the calculated value from current data (receipts + paid installments)
-  // When a new paid installment is added or marked as paid, totalFromReceiptsAndInstallments increases
-  // We should use this new value to ensure outstanding balance updates correctly
-  // If storedAdvance > totalFromReceiptsAndInstallments, it means there's initial advance
-  // that's not included in receipts/installments. We preserve it by adding the difference.
-  
-  // Always use the calculated value from current data to ensure new paid installments are included
-  // When a new paid installment is added or marked as paid, totalFromReceiptsAndInstallments increases
-  // This ensures outstanding balance updates correctly
-  // If storedAdvance is higher, it includes initial advance, but we still use current calculated value
-  // to ensure new paid installments are always included in outstanding balance calculation
-  // 
-  // Note: When a new paid installment is added, totalFromReceiptsAndInstallments should increase,
-  // so it should be >= storedAdvance. If storedAdvance is still higher, it means there's initial advance.
-  // In that case, we use storedAdvance to preserve initial advance, but this might miss new paid installments.
-  // The fix: always use totalFromReceiptsAndInstallments because it's calculated from current data
-  // and includes all current paid installments. If there's initial advance, it should be tracked separately.
-  
-  // Always use the calculated value from current data (includes new paid installments)
-  // This ensures outstanding balance updates correctly when installments are marked as paid
-  const totalReceived = totalFromReceiptsAndInstallments;
-  
-  // Always update advanceReceived to reflect current total received
-  // This ensures outstanding balance is calculated correctly when installments are marked as paid
+  // This avoids double-counting when recalculations run multiple times.
+
+  const totalReceived =
+    totalApprovedPayments + collectedFromInstallments + totalManualRecoveries;
+
+  // Update advanceReceived and remainingAmount based on recomputed totals
   project.financialDetails.advanceReceived = totalReceived;
-  
+
   // Calculate remaining amount
   const remainingRaw = totalCost - totalReceived;
   const remainingAmount = Number.isFinite(remainingRaw) ? Math.max(remainingRaw, 0) : 0;
@@ -389,6 +378,116 @@ const createProject = asyncHandler(async (req, res, next) => {
   res.status(201).json({
     success: true,
     data: populatedProject
+  });
+});
+
+// @desc    Record manual recovery payment for a project (Admin)
+// @route   POST /api/admin/projects/:id/recoveries
+// @access  Admin only
+const addProjectRecovery = asyncHandler(async (req, res, next) => {
+  const adminId = req.user?.id;
+
+  if (!adminId) {
+    return next(new ErrorResponse('Admin authentication required', 401));
+  }
+
+  const { amount, accountId, paymentMethod = 'bank_transfer', paymentDate, referenceId, notes } = req.body;
+
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    return next(new ErrorResponse('Please provide a valid recovery amount greater than 0', 400));
+  }
+
+  if (!accountId) {
+    return next(new ErrorResponse('Please select an account for the recovery amount', 400));
+  }
+
+  if (!paymentDate) {
+    return next(new ErrorResponse('Payment date is required', 400));
+  }
+
+  const parsedDate = new Date(paymentDate);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return next(new ErrorResponse('Invalid payment date', 400));
+  }
+
+  // Disallow future dates (allow same-day and any past date)
+  const today = new Date();
+  const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+  if (parsedDate > endOfToday) {
+    return next(new ErrorResponse('Payment date cannot be in the future', 400));
+  }
+
+  const [project, account] = await Promise.all([
+    Project.findById(req.params.id),
+    Account.findById(accountId)
+  ]);
+
+  if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
+
+  if (!account) {
+    return next(new ErrorResponse('Account not found', 404));
+  }
+
+  const clientId = project.client;
+  if (!clientId) {
+    return next(new ErrorResponse('Project is not linked to a client', 400));
+  }
+
+  const financeMethod = mapPaymentMethodToFinance(paymentMethod);
+
+  // Create finance transaction representing this manual recovery
+  const financeTransaction = await createIncomingTransaction({
+    amount: numericAmount,
+    category: 'Project Recovery',
+    transactionDate: parsedDate,
+    createdBy: adminId,
+    client: clientId,
+    project: project._id,
+    account: account._id,
+    paymentMethod: financeMethod,
+    description: `Manual recovery for project "${project.name || 'Project'}" - ₹${numericAmount}`,
+    metadata: {
+      sourceType: 'adminManualRecovery',
+      sourceId: project._id.toString(),
+      projectId: project._id.toString(),
+      clientId: clientId.toString(),
+      referenceId: referenceId || null,
+      notes: notes || null
+    },
+    checkDuplicate: false
+  });
+
+  // Recalculate project financials so manual recoveries are included consistently
+  await recalculateProjectFinancials(project);
+  await project.save();
+
+  const populatedProject = await populateProjectForAdmin(project._id);
+
+  res.status(201).json({
+    success: true,
+    data: {
+      project: populatedProject,
+      recovery: {
+        amount: numericAmount,
+        account: {
+          id: account._id,
+          name: account.name,
+          bankName: account.bankName,
+          accountNumber: account.accountNumber,
+          ifsc: account.ifsc,
+          upiId: account.upiId
+        },
+        paymentMethod: financeMethod,
+        paymentDate: parsedDate,
+        referenceId: referenceId || null,
+        notes: notes || null,
+        financeTransactionId: financeTransaction._id
+      }
+    },
+    message: 'Recovery payment recorded successfully'
   });
 });
 
@@ -1423,5 +1522,6 @@ module.exports = {
   getProjectManagementStatistics,
   getPendingProjects,
   assignPMToPendingProject,
-  getPMsForAssignment
+  getPMsForAssignment,
+  addProjectRecovery
 };

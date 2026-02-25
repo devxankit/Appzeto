@@ -161,6 +161,20 @@ class AdminProjectService {
     }
   }
 
+  // Add manual recovery payment for a project (admin-side)
+  async addProjectRecovery(projectId, recoveryData) {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/recoveries`, {
+        method: 'POST',
+        body: JSON.stringify(recoveryData)
+      });
+      return response;
+    } catch (error) {
+      console.error('Error adding project recovery:', error);
+      throw error;
+    }
+  }
+
   // Update project installment
   async updateProjectInstallment(projectId, installmentId, updateData) {
     try {

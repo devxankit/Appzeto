@@ -1,0 +1,73 @@
+# Implementation Plan - Add 'Linked Sales Employee' to Clients
+
+This plan outlines the changes required to link clients to specific sales employees and ensure that linked client and project data is visible within the sales employee module.
+
+## User Review Required
+
+> [!IMPORTANT]
+> The "Linked Sales Employee" is a manual assignment by Admins. This will coexist with the existing `convertedBy` field (which typically tracks the original lead converter). Data visibility in the Sales module will be expanded to include both converted and linked clients.
+> 
+> [!NOTE]
+> **New Requirement**: Clients will only be visible in the sales employee's "Converted" section if they have **at least one project**. This prevents displaying empty profiles in the sales module.
+
+## Proposed Changes
+
+### Backend
+
+#### [MODIFY] [Client.js](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/models/Client.js)
+- Add `linkedSalesEmployee` field to the schema:
+  ```javascript
+  linkedSalesEmployee: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Sales'
+  }
+  ```
+
+#### [MODIFY] [adminUserController.js](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/adminUserController.js)
+- Update `createUser` and `updateUser` logic for the 'client' role to handle the `linkedSalesEmployee` field from the request body.
+
+#### [MODIFY] [salesController.js](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js)
+- Update the following methods to filter by either `convertedBy` OR `linkedSalesEmployee`:
+    - [getMyConvertedClients](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js#785-830): 
+        - Find clients where `convertedBy: salesId` OR `linkedSalesEmployee: salesId`.
+        - **Project Check**: Only include these clients if they have at least one project in the [Project](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/models/Client.js#308-317) collection.
+    - [getPaymentRecovery](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js#98-197), [getPaymentRecoveryStats](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js#198-228), [getProjectInstallments](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js#396-464), [requestInstallmentPayment](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js#465-554), [getTileCardStats](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js#1221-1351), [getDashboardHeroStats](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js#1352-1706):
+        - Update `clientMatch` or `Client.find` calls to include `linkedSalesEmployee: salesId`.
+    - [getLeadsByStatus](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/frontend/src/modules/sells/SL-services/salesLeadService.js#68-92):
+        - For 'converted' status, ensure consistency if it also fetches client-related data. (Primarily focuses on Lead documents).
+    - [getMyLeads](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/backend/controllers/salesController.js#2114-2205):
+        - Ensure visibility of leads that eventually became linked clients if applicable.
+
+---
+
+### Frontend
+
+#### [MODIFY] [Admin_user_management.jsx](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/frontend/src/modules/admin/admin-pages/Admin_user_management.jsx)
+- **State Management**:
+    - Add `linkedSalesEmployee` to the `formData` object.
+    - Fetch the sales team list (using `adminUserService.getAllUsers({ role: 'sales' })` or similar) to populate the dropdown.
+- **UI Changes**:
+    - In the Create/Edit User modal, if `formData.role === 'client'`, display a dropdown to select a "Linked Sales Employee".
+- **Logic**:
+    - Update [handleSaveUser](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/frontend/src/modules/admin/admin-pages/Admin_user_management.jsx#387-460) to include `linkedSalesEmployee` in the payload.
+    - Update [handleEditUser](file:///c:/Users/AnkitAhirwar/OneDrive/Desktop/Appzeto/frontend/src/modules/admin/admin-pages/Admin_user_management.jsx#330-348) to populate `linkedSalesEmployee` in the form.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- I will check for existing tests in the `backend/tests` or `frontend/src/tests` directories and add new test cases if possible.
+- If no test framework is set up, I will focus on manual verification.
+
+### Manual Verification
+1.  **Admin Module**:
+    - Log in as Admin.
+    - Go to User Management -> Clients.
+    - Create a new client and assign a "Linked Sales Employee".
+    - Edit an existing client and change the "Linked Sales Employee".
+2.  **Sales Module**:
+    - Log in as the Sales Employee who was linked to the client.
+    - Verify that the client appears in "Converted Clients".
+    - Verify that the client's projects appear in "Payment Recovery".
+    - Verify that the dashboard stats (Tile Cards and Hero Stats) reflect the data from this linked client.

@@ -3,13 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import CloudinaryUpload from '../../../components/ui/cloudinary-upload'
-import { 
-  Users, 
-  UserPlus, 
-  Edit3, 
-  Trash2, 
-  Eye, 
-  Search, 
+import {
+  Users,
+  UserPlus,
+  Edit3,
+  Trash2,
+  Eye,
+  Search,
   Filter,
   Phone,
   Mail,
@@ -81,7 +81,8 @@ const Admin_user_management = () => {
     joiningDate: '',
     document: null,
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    linkedSalesEmployee: ''
   })
 
   // Statistics data
@@ -99,6 +100,9 @@ const Admin_user_management = () => {
     active: 0,
     inactive: 0
   })
+
+  // Sales team data for client linking
+  const [salesTeam, setSalesTeam] = useState([])
 
   // Users data
   const [users, setUsers] = useState([])
@@ -122,9 +126,28 @@ const Admin_user_management = () => {
     }
   }
 
+  // Load sales team (employees with team='sales')
+  const loadSalesTeam = async () => {
+    try {
+      const response = await adminUserService.getAllUsers({
+        role: 'employee',
+        team: 'sales',
+        status: 'active',
+        limit: 10000
+      })
+      if (response.success) {
+        const formattedSales = response.data.map(user => adminUserService.formatUserForDisplay(user))
+        setSalesTeam(formattedSales)
+      }
+    } catch (error) {
+      console.error('Error loading sales team:', error)
+    }
+  }
+
   useEffect(() => {
     loadData()
     loadDeveloperTeam()
+    loadSalesTeam()
   }, [])
 
   // Reload users when filters change (without full page reload)
@@ -153,7 +176,7 @@ const Admin_user_management = () => {
 
       // Format users for display
       const formattedUsers = usersResponse.data.map(user => adminUserService.formatUserForDisplay(user))
-      
+
       setUsers(formattedUsers)
       setStatistics(statisticsResponse.data)
       setCurrentPage(1) // Reset to first page when data loads
@@ -180,7 +203,7 @@ const Admin_user_management = () => {
 
       // Format users for display
       const formattedUsers = usersResponse.data.map(user => adminUserService.formatUserForDisplay(user))
-      
+
       setUsers(formattedUsers)
       setCurrentPage(1) // Reset to first page when filters change
     } catch (error) {
@@ -301,7 +324,8 @@ const Admin_user_management = () => {
       joiningDate: '',
       document: null,
       password: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      linkedSalesEmployee: ''
     })
     setShowCreateModal(true)
   }
@@ -340,7 +364,8 @@ const Admin_user_management = () => {
       joiningDate: formatDateForInput(user.joiningDate),
       document: user.document || null,
       password: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      linkedSalesEmployee: user.linkedSalesEmployee?._id || user.linkedSalesEmployee || ''
     })
     setSelectedUser(user)
     setShowEditModal(true)
@@ -360,27 +385,27 @@ const Admin_user_management = () => {
   const handlePhoneChange = (value) => {
     // Remove all non-digit characters except +
     let cleaned = value.replace(/[^\d+]/g, '')
-    
+
     // Handle +91 prefix
     if (cleaned.startsWith('+91')) {
       // Extract digits after +91
       const digitsAfterPrefix = cleaned.substring(3)
       // Limit to 10 digits after +91
       const limitedDigits = digitsAfterPrefix.slice(0, 10)
-      setFormData({...formData, phone: '+91' + limitedDigits})
+      setFormData({ ...formData, phone: '+91' + limitedDigits })
     } else if (cleaned.startsWith('91') && cleaned.length > 2) {
       // Handle 91 prefix (without +)
       const digitsAfterPrefix = cleaned.substring(2)
       const limitedDigits = digitsAfterPrefix.slice(0, 10)
-      setFormData({...formData, phone: '+91' + limitedDigits})
+      setFormData({ ...formData, phone: '+91' + limitedDigits })
     } else if (cleaned.startsWith('+')) {
       // If starts with + but not +91, remove it
       const digitsOnly = cleaned.substring(1).slice(0, 10)
-      setFormData({...formData, phone: digitsOnly})
+      setFormData({ ...formData, phone: digitsOnly })
     } else {
       // No prefix, limit to 10 digits
       const limitedDigits = cleaned.slice(0, 10)
-      setFormData({...formData, phone: limitedDigits})
+      setFormData({ ...formData, phone: limitedDigits })
     }
   }
 
@@ -392,7 +417,7 @@ const Admin_user_management = () => {
 
     try {
       setIsSubmitting(true)
-      
+
       // Validate user data
       const validationErrors = adminUserService.validateUserData(formData, showEditModal)
       if (validationErrors.length > 0) {
@@ -400,7 +425,7 @@ const Admin_user_management = () => {
         setIsSubmitting(false)
         return
       }
-    
+
       let response;
       const dataToSave = { ...formData };
 
@@ -430,23 +455,24 @@ const Admin_user_management = () => {
       }
 
       // Close modals and reset form
-    setShowCreateModal(false)
-    setShowEditModal(false)
-    setSelectedUser(null)
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      role: '',
-      team: '',
-      department: '',
-      status: 'active',
-      dateOfBirth: '',
-      joiningDate: '',
-      document: null,
-      password: '',
-      confirmPassword: ''
-    })
+      setShowCreateModal(false)
+      setShowEditModal(false)
+      setSelectedUser(null)
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        role: '',
+        team: '',
+        department: '',
+        status: 'active',
+        dateOfBirth: '',
+        joiningDate: '',
+        document: null,
+        password: '',
+        confirmPassword: '',
+        linkedSalesEmployee: ''
+      })
 
       // Reload data
       await loadUsersOnly()
@@ -462,8 +488,8 @@ const Admin_user_management = () => {
     try {
       await adminUserService.deleteUser(selectedUser.userType, selectedUser.id)
       addToast({ type: 'success', message: 'User deleted successfully' })
-    setShowDeleteModal(false)
-    setSelectedUser(null)
+      setShowDeleteModal(false)
+      setSelectedUser(null)
       await loadUsersOnly()
     } catch (error) {
       console.error('Error deleting user:', error)
@@ -493,10 +519,10 @@ const Admin_user_management = () => {
         teamMembers: [],
         isTeamLead: false
       })
-      
-      addToast({ 
-        type: 'success', 
-        message: `${selectedTeamLeadForDelete.name} has been removed as team lead. ${teamMemberCount} team member(s) have been unassigned.` 
+
+      addToast({
+        type: 'success',
+        message: `${selectedTeamLeadForDelete.name} has been removed as team lead. ${teamMemberCount} team member(s) have been unassigned.`
       })
 
       // Close modal
@@ -508,9 +534,9 @@ const Admin_user_management = () => {
       await loadDeveloperTeam()
     } catch (error) {
       console.error('Error removing team lead:', error)
-      addToast({ 
-        type: 'error', 
-        message: error.response?.data?.message || 'Failed to remove team lead status' 
+      addToast({
+        type: 'error',
+        message: error.response?.data?.message || 'Failed to remove team lead status'
       })
     } finally {
       setDeletingTeamLead(false)
@@ -519,12 +545,12 @@ const Admin_user_management = () => {
 
   const handleAssignDevTeam = async (user) => {
     setSelectedUser(user)
-    
+
     // Ensure developer team is loaded before opening modal
     if (developerTeam.length === 0) {
       await loadDeveloperTeam()
     }
-    
+
     // Get currently assigned team members if any
     const existingTeamMembers = user.teamMembers || []
     const existingTeamMemberIds = existingTeamMembers.map(tm => {
@@ -533,7 +559,7 @@ const Admin_user_management = () => {
     setAlreadyAssignedDevMembers(existingTeamMemberIds)
     setSelectedDevTeamMembers([])
     setDevLeadToggle(user.isTeamLead || false)
-    
+
     setShowAssignDevTeamModal(true)
   }
 
@@ -572,24 +598,24 @@ const Admin_user_management = () => {
     // Use selectedDeveloperForLead if creating new, otherwise use selectedUser
     const userToUse = selectedDeveloperForLead || selectedUser
     const currentTeamLeadId = userToUse?.id || userToUse?._id
-    
+
     // Check if this member is already assigned to another team lead
     const assignedToOtherLeads = getAssignedToOtherLeads(currentTeamLeadId)
     const memberIdStr = String(memberId)
-    
+
     if (assignedToOtherLeads.includes(memberIdStr)) {
       const member = developerTeam.find(m => {
         const mId = String(m.id || m._id)
         return mId === memberIdStr
       })
       const memberName = member?.name || 'This developer'
-      addToast({ 
-        type: 'error', 
-        message: `${memberName} is already assigned to another team lead. Please remove them from that team lead first.` 
+      addToast({
+        type: 'error',
+        message: `${memberName} is already assigned to another team lead. Please remove them from that team lead first.`
       })
       return
     }
-    
+
     setSelectedDevTeamMembers(prev => {
       if (prev.includes(memberId)) {
         return prev.filter(id => id !== memberId)
@@ -607,28 +633,28 @@ const Admin_user_management = () => {
 
     // Use selectedDeveloperForLead if creating new, otherwise use selectedUser
     const userToUse = selectedDeveloperForLead || selectedUser
-    
+
     if (!userToUse) {
       addToast({ type: 'error', message: 'Please select a developer to make a team lead' })
       return
     }
-    
+
     try {
       setAssigningDevMembers(true)
       const userId = userToUse.id || userToUse._id
-      
+
       if (!userId) {
         addToast({ type: 'error', message: 'Team leader ID not found' })
         return
       }
-      
+
       // Check if any selected members are already assigned to other team leads
       const assignedToOtherLeads = getAssignedToOtherLeads(userId)
       const conflictingMembers = selectedDevTeamMembers.filter(memberId => {
         const memberIdStr = String(memberId)
         return assignedToOtherLeads.includes(memberIdStr)
       })
-      
+
       if (conflictingMembers.length > 0) {
         const conflictingNames = conflictingMembers.map(memberId => {
           const member = developerTeam.find(m => {
@@ -637,31 +663,31 @@ const Admin_user_management = () => {
           })
           return member?.name || 'Unknown'
         }).join(', ')
-        
-        addToast({ 
-          type: 'error', 
-          message: `Cannot assign: ${conflictingNames} ${conflictingMembers.length > 1 ? 'are' : 'is'} already assigned to another team lead. Please remove them first.` 
+
+        addToast({
+          type: 'error',
+          message: `Cannot assign: ${conflictingNames} ${conflictingMembers.length > 1 ? 'are' : 'is'} already assigned to another team lead. Please remove them first.`
         })
         setAssigningDevMembers(false)
         return
       }
-      
+
       // Merge newly selected members with already assigned members
       const allAssignedIds = [...new Set([
         ...alreadyAssignedDevMembers.map(id => typeof id === 'object' ? String(id._id || id.id) : String(id)),
         ...selectedDevTeamMembers.map(id => String(id))
       ])]
-      
+
       // Save to backend
       const response = await adminUserService.updateDeveloperTeamMembers(userId, {
         teamMembers: allAssignedIds,
         isTeamLead: devLeadToggle
       })
-      
+
       if (response && response.success) {
         const teamLeadStatus = devLeadToggle ? 'enabled' : 'disabled'
         const membersCount = allAssignedIds.length
-        
+
         if (selectedDeveloperForLead) {
           addToast({ type: 'success', message: `Team lead created successfully! ${membersCount} team member(s) assigned` })
         } else {
@@ -670,7 +696,7 @@ const Admin_user_management = () => {
       } else {
         throw new Error(response?.message || 'Failed to update team members')
       }
-      
+
       // Close modals after confirmation
       setShowAssignDevTeamModal(false)
       setShowCreateDevLeadModal(false)
@@ -680,11 +706,11 @@ const Admin_user_management = () => {
       setAlreadyAssignedDevMembers([])
       setDevLeadToggle(false)
       setDevLeadCreationStep(1)
-      
+
       // Reload users to reflect changes
       await loadUsersOnly()
       await loadDeveloperTeam()
-      
+
     } catch (error) {
       console.error('Error assigning team member:', error)
       const errorMessage = error?.response?.data?.message || error?.message || 'Failed to assign team member'
@@ -748,9 +774,9 @@ const Admin_user_management = () => {
   }, [activeTab, selectedFilter, selectedDepartment, searchTerm])
 
   // Get developer team leads count
-  const developerTeamLeadsCount = users.filter(user => 
-    user.userType === 'employee' && 
-    user.team === 'developer' && 
+  const developerTeamLeadsCount = users.filter(user =>
+    user.userType === 'employee' &&
+    user.team === 'developer' &&
     user.isTeamLead === true
   ).length
 
@@ -814,10 +840,10 @@ const Admin_user_management = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <Admin_navbar />
-      
+
       {/* Sidebar */}
       <Admin_sidebar />
-      
+
       {/* Main Content */}
       <div className="ml-0 lg:ml-64 pt-16 lg:pt-20 p-4 lg:p-8">
         <div className="max-w-7xl mx-auto space-y-4 lg:space-y-6">
@@ -854,7 +880,7 @@ const Admin_user_management = () => {
           </div>
 
           {/* Statistics Cards - Row 1 */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
@@ -972,7 +998,7 @@ const Admin_user_management = () => {
           </motion.div>
 
           {/* Statistics Cards - Row 2 */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
@@ -1142,22 +1168,20 @@ const Admin_user_management = () => {
                   {tabs.map((tab) => {
                     const Icon = tab.icon
                     const isActive = activeTab === tab.key
-                    
+
                     return (
                       <button
                         key={tab.key}
                         onClick={() => setActiveTab(tab.key)}
-                        className={`flex items-center space-x-1.5 py-3 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                          isActive
-                            ? 'border-blue-500 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
+                        className={`flex items-center space-x-1.5 py-3 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${isActive
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          }`}
                       >
                         <Icon className="h-3.5 w-3.5 flex-shrink-0" />
                         <span className="text-xs">{tab.label}</span>
-                        <span className={`px-1.5 py-0.5 text-xs rounded-full min-w-[20px] text-center ${
-                          isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
-                        }`}>
+                        <span className={`px-1.5 py-0.5 text-xs rounded-full min-w-[20px] text-center ${isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
+                          }`}>
                           {tab.count}
                         </span>
                       </button>
@@ -1279,7 +1303,7 @@ const Admin_user_management = () => {
                                       })
                                       return member?.name
                                     }).filter(Boolean)
-                                    
+
                                     return (
                                       <tr key={teamLeadId} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                                         <td className="py-2 px-2">
@@ -1465,11 +1489,10 @@ const Admin_user_management = () => {
                                         <button
                                           key={i}
                                           onClick={() => setCurrentPage(i)}
-                                          className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
-                                            currentPage === i
-                                              ? 'bg-blue-600 text-white border-blue-600'
-                                              : 'border-gray-300 hover:bg-gray-50'
-                                          }`}
+                                          className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${currentPage === i
+                                            ? 'bg-blue-600 text-white border-blue-600'
+                                            : 'border-gray-300 hover:bg-gray-50'
+                                            }`}
                                         >
                                           {i}
                                         </button>
@@ -1601,12 +1624,12 @@ const Admin_user_management = () => {
                                     </td>
                                     <td className="py-2 px-2">
                                       <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded-full border ${getRoleColor(user.role)}`}>
-                                        {user.role === 'admin' ? 'Admin' : 
-                                         user.role === 'hr' ? 'HR' :
-                                         user.role === 'accountant' ? 'Accountant' :
-                                         user.role === 'pem' ? 'PEM' :
-                                         user.role === 'project-manager' ? 'PM' : 
-                                         user.role === 'employee' ? 'Emp' : 'Client'}
+                                        {user.role === 'admin' ? 'Admin' :
+                                          user.role === 'hr' ? 'HR' :
+                                            user.role === 'accountant' ? 'Accountant' :
+                                              user.role === 'pem' ? 'PEM' :
+                                                user.role === 'project-manager' ? 'PM' :
+                                                  user.role === 'employee' ? 'Emp' : 'Client'}
                                       </span>
                                     </td>
                                     {activeTab !== 'clients' && activeTab !== 'admin-hr' && activeTab !== 'project-managers' && activeTab !== 'accountant' && activeTab !== 'pem' && activeTab !== 'developer-team-leads' && (
@@ -1756,11 +1779,10 @@ const Admin_user_management = () => {
                                     <button
                                       key={i}
                                       onClick={() => setCurrentPage(i)}
-                                      className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
-                                        currentPage === i
-                                          ? 'bg-blue-600 text-white border-blue-600'
-                                          : 'border-gray-300 hover:bg-gray-50'
-                                      }`}
+                                      className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${currentPage === i
+                                        ? 'bg-blue-600 text-white border-blue-600'
+                                        : 'border-gray-300 hover:bg-gray-50'
+                                        }`}
                                     >
                                       {i}
                                     </button>
@@ -1865,7 +1887,7 @@ const Admin_user_management = () => {
                       {showCreateModal ? 'Create New User' : 'Edit User'}
                     </h3>
                     <p className="text-blue-100">
-                      {showCreateModal 
+                      {showCreateModal
                         ? 'Fill in the user details below. Fields marked with * are required.'
                         : 'Update the user details below. Fields marked with * are required.'
                       }
@@ -1880,14 +1902,14 @@ const Admin_user_management = () => {
                 </div>
               </div>
 
-              <form onSubmit={(e) => { 
-                e.preventDefault(); 
+              <form onSubmit={(e) => {
+                e.preventDefault();
                 if (!isSubmitting) {
-                  handleSaveUser(); 
+                  handleSaveUser();
                 }
               }} className="p-6 space-y-6 max-h-[calc(95vh-140px)] overflow-y-auto">
                 {/* Name Field */}
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
@@ -1899,14 +1921,14 @@ const Admin_user_management = () => {
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
                     placeholder="Enter full name"
                   />
                 </motion.div>
 
                 {/* Email Field */}
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
@@ -1918,14 +1940,14 @@ const Admin_user_management = () => {
                   <input
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
                     placeholder="Enter email address"
                   />
                 </motion.div>
 
                 {/* Phone Field */}
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
@@ -1947,7 +1969,7 @@ const Admin_user_management = () => {
 
                 {/* Role and Team Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.4 }}
@@ -1959,14 +1981,14 @@ const Admin_user_management = () => {
                     <Combobox
                       options={roleOptions}
                       value={formData.role}
-                      onChange={(value) => setFormData({...formData, role: value, team: ''})}
+                      onChange={(value) => setFormData({ ...formData, role: value, team: '' })}
                       placeholder="Select role"
                       className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
                     />
                   </motion.div>
 
                   {formData.role === 'employee' && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.5 }}
@@ -1978,8 +2000,28 @@ const Admin_user_management = () => {
                       <Combobox
                         options={teamOptions}
                         value={formData.team}
-                        onChange={(value) => setFormData({...formData, team: value, department: ''})}
+                        onChange={(value) => setFormData({ ...formData, team: value, department: '' })}
                         placeholder="Select team"
+                        className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                      />
+                    </motion.div>
+                  )}
+
+                  {formData.role === 'client' && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5 }}
+                      className="space-y-2"
+                    >
+                      <label className="text-sm font-semibold text-gray-700 flex items-center">
+                        Linked Sales Employee
+                      </label>
+                      <Combobox
+                        options={salesTeam.map(s => ({ value: s.id || s._id, label: s.name }))}
+                        value={formData.linkedSalesEmployee}
+                        onChange={(value) => setFormData({ ...formData, linkedSalesEmployee: value })}
+                        placeholder="Select sales employee"
                         className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
                       />
                     </motion.div>
@@ -1988,7 +2030,7 @@ const Admin_user_management = () => {
 
                 {/* Department Field - Only for Employees */}
                 {formData.role === 'employee' && formData.team && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.6 }}
@@ -2000,7 +2042,7 @@ const Admin_user_management = () => {
                     <input
                       type="text"
                       value={formData.department}
-                      onChange={(e) => setFormData({...formData, department: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                       className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
                       placeholder="Enter department name (e.g., Full Stack, Node.js, Web, App, Sales)"
                       maxLength={100}
@@ -2011,7 +2053,7 @@ const Admin_user_management = () => {
 
                 {/* Date Fields Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.7 }}
@@ -2023,12 +2065,12 @@ const Admin_user_management = () => {
                     <input
                       type="date"
                       value={formData.dateOfBirth}
-                      onChange={(e) => setFormData({...formData, dateOfBirth: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
                       className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
                     />
                   </motion.div>
 
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.8 }}
@@ -2040,14 +2082,14 @@ const Admin_user_management = () => {
                     <input
                       type="date"
                       value={formData.joiningDate}
-                      onChange={(e) => setFormData({...formData, joiningDate: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, joiningDate: e.target.value })}
                       className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
                     />
                   </motion.div>
                 </div>
 
                 {/* Document Upload Field */}
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.9 }}
@@ -2058,13 +2100,13 @@ const Admin_user_management = () => {
                   </label>
                   <CloudinaryUpload
                     onUploadSuccess={(uploadData) => {
-                      setFormData({...formData, document: uploadData});
+                      setFormData({ ...formData, document: uploadData });
                     }}
                     onUploadError={(error) => {
                       console.error('Upload error:', error);
                     }}
                     onRemoveExisting={() => {
-                      setFormData({...formData, document: null});
+                      setFormData({ ...formData, document: null });
                     }}
                     folder="appzeto/users/documents"
                     maxSize={10 * 1024 * 1024} // 10MB
@@ -2078,7 +2120,7 @@ const Admin_user_management = () => {
                 </motion.div>
 
                 {/* Status Field */}
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 1.0 }}
@@ -2088,7 +2130,7 @@ const Admin_user_management = () => {
                   <Combobox
                     options={statusOptions}
                     value={formData.status}
-                    onChange={(value) => setFormData({...formData, status: value})}
+                    onChange={(value) => setFormData({ ...formData, status: value })}
                     placeholder="Select status"
                     className="h-12 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
                   />
@@ -2096,58 +2138,58 @@ const Admin_user_management = () => {
 
                 {/* Password Fields Grid - Only for non-client users */}
                 {formData.role !== 'client' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.1 }}
-                    className="space-y-2"
-                  >
-                    <label className="text-sm font-semibold text-gray-700 flex items-center">
-                      Password <span className="text-red-500 ml-1">{showCreateModal ? '*' : ''}</span>
-                      {!showCreateModal && <span className="text-gray-500 ml-2 text-xs">(Leave blank to keep current)</span>}
-                    </label>
-                    <input
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) => setFormData({...formData, password: e.target.value})}
-                      className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                      placeholder={showCreateModal ? "Enter password" : "Enter new password"}
-                    />
-                  </motion.div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 1.1 }}
+                      className="space-y-2"
+                    >
+                      <label className="text-sm font-semibold text-gray-700 flex items-center">
+                        Password <span className="text-red-500 ml-1">{showCreateModal ? '*' : ''}</span>
+                        {!showCreateModal && <span className="text-gray-500 ml-2 text-xs">(Leave blank to keep current)</span>}
+                      </label>
+                      <input
+                        type="password"
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                        placeholder={showCreateModal ? "Enter password" : "Enter new password"}
+                      />
+                    </motion.div>
 
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.2 }}
-                    className="space-y-2"
-                  >
-                    <label className="text-sm font-semibold text-gray-700 flex items-center">
-                      Confirm Password <span className="text-red-500 ml-1">{showCreateModal ? '*' : ''}</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={formData.confirmPassword}
-                      onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-                      className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                      placeholder="Confirm password"
-                    />
-                    {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
-                      <motion.p 
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="text-xs text-red-600 flex items-center"
-                      >
-                        <AlertCircle className="h-3 w-3 mr-1" />
-                        Passwords do not match
-                      </motion.p>
-                    )}
-                  </motion.div>
-                </div>
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 1.2 }}
+                      className="space-y-2"
+                    >
+                      <label className="text-sm font-semibold text-gray-700 flex items-center">
+                        Confirm Password <span className="text-red-500 ml-1">{showCreateModal ? '*' : ''}</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={formData.confirmPassword}
+                        onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                        className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                        placeholder="Confirm password"
+                      />
+                      {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                        <motion.p
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="text-xs text-red-600 flex items-center"
+                        >
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          Passwords do not match
+                        </motion.p>
+                      )}
+                    </motion.div>
+                  </div>
                 )}
 
                 {/* Form Actions */}
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 1.2 }}
@@ -2216,7 +2258,7 @@ const Admin_user_management = () => {
 
               <div className="p-6 space-y-6 max-h-[calc(90vh-140px)] overflow-y-auto">
                 {/* User Avatar and Basic Info */}
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
@@ -2230,12 +2272,12 @@ const Admin_user_management = () => {
                     <p className="text-gray-600 mb-2">{selectedUser.email}</p>
                     <div className="flex flex-wrap gap-2">
                       <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full border ${getRoleColor(selectedUser.role)}`}>
-                        {selectedUser.role === 'admin' ? 'Admin' : 
-                         selectedUser.role === 'hr' ? 'HR' :
-                         selectedUser.role === 'accountant' ? 'Accountant' :
-                         selectedUser.role === 'pem' ? 'Project Expense Manager (PEM)' :
-                         selectedUser.role === 'project-manager' ? 'Project Manager' : 
-                         selectedUser.role === 'employee' ? 'Employee' : 'Client'}
+                        {selectedUser.role === 'admin' ? 'Admin' :
+                          selectedUser.role === 'hr' ? 'HR' :
+                            selectedUser.role === 'accountant' ? 'Accountant' :
+                              selectedUser.role === 'pem' ? 'Project Expense Manager (PEM)' :
+                                selectedUser.role === 'project-manager' ? 'Project Manager' :
+                                  selectedUser.role === 'employee' ? 'Employee' : 'Client'}
                       </span>
                       {selectedUser.team && (
                         <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${getTeamColor(selectedUser.team)}`}>
@@ -2251,11 +2293,24 @@ const Admin_user_management = () => {
                         {selectedUser.status}
                       </span>
                     </div>
+                    {selectedUser.role === 'client' && selectedUser.linkedSalesEmployee && (
+                      <div className="mt-3 p-3 bg-blue-50 rounded-xl border border-blue-100 flex items-center space-x-2">
+                        <Users className="h-4 w-4 text-blue-600" />
+                        <div>
+                          <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Linked Sales Employee</p>
+                          <p className="text-sm font-semibold text-blue-900">
+                            {typeof selectedUser.linkedSalesEmployee === 'object'
+                              ? selectedUser.linkedSalesEmployee.name
+                              : salesTeam.find(s => (s.id || s._id) === selectedUser.linkedSalesEmployee)?.name || 'Assigned'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
 
                 {/* Contact Information */}
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
@@ -2347,7 +2402,7 @@ const Admin_user_management = () => {
                 </motion.div>
 
                 {/* Action Buttons */}
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
@@ -2408,7 +2463,7 @@ const Admin_user_management = () => {
               </div>
 
               <div className="p-6">
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
@@ -2427,32 +2482,32 @@ const Admin_user_management = () => {
                   {(() => {
                     const teamMembers = selectedTeamLeadForDelete.teamMembers || []
                     const teamMemberCount = Array.isArray(teamMembers) ? teamMembers.length : 0
-                    
+
                     return (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-start space-x-3">
-                      <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-blue-800 mb-1">Remove Team Lead Status</p>
-                        <p className="text-sm text-blue-700">
-                          Are you sure you want to remove <strong>{selectedTeamLeadForDelete.name}</strong> as a team lead?
-                          {teamMemberCount > 0 && (
-                            <span className="block mt-1">
-                              This will automatically unassign <strong>{teamMemberCount} team member{teamMemberCount > 1 ? 's' : ''}</strong> from this team lead.
-                            </span>
-                          )}
-                          <span className="block mt-2 text-xs">
-                            Note: The user will remain in the system but will no longer be a team lead.
-                          </span>
-                        </p>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-start space-x-3">
+                          <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-blue-800 mb-1">Remove Team Lead Status</p>
+                            <p className="text-sm text-blue-700">
+                              Are you sure you want to remove <strong>{selectedTeamLeadForDelete.name}</strong> as a team lead?
+                              {teamMemberCount > 0 && (
+                                <span className="block mt-1">
+                                  This will automatically unassign <strong>{teamMemberCount} team member{teamMemberCount > 1 ? 's' : ''}</strong> from this team lead.
+                                </span>
+                              )}
+                              <span className="block mt-2 text-xs">
+                                Note: The user will remain in the system but will no longer be a team lead.
+                              </span>
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
                     )
                   })()}
                 </motion.div>
 
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
@@ -2521,7 +2576,7 @@ const Admin_user_management = () => {
               </div>
 
               <div className="p-6">
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
@@ -2550,7 +2605,7 @@ const Admin_user_management = () => {
                   </div>
                 </motion.div>
 
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
@@ -2606,7 +2661,7 @@ const Admin_user_management = () => {
                       Create Developer Team Lead
                     </h3>
                     <p className="text-indigo-100 text-sm mt-1">
-                      {devLeadCreationStep === 1 
+                      {devLeadCreationStep === 1
                         ? 'Step 1: Select a developer to make team lead'
                         : 'Step 2: Assign team members'}
                     </p>
@@ -2661,34 +2716,32 @@ const Admin_user_management = () => {
                               const assignedToLeads = getAssignedToOtherLeads()
                               const isAssignedToAnyLead = assignedToLeads.includes(memberIdStr)
                               const isTeamLead = member.isTeamLead === true
-                              
+
                               return (
                                 <div
                                   key={memberId}
-                                  className={`p-4 transition-colors ${
-                                    isAssignedToAnyLead || isTeamLead
-                                      ? 'opacity-50 cursor-not-allowed bg-gray-100'
-                                      : isSelected 
-                                        ? 'bg-indigo-50 border-l-4 border-indigo-500 cursor-pointer hover:bg-indigo-100' 
-                                        : 'cursor-pointer hover:bg-gray-50'
-                                  }`}
+                                  className={`p-4 transition-colors ${isAssignedToAnyLead || isTeamLead
+                                    ? 'opacity-50 cursor-not-allowed bg-gray-100'
+                                    : isSelected
+                                      ? 'bg-indigo-50 border-l-4 border-indigo-500 cursor-pointer hover:bg-indigo-100'
+                                      : 'cursor-pointer hover:bg-gray-50'
+                                    }`}
                                   onClick={() => {
                                     if (!isAssignedToAnyLead && !isTeamLead) {
                                       handleSelectDeveloperForLead(member)
                                     } else {
                                       const reason = isTeamLead ? 'already a team lead' : 'assigned to another team lead'
-                                      addToast({ 
-                                        type: 'error', 
-                                        message: `${member?.name || 'This developer'} is ${reason}. Please remove them first.` 
+                                      addToast({
+                                        type: 'error',
+                                        message: `${member?.name || 'This developer'} is ${reason}. Please remove them first.`
                                       })
                                     }
                                   }}
                                 >
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
-                                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                                        isSelected ? 'bg-indigo-600' : isAssignedToAnyLead || isTeamLead ? 'bg-gray-300' : 'bg-gray-400'
-                                      }`}>
+                                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${isSelected ? 'bg-indigo-600' : isAssignedToAnyLead || isTeamLead ? 'bg-gray-300' : 'bg-gray-400'
+                                        }`}>
                                         {member?.avatar || member?.name?.charAt(0) || 'D'}
                                       </div>
                                       <div>
@@ -2705,11 +2758,10 @@ const Admin_user_management = () => {
                                         )}
                                       </div>
                                     </div>
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                                      isSelected 
-                                        ? 'bg-indigo-600 border-indigo-600' 
-                                        : 'border-gray-300'
-                                    }`}>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected
+                                      ? 'bg-indigo-600 border-indigo-600'
+                                      : 'border-gray-300'
+                                      }`}>
                                       {isSelected && (
                                         <CheckCircle className="h-4 w-4 text-white" />
                                       )}
@@ -2750,14 +2802,12 @@ const Admin_user_management = () => {
                         <button
                           type="button"
                           onClick={() => setDevLeadToggle(!devLeadToggle)}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                            devLeadToggle ? 'bg-indigo-600' : 'bg-gray-300'
-                          }`}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${devLeadToggle ? 'bg-indigo-600' : 'bg-gray-300'
+                            }`}
                         >
                           <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              devLeadToggle ? 'translate-x-6' : 'translate-x-1'
-                            }`}
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${devLeadToggle ? 'translate-x-6' : 'translate-x-1'
+                              }`}
                           />
                         </button>
                       </div>
@@ -2774,12 +2824,12 @@ const Admin_user_management = () => {
                             Team leads excluded
                           </span>
                         </div>
-                    <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-xs text-blue-800 flex items-center space-x-1">
-                        <AlertCircle className="h-3 w-3 flex-shrink-0" />
-                        <span>Team leads and developers assigned to any team lead cannot be selected. Remove them from their current team first.</span>
-                      </p>
-                    </div>
+                        <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs text-blue-800 flex items-center space-x-1">
+                            <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                            <span>Team leads and developers assigned to any team lead cannot be selected. Remove them from their current team first.</span>
+                          </p>
+                        </div>
                         <div className="border border-gray-300 rounded-lg max-h-64 overflow-y-auto">
                           {developerTeam.length > 0 ? (
                             <div className="divide-y divide-gray-200">
@@ -2800,24 +2850,22 @@ const Admin_user_management = () => {
                                   const selectedUserId = selectedDeveloperForLead?.id || selectedDeveloperForLead?._id
                                   const assignedToOtherLeads = getAssignedToOtherLeads(selectedUserId)
                                   const isAssignedToOtherLead = assignedToOtherLeads.includes(String(memberId))
-                                  
+
                                   return (
                                     <div
                                       key={memberId}
-                                      className={`p-3 transition-colors ${
-                                        isAssignedToOtherLead 
-                                          ? 'opacity-50 cursor-not-allowed bg-gray-100' 
-                                          : isSelected 
-                                            ? 'bg-indigo-50 border-l-4 border-indigo-500 cursor-pointer hover:bg-indigo-100' 
-                                            : 'cursor-pointer hover:bg-gray-50'
-                                      }`}
+                                      className={`p-3 transition-colors ${isAssignedToOtherLead
+                                        ? 'opacity-50 cursor-not-allowed bg-gray-100'
+                                        : isSelected
+                                          ? 'bg-indigo-50 border-l-4 border-indigo-500 cursor-pointer hover:bg-indigo-100'
+                                          : 'cursor-pointer hover:bg-gray-50'
+                                        }`}
                                       onClick={() => !isAssignedToOtherLead && handleDevTeamMemberToggle(memberId)}
                                     >
                                       <div className="flex items-center justify-between">
                                         <div className="flex items-center space-x-3">
-                                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                                            isSelected ? 'bg-indigo-600' : isAssignedToOtherLead ? 'bg-gray-300' : 'bg-gray-400'
-                                          }`}>
+                                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${isSelected ? 'bg-indigo-600' : isAssignedToOtherLead ? 'bg-gray-300' : 'bg-gray-400'
+                                            }`}>
                                             {member?.avatar || member?.name?.charAt(0) || 'D'}
                                           </div>
                                           <div>
@@ -2834,11 +2882,10 @@ const Admin_user_management = () => {
                                             )}
                                           </div>
                                         </div>
-                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                                          isSelected 
-                                            ? 'bg-indigo-600 border-indigo-600' 
-                                            : 'border-gray-300'
-                                        }`}>
+                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isSelected
+                                          ? 'bg-indigo-600 border-indigo-600'
+                                          : 'border-gray-300'
+                                          }`}>
                                           {isSelected && (
                                             <CheckCircle className="h-4 w-4 text-white" />
                                           )}
@@ -2975,7 +3022,7 @@ const Admin_user_management = () => {
                 {(() => {
                   const teamMembers = selectedTeamLeadForMembers.teamMembers || []
                   const teamMemberCount = Array.isArray(teamMembers) ? teamMembers.length : 0
-                  
+
                   if (teamMemberCount === 0) {
                     return (
                       <div className="text-center py-12">
@@ -3149,14 +3196,12 @@ const Admin_user_management = () => {
                     <button
                       type="button"
                       onClick={() => setDevLeadToggle(!devLeadToggle)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        devLeadToggle ? 'bg-indigo-600' : 'bg-gray-300'
-                      }`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${devLeadToggle ? 'bg-indigo-600' : 'bg-gray-300'
+                        }`}
                     >
                       <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          devLeadToggle ? 'translate-x-6' : 'translate-x-1'
-                        }`}
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${devLeadToggle ? 'translate-x-6' : 'translate-x-1'
+                          }`}
                       />
                     </button>
                   </div>
@@ -3203,24 +3248,22 @@ const Admin_user_management = () => {
                               const selectedUserId = selectedUser?.id || selectedUser?._id
                               const assignedToOtherLeads = getAssignedToOtherLeads(selectedUserId)
                               const isAssignedToOtherLead = assignedToOtherLeads.includes(String(memberId))
-                              
+
                               return (
                                 <div
                                   key={memberId}
-                                  className={`p-3 transition-colors ${
-                                    isAssignedToOtherLead 
-                                      ? 'opacity-50 cursor-not-allowed bg-gray-100' 
-                                      : isSelected 
-                                        ? 'bg-indigo-50 border-l-4 border-indigo-500 cursor-pointer hover:bg-indigo-100' 
-                                        : 'cursor-pointer hover:bg-gray-50'
-                                  }`}
+                                  className={`p-3 transition-colors ${isAssignedToOtherLead
+                                    ? 'opacity-50 cursor-not-allowed bg-gray-100'
+                                    : isSelected
+                                      ? 'bg-indigo-50 border-l-4 border-indigo-500 cursor-pointer hover:bg-indigo-100'
+                                      : 'cursor-pointer hover:bg-gray-50'
+                                    }`}
                                   onClick={() => !isAssignedToOtherLead && handleDevTeamMemberToggle(memberId)}
                                 >
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
-                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                                        isSelected ? 'bg-indigo-600' : isAssignedToOtherLead ? 'bg-gray-300' : 'bg-gray-400'
-                                      }`}>
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${isSelected ? 'bg-indigo-600' : isAssignedToOtherLead ? 'bg-gray-300' : 'bg-gray-400'
+                                        }`}>
                                         {member?.avatar || member?.name?.charAt(0) || 'D'}
                                       </div>
                                       <div>
@@ -3237,11 +3280,10 @@ const Admin_user_management = () => {
                                         )}
                                       </div>
                                     </div>
-                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                                      isSelected 
-                                        ? 'bg-indigo-600 border-indigo-600' 
-                                        : 'border-gray-300'
-                                    }`}>
+                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isSelected
+                                      ? 'bg-indigo-600 border-indigo-600'
+                                      : 'border-gray-300'
+                                      }`}>
                                       {isSelected && (
                                         <CheckCircle className="h-4 w-4 text-white" />
                                       )}

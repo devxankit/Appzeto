@@ -52,21 +52,38 @@ const recalculateProjectFinancials = async (project, totals) => {
     (sum, receipt) => sum + Math.round(Number(receipt.amount || 0)),
     0
   );
-  
+
+  // Include admin-recorded manual recoveries from AdminFinance
+  const AdminFinance = require('../models/AdminFinance');
+  const manualRecoveries = await AdminFinance.aggregate([
+    {
+      $match: {
+        recordType: 'transaction',
+        transactionType: 'incoming',
+        status: { $ne: 'cancelled' },
+        project: project._id,
+        'metadata.sourceType': 'adminManualRecovery'
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalAmount: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const totalManualRecoveries = manualRecoveries[0]?.totalAmount || 0;
+
   // Calculate total received from all sources:
   // 1. Approved PaymentReceipts (from PaymentReceipt model)
   // 2. Paid installments (from installmentPlan with status 'paid')
-  // 
-  // Strategy: Always recalculate from actual data sources to ensure accuracy
-  // This ensures that when a new paid installment is added or marked as paid,
-  // or when a payment receipt is approved, the totalReceived is correctly updated
-  
-  const totalFromReceiptsAndInstallments = totalApprovedPayments + collectedFromInstallments;
-  
-  // Always use the calculated value from current data (includes new paid installments and approved receipts)
-  // This ensures outstanding balance updates correctly when installments are marked as paid or receipts are approved
-  const totalReceived = totalFromReceiptsAndInstallments;
-  
+  // 3. Admin manual recoveries (from AdminFinance with metadata.sourceType = 'adminManualRecovery')
+  //
+  // Strategy: recompute from actual data sources only, so values don't drift or double-count
+  // when recalculations run multiple times.
+
+  const totalReceived = totalApprovedPayments + collectedFromInstallments + totalManualRecoveries;
+
   // Update advanceReceived to reflect current total received
   project.financialDetails.advanceReceived = Math.round(totalReceived);
   

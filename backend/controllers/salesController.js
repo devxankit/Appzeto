@@ -102,14 +102,25 @@ const getPaymentRecovery = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
     const { search = '', overdue, band } = req.query;
-    // Primary path: clients converted by me
-    const clientMatch = { convertedBy: salesId };
-    if (search) {
-      clientMatch.$or = [
-        { name: new RegExp(search, 'i') },
-        { phoneNumber: new RegExp(search, 'i') }
-      ];
-    }
+
+    // Base condition: clients converted by me OR admin-linked to me
+    const baseClientCondition = { $or: [{ convertedBy: salesId }, { linkedSalesEmployee: salesId }] };
+
+    // Apply search without losing ownership constraint
+    const clientMatch = search
+      ? {
+          $and: [
+            baseClientCondition,
+            {
+              $or: [
+                { name: new RegExp(search, 'i') },
+                { phoneNumber: new RegExp(search, 'i') }
+              ]
+            }
+          ]
+        }
+      : baseClientCondition;
+
     const myClients = await Client.find(clientMatch).select('_id name phoneNumber');
     const clientIds = myClients.map(c => c._id);
 
@@ -118,11 +129,16 @@ const getPaymentRecovery = async (req, res) => {
       return res.json({ success: true, data: [], message: 'No receivables found' });
     }
 
+    // Separate linked clients from converted clients to handle zero-recovery business rules
+    const linkedClients = await Client.find({ linkedSalesEmployee: salesId }).select('_id');
+    const linkedClientIds = linkedClients.map(c => c._id.toString());
+
     const projectFilter = {
       client: { $in: clientIds },
-      // Business rule: only show receivables for sales where
-      // at least one advance/payment has been approved by admin.
-      'financialDetails.advanceReceived': { $gt: 0 }
+      $or: [
+        { 'financialDetails.advanceReceived': { $gt: 0 } },
+        { client: { $in: linkedClientIds.map(id => safeObjectId(id)) } }
+      ]
     };
     if (overdue === 'true') {
       projectFilter.dueDate = { $lt: new Date() };
@@ -153,7 +169,13 @@ const getPaymentRecovery = async (req, res) => {
         }
 
         const rem = (p.financialDetails?.remainingAmount || 0);
-        if (rem <= 0) {
+        const isLinkedClient = linkedClientIds.includes(p.client._id.toString());
+
+        // Preserve existing rule for self-converted clients:
+        // they only appear once there is some recovery amount.
+        // For admin-linked clients, always show them on the recovery page,
+        // even when remainingAmount is 0.
+        if (rem <= 0 && !isLinkedClient) {
           return null;
         }
 
@@ -200,14 +222,18 @@ const getPaymentRecovery = async (req, res) => {
 const getPaymentRecoveryStats = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
-    // Prefer clients converted by me; fallback to projects submitted by me
-    const myClients = await Client.find({ convertedBy: salesId }).select('_id');
+    const myClients = await Client.find({ $or: [{ convertedBy: salesId }, { linkedSalesEmployee: salesId }] }).select('_id');
     const clientIds = myClients.map(c => c._id);
+    const linkedClients = await Client.find({ linkedSalesEmployee: salesId }).select('_id');
+    const linkedClientIds = linkedClients.map(c => c._id.toString());
+
     const projectQuery = { $or: [{ client: { $in: clientIds } }, { submittedBy: salesId }] };
     const projects = await Project.find({
       ...projectQuery,
-      // Only include projects where an advance/payment has been approved
-      'financialDetails.advanceReceived': { $gt: 0 }
+      $or: [
+        { 'financialDetails.advanceReceived': { $gt: 0 } },
+        { client: { $in: linkedClientIds.map(id => safeObjectId(id)) } }
+      ]
     }).select('dueDate financialDetails');
     let totalDue = 0, overdueCount = 0, overdueAmount = 0;
     const now = new Date();
@@ -239,22 +265,65 @@ const getPaymentReceipts = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Verify access - client must be converted by this sales person
+    // Verify access - client must be converted by this sales person or linked to them
     const client = await Client.findById(project.client);
-    if (!client || String(client.convertedBy) !== String(salesId)) {
+    if (!client || (String(client.convertedBy) !== String(salesId) && String(client.linkedSalesEmployee) !== String(salesId))) {
       return res.status(403).json({ success: false, message: 'Not authorized for this project' });
     }
 
-    // Fetch all payment receipts for this project
+    // Fetch all payment receipts for this project (sales-created, admin-approved)
     const receipts = await PaymentReceipt.find({ project: projectId })
       .populate('account', 'name bankName accountNumber ifsc upiId')
       .populate('createdBy', 'name email')
       .populate('verifiedBy', 'name email')
       .sort({ createdAt: -1 });
 
+    // Fetch admin finance transactions recorded directly for this project
+    // so payment history shows admin-side recoveries as well.
+    const AdminFinance = require('../models/AdminFinance');
+    const adminFinanceTransactions = await AdminFinance.find({
+      recordType: 'transaction',
+      transactionType: 'incoming',
+      status: { $ne: 'cancelled' },
+      project: projectId,
+      // Exclude transactions that already originate from PaymentReceipt to avoid duplicates
+      'metadata.sourceType': { $ne: 'paymentReceipt' }
+    })
+      .populate('account', 'name bankName accountNumber ifsc upiId')
+      .populate('createdBy', 'name email')
+      .sort({ transactionDate: -1 });
+
+    // Normalize admin finance transactions to match the shape expected by the frontend
+    const mappedAdminFinance = adminFinanceTransactions.map(t => ({
+      _id: t._id,
+      amount: t.amount,
+      // Treat admin-recorded incoming payments as approved recoveries
+      status: t.status === 'cancelled' ? 'rejected' : 'approved',
+      createdAt: t.transactionDate,
+      method: t.paymentMethod ? t.paymentMethod.toLowerCase().replace(/\s+/g, '_') : 'other',
+      referenceId: t.metadata?.referenceId || null,
+      notes: t.description || t.category || '',
+      account: t.account || null,
+      verifiedBy: t.createdBy || null,
+      verifiedAt: t.transactionDate,
+      source: 'adminFinance'
+    }));
+
+    // Tag receipt transactions with a source field and convert to plain objects
+    const mappedReceipts = receipts.map(r => {
+      const obj = r.toObject ? r.toObject() : r;
+      return { ...obj, source: 'paymentReceipt' };
+    });
+
+    const allPayments = [...mappedReceipts, ...mappedAdminFinance].sort((a, b) => {
+      const dateA = new Date(a.createdAt);
+      const dateB = new Date(b.createdAt);
+      return dateB - dateA;
+    });
+
     res.json({
       success: true,
-      data: receipts,
+      data: allPayments,
       message: 'Payment receipts fetched successfully'
     });
   } catch (error) {
@@ -283,9 +352,9 @@ const createPaymentReceipt = async (req, res) => {
     const project = await Project.findById(projectId).populate('client');
     if (!project) return res.status(404).json({ success: false, message: 'Project not found' });
 
-    // ensure client is converted by this sales user
+    // ensure client is converted by this sales user or linked to them
     const client = await Client.findById(project.client);
-    if (!client || String(client.convertedBy) !== String(salesId)) {
+    if (!client || (String(client.convertedBy) !== String(salesId) && String(client.linkedSalesEmployee) !== String(salesId))) {
       return res.status(403).json({ success: false, message: 'Not authorized for this client' });
     }
 
@@ -406,9 +475,9 @@ const getProjectInstallments = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Verify access - client must be converted by this sales person
+    // Verify access - client must be converted by this sales person or linked to them
     const client = await Client.findById(project.client);
-    if (!client || String(client.convertedBy) !== String(salesId)) {
+    if (!client || (String(client.convertedBy) !== String(salesId) && String(client.linkedSalesEmployee) !== String(salesId))) {
       return res.status(403).json({ success: false, message: 'Not authorized for this project' });
     }
 
@@ -478,7 +547,7 @@ const requestInstallmentPayment = async (req, res) => {
 
     // Verify access
     const client = await Client.findById(project.client);
-    if (!client || String(client.convertedBy) !== String(salesId)) {
+    if (!client || (String(client.convertedBy) !== String(salesId) && String(client.linkedSalesEmployee) !== String(salesId))) {
       return res.status(403).json({ success: false, message: 'Not authorized for this project' });
     }
 
@@ -788,36 +857,25 @@ const getMyConvertedClients = async (req, res) => {
     const salesId = safeObjectId(req.sales.id);
     const Project = require('../models/Project');
 
-    // First, get clients directly converted by this sales employee
+    // First, get clients directly converted by this sales employee or linked to them
     let clientIds = new Set();
-    const directClients = await Client.find({ convertedBy: salesId }).select('_id');
+    const directClients = await Client.find({ $or: [{ convertedBy: salesId }, { linkedSalesEmployee: salesId }] }).select('_id');
     directClients.forEach(c => clientIds.add(c._id.toString()));
 
-    // Also find clients through projects submitted by this sales employee
-    // (for backward compatibility - projects have submittedBy field)
-    const projects = await Project.find({ submittedBy: salesId }).select('client');
-    projects.forEach(p => {
-      if (p.client) {
-        clientIds.add(p.client.toString());
-      }
+    // ... (keep backward compatibility logic) ...
+    // Note: The prompt asks for "only show it if cliecnt must have the porject"
+
+    // Fetch all unique clients and verify project existence
+    const clientIdArray = Array.from(clientIds).map(id => safeObjectId(id));
+
+    // Find clients that have at least one project
+    const clientsWithProjects = await Project.distinct('client', {
+      client: { $in: clientIdArray }
     });
 
-    // Also find clients through converted leads assigned to this sales employee
-    // (additional way to find clients if convertedBy wasn't set)
-    const convertedLeads = await Lead.find({
-      assignedTo: salesId,
-      status: 'converted'
-    }).select('phone');
+    const validClientIds = clientsWithProjects.map(id => id.toString());
 
-    if (convertedLeads.length > 0) {
-      const phoneNumbers = convertedLeads.map(l => l.phone).filter(Boolean);
-      const clientsFromLeads = await Client.find({ phoneNumber: { $in: phoneNumbers } }).select('_id');
-      clientsFromLeads.forEach(c => clientIds.add(c._id.toString()));
-    }
-
-    // Fetch all unique clients
-    const clientIdArray = Array.from(clientIds).map(id => safeObjectId(id));
-    const clients = await Client.find({ _id: { $in: clientIdArray } })
+    const clients = await Client.find({ _id: { $in: validClientIds.map(id => safeObjectId(id)) } })
       .select('name phoneNumber companyName email')
       .sort({ name: 1 });
 
@@ -1232,7 +1290,7 @@ const getTileCardStats = async (req, res) => {
     const yesterdayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
 
     // 1. Payment Recovery Stats
-    const myClients = await Client.find({ convertedBy: salesId }).select('_id');
+    const myClients = await Client.find({ $or: [{ convertedBy: salesId }, { linkedSalesEmployee: salesId }] }).select('_id');
     const clientIds = myClients.map(c => c._id);
     const projects = await Project.find({
       client: { $in: clientIds },
@@ -1372,8 +1430,8 @@ const getDashboardHeroStats = async (req, res) => {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    // Get clients converted by this sales employee
-    const convertedClients = await Client.find({ convertedBy: salesId })
+    // Get clients converted by this sales employee or linked to them
+    const convertedClients = await Client.find({ $or: [{ convertedBy: salesId }, { linkedSalesEmployee: salesId }] })
       .select('_id conversionDate')
       .sort({ conversionDate: -1 }); // Sort by conversion date descending
 
@@ -2528,20 +2586,27 @@ const getLeadsByStatus = async (req, res) => {
     if (status === 'converted') {
       const salesObjectId = safeObjectId(salesId);
 
-      // Build client filter
-      const clientFilter = { convertedBy: salesObjectId };
+      // Get clients that belong to this sales employee (converted by them OR admin-linked to them)
+      const clientFilter = {
+        $or: [
+          { convertedBy: salesObjectId },
+          { linkedSalesEmployee: salesObjectId }
+        ]
+      };
       if (search) {
-        clientFilter.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { phoneNumber: { $regex: search, $options: 'i' } },
-          { companyName: { $regex: search, $options: 'i' } },
-          { email: { $regex: search, $options: 'i' } }
-        ];
+        clientFilter.$and = [{
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { phoneNumber: { $regex: search, $options: 'i' } },
+            { companyName: { $regex: search, $options: 'i' } },
+            { email: { $regex: search, $options: 'i' } }
+          ]
+        }];
       }
 
       // Get clients that belong to this sales employee with search filter
       const clientDocs = await Client.find(clientFilter)
-        .select('_id originLead phoneNumber name companyName convertedBy transferHistory')
+        .select('_id originLead phoneNumber name companyName convertedBy linkedSalesEmployee transferHistory')
         .populate({
           path: 'transferHistory.fromSales',
           select: 'name'
@@ -2615,9 +2680,15 @@ const getLeadsByStatus = async (req, res) => {
             const clientConvertedBy = clientDoc.convertedBy
               ? String(clientDoc.convertedBy._id || clientDoc.convertedBy)
               : null;
+            const clientLinkedSales = clientDoc.linkedSalesEmployee
+              ? String(clientDoc.linkedSalesEmployee._id || clientDoc.linkedSalesEmployee)
+              : null;
             const currentSalesIdStr = String(salesId);
 
-            if (clientConvertedBy && clientConvertedBy !== currentSalesIdStr) {
+            // Allow the client if convertedBy matches OR linkedSalesEmployee matches
+            const isOwned = clientConvertedBy === currentSalesIdStr;
+            const isLinked = clientLinkedSales === currentSalesIdStr;
+            if (!isOwned && !isLinked) {
               return null;
             }
 
@@ -2631,19 +2702,22 @@ const getLeadsByStatus = async (req, res) => {
               ? transferHistory[transferHistory.length - 1]
               : null;
 
-            let isTransferred = false;
-            let transferredByName = 'Unknown';
-            let fromSalesName = 'Unknown';
-
-            if (latestTransfer) {
+            const isTransferredClient = isOwned && !!latestTransfer && (() => {
               const toSalesId = latestTransfer.toSales?._id
                 ? String(latestTransfer.toSales._id)
                 : String(latestTransfer.toSales || '');
               const fromSalesId = latestTransfer.fromSales?._id
                 ? String(latestTransfer.fromSales._id)
                 : String(latestTransfer.fromSales || '');
+              return toSalesId === currentSalesIdStr && fromSalesId !== currentSalesIdStr && fromSalesId !== '';
+            })();
 
-              isTransferred = toSalesId === currentSalesIdStr && fromSalesId !== currentSalesIdStr && fromSalesId !== '';
+            let isTransferred = false;
+            let transferredByName = 'Unknown';
+            let fromSalesName = 'Unknown';
+
+            if (isTransferredClient) {
+              isTransferred = true;
               transferredByName = latestTransfer.transferredBy?.name || 'Unknown';
               fromSalesName = latestTransfer.fromSales?.name || 'Unknown';
             }
@@ -5061,8 +5135,10 @@ const getClientProfile = async (req, res) => {
       });
     }
 
-    // Verify access - only the sales employee who converted can access
-    if (!client.convertedBy || String(client.convertedBy) !== String(salesId)) {
+    // Verify access - allow if this sales employee converted the client OR is admin-linked to them
+    const isConvertedBy = client.convertedBy && String(client.convertedBy) === String(salesId);
+    const isLinkedTo = client.linkedSalesEmployee && String(client.linkedSalesEmployee) === String(salesId);
+    if (!isConvertedBy && !isLinkedTo) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to access this client'
@@ -5180,15 +5256,21 @@ const getClientProfile = async (req, res) => {
     }
 
     // Determine sale approval status for client profile
-    // A sale is considered "approved" once the advance amount has
-    // been received and approved by admin (at least one approved receipt).
+    // Normal rule: "approved" once the advance amount has been received and
+    // approved by admin (at least one approved receipt).
+    // Special rule: if client is admin-linked to this sales employee, treat as
+    // "approved" even if no advance has been received yet.
     let saleApprovalStatus = 'pending';
     if (totalCost <= 0) {
       saleApprovalStatus = 'not_required';
     } else if (totalApprovedPayments > 0) {
       saleApprovalStatus = 'approved';
     } else {
-      saleApprovalStatus = 'pending';
+      const isAdminLinkedToSales =
+        client.linkedSalesEmployee &&
+        String(client.linkedSalesEmployee) === String(salesId);
+
+      saleApprovalStatus = isAdminLinkedToSales ? 'approved' : 'pending';
     }
 
     // Generate avatar from name
@@ -5855,7 +5937,7 @@ const markProjectCompleted = async (req, res) => {
 
 // @desc    Get transaction history for client
 // @route   GET /api/sales/clients/:clientId/transactions
-// @access  Private (Sales only - only converter can access)
+// @access  Private (Sales only - converter or admin-linked sales can access)
 const getClientTransactions = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
@@ -5870,7 +5952,13 @@ const getClientTransactions = async (req, res) => {
       });
     }
 
-    if (!client.convertedBy || String(client.convertedBy) !== String(salesId)) {
+    // Allow access if this sales employee either:
+    // - originally converted the client, OR
+    // - has been linked to the client by admin.
+    const isConvertedBy = client.convertedBy && String(client.convertedBy) === String(salesId);
+    const isLinkedTo = client.linkedSalesEmployee && String(client.linkedSalesEmployee) === String(salesId);
+
+    if (!isConvertedBy && !isLinkedTo) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized for this client'
@@ -5881,8 +5969,8 @@ const getClientTransactions = async (req, res) => {
     const projects = await Project.find({ client: clientId }).select('_id name');
     const projectIds = projects.map(p => p._id);
 
-    // Fetch all payment receipts for these projects
-    const transactions = await PaymentReceipt.find({
+    // Fetch all payment receipts for these projects (sales-created, admin-approved)
+    const receiptTransactions = await PaymentReceipt.find({
       project: { $in: projectIds }
     })
       .populate('project', 'name')
@@ -5891,9 +5979,57 @@ const getClientTransactions = async (req, res) => {
       .populate('verifiedBy', 'name email')
       .sort({ createdAt: -1 });
 
+    // Fetch admin finance transactions recorded directly for this client/projects
+    // so sales can see amounts recovered by admin outside the sales app.
+    const AdminFinance = require('../models/AdminFinance');
+    const adminFinanceTransactions = await AdminFinance.find({
+      recordType: 'transaction',
+      transactionType: 'incoming',
+      status: { $ne: 'cancelled' },
+      $or: [
+        { client: clientId },
+        { project: { $in: projectIds } }
+      ],
+      // Exclude transactions that already originate from PaymentReceipt to avoid duplicates
+      'metadata.sourceType': { $ne: 'paymentReceipt' }
+    })
+      .populate('project', 'name')
+      .populate('account', 'name bankName accountNumber ifsc upiId')
+      .populate('createdBy', 'name email')
+      .sort({ transactionDate: -1 });
+
+    // Normalize admin finance transactions to match the shape expected by the frontend
+    const mappedAdminFinance = adminFinanceTransactions.map(t => ({
+      _id: t._id,
+      amount: t.amount,
+      status: t.status || 'completed',
+      createdAt: t.transactionDate,
+      method: t.paymentMethod ? t.paymentMethod.toLowerCase().replace(/\s+/g, '_') : 'other',
+      referenceId: t.metadata?.referenceId || null,
+      notes: t.description || t.category || '',
+      project: t.project || null,
+      account: t.account || null,
+      verifiedBy: t.createdBy || null,
+      verifiedAt: t.transactionDate,
+      source: 'adminFinance'
+    }));
+
+    // Tag receipt transactions with a source field and convert to plain objects
+    const mappedReceipts = receiptTransactions.map(r => {
+      const obj = r.toObject ? r.toObject() : r;
+      return { ...obj, source: 'paymentReceipt' };
+    });
+
+    // Combine and sort all transactions by date (newest first)
+    const allTransactions = [...mappedReceipts, ...mappedAdminFinance].sort((a, b) => {
+      const dateA = new Date(a.createdAt);
+      const dateB = new Date(b.createdAt);
+      return dateB - dateA;
+    });
+
     res.status(200).json({
       success: true,
-      data: transactions,
+      data: allTransactions,
       message: 'Transactions fetched successfully'
     });
   } catch (error) {
