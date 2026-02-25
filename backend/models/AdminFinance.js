@@ -262,27 +262,35 @@ adminFinanceSchema.statics.getFinanceStatistics = async function(timeFilter = 'a
   let dateFilter = {};
   
   switch (timeFilter) {
-    case 'today':
-      dateFilter = {
-        $gte: new Date(now.setHours(0, 0, 0, 0)),
-        $lte: new Date(now.setHours(23, 59, 59, 999))
-      };
+    case 'today': {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      dateFilter = { $gte: start, $lte: end };
       break;
-    case 'week':
-      const weekAgo = new Date(now);
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      dateFilter = { $gte: weekAgo };
+    }
+    case 'week': {
+      // Last 7 days including today
+      const start = new Date(now);
+      start.setDate(start.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      dateFilter = { $gte: start, $lte: end };
       break;
-    case 'month':
-      const monthAgo = new Date(now);
-      monthAgo.setMonth(monthAgo.getMonth() - 1);
-      dateFilter = { $gte: monthAgo };
+    }
+    case 'month': {
+      // Current calendar month
+      const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      dateFilter = { $gte: start, $lte: end };
       break;
-    case 'year':
-      const yearAgo = new Date(now);
-      yearAgo.setFullYear(yearAgo.getFullYear() - 1);
-      dateFilter = { $gte: yearAgo };
+    }
+    case 'year': {
+      // Current calendar year
+      const start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+      dateFilter = { $gte: start, $lte: end };
       break;
+    }
   }
   
   const matchFilter = timeFilter !== 'all' 

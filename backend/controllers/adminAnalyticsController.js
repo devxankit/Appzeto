@@ -88,9 +88,10 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
   const yesterdayEnd = new Date(todayEnd);
   yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
   
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
   
   // Get date range based on filter (null if 'all' or no filter)
   const { dateFilter, periodStart, periodEnd } = getDateRangeFromFilter(timeFilter, startDate, endDate);
@@ -306,7 +307,7 @@ const getAdminDashboardStats = asyncHandler(async (req, res, next) => {
   // Calculate overall finance growth (compare this month vs last month)
   const transactionsThisMonth = await AdminFinance.find({
     recordType: 'transaction',
-    transactionDate: { $gte: currentMonthStart }
+    transactionDate: { $gte: currentMonthStart, $lte: currentMonthEnd }
   });
   
   const revenueThisMonth = transactionsThisMonth
