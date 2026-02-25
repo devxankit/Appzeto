@@ -10,7 +10,8 @@ const {
   resetPassword,
   getMyTeam,
   getMilestoneById,
-  getMilestoneTasks
+  getMilestoneTasks,
+  getRewardProgress
 } = require('../controllers/employeeController');
 const {
   getPublishedNoticesForEmployee,
@@ -37,9 +38,10 @@ router.post('/logout', logoutEmployee);
 router.get('/notices', getPublishedNoticesForEmployee);
 router.post('/notices/:id/view', incrementNoticeViews);
 
-// Employee wallet routes
+// Employee wallet & rewards routes
 router.get('/wallet/summary', getWalletSummary);
 router.get('/wallet/transactions', getWalletTransactions);
+router.get('/rewards/progress', getRewardProgress);
 
 // Milestone routes
 router.get('/milestones/:id', getMilestoneById);

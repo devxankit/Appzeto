@@ -66,6 +66,20 @@ export const adminRewardService = {
     return apiRequest(`/admin/rewards/tags/${tagId}`, {
       method: 'DELETE'
     })
+  },
+
+  getRewardHistory: async (params = {}) => {
+    const query = buildQueryString(params)
+    return apiRequest(`/admin/rewards/history${query}`, {
+      method: 'GET'
+    })
+  },
+
+  triggerMonthlyProcess: async (month) => {
+    return apiRequest('/admin/rewards/trigger-process', {
+      method: 'POST',
+      body: JSON.stringify({ month })
+    })
   }
 }
 

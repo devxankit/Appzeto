@@ -303,79 +303,80 @@ const getWalletSummary = async (req, res) => {
 
     const salaryStatus = currentMonthSalary?.status === 'paid' ? 'paid' : 'unpaid';
 
-    // Get rewards for current month (paid status)
-    const monthlyRewards = await EmployeeReward.aggregate([
-      {
-        $match: {
-          employeeId: employeeId,
-          status: 'paid',
-          paidAt: { $gte: monthStart, $lte: monthEnd }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$amount' }
-        }
-      }
+    // Total Paid Rewards (All Time)
+    const paidRewards = await EmployeeReward.aggregate([
+      { $match: { employeeId: employeeId, status: 'paid' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
     ]);
-    const monthlyRewardsAmount = monthlyRewards.length > 0 ? monthlyRewards[0].total : 0;
+    const totalPaidRewards = paidRewards.length > 0 ? paidRewards[0].total : 0;
 
-    // Get all-time rewards total
-    const allTimeRewards = await EmployeeReward.aggregate([
-      {
-        $match: {
-          employeeId: employeeId,
-          status: 'paid'
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$amount' }
-        }
-      }
+    // All Time Pending Rewards (In Salary records)
+    const pendingRewardsFromSalary = await Salary.aggregate([
+      { $match: { employeeId: employeeId, employeeModel: 'Employee', rewardStatus: 'pending' } },
+      { $group: { _id: null, total: { $sum: '$rewardAmount' } } }
     ]);
-    const allTimeRewardsAmount = allTimeRewards.length > 0 ? allTimeRewards[0].total : 0;
+    const totalPendingRewards = pendingRewardsFromSalary.length > 0 ? pendingRewardsFromSalary[0].total : 0;
 
-    // Get all-time salary total
+    // All Time Salary Paid
     const allTimeSalary = await Salary.aggregate([
-      {
-        $match: {
-          employeeId: employeeId,
-          employeeModel: 'Employee',
-          status: 'paid'
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$fixedSalary' }
-        }
-      }
+      { $match: { employeeId: employeeId, employeeModel: 'Employee', status: 'paid' } },
+      { $group: { _id: null, total: { $sum: '$fixedSalary' } } }
     ]);
-    const allTimeSalaryAmount = allTimeSalary.length > 0 ? allTimeSalary[0].total : 0;
-
-    const totalEarnings = allTimeSalaryAmount + allTimeRewardsAmount;
+    const totalPaidSalary = allTimeSalary.length > 0 ? allTimeSalary[0].total : 0;
 
     res.status(200).json({
       success: true,
       data: {
         monthlySalary: fixedSalary,
-        monthlyRewards: monthlyRewardsAmount,
-        totalEarnings: totalEarnings,
+        totalPaidRewards: totalPaidRewards,
+        totalPendingRewards: totalPendingRewards,
+        totalEarnings: totalPaidSalary + totalPaidRewards,
         salaryStatus: salaryStatus,
         rewardProgress: {
-          completionRate: completionRate,
+          completionRate: Math.round(completionRate),
           tasksCompleted: tasksCompleted,
           totalTasks: totalTasks,
-          rewardTarget: 90 // Target completion ratio to win reward
+          rewardTarget: 90
         }
       }
     });
   } catch (error) {
     console.error('Get wallet summary error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch wallet summary' });
+  }
+};
+
+// @desc    Get reward progress for current month
+// @route   GET /api/employee/rewards/progress
+// @access  Private (Employee only)
+const getRewardProgress = async (req, res) => {
+  try {
+    const employeeId = safeObjectId(req.employee.id);
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    await employee.updateStatistics();
+    const completionRate = employee.statistics?.completionRate || 0;
+    const tasksCompleted = employee.statistics?.tasksCompleted || 0;
+
+    const Task = mongoose.model('Task');
+    const totalTasks = await Task.countDocuments({ assignedTo: employeeId });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        completionRate: Math.round(completionRate),
+        tasksCompleted,
+        totalTasks,
+        targetRate: 90,
+        isEligible: completionRate >= 90
+      }
+    });
+  } catch (error) {
+    console.error('Get reward progress error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch reward progress' });
   }
 };
 
@@ -788,5 +789,6 @@ module.exports = {
   resetPassword,
   getMyTeam,
   getMilestoneById,
-  getMilestoneTasks
+  getMilestoneTasks,
+  getRewardProgress
 };

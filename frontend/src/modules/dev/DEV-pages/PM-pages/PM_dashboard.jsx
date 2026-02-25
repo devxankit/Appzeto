@@ -1,24 +1,26 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import PM_navbar from '../../DEV-components/PM_navbar'
 import PM_project_form from '../../DEV-components/PM_project_form'
 import PM_task_form from '../../DEV-components/PM_task_form'
 import { useToast } from '../../../../contexts/ToastContext'
-import { 
-  analyticsService, 
-  projectService, 
-  taskService, 
-  teamService, 
+import {
+  analyticsService,
+  projectService,
+  taskService,
+  teamService,
   milestoneService,
   pmRequestService,
-  socketService, 
-  tokenUtils 
+  pmWalletService,
+  socketService,
+  tokenUtils
 } from '../../DEV-services'
-import { 
-  FiFolder, 
-  FiCheckSquare, 
-  FiUsers, 
+import {
+  FiFolder,
+  FiCheckSquare,
+  FiUsers,
   FiCalendar,
   FiPlus,
   FiTrendingUp,
@@ -53,7 +55,7 @@ const PM_dashboard = () => {
   useEffect(() => {
     loadDashboardData()
     setupWebSocket()
-    
+
     // Don't disconnect WebSocket when navigating between PM pages
     // The WebSocket connection will be managed globally
     return () => {
@@ -70,25 +72,25 @@ const PM_dashboard = () => {
     if (token && tokenUtils.isAuthenticated()) {
       try {
         await socketService.connect(token)
-        
+
         // Listen for connection status
         socketService.on('connection_status', (status) => {
           if (!status.connected) {
             console.warn('WebSocket disconnected:', status.reason)
           }
         })
-        
+
         // Listen for connection errors
         socketService.on('connection_error', (error) => {
           console.error('WebSocket connection error:', error)
           // Don't show error to user, just log it
         })
-        
+
         // Listen for real-time updates
         socketService.on('project_updated', () => {
           loadDashboardData()
         })
-        
+
         socketService.on('task_updated', () => {
           loadDashboardData()
         })
@@ -104,7 +106,7 @@ const PM_dashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true)
-      
+
       // Load projects data first - this is the main source of truth
       const [
         projectsResponse,
@@ -112,7 +114,8 @@ const PM_dashboard = () => {
         productivityMetrics,
         projectGrowth,
         testingProjectsResponse,
-        requestStatsResponse
+        requestStatsResponse,
+        rewardResponse
       ] = await Promise.all([
         projectService.getAllProjects({ limit: 100 }), // Get all projects for statistics
         teamService.getTeamStatistics(),
@@ -125,7 +128,7 @@ const PM_dashboard = () => {
 
       // Get projects data - handle both array response and object with data property
       const allProjects = Array.isArray(projectsResponse) ? projectsResponse : (projectsResponse?.data || [])
-      
+
       // Calculate statistics from projects data (frontend-based calculation)
       // Active = both 'active' and 'in-progress' to match Client/backend usage
       const projectStats = {
@@ -143,7 +146,7 @@ const PM_dashboard = () => {
           return new Date(p.dueDate) < new Date() && !['completed', 'cancelled'].includes(p.status)
         }).length
       }
-      
+
       const clampProgress = (p) => Math.min(100, Math.max(0, Number(p) || 0))
       // Process recent projects (limit to 3 most recent)
       const processedRecentProjects = allProjects
@@ -194,7 +197,7 @@ const PM_dashboard = () => {
       let testingMilestonesCount = 0;
       try {
         const allProjectsForMilestones = Array.isArray(projectsResponse) ? projectsResponse : (projectsResponse?.data || []);
-        const milestonePromises = allProjectsForMilestones.map(project => 
+        const milestonePromises = allProjectsForMilestones.map(project =>
           milestoneService.getMilestonesByProject(project._id).catch(() => ({ data: [] }))
         );
         const milestoneResponses = await Promise.all(milestonePromises);
@@ -269,11 +272,11 @@ const PM_dashboard = () => {
     try {
       // Create task
       const createdTask = await taskService.createTask(taskData)
-      
+
       // Upload attachments if any
       if (taskData.attachments && taskData.attachments.length > 0) {
         toast.info(`Uploading ${taskData.attachments.length} attachment(s)...`)
-        
+
         for (const attachment of taskData.attachments) {
           try {
             const file = attachment.file || attachment
@@ -285,7 +288,7 @@ const PM_dashboard = () => {
           }
         }
       }
-      
+
       toast.success('Task created successfully!')
       setIsTaskFormOpen(false)
       loadDashboardData() // Refresh data
@@ -335,13 +338,13 @@ const PM_dashboard = () => {
   return (
     <div>
       <PM_navbar />
-      
+
       {/* Main Content */}
       <div className="pt-16 lg:pt-16 pb-20 lg:pb-0 min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
           {/* New Project Card */}
-          <div 
+          <div
             onClick={() => navigate('/pm-new-projects')}
             className="bg-teal-100 rounded-xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 border border-teal-300/40 cursor-pointer mb-6 transform hover:scale-[1.02] active:scale-[0.98]"
             style={{
@@ -353,7 +356,7 @@ const PM_dashboard = () => {
                 <h2 className="text-xl font-bold text-teal-900 mb-1">New Project</h2>
                 <p className="text-sm text-teal-700">Projects requiring setup or initial planning</p>
               </div>
-              <div 
+              <div
                 className="bg-teal-500 text-white rounded-full w-12 h-12 flex items-center justify-center shadow-lg border border-teal-400/30"
                 style={{
                   boxShadow: '0 4px 12px -2px rgba(20, 184, 166, 0.3), 0 2px 6px -1px rgba(0, 0, 0, 0.1)'
@@ -429,7 +432,7 @@ const PM_dashboard = () => {
 
           {/* Request Management Card */}
           <div className="mb-6 md:mb-8">
-            <div 
+            <div
               onClick={() => navigate('/pm-requests')}
               className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-2xl p-4 shadow-sm border border-teal-200 cursor-pointer hover:shadow-md hover:border-teal-300 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
             >
@@ -443,16 +446,16 @@ const PM_dashboard = () => {
                     <p className="text-xs text-teal-700">Manage incoming and outgoing requests</p>
                   </div>
                 </div>
-                 <div className="bg-teal-300 text-teal-800 px-4 py-2 rounded-xl shadow-sm">
-                   <p className="text-2xl font-bold">{dashboardData.requestsCount}</p>
-                 </div>
+                <div className="bg-teal-300 text-teal-800 px-4 py-2 rounded-xl shadow-sm">
+                  <p className="text-2xl font-bold">{dashboardData.requestsCount}</p>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Testing Projects Card */}
           <div className="mb-6 md:mb-8">
-            <div 
+            <div
               onClick={() => navigate('/pm-testing-projects')}
               className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-4 shadow-sm border border-purple-200 cursor-pointer hover:shadow-md hover:border-purple-300 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
             >
@@ -466,16 +469,16 @@ const PM_dashboard = () => {
                     <p className="text-xs text-purple-700">Projects currently in testing phase</p>
                   </div>
                 </div>
-                 <div className="bg-purple-300 text-purple-800 px-4 py-2 rounded-xl shadow-sm">
-                   <p className="text-2xl font-bold">{dashboardData.testingProjectsCount}</p>
-                 </div>
+                <div className="bg-purple-300 text-purple-800 px-4 py-2 rounded-xl shadow-sm">
+                  <p className="text-2xl font-bold">{dashboardData.testingProjectsCount}</p>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Testing Milestones Card */}
           <div className="mb-6 md:mb-8">
-            <div 
+            <div
               onClick={() => navigate('/pm-testing-milestones')}
               className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl p-4 shadow-sm border border-indigo-200 cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
             >
@@ -489,9 +492,9 @@ const PM_dashboard = () => {
                     <p className="text-xs text-indigo-700">Milestones currently in testing phase</p>
                   </div>
                 </div>
-                 <div className="bg-indigo-300 text-indigo-800 px-4 py-2 rounded-xl shadow-sm">
-                   <p className="text-2xl font-bold">{dashboardData.testingMilestonesCount}</p>
-                 </div>
+                <div className="bg-indigo-300 text-indigo-800 px-4 py-2 rounded-xl shadow-sm">
+                  <p className="text-2xl font-bold">{dashboardData.testingMilestonesCount}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -502,7 +505,7 @@ const PM_dashboard = () => {
               <h2 className="text-lg font-semibold text-gray-900">Recent Projects</h2>
               <button type="button" onClick={() => navigate('/pm-projects')} className="text-teal-600 text-sm font-medium hover:text-teal-700">View All</button>
             </div>
-            
+
             <div className="space-y-2">
               {dashboardData.recentProjects.map((project, index) => (
                 <div key={index} className="border border-gray-200 rounded-lg p-3">
@@ -512,7 +515,7 @@ const PM_dashboard = () => {
                     <span className="text-gray-900 font-medium">{project.progress}%</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
+                    <div
                       className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${project.progress}%` }}
                     ></div>
@@ -530,7 +533,7 @@ const PM_dashboard = () => {
                 <h3 className="text-lg font-semibold text-gray-900">Project Growth</h3>
                 <FiTrendingUp className="text-teal-600 text-lg" />
               </div>
-              
+
               {/* Scrollable Bar Chart Container */}
               <div className="relative h-32 mb-4">
                 {/* Y-axis labels */}
@@ -542,7 +545,7 @@ const PM_dashboard = () => {
                     return yAxisLabels.map((label, i) => <span key={i}>{label}</span>);
                   })()}
                 </div>
-                
+
                 {/* Scrollable Chart Area */}
                 <div className="ml-8 h-full overflow-x-auto scrollbar-hide">
                   <div className="flex items-end space-x-1 w-max h-full relative min-w-full">
@@ -554,12 +557,12 @@ const PM_dashboard = () => {
                       <div className="border-t border-gray-200"></div>
                       <div className="border-t border-gray-200"></div>
                     </div>
-                    
+
                     {/* All 12 Months Bars */}
                     {projectGrowthData.length > 0 ? projectGrowthData.map((data, index) => (
                       <div key={index} className="flex flex-col items-center group">
                         {/* Bar */}
-                        <div 
+                        <div
                           className={`${data.color} w-6 mb-2 rounded-t-sm transition-all duration-300 hover:bg-teal-600 relative`}
                           style={{ height: `${(data.projects / (Math.max(...projectGrowthData.map(d => d.projects), 1) || 1)) * 90}px` }}
                           title={`${data.month}: ${data.projects} projects`}
@@ -569,7 +572,7 @@ const PM_dashboard = () => {
                             {data.projects}
                           </div>
                         </div>
-                        
+
                         {/* Month label */}
                         <div className="text-xs font-medium text-gray-600">{data.month}</div>
                       </div>
@@ -579,7 +582,7 @@ const PM_dashboard = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="mt-6 pt-3 border-t border-gray-100">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
@@ -614,7 +617,7 @@ const PM_dashboard = () => {
                     <div className="text-xs text-teal-700 font-medium">Active Tasks</div>
                   </div>
                 </div>
-                
+
                 {/* Performance Indicators */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -660,7 +663,7 @@ const PM_dashboard = () => {
                       ))}
                     </Pie>
                   </PieChart>
-                  
+
                   {/* Center Text */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
@@ -677,8 +680,8 @@ const PM_dashboard = () => {
                   {dashboardData.projectStatusData.map((item, index) => (
                     <div key={index} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200/50 hover:shadow-md transition-all duration-300">
                       <div className="flex items-center space-x-4">
-                        <div 
-                          className="w-5 h-5 rounded-full shadow-sm" 
+                        <div
+                          className="w-5 h-5 rounded-full shadow-sm"
                           style={{ backgroundColor: item.color }}
                         ></div>
                         <div>
@@ -689,9 +692,9 @@ const PM_dashboard = () => {
                       <div className="text-right">
                         <p className="text-xl font-bold text-gray-900">{item.value}</p>
                         <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div 
+                          <div
                             className="h-full rounded-full transition-all duration-1000"
-                            style={{ 
+                            style={{
                               backgroundColor: item.color,
                               width: `${(item.value / dashboardData.projectStats.total) * 100}%`
                             }}
@@ -712,7 +715,7 @@ const PM_dashboard = () => {
                     <p className="text-base font-bold text-emerald-900">{Math.round((dashboardData.projectStats.completed / Math.max(dashboardData.projectStats.total, 1)) * 100)}%</p>
                     <p className="text-xs text-emerald-600">{dashboardData.projectStats.completed}/{dashboardData.projectStats.total} completed</p>
                   </div>
-                  
+
                   <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200/50">
                     <div className="flex items-center space-x-1.5 mb-1.5">
                       <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>

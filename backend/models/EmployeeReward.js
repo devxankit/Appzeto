@@ -31,10 +31,15 @@ const employeeRewardSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  month: {
+    type: String,
+    required: [true, 'Reward month is required (YYYY-MM)'],
+    match: [/^\d{4}-\d{2}$/, 'Please enter a valid month format (YYYY-MM)']
+  },
   status: {
     type: String,
     enum: ['pending', 'approved', 'paid'],
-    default: 'paid'
+    default: 'pending'
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -70,7 +75,7 @@ employeeRewardSchema.index({ employeeId: 1, dateAwarded: -1 });
 employeeRewardSchema.index({ rewardId: 1, employeeId: 1 });
 
 // Static method to get rewards by Employee
-employeeRewardSchema.statics.getByEmployee = function(employeeId) {
+employeeRewardSchema.statics.getByEmployee = function (employeeId) {
   return this.find({ employeeId })
     .populate('createdBy', 'name')
     .populate('approvedBy', 'name')
@@ -78,7 +83,7 @@ employeeRewardSchema.statics.getByEmployee = function(employeeId) {
 };
 
 // Static method to get rewards by status
-employeeRewardSchema.statics.getByStatus = function(status) {
+employeeRewardSchema.statics.getByStatus = function (status) {
   return this.find({ status })
     .populate('employeeId', 'name email')
     .populate('createdBy', 'name')
@@ -87,20 +92,20 @@ employeeRewardSchema.statics.getByStatus = function(status) {
 };
 
 // Post-save hook to create finance transaction when Employee reward is created/updated with 'paid' status
-employeeRewardSchema.post('save', async function(doc) {
+employeeRewardSchema.post('save', async function (doc) {
   // Only create transaction if status is 'paid'
   if (doc.status === 'paid') {
     try {
       const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
       const AdminFinance = require('./AdminFinance');
-      
+
       // Check if transaction already exists
       const existing = await AdminFinance.findOne({
         recordType: 'transaction',
         'metadata.sourceType': 'employeeReward',
         'metadata.sourceId': doc._id.toString()
       });
-      
+
       if (!existing) {
         await createOutgoingTransaction({
           amount: doc.amount,

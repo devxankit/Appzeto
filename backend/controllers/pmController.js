@@ -251,6 +251,9 @@ const getWalletSummary = async (req, res) => {
 
     // Load PM for fixed salary
     const pm = await PM.findById(pmId).select('fixedSalary name');
+    if (!pm) {
+      return res.status(404).json({ success: false, message: 'PM not found' });
+    }
     const fixedSalary = Number(pm?.fixedSalary || 0);
 
     // Get current month dates
@@ -268,73 +271,81 @@ const getWalletSummary = async (req, res) => {
 
     const salaryStatus = currentMonthSalary?.status === 'paid' ? 'paid' : 'unpaid';
 
-    // Get rewards for current month (paid status)
-    const monthlyRewards = await PMReward.aggregate([
-      {
-        $match: {
-          pmId: pmId,
-          status: 'paid',
-          paidAt: { $gte: monthStart, $lte: monthEnd }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$amount' }
-        }
-      }
+    // Total Paid Rewards (All Time)
+    const paidRewards = await PMReward.aggregate([
+      { $match: { pmId: pmId, status: 'paid' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
     ]);
-    const monthlyRewardsAmount = monthlyRewards.length > 0 ? monthlyRewards[0].total : 0;
+    const totalPaidRewards = paidRewards.length > 0 ? paidRewards[0].total : 0;
 
-    // Get all-time rewards total
-    const allTimeRewards = await PMReward.aggregate([
-      {
-        $match: {
-          pmId: pmId,
-          status: 'paid'
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$amount' }
-        }
-      }
+    // All Time Pending Rewards (In Salary records)
+    const pendingRewardsFromSalary = await Salary.aggregate([
+      { $match: { employeeId: pmId, employeeModel: 'PM', rewardStatus: 'pending' } },
+      { $group: { _id: null, total: { $sum: '$rewardAmount' } } }
     ]);
-    const allTimeRewardsAmount = allTimeRewards.length > 0 ? allTimeRewards[0].total : 0;
+    const totalPendingRewards = pendingRewardsFromSalary.length > 0 ? pendingRewardsFromSalary[0].total : 0;
 
-    // Get all-time salary total
+    // All Time Salary Paid
     const allTimeSalary = await Salary.aggregate([
-      {
-        $match: {
-          employeeId: pmId,
-          employeeModel: 'PM',
-          status: 'paid'
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$fixedSalary' }
-        }
-      }
+      { $match: { employeeId: pmId, employeeModel: 'PM', status: 'paid' } },
+      { $group: { _id: null, total: { $sum: '$fixedSalary' } } }
     ]);
-    const allTimeSalaryAmount = allTimeSalary.length > 0 ? allTimeSalary[0].total : 0;
+    const totalPaidSalary = allTimeSalary.length > 0 ? allTimeSalary[0].total : 0;
 
-    const totalEarnings = allTimeSalaryAmount + allTimeRewardsAmount;
+    // Calculate PM Progress (Average milestone completion for active projects)
+    const Project = mongoose.model('Project');
+    const projects = await Project.find({ projectManager: pmId, status: { $ne: 'cancelled' } });
+
+    let totalProgress = 0;
+    projects.forEach(p => { totalProgress += (p.progress || 0); });
+    const avgProgress = projects.length > 0 ? totalProgress / projects.length : 0;
 
     res.status(200).json({
       success: true,
       data: {
         monthlySalary: fixedSalary,
-        monthlyRewards: monthlyRewardsAmount,
-        totalEarnings: totalEarnings,
-        salaryStatus: salaryStatus
+        totalPaidRewards: totalPaidRewards,
+        totalPendingRewards: totalPendingRewards,
+        totalEarnings: totalPaidSalary + totalPaidRewards,
+        salaryStatus: salaryStatus,
+        rewardProgress: {
+          completionRate: Math.round(avgProgress),
+          totalProjects: projects.length,
+          rewardTarget: 90
+        }
       }
     });
   } catch (error) {
     console.error('Get wallet summary error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch wallet summary' });
+  }
+};
+
+// @desc    Get reward progress for current month
+// @route   GET /api/pm/rewards/progress
+// @access  Private (PM only)
+const getRewardProgress = async (req, res) => {
+  try {
+    const pmId = safeObjectId(req.pm.id);
+    const Project = mongoose.model('Project');
+    const projects = await Project.find({ projectManager: pmId, status: { $ne: 'cancelled' } });
+
+    let totalProgress = 0;
+    projects.forEach(p => { totalProgress += (p.progress || 0); });
+    const avgProgress = projects.length > 0 ? totalProgress / projects.length : 0;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        completionRate: Math.round(avgProgress),
+        totalProjects: projects.length,
+        targetRate: 90,
+        isEligible: avgProgress >= 90
+      }
+    });
+  } catch (error) {
+    console.error('Get reward progress error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch reward progress' });
   }
 };
 
@@ -507,5 +518,6 @@ module.exports = {
   getWalletSummary,
   getWalletTransactions,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  getRewardProgress
 };

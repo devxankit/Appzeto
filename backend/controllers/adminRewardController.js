@@ -6,6 +6,9 @@ const PM = require('../models/PM');
 const Task = require('../models/Task');
 const EmployeeReward = require('../models/EmployeeReward');
 const PMReward = require('../models/PMReward');
+const RewardSystemLog = require('../models/RewardSystemLog');
+const rewardService = require('../services/rewardService');
+const Salary = require('../models/Salary');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 
@@ -358,7 +361,7 @@ exports.awardRewardForMonth = asyncHandler(async (req, res, next) => {
     const pms = await PM.find({ isActive: true }).select('_id name projectsManaged');
     for (const pm of pms) {
       const projectIds = pm.projectsManaged && pm.projectsManaged.length > 0 ? pm.projectsManaged : [];
-          const tasks = await Task.find({ project: { $in: projectIds }, status: { $ne: 'cancelled' } }).select('status');
+      const tasks = await Task.find({ project: { $in: projectIds }, status: { $ne: 'cancelled' } }).select('status');
       const total = tasks.length;
       const completed = tasks.filter(t => t.status === 'completed').length;
       const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -391,4 +394,54 @@ exports.awardRewardForMonth = asyncHandler(async (req, res, next) => {
     message: `Reward awarded to ${awarded} ${reward.team === 'dev' ? 'developer(s)' : 'PM(s)'} for this month. They will see it in their wallet.`,
     data: { awarded }
   });
+});
+
+// @desc    Get reward system logs/history
+// @route   GET /api/admin/rewards/history
+// @access  Private (Admin)
+exports.getRewardHistory = asyncHandler(async (req, res, next) => {
+  const { month, team } = req.query;
+  const filter = {};
+
+  if (month) filter.month = month;
+  if (team && team !== 'all') filter.team = team;
+
+  const logs = await RewardSystemLog.find(filter)
+    .sort({ processedAt: -1 })
+    .limit(50);
+
+  res.status(200).json({
+    success: true,
+    data: logs
+  });
+});
+
+// @desc    Manually trigger monthly rewards processing
+// @route   POST /api/admin/rewards/trigger-process
+// @access  Private (Admin)
+exports.triggerMonthlyProcess = asyncHandler(async (req, res, next) => {
+  const { month } = req.body; // YYYY-MM
+
+  if (!month) {
+    return res.status(400).json({
+      success: false,
+      message: 'Please provide a month in YYYY-MM format'
+    });
+  }
+
+  const result = await rewardService.processMonthlyRewards(month, req.admin.id);
+
+  if (result.success) {
+    res.status(200).json({
+      success: true,
+      message: `Successfully processed rewards for ${month}`,
+      data: result
+    });
+  } else {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process rewards',
+      error: result.error
+    });
+  }
 });

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Employee_navbar from '../../DEV-components/Employee_navbar'
-import { employeeService, socketService, employeeRequestService, getStoredEmployeeData } from '../../DEV-services'
+import { employeeService, socketService, employeeRequestService, getStoredEmployeeData, employeeWalletService } from '../../DEV-services'
 import {
   FiCheckSquare as CheckSquare,
   FiClock as Clock,
@@ -90,7 +90,7 @@ const Employee_dashboard = () => {
       setError(null)
 
       // Load dashboard statistics, tasks, and requests count
-      const [dashboardResponse, tasksResponse, requestsResponse] = await Promise.all([
+      const [dashboardResponse, tasksResponse, requestsResponse, rewardResponse] = await Promise.all([
         employeeService.getEmployeeDashboardStats({ timeFilter: 'all' }),
         employeeService.getEmployeeTasks({ limit: 100 }), // Fetch more tasks to allow frontend filtering too
         employeeRequestService.getRequests({ direction: 'outgoing', limit: 1 }).catch(() => ({ pagination: { total: 0 } }))
@@ -117,6 +117,7 @@ const Employee_dashboard = () => {
       // Handle requests count - get total from pagination
       const requestsTotal = requestsResponse?.pagination?.total || 0
       setRequestsCount(requestsTotal)
+
     } catch (error) {
       console.error('Error loading dashboard data:', error)
       setError('Failed to load dashboard data. Please try again.')
@@ -324,6 +325,7 @@ const Employee_dashboard = () => {
                 <div className="bg-gradient-to-r from-primary to-primary-dark h-4 rounded-full transition-all duration-700" style={{ width: `${overallProgress}%` }} />
               </div>
             </div>
+
           </div>
 
           <div className="md:hidden mb-6">
@@ -422,9 +424,9 @@ const Employee_dashboard = () => {
               </div>
             )}
           </div>
-        </div>
-      </main>
-    </div>
+        </div >
+      </main >
+    </div >
   )
 }
 

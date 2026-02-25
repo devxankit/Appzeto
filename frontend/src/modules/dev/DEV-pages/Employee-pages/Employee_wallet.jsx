@@ -21,6 +21,8 @@ const Employee_wallet = () => {
   const [walletData, setWalletData] = useState({
     monthlySalary: 0,
     monthlyRewards: 0,
+    totalPaidRewards: 0,
+    totalPendingRewards: 0,
     totalEarnings: 0,
     salaryStatus: 'unpaid',
     transactions: [],
@@ -52,6 +54,8 @@ const Employee_wallet = () => {
         setWalletData({
           monthlySalary: summaryResponse.data.monthlySalary || 0,
           monthlyRewards: summaryResponse.data.monthlyRewards || 0,
+          totalPaidRewards: summaryResponse.data.totalPaidRewards || 0,
+          totalPendingRewards: summaryResponse.data.totalPendingRewards || 0,
           totalEarnings: summaryResponse.data.totalEarnings || 0,
           salaryStatus: summaryResponse.data.salaryStatus || 'unpaid',
           transactions: transactionsResponse.data || [],
@@ -210,8 +214,8 @@ const Employee_wallet = () => {
                   animate={{ width: `${Math.min(walletData.rewardProgress.completionRate, 100)}%` }}
                   transition={{ duration: 1.5, ease: "easeOut" }}
                   className={`absolute top-0 left-0 h-full rounded-full ${walletData.rewardProgress.completionRate >= walletData.rewardProgress.rewardTarget
-                      ? 'bg-gradient-to-r from-teal-500 to-emerald-500'
-                      : 'bg-gradient-to-r from-teal-400 to-teal-600'
+                    ? 'bg-gradient-to-r from-teal-500 to-emerald-500'
+                    : 'bg-gradient-to-r from-teal-400 to-teal-600'
                     }`}
                 />
                 <div
@@ -292,29 +296,44 @@ const Employee_wallet = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.8 }}
-              className="grid grid-cols-3 gap-2"
+              className="grid grid-cols-2 gap-2 mb-3"
+            >
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                className="bg-white/60 backdrop-blur-sm rounded-lg p-2 border border-emerald-300/50 text-center hover:border-emerald-400/70 transition-all duration-300 shadow-sm"
+              >
+                <p className="text-emerald-800 text-[10px] font-semibold mb-0.5">Total Paid Rewards</p>
+                <p className="text-gray-900 text-xs font-bold">{formatCurrency(walletData.totalPaidRewards)}</p>
+              </motion.div>
+
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                className="bg-white/60 backdrop-blur-sm rounded-lg p-2 border border-orange-300/50 text-center hover:border-orange-400/70 transition-all duration-300 shadow-sm"
+              >
+                <p className="text-orange-800 text-[10px] font-semibold mb-0.5">Pending Rewards</p>
+                <p className="text-gray-900 text-xs font-bold">{formatCurrency(walletData.totalPendingRewards)}</p>
+              </motion.div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.9 }}
+              className="grid grid-cols-2 gap-2"
             >
               <motion.div
                 whileHover={{ scale: 1.05 }}
                 className="bg-white/60 backdrop-blur-sm rounded-lg p-2 border border-primary/50 text-center hover:border-primary/70 transition-all duration-300 shadow-sm"
               >
-                <p className="text-primary text-xs font-semibold mb-0.5">This Month</p>
+                <p className="text-primary text-[10px] font-semibold mb-0.5">This Month</p>
                 <p className="text-gray-900 text-xs font-bold">{formatCurrency(walletData.monthlySalary + walletData.monthlyRewards)}</p>
-              </motion.div>
-
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                className="bg-white/60 backdrop-blur-sm rounded-lg p-2 border border-emerald-300/50 text-center hover:border-emerald-400/70 transition-all duration-300 shadow-sm"
-              >
-                <p className="text-emerald-800 text-xs font-semibold mb-0.5">Total Rewards</p>
-                <p className="text-gray-900 text-xs font-bold">{formatCurrency(walletData.monthlyRewards)}</p>
               </motion.div>
 
               <motion.div
                 whileHover={{ scale: 1.05 }}
                 className="bg-white/60 backdrop-blur-sm rounded-lg p-2 border border-purple-300/50 text-center hover:border-purple-400/70 transition-all duration-300 shadow-sm"
               >
-                <p className="text-purple-800 text-xs font-semibold mb-0.5">All Time</p>
+                <p className="text-purple-800 text-[10px] font-semibold mb-0.5">All Time Total</p>
                 <p className="text-gray-900 text-xs font-bold">{formatCurrency(walletData.totalEarnings)}</p>
               </motion.div>
             </motion.div>
@@ -448,8 +467,8 @@ const Employee_wallet = () => {
                         animate={{ width: `${Math.min(walletData.rewardProgress.completionRate, 100)}%` }}
                         transition={{ duration: 2, ease: "circOut" }}
                         className={`h-full rounded-full shadow-[0_0_20px_rgba(255,255,255,0.3)] ${walletData.rewardProgress.completionRate >= walletData.rewardProgress.rewardTarget
-                            ? 'bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400'
-                            : 'bg-gradient-to-r from-teal-400 via-blue-400 to-teal-500'
+                          ? 'bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400'
+                          : 'bg-gradient-to-r from-teal-400 via-blue-400 to-teal-500'
                           }`}
                       >
                         <div className="absolute inset-0 bg-white/10 animate-pulse"></div>
@@ -492,9 +511,10 @@ const Employee_wallet = () => {
               </div>
 
               {/* Summary Cards Row */}
-              <div className="grid grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-4 gap-6 mb-6">
                 {/* Fixed Salary */}
                 <motion.div
+                  whileHover={{ y: -5 }}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
@@ -508,27 +528,62 @@ const Employee_wallet = () => {
                       <FiClock className="text-orange-500 text-lg" />
                     )}
                   </div>
-                  <h4 className="text-gray-600 text-sm font-medium mb-2">Fixed Salary</h4>
+                  <h4 className="text-gray-600 text-sm font-medium mb-1">Fixed Salary</h4>
                   <p className="text-gray-900 text-2xl font-bold">{formatCurrency(walletData.monthlySalary)}</p>
-                  <p className={`text-xs font-semibold mt-1 ${walletData.salaryStatus === 'paid' ? 'text-green-600' : 'text-orange-600'}`}>
+                  <p className={`text-[10px] font-semibold mt-1 uppercase tracking-wider ${walletData.salaryStatus === 'paid' ? 'text-green-600' : 'text-orange-600'}`}>
                     {walletData.salaryStatus === 'paid' ? 'Paid this month' : 'Pending payment'}
                   </p>
                 </motion.div>
 
-                {/* Monthly Rewards */}
+                {/* Total Paid Rewards */}
                 <motion.div
+                  whileHover={{ y: -5 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, ease: "easeOut", delay: 0.3 }}
+                  className="bg-white rounded-2xl p-6 shadow-xl border border-gray-100"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <FiAward className="text-emerald-600 text-xl" />
+                    <FiTrendingUp className="text-emerald-500 text-lg" />
+                  </div>
+                  <h4 className="text-gray-600 text-sm font-medium mb-1">Total Paid Rewards</h4>
+                  <p className="text-gray-900 text-2xl font-bold">{formatCurrency(walletData.totalPaidRewards)}</p>
+                  <p className="text-emerald-600 text-[10px] font-semibold mt-1 uppercase tracking-wider">All time paid</p>
+                </motion.div>
+
+                {/* All Time Pending Rewards */}
+                <motion.div
+                  whileHover={{ y: -5 }}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, ease: "easeOut", delay: 0.4 }}
                   className="bg-white rounded-2xl p-6 shadow-xl border border-gray-100"
                 >
                   <div className="flex items-center justify-between mb-4">
-                    <FiAward className="text-green-600 text-xl" />
-                    <FiTrendingUp className="text-green-500 text-lg" />
+                    <FiClock className="text-orange-600 text-xl" />
+                    <FiActivity className="text-orange-500 text-lg" />
                   </div>
-                  <h4 className="text-gray-600 text-sm font-medium mb-2">Monthly Rewards</h4>
+                  <h4 className="text-gray-600 text-sm font-medium mb-1">Pending Rewards</h4>
+                  <p className="text-gray-900 text-2xl font-bold">{formatCurrency(walletData.totalPendingRewards)}</p>
+                  <p className="text-orange-600 text-[10px] font-semibold mt-1 uppercase tracking-wider">Awaiting Payout</p>
+                </motion.div>
+
+                {/* Monthly Rewards (Current) */}
+                <motion.div
+                  whileHover={{ y: -5 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, ease: "easeOut", delay: 0.5 }}
+                  className="bg-white rounded-2xl p-6 shadow-xl border border-gray-100"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <FiAward className="text-blue-600 text-xl" />
+                    <FiCalendar className="text-blue-500 text-lg" />
+                  </div>
+                  <h4 className="text-gray-600 text-sm font-medium mb-1">Monthly Rewards</h4>
                   <p className="text-gray-900 text-2xl font-bold">{formatCurrency(walletData.monthlyRewards)}</p>
-                  <p className="text-green-600 text-xs font-semibold mt-1">Performance based</p>
+                  <p className="text-blue-600 text-[10px] font-semibold mt-1 uppercase tracking-wider">This Month Performance</p>
                 </motion.div>
               </div>
 
@@ -623,14 +678,19 @@ const Employee_wallet = () => {
                     <span className="font-semibold text-green-600">{formatCurrency(walletData.monthlyRewards)}</span>
                   </div>
 
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Total This Month</span>
-                    <span className="font-semibold text-purple-600">{formatCurrency(walletData.monthlySalary + walletData.monthlyRewards)}</span>
+                  <div className="border-t border-gray-100 pt-4 flex justify-between items-center">
+                    <span className="text-gray-600">Paid Rewards (All)</span>
+                    <span className="font-semibold text-emerald-600">{formatCurrency(walletData.totalPaidRewards)}</span>
                   </div>
 
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600">All Time Earnings</span>
-                    <span className="font-semibold text-indigo-600">{formatCurrency(walletData.totalEarnings)}</span>
+                    <span className="text-gray-600">Pending Rewards</span>
+                    <span className="font-semibold text-orange-600">{formatCurrency(walletData.totalPendingRewards)}</span>
+                  </div>
+
+                  <div className="border-t border-gray-100 pt-4 flex justify-between items-center">
+                    <span className="text-gray-700 font-bold">Total Earnings</span>
+                    <span className="font-bold text-indigo-600 text-lg">{formatCurrency(walletData.totalEarnings)}</span>
                   </div>
                 </div>
               </motion.div>

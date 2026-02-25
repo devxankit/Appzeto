@@ -37,6 +37,22 @@ export const employeeWalletService = {
       console.error('Error fetching wallet transactions:', error);
       throw error;
     }
+  },
+
+  /**
+   * Get reward progress for current month
+   * @returns {Promise} Reward progress data
+   */
+  getRewardProgress: async () => {
+    try {
+      const response = await apiRequest('/employee/rewards/progress', {
+        method: 'GET'
+      });
+      return response;
+    } catch (error) {
+      console.error('Error fetching reward progress:', error);
+      throw error;
+    }
   }
 };
 

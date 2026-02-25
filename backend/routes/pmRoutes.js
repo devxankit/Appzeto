@@ -7,7 +7,8 @@ const {
   getWalletSummary,
   getWalletTransactions,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  getRewardProgress
 } = require('../controllers/pmController');
 const { getPublishedNoticesForPM, incrementNoticeViews } = require('../controllers/noticeController');
 const { getPMNotifications } = require('../controllers/pmNotificationController');
@@ -41,9 +42,10 @@ router.use(authorize('project-manager')); // All routes below this middleware ar
 router.get('/profile', getPMProfile);
 router.post('/logout', logoutPM);
 
-// PM wallet routes
+// PM wallet & rewards routes
 router.get('/wallet/summary', getWalletSummary);
 router.get('/wallet/transactions', getWalletTransactions);
+router.get('/rewards/progress', getRewardProgress);
 
 // PM team management routes
 router.get('/team/employees', getPMEmployees);

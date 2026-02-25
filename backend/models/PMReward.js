@@ -31,10 +31,15 @@ const pmRewardSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  month: {
+    type: String,
+    required: [true, 'Reward month is required (YYYY-MM)'],
+    match: [/^\d{4}-\d{2}$/, 'Please enter a valid month format (YYYY-MM)']
+  },
   status: {
     type: String,
     enum: ['pending', 'approved', 'paid'],
-    default: 'paid'
+    default: 'pending'
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -70,7 +75,7 @@ pmRewardSchema.index({ pmId: 1, dateAwarded: -1 });
 pmRewardSchema.index({ rewardId: 1, pmId: 1 });
 
 // Static method to get rewards by PM
-pmRewardSchema.statics.getByPM = function(pmId) {
+pmRewardSchema.statics.getByPM = function (pmId) {
   return this.find({ pmId })
     .populate('createdBy', 'name')
     .populate('approvedBy', 'name')
@@ -78,7 +83,7 @@ pmRewardSchema.statics.getByPM = function(pmId) {
 };
 
 // Static method to get rewards by status
-pmRewardSchema.statics.getByStatus = function(status) {
+pmRewardSchema.statics.getByStatus = function (status) {
   return this.find({ status })
     .populate('pmId', 'name email')
     .populate('createdBy', 'name')
@@ -87,20 +92,20 @@ pmRewardSchema.statics.getByStatus = function(status) {
 };
 
 // Post-save hook to create finance transaction when PM reward is created/updated with 'paid' status
-pmRewardSchema.post('save', async function(doc) {
+pmRewardSchema.post('save', async function (doc) {
   // Only create transaction if status is 'paid'
   if (doc.status === 'paid') {
     try {
       const { createOutgoingTransaction } = require('../utils/financeTransactionHelper');
       const AdminFinance = require('./AdminFinance');
-      
+
       // Check if transaction already exists
       const existing = await AdminFinance.findOne({
         recordType: 'transaction',
         'metadata.sourceType': 'pmReward',
         'metadata.sourceId': doc._id.toString()
       });
-      
+
       if (!existing) {
         await createOutgoingTransaction({
           amount: doc.amount,

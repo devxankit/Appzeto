@@ -9,7 +9,9 @@ const {
   awardRewardForMonth,
   getTags,
   createTag,
-  deleteTag
+  deleteTag,
+  getRewardHistory,
+  triggerMonthlyProcess
 } = require('../controllers/adminRewardController');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -29,6 +31,9 @@ router
   .post(createTag);
 
 router.delete('/tags/:id', deleteTag);
+
+router.get('/history', getRewardHistory);
+router.post('/trigger-process', triggerMonthlyProcess);
 
 router.patch('/:id/toggle', toggleRewardStatus);
 router.post('/:id/award-month', awardRewardForMonth);

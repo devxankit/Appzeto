@@ -73,6 +73,8 @@ const { startDailyScheduler } = require('./services/dailyPointsScheduler');
 const { startRecurringExpenseAutoPayScheduler } = require('./services/recurringExpenseAutoPayScheduler');
 // Import daily backup scheduler (runs at 2 AM - no crontab needed)
 const { startBackupScheduler } = require('./services/backupScheduler');
+// Import reward automation scheduler (runs on 1st of month)
+const { startRewardScheduler } = require('./services/rewardScheduler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -100,10 +102,10 @@ const allowedOrigins = [
 // MUST be the ABSOLUTE FIRST middleware - nothing can run before this
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  
+
   // Handle OPTIONS preflight requests FIRST - respond immediately
   if (req.method === 'OPTIONS') {
-    
+
     // Check if origin is allowed
     if (origin && allowedOrigins.includes(origin)) {
       res.header('Access-Control-Allow-Origin', origin);
@@ -124,14 +126,14 @@ app.use((req, res, next) => {
       return;
     }
   }
-  
+
   // For non-OPTIONS requests, set CORS headers if origin is allowed
   if (origin && allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
   }
-  
+
   next();
 });
 
@@ -149,7 +151,7 @@ app.use(cors({
 // Log CORS configuration on startup (cleaner format)
 const localOrigins = allowedOrigins.filter(o => o.includes('localhost')).length;
 const productionOrigins = allowedOrigins.filter(o => o.includes('https://')).length;
-console.log('🔒 CORS: ' + allowedOrigins.length + ' origins configured' + 
+console.log('🔒 CORS: ' + allowedOrigins.length + ' origins configured' +
   (localOrigins > 0 ? ` (${localOrigins} local, ${productionOrigins} production)` : ''));
 
 // Configure Helmet AFTER CORS - Helmet must not interfere with CORS headers
@@ -193,7 +195,7 @@ app.get('/status', (req, res) => {
   const connectedUsers = socketService.getConnectedUsersCount();
   const uptime = process.uptime();
   const memoryUsage = process.memoryUsage();
-  
+
   res.json({
     server: {
       status: 'RUNNING',
@@ -503,17 +505,17 @@ app.use('*', (req, res) => {
 app.use((err, req, res, next) => {
   console.error('Error occurred:', err);
   console.error('Error stack:', err.stack);
-  
+
   // Set CORS headers on error responses
   const origin = req.headers.origin;
   if (origin && allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
   }
-  
+
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal server error';
-  
+
   res.status(statusCode).json({
     success: false,
     error: statusCode === 500 ? 'Something went wrong!' : 'Request failed',
@@ -526,12 +528,12 @@ const startServer = async () => {
   try {
     // Connect to MongoDB
     await connectDB();
-    
+
     // Start server with error handling for port conflicts
     const server = app.listen(PORT, () => {
       // Clear console for clean startup
       console.clear();
-      
+
       // Beautiful server startup display
       console.log('\n');
       console.log('🚀 ' + '='.repeat(60));
@@ -598,6 +600,8 @@ const startServer = async () => {
     startRecurringExpenseAutoPayScheduler();
     // Start daily backup scheduler (2 AM - runs when GOOGLE_DRIVE_FOLDER_ID is set)
     startBackupScheduler();
+    // Start reward automation scheduler
+    startRewardScheduler();
 
     // Graceful shutdown handling
     process.on('SIGINT', () => {
