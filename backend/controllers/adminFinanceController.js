@@ -607,8 +607,11 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // - A sale is only valid (and counted) once an advance payment has been approved by admin.
   // - This is reflected when financialDetails.advanceReceived > 0
   //   (updated by PaymentReceipt/Payment hooks after approval).
+  // - The "sale date" is taken from project.startDate (business creation date chosen by user),
+  //   not from the document's createdAt timestamp, so backdated projects are counted in the
+  //   month/year they actually belong to.
   const salesDateFilter = timeFilter !== 'all'
-    ? { createdAt: dateFilter, 'financialDetails.advanceReceived': { $gt: 0 } }
+    ? { startDate: dateFilter, 'financialDetails.advanceReceived': { $gt: 0 } }
     : { 'financialDetails.advanceReceived': { $gt: 0 } };
   const totalSales = await Project.aggregate([
     { $match: salesDateFilter },

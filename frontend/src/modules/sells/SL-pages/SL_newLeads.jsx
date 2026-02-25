@@ -366,14 +366,7 @@ const SL_newLeads = () => {
     const categoryInfo = getCategoryInfo(lead.category)
 
     return (
-      <div
-        className="flex items-center justify-between cursor-pointer"
-        onClick={() => {
-          // New leads don't have profiles yet, so navigate to lead profile page
-          // which will handle the case where profile doesn't exist
-          handleProfile(lead._id)
-        }}
-      >
+      <div className="flex items-center justify-between">
         {/* Left Section - Avatar & Phone */}
         <div className="flex items-center space-x-3 flex-1 min-w-0">
           {/* Avatar */}
