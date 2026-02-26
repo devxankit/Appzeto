@@ -41,7 +41,11 @@ const {
   getSalesOverview,
   getCategoryAnalytics,
   getCategoryFinancialDetails,
-  getTeamPerformance
+  getTeamPerformance,
+
+  // Sales month configuration
+  getSalesMonthRangeConfig,
+  updateSalesMonthRangeConfig
 } = require('../controllers/adminSalesController');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -203,6 +207,18 @@ router.get('/analytics/categories/financial', getCategoryFinancialDetails);
 // @desc    Get team performance analytics
 // @access  Private (Admin/HR only)
 router.get('/analytics/team', getTeamPerformance);
+
+// ==================== SALES MONTH CONFIGURATION ROUTES ====================
+
+// @route   GET /api/admin/sales/month-range
+// @desc    Get global sales month configuration
+// @access  Private (Admin/HR only)
+router.get('/month-range', getSalesMonthRangeConfig);
+
+// @route   PUT /api/admin/sales/month-range
+// @desc    Update global sales month configuration
+// @access  Private (Admin/HR only)
+router.put('/month-range', updateSalesMonthRangeConfig);
 
 module.exports = router;
 

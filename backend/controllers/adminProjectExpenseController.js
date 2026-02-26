@@ -1,4 +1,5 @@
 const Project = require('../models/Project');
+const AdminFinance = require('../models/AdminFinance');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 
@@ -324,11 +325,39 @@ const createProjectExpense = asyncHandler(async (req, res, next) => {
     project.expenses.push(newExpense);
     await project.save();
 
+    const savedExpense = project.expenses[project.expenses.length - 1];
+
+    // Create AdminFinance record so expense appears in Transactions and Expenses tabs
+    // (Cards already count project expenses from Project.expenses - we exclude this via metadata.sourceType)
+    try {
+      await AdminFinance.create({
+        recordType: 'transaction',
+        transactionType: 'outgoing',
+        category: category,
+        amount: parseFloat(amount),
+        transactionDate: new Date(expenseDate),
+        createdBy: req.admin._id,
+        status: 'completed',
+        description: description ? description.trim() : `Project expense: ${expenseName}`,
+        vendor: clientName,
+        paymentMethod: paymentMethod || 'Bank Transfer',
+        project: projectId,
+        client: project.client?._id || project.client,
+        metadata: {
+          sourceType: 'projectExpense',
+          sourceId: savedExpense._id.toString(),
+          projectId: projectId.toString(),
+          createdAt: new Date()
+        }
+      });
+    } catch (financeErr) {
+      console.error('Error creating AdminFinance for project expense:', financeErr);
+      // Don't fail the request - project expense was saved; finance record is for visibility
+    }
+
     // Populate the expense with admin info
     const Admin = require('../models/Admin');
     const createdByAdmin = await Admin.findById(req.admin._id).select('name email');
-    
-    const savedExpense = project.expenses[project.expenses.length - 1];
     const expenseWithProject = {
       ...savedExpense.toObject(),
       createdBy: createdByAdmin,
@@ -431,6 +460,26 @@ const updateProjectExpense = asyncHandler(async (req, res, next) => {
     project.markModified('expenses');
     await project.save();
 
+    // Sync AdminFinance record if it exists
+    try {
+      const financeRecord = await AdminFinance.findOne({
+        recordType: 'transaction',
+        'metadata.sourceType': 'projectExpense',
+        'metadata.sourceId': id
+      });
+      if (financeRecord) {
+        financeRecord.amount = expense.amount;
+        financeRecord.category = expense.category;
+        financeRecord.transactionDate = expense.expenseDate;
+        financeRecord.vendor = expense.vendor;
+        financeRecord.paymentMethod = expense.paymentMethod;
+        financeRecord.description = expense.description || `Project expense: ${expense.name}`;
+        await financeRecord.save();
+      }
+    } catch (financeErr) {
+      console.error('Error syncing AdminFinance for project expense update:', financeErr);
+    }
+
     // Populate updatedBy
     const Admin = require('../models/Admin');
     const updatedByAdmin = await Admin.findById(req.admin._id).select('name email');
@@ -475,6 +524,17 @@ const deleteProjectExpense = asyncHandler(async (req, res, next) => {
 
     if (!project) {
       return next(new ErrorResponse('Project expense not found', 404));
+    }
+
+    // Remove linked AdminFinance record so it doesn't appear in Transactions/Expenses
+    try {
+      await AdminFinance.deleteOne({
+        recordType: 'transaction',
+        'metadata.sourceType': 'projectExpense',
+        'metadata.sourceId': id
+      });
+    } catch (financeErr) {
+      console.error('Error removing AdminFinance for deleted project expense:', financeErr);
     }
 
     // Filter out the expense to delete

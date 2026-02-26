@@ -11,6 +11,8 @@ const {
   getSalesDashboardStats,
   getDashboardStats,
   getMonthlyConversions,
+  getMonthlySalesHistory,
+  getMonthlyIncentiveHistory,
   getWalletSummary,
   getMyLeads,
   getLeadsByStatus,
@@ -75,6 +77,9 @@ router.get('/dashboard/statistics', getSalesDashboardStats);
 router.get('/dashboard/stats', getDashboardStats);
 // Monthly conversions for bar chart
 router.get('/analytics/conversions/monthly', getMonthlyConversions);
+// Monthly sales history for sales employee
+router.get('/analytics/monthly-sales-history', getMonthlySalesHistory);
+router.get('/analytics/incentives/history', getMonthlyIncentiveHistory);
 // Sales leaderboard (for sales module UI)
 router.get('/analytics/leaderboard', getSalesLeaderboard);
 

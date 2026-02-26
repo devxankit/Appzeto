@@ -496,6 +496,40 @@ class AdminSalesService {
     }
   }
 
+  // Get global sales month configuration
+  async getSalesMonthConfig() {
+    try {
+      const response = await apiRequest('/admin/sales/month-range', { method: 'GET' });
+      return response;
+    } catch (error) {
+      console.error('Error fetching sales month config:', error);
+      throw error;
+    }
+  }
+
+  // Update global sales month configuration
+  async updateSalesMonthConfig(salesMonthStartDay, salesMonthEndDay) {
+    try {
+      const body = {
+        salesMonthStartDay,
+        salesMonthEndDay,
+      };
+
+      const response = await apiRequest('/admin/sales/month-range', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return response;
+    } catch (error) {
+      console.error('Error updating sales month config:', error);
+      throw error;
+    }
+  }
+
   // Get category analytics
   async getCategoryAnalytics(params = {}) {
     try {

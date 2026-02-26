@@ -29,7 +29,8 @@ import {
   FiFile,
   FiX,
   FiDollarSign,
-  FiUserPlus
+  FiUserPlus,
+  FiSettings
 } from 'react-icons/fi'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
@@ -59,6 +60,14 @@ const Admin_sales_management = () => {
   const SkeletonLoader = ({ className = '', rounded = 'rounded' }) => (
     <div className={`animate-pulse bg-gray-200 ${rounded} ${className}`}></div>
   )
+
+  // Clamp day to valid range for a given year/month
+  const clampDay = (day, year, monthIndex) => {
+    const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate()
+    if (day < 1) return 1
+    if (day > lastDayOfMonth) return lastDayOfMonth
+    return day
+  }
 
   // State management
   const [loading, setLoading] = useState(true)
@@ -139,6 +148,9 @@ const Admin_sales_management = () => {
   const [targets, setTargets] = useState([
     { targetNumber: 1, amount: '', reward: '', date: '', time: '' }
   ])
+  const [salesMonthStartDay, setSalesMonthStartDay] = useState(1)
+  const [salesMonthEndDay, setSalesMonthEndDay] = useState(0)
+  const [loadingSalesMonthConfig, setLoadingSalesMonthConfig] = useState(false)
   const [leadsToAssign, setLeadsToAssign] = useState('')
   const [incentiveAmount, setIncentiveAmount] = useState('')
   const [distributingLeads, setDistributingLeads] = useState(false)
@@ -148,6 +160,83 @@ const Admin_sales_management = () => {
   const [selectedCategory, setSelectedCategory] = useState('')
   const [assignCategoryFilter, setAssignCategoryFilter] = useState('all')
   const [leadsPerCategory, setLeadsPerCategory] = useState({})
+
+  // Sales month preview (mirrors backend salesMonthRange logic for current window)
+  const salesMonthPreview = useMemo(() => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const monthIndex = now.getMonth()
+    const today = now.getDate()
+
+    let startDay = Number(salesMonthStartDay) || 1
+    let endDay = Number(salesMonthEndDay)
+
+    if (!Number.isInteger(startDay) || startDay < 1) startDay = 1
+    if (!Number.isInteger(endDay) || endDay < 0) endDay = 0
+
+    // Resolve end-of-month
+    const thisMonthLastDay = new Date(year, monthIndex + 1, 0).getDate()
+    let resolvedEndDay = endDay === 0 ? thisMonthLastDay : endDay
+
+    let windowStart
+    let windowEnd
+    let modeLabel
+
+    // Single-month window when start < end (same rule as backend)
+    if (startDay < resolvedEndDay) {
+      modeLabel = 'Single-month window'
+      if (today < startDay) {
+        // Use previous month window
+        const prevMonthDate = new Date(year, monthIndex - 1, 1)
+        const pmYear = prevMonthDate.getFullYear()
+        const pmMonth = prevMonthDate.getMonth()
+        const sDay = clampDay(startDay, pmYear, pmMonth)
+        const eDay = clampDay(resolvedEndDay, pmYear, pmMonth)
+        windowStart = new Date(pmYear, pmMonth, sDay, 0, 0, 0, 0)
+        windowEnd = new Date(pmYear, pmMonth, eDay, 23, 59, 59, 999)
+      } else {
+        // This-month window
+        const sDay = clampDay(startDay, year, monthIndex)
+        const eDay = clampDay(resolvedEndDay, year, monthIndex)
+        windowStart = new Date(year, monthIndex, sDay, 0, 0, 0, 0)
+        windowEnd = new Date(year, monthIndex, eDay, 23, 59, 59, 999)
+      }
+    } else {
+      // Cross-month window (start >= end) – e.g. 10–10, 20–5, etc.
+      modeLabel = 'Cross-month window'
+      if (today >= startDay) {
+        // Start this month, end next month
+        const sDay = clampDay(startDay, year, monthIndex)
+        const nextMonthDate = new Date(year, monthIndex + 1, 1)
+        const nmYear = nextMonthDate.getFullYear()
+        const nmMonth = nextMonthDate.getMonth()
+        const eDay = clampDay(resolvedEndDay, nmYear, nmMonth)
+        windowStart = new Date(year, monthIndex, sDay, 0, 0, 0, 0)
+        windowEnd = new Date(nmYear, nmMonth, eDay, 23, 59, 59, 999)
+      } else {
+        // Previous month start to current month end
+        const prevMonthDate = new Date(year, monthIndex - 1, 1)
+        const pmYear = prevMonthDate.getFullYear()
+        const pmMonth = prevMonthDate.getMonth()
+        const sDay = clampDay(startDay, pmYear, pmMonth)
+        const eDay = clampDay(resolvedEndDay, year, monthIndex)
+        windowStart = new Date(pmYear, pmMonth, sDay, 0, 0, 0, 0)
+        windowEnd = new Date(year, monthIndex, eDay, 23, 59, 59, 999)
+      }
+    }
+
+    const fmt = (d) =>
+      d.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      })
+
+    return {
+      modeLabel,
+      rangeLabel: `${fmt(windowStart)} – ${fmt(windowEnd)}`
+    }
+  }, [salesMonthStartDay, salesMonthEndDay])
 
   // Data loading functions
   const loadStatistics = async () => {
@@ -293,6 +382,27 @@ const Admin_sales_management = () => {
     }
   }
 
+  const loadSalesMonthConfig = async () => {
+    try {
+      setLoadingSalesMonthConfig(true)
+      const response = await adminSalesService.getSalesMonthConfig()
+      if (response?.success && response.data) {
+        const { salesMonthStartDay: start, salesMonthEndDay: end } = response.data
+        if (typeof start === 'number') {
+          setSalesMonthStartDay(start)
+        }
+        if (typeof end === 'number') {
+          setSalesMonthEndDay(end)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading sales month config:', error)
+      toast.error('Failed to load sales month configuration')
+    } finally {
+      setLoadingSalesMonthConfig(false)
+    }
+  }
+
   // Initial data load
   useEffect(() => {
     const loadInitialData = async () => {
@@ -303,7 +413,8 @@ const Admin_sales_management = () => {
           loadCategories(),
           loadLeads(),
           loadAllLeads(), // Load all unassigned leads for statistics
-          loadAssignedLeads() // Load assigned leads for category performance
+          loadAssignedLeads(), // Load assigned leads for category performance
+          loadSalesMonthConfig()
         ])
       } catch (error) {
         console.error('Error loading initial data:', error)
@@ -2326,7 +2437,8 @@ const Admin_sales_management = () => {
                 { key: 'sales-team', label: 'Sales Team', icon: FiUser },
                 { key: 'team-leads', label: 'Team Leads', icon: FiUserPlus },
                 { key: 'category-performance', label: 'Category Performance', icon: FiTrendingUp },
-                { key: 'sales-leaderboard', label: 'Sales Leader Board', icon: FiBarChart }
+                { key: 'sales-leaderboard', label: 'Sales Leader Board', icon: FiBarChart },
+                { key: 'sales-settings', label: 'Sales Month & Targets', icon: FiSettings }
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -2346,7 +2458,7 @@ const Admin_sales_management = () => {
           {/* Tab Content */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             {/* Search and Filter */}
-            {activeTab !== 'lead-management' && activeTab !== 'sales-leaderboard' && (
+            {activeTab !== 'lead-management' && activeTab !== 'sales-leaderboard' && activeTab !== 'sales-settings' && (
               <div className="p-6 border-b border-gray-200">
                 <div className="flex flex-col lg:flex-row gap-4 items-center">
                   <div className="w-full lg:w-80 relative">
@@ -2427,6 +2539,140 @@ const Admin_sales_management = () => {
 
             {/* Content based on active tab */}
             <div className="p-6">
+              {activeTab === 'sales-settings' && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                          <FiSettings className="h-4 w-4" />
+                        </span>
+                        <span>Sales Month & Targets</span>
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Configure how the sales month is calculated for sales employee targets and incentives.
+                      </p>
+                    </div>
+                    <div className="hidden md:flex flex-col items-end text-xs text-gray-500">
+                      <span className="uppercase tracking-wide text-[10px] text-gray-400">Current Window</span>
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 border border-emerald-100">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        {salesMonthStartDay}th to {salesMonthEndDay === 0 ? 'end of month' : `${salesMonthEndDay}th`}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+                    <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-4 shadow-sm">
+                      <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-primary/5" />
+                      <div className="pointer-events-none absolute -right-12 top-8 h-32 w-32 rounded-full bg-primary/10" />
+
+                      <div className="relative space-y-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-900">Sales Month Configuration</h3>
+                          <p className="text-xs text-gray-600 mt-1">
+                            This range is used only for sales employee dashboard cards, targets and incentives.
+                            Admin analytics and reports continue to use calendar months.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-3 mt-2">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-3 py-1 text-[11px] font-medium text-gray-700 border border-gray-200 shadow-sm">
+                            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                            Current window: {salesMonthPreview.rangeLabel}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-3 py-1 text-[11px] text-gray-700 border border-gray-200">
+                            <FiCalendar className="h-3 w-3" />
+                            {salesMonthPreview.modeLabel}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/60 px-3 py-1 text-[11px] text-gray-600 border border-dashed border-gray-200">
+                            <FiAlertCircle className="h-3 w-3" />
+                            Changes apply going forward; past data is not recalculated.
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <h4 className="text-xs font-semibold text-gray-800 mb-3">Configure Date Range</h4>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <div className="flex flex-col flex-1">
+                          <label className="text-xs font-medium text-gray-700 mb-1">Start Day</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={31}
+                            value={salesMonthStartDay}
+                            onChange={(e) => setSalesMonthStartDay(Number(e.target.value) || 1)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-gray-50"
+                          />
+                          <span className="mt-1 text-[11px] text-gray-500">
+                            First day of the sales month (e.g. 10 for 10th).
+                          </span>
+                        </div>
+                        <div className="flex flex-col flex-1">
+                          <label className="text-xs font-medium text-gray-700 mb-1">End Day</label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={31}
+                            value={salesMonthEndDay}
+                            onChange={(e) => setSalesMonthEndDay(Number(e.target.value) || 0)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-gray-50"
+                          />
+                          <span className="mt-1 text-[11px] text-gray-500">
+                            Use <span className="font-semibold">0</span> to end on the last day of the month.
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                          <FiClock className="h-3 w-3" />
+                          <span>Updates may take a few seconds to reflect on dashboards.</span>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={loadingSalesMonthConfig}
+                          onClick={async () => {
+                            try {
+                              setLoadingSalesMonthConfig(true)
+                              const response = await adminSalesService.updateSalesMonthConfig(
+                                salesMonthStartDay,
+                                salesMonthEndDay
+                              )
+                              if (response?.success) {
+                                toast.success('Sales month configuration updated')
+                                await loadSalesMonthConfig()
+                              } else {
+                                toast.error(response?.message || 'Failed to update sales month configuration')
+                              }
+                            } catch (error) {
+                              console.error('Error updating sales month config:', error)
+                              toast.error(error?.response?.data?.message || error?.message || 'Failed to update sales month configuration')
+                            } finally {
+                              setLoadingSalesMonthConfig(false)
+                            }
+                          }}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-xs font-semibold text-white bg-primary hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                        >
+                          {loadingSalesMonthConfig ? (
+                            <>
+                              <FiRefreshCw className="h-3 w-3 animate-spin" />
+                              <span>Saving...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FiCheckCircle className="h-3 w-3" />
+                              <span>Save Sales Month</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               {activeTab === 'leads' && (
                 <div className="space-y-6">
                   {/* Leads List */}

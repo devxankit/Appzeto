@@ -438,6 +438,7 @@ const SL_ClientProfile = () => {
   const financial = clientData.financial
   const project = clientData.project
   const saleApproval = clientData.saleApproval
+  const workProgress = Math.min(100, Math.max(0, Number(project?.workProgress ?? project?.projectDetails?.progress ?? 0) || 0))
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
@@ -495,15 +496,7 @@ const SL_ClientProfile = () => {
                   <div className="space-y-1.5 pt-1">
                     <div className="text-xs text-teal-600 font-semibold mb-1.5">Payment Breakdown:</div>
                     
-                    {/* Initial Advance */}
-                    {(financial?.breakdown?.initialAdvance || 0) > 0 && (
-                      <div className="flex justify-between items-center pl-3">
-                        <span className="text-teal-600 text-xs">Initial Advance</span>
-                        <span className="text-teal-700 font-semibold text-xs">₹{formatWhole(financial?.breakdown?.initialAdvance || 0)}</span>
-                      </div>
-                    )}
-                    
-                    {/* From Receipts */}
+                    {/* From Receipts (approved advance/recovery receipts) */}
                     {(financial?.breakdown?.fromReceipts || 0) > 0 && (
                       <div className="flex justify-between items-center pl-3">
                         <span className="text-teal-600 text-xs">From Receipts</span>
@@ -516,6 +509,14 @@ const SL_ClientProfile = () => {
                       <div className="flex justify-between items-center pl-3">
                         <span className="text-teal-600 text-xs">From Installments</span>
                         <span className="text-teal-700 font-semibold text-xs">₹{formatWhole(financial?.breakdown?.fromInstallments || 0)}</span>
+                      </div>
+                    )}
+                    
+                    {/* From Admin Recoveries */}
+                    {(financial?.breakdown?.fromAdminRecoveries || 0) > 0 && (
+                      <div className="flex justify-between items-center pl-3">
+                        <span className="text-teal-600 text-xs">From Admin Recoveries</span>
+                        <span className="text-teal-700 font-semibold text-xs">₹{formatWhole(financial?.breakdown?.fromAdminRecoveries || 0)}</span>
                       </div>
                     )}
                     
@@ -551,13 +552,13 @@ const SL_ClientProfile = () => {
         >
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-lg font-semibold text-gray-800">Work Progress</h3>
-            <span className="text-lg font-semibold text-gray-600">{project?.workProgress || 0}%</span>
+            <span className="text-lg font-semibold text-gray-600">{workProgress}%</span>
           </div>
           
           <div className="w-full bg-gray-200 rounded-full h-3">
             <motion.div 
               initial={{ width: 0 }}
-              animate={{ width: `${project?.workProgress || 0}%` }}
+              animate={{ width: `${workProgress}%` }}
               transition={{ duration: 1, delay: 0.3 }}
               className="h-3 rounded-full"
               style={{ background: gradients.primary }}
@@ -567,7 +568,7 @@ const SL_ClientProfile = () => {
           <div className="mt-4 text-sm text-gray-600">
             <p>Status: <span className="font-medium text-teal-700">{formatProjectStatus(project?.status)}</span></p>
             <p>Project: <span className="text-teal-600">
-              {project?.category ? (typeof project.category === 'object' ? project.category.name : project.category) : (project?.projectType ? (project.projectType.web ? 'Web' : project.projectType.app ? 'App' : project.projectType.taxi ? 'Taxi' : 'N/A') : 'N/A')}
+              {project?.projectDetails?.name || project?.name || 'N/A'}
             </span></p>
           </div>
         </motion.div>
@@ -789,17 +790,17 @@ const SL_ClientProfile = () => {
                   <select
                     value={selectedAccountId}
                     onChange={(e) => {
-                      const accountId = e.target.value
-                      const account = accounts.find(acc => (acc._id || acc.id) === accountId)
-                      setSelectedAccountId(accountId)
-                      setSelectedAccount(account ? account.name : '')
+                    const accountId = e.target.value
+                    const account = accounts.find(acc => (acc._id || acc.id) === accountId)
+                    setSelectedAccountId(accountId)
+                    setSelectedAccount(account ? (account.accountName || account.name || '') : '')
                     }}
                     className="w-full px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
                   >
                     <option value="">Select an account</option>
                     {accounts.map(account => (
                       <option key={account._id || account.id} value={account._id || account.id}>
-                        {account.name} {account.bankName ? `- ${account.bankName}` : ''}
+                        {account.accountName || account.name || 'Account'}
                       </option>
                     ))}
                   </select>

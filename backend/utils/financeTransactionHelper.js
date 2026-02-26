@@ -20,6 +20,7 @@ const FINANCE_SOURCE_TYPES = Object.freeze({
   REWARD: 'reward',
   PM_REWARD: 'pmReward',
   EXPENSE_ENTRY: 'expenseEntry',
+  PROJECT_EXPENSE: 'projectExpense',
   SALARY: 'salary',
   ALLOWANCE: 'allowance',
   OTHER: 'other'

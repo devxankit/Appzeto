@@ -12,9 +12,11 @@ import {
 import { FaWhatsapp } from 'react-icons/fa'
 import SL_navbar from '../SL-components/SL_navbar'
 import { salesPaymentsService } from '../SL-services'
+import { useToast } from '../../../contexts/ToastContext'
 
 const SL_payments_recovery = () => {
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false)
@@ -180,12 +182,12 @@ Thank you!`
 
     const amountValue = Math.round(Number(String(paymentForm.amount || '').replace(/,/g, '')) || 0)
     if (!amountValue || amountValue <= 0) {
-      alert('Please enter a valid amount greater than 0')
+      toast.error('Please enter a valid amount greater than 0')
       return
     }
 
     if (!paymentForm.accountId) {
-      alert('Please select an account')
+      toast.error('Please select an account')
       return
     }
 
@@ -195,7 +197,7 @@ Thank you!`
     const availableAmount = Math.max(0, (selectedProjectForPayment.remainingAmount || 0) - totalPending)
 
     if (amountValue > availableAmount) {
-      alert(`Amount exceeds available balance. Available: ₹${availableAmount.toLocaleString()}`)
+      toast.error(`Amount exceeds available balance. Available: ₹${availableAmount.toLocaleString()}`)
       return
     }
 
@@ -248,10 +250,10 @@ Thank you!`
         referenceId: '',
         notes: ''
       })
-      alert('Payment receipt created successfully. Pending admin approval.')
+      toast.success('Payment receipt created successfully. Pending admin approval.')
     } catch (e) {
       console.error('Failed to create payment receipt', e)
-      alert(e.message || 'Failed to create payment receipt')
+      toast.error(e.message || 'Failed to create payment receipt')
     } finally {
       setIsSubmittingPayment(false)
     }
@@ -716,7 +718,7 @@ Thank you!`
                   <option value="">Select an account</option>
                   {accounts.map(account => (
                     <option key={account._id || account.id} value={account._id || account.id}>
-                      {account.name} {account.bankName ? `- ${account.bankName}` : ''}
+                      {account.accountName || account.name || 'Account'}
                     </option>
                   ))}
                 </select>

@@ -43,8 +43,7 @@ const projectExpenseCategorySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for better performance
-projectExpenseCategorySchema.index({ name: 1 });
+// Index for better performance (name already has index from unique: true)
 projectExpenseCategorySchema.index({ isActive: 1 });
 
 // Virtual for expense count

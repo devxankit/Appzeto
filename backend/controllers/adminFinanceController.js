@@ -847,7 +847,8 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   });
 
   // 7. Other Finance outgoing transactions (not from above sources)
-  // Exclude expenseEntry, incentive, and reward transactions since they're already counted separately
+  // Exclude expenseEntry, incentive, reward, projectExpense - they're counted in their own sources
+  // (projectExpense is counted in projectExpensesAmount from Project.expenses)
   let otherExpenseFilter;
   if (timeFilter !== 'all') {
     otherExpenseFilter = {
@@ -855,7 +856,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       recordType: 'transaction',
       transactionType: 'outgoing',
       status: 'completed',
-      'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry'] },
+      'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry', 'projectExpense'] },
       category: { $nin: ['Salary Payment', 'Employee Allowance', 'Incentive Payment', 'Reward Payment', 'Sales Incentive', 'PM Reward'] }
     };
   } else {
@@ -863,7 +864,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
       recordType: 'transaction',
       transactionType: 'outgoing',
       status: 'completed',
-      'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry'] },
+      'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry', 'projectExpense'] },
       category: { $nin: ['Salary Payment', 'Employee Allowance', 'Incentive Payment', 'Reward Payment', 'Sales Incentive', 'PM Reward'] }
     };
   }
@@ -1052,6 +1053,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   const todayRewardsAmount = todayRewards[0]?.totalAmount || 0;
 
   // Today's Other Expenses (other outgoing transactions not from above sources)
+  // Exclude projectExpense - counted in todayProjectExpensesAmount
   const todayOtherExpenses = await AdminFinance.aggregate([
     {
       $match: {
@@ -1059,7 +1061,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
         recordType: 'transaction',
         transactionType: 'outgoing',
         status: 'completed',
-        'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'pmReward', 'expenseEntry'] },
+        'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'pmReward', 'expenseEntry', 'projectExpense'] },
         category: { $nin: ['Salary Payment', 'Employee Allowance', 'Sales Incentive', 'PM Reward'] }
       }
     },
@@ -1186,7 +1188,7 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
           recordType: 'transaction',
           transactionType: 'outgoing',
           status: 'completed',
-          'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry'] },
+          'metadata.sourceType': { $nin: ['salary', 'allowance', 'incentive', 'reward', 'pmReward', 'expenseEntry', 'projectExpense'] },
           category: { $nin: ['Salary Payment', 'Employee Allowance', 'Incentive Payment', 'Reward Payment', 'Sales Incentive', 'PM Reward'] }
         }
       },

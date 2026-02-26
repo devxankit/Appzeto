@@ -65,7 +65,8 @@ const generateToken = (id) => {
 // @access  Private (Sales)
 const getAccounts = async (req, res) => {
   try {
-    const accounts = await Account.find({ isActive: true }).select('name bankName accountNumber ifsc upiId');
+    // Include accountName so sales UIs can show the human-friendly account label
+    const accounts = await Account.find({ isActive: true }).select('accountName name bankName accountNumber ifsc upiId');
     res.json({ success: true, data: accounts, message: 'Accounts fetched' });
   } catch (error) {
     console.error('getAccounts error:', error);
@@ -1422,8 +1423,10 @@ const getDashboardHeroStats = async (req, res) => {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    // Use configurable sales-month window for monthly metrics (targets & incentives)
+    const { getCurrentSalesMonthRange } = require('../utils/salesMonthRange');
+    const { start: monthStart, end: monthEnd } = await getCurrentSalesMonthRange(now);
 
     // Get clients converted by this sales employee or linked to them
     const convertedClients = await Client.find({ $or: [{ convertedBy: salesId }, { linkedSalesEmployee: salesId }] })
@@ -1445,7 +1448,7 @@ const getDashboardHeroStats = async (req, res) => {
       .filter(c => c.conversionDate && c.conversionDate >= todayStart && c.conversionDate <= todayEnd)
       .map(c => c._id.toString());
 
-    // Get only projects where advance has been approved (same rule as admin/sales payment recovery)
+    // Get only projects where advance has been approved (first payment approved)
     const allClientIds = convertedClients.map(c => c._id);
     const projects = await Project.find({
       client: { $in: allClientIds },
@@ -1997,6 +2000,238 @@ const getMonthlyConversions = async (req, res) => {
   } catch (error) {
     console.error('Get monthly conversions error:', error);
     res.status(500).json({ success: false, message: 'Server error while fetching monthly conversions' });
+  }
+};
+
+// @desc    Monthly sales history for sales employee (last N calendar months)
+// @route   GET /api/sales/analytics/monthly-sales-history
+// @access  Private (Sales only)
+const getMonthlySalesHistory = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const rawMonths = parseInt(req.query.months || '12', 10) || 12;
+    const months = rawMonths <= 0 ? 120 : Math.min(rawMonths, 120);
+
+    const convertedClients = await Client.find({ $or: [{ convertedBy: salesId }, { linkedSalesEmployee: salesId }] })
+      .select('_id conversionDate')
+      .lean();
+
+    const allClientIds = convertedClients.map(c => c._id);
+    const projects = await Project.find({
+      client: { $in: allClientIds },
+      'financialDetails.advanceReceived': { $gt: 0 }
+    }).select('client financialDetails.totalCost financialDetails.includeGST budget').lean();
+
+    const getProjectBaseCost = (project) => {
+      const rawCost = Number(project.financialDetails?.totalCost || project.budget || 0);
+      const includeGST = !!project.financialDetails?.includeGST;
+      if (!includeGST || rawCost <= 0) return rawCost;
+      const base = Math.round(rawCost / 1.18);
+      return base > 0 ? base : rawCost;
+    };
+
+    const frames = getLastNMonths(months);
+    const items = [];
+
+    for (const f of frames) {
+      const monthStart = new Date(f.year, f.monthIndex - 1, 1, 0, 0, 0, 0);
+      const monthEnd = new Date(f.year, f.monthIndex, 0, 23, 59, 59, 999);
+
+      const monthlyClientIds = convertedClients
+        .filter(c => c.conversionDate && c.conversionDate >= monthStart && c.conversionDate <= monthEnd)
+        .map(c => c._id.toString());
+
+      let sales = 0;
+      projects.forEach(p => {
+        const clientIdStr = p.client.toString();
+        if (monthlyClientIds.includes(clientIdStr)) {
+          sales += getProjectBaseCost(p);
+        }
+      });
+
+      items.push({
+        month: f.label,
+        year: f.year,
+        monthIndex: f.monthIndex,
+        key: `${f.year}-${f.monthIndex}`,
+        sales,
+        monthLabel: `${f.label} ${f.year}`
+      });
+    }
+
+    // Determine when this sales employee "exists" in the system:
+    // earliest of (Sales.createdAt, first client conversion date)
+    let earliestActiveDate = null;
+    try {
+      const Sales = require('../models/Sales');
+      const salesDoc = await Sales.findById(salesId).select('createdAt');
+      if (salesDoc?.createdAt) {
+        earliestActiveDate = salesDoc.createdAt;
+      }
+    } catch (e) {
+      // If Sales model lookup fails, fall back to conversion dates only
+    }
+
+    if (convertedClients.length > 0) {
+      const earliestConversion = convertedClients
+        .filter(c => c.conversionDate)
+        .reduce(
+          (min, c) => (!min || c.conversionDate < min ? c.conversionDate : min),
+          null
+        );
+      if (earliestConversion) {
+        earliestActiveDate = earliestActiveDate
+          ? new Date(Math.min(earliestActiveDate, earliestConversion))
+          : earliestConversion;
+      }
+    }
+
+    let filteredItems = items;
+    if (earliestActiveDate) {
+      const earliestYear = earliestActiveDate.getFullYear();
+      const earliestMonthIndex = earliestActiveDate.getMonth() + 1; // 1-12
+      const earliestKey = earliestYear * 12 + (earliestMonthIndex - 1);
+
+      filteredItems = items.filter((x) => {
+        const key = x.year * 12 + (x.monthIndex - 1);
+        return key >= earliestKey;
+      });
+    }
+
+    const totalSales = filteredItems.reduce((sum, x) => sum + x.sales, 0);
+    const bestMonth = filteredItems.reduce(
+      (b, x) => (x.sales > (b?.sales || 0) ? x : b),
+      filteredItems[0] || { monthLabel: '-', sales: 0 }
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        items: filteredItems,
+        totalSales,
+        bestMonth: { monthLabel: bestMonth.monthLabel, sales: bestMonth.sales }
+      }
+    });
+  } catch (error) {
+    console.error('Get monthly sales history error:', error);
+    res.status(500).json({ success: false, message: 'Server error while fetching monthly sales history' });
+  }
+};
+
+// @desc    Monthly incentive history for sales employee (grouped by custom sales-month windows)
+// @route   GET /api/sales/analytics/incentives/history
+// @access  Private (Sales only)
+const getMonthlyIncentiveHistory = async (req, res) => {
+  try {
+    const salesId = safeObjectId(req.sales.id);
+    const rawPeriods = parseInt(req.query.periods || '12', 10) || 12;
+    const periodsToShow = Math.min(Math.max(rawPeriods, 1), 36);
+
+    const Sales = require('../models/Sales');
+    const Incentive = require('../models/Incentive');
+    const { getCurrentSalesMonthRange } = require('../utils/salesMonthRange');
+
+    // Load conversion-based incentives for this sales employee (own incentives only)
+    const incentives = await Incentive.find({
+      salesEmployee: salesId,
+      isConversionBased: true
+    })
+      .populate('clientId', 'name')
+      .populate('projectId', 'name')
+      .sort({ dateAwarded: 1 }) // ascending for earliest date calculation
+      .lean();
+
+    // Determine when this sales employee "exists" (earliest of Sales.createdAt and first incentive)
+    let earliestActiveDate = null;
+    const salesDoc = await Sales.findById(salesId).select('createdAt').lean();
+    if (salesDoc?.createdAt) {
+      earliestActiveDate = salesDoc.createdAt;
+    }
+    if (incentives.length > 0) {
+      const earliestIncentiveDate = incentives[0].dateAwarded ? new Date(incentives[0].dateAwarded) : null;
+      if (earliestIncentiveDate) {
+        earliestActiveDate = earliestActiveDate
+          ? new Date(Math.min(earliestActiveDate, earliestIncentiveDate))
+          : earliestIncentiveDate;
+      }
+    }
+
+    // Build custom sales-month windows going backwards from "now" using the same helper as hero stats
+    const frames = [];
+    const frameKeys = new Set();
+    let cursor = new Date();
+
+    while (frames.length < periodsToShow) {
+      // eslint-disable-next-line no-await-in-loop
+      const { start, end } = await getCurrentSalesMonthRange(cursor);
+      const key = `${start.toISOString()}_${end.toISOString()}`;
+      if (!frameKeys.has(key)) {
+        frameKeys.add(key);
+        frames.push({ start, end });
+      }
+      // Move cursor to the day before this window to get the previous window in next iteration
+      cursor = new Date(start.getTime() - 24 * 60 * 60 * 1000);
+    }
+
+    // Sort frames chronologically and filter out any that end before the employee became active
+    frames.sort((a, b) => a.start - b.start);
+    let usableFrames = frames;
+    if (earliestActiveDate) {
+      usableFrames = frames.filter((f) => f.end >= earliestActiveDate);
+    }
+
+    // Helper for date formatting
+    const fmt = (d) =>
+      d.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+
+    // Group incentives into these windows
+    const periods = usableFrames.map((frame) => {
+      const { start, end } = frame;
+      const incentivesInPeriod = incentives.filter((inc) => {
+        if (!inc.dateAwarded) return false;
+        const d = new Date(inc.dateAwarded);
+        return d >= start && d <= end;
+      });
+
+      const totalAmount = incentivesInPeriod.reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
+
+      const incentivesMapped = incentivesInPeriod.map((inc) => ({
+        id: inc._id,
+        amount: inc.amount,
+        status: inc.status,
+        dateAwarded: inc.dateAwarded,
+        paidAt: inc.paidAt || null,
+        reason: inc.reason,
+        clientName: inc.clientId?.name || null,
+        projectName: inc.projectId?.name || null
+      }));
+
+      return {
+        key: `${start.toISOString()}_${end.toISOString()}`,
+        start,
+        end,
+        label: `${fmt(start)} – ${fmt(end)}`,
+        totalAmount,
+        incentives: incentivesMapped
+      };
+    });
+
+    const totalAmountAllPeriods = periods.reduce((sum, p) => sum + p.totalAmount, 0);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        periods,
+        totalAmount: totalAmountAllPeriods
+      }
+    });
+  } catch (error) {
+    console.error('Get monthly incentive history error:', error);
+    res.status(500).json({ success: false, message: 'Server error while fetching monthly incentive history' });
   }
 };
 
@@ -5179,10 +5414,9 @@ const getClientProfile = async (req, res) => {
     let expectedCompletion = null;
 
     // Variables for detailed breakdown
-    let initialAdvance = 0;
     let totalApprovedPayments = 0;
     let paidInstallmentAmount = 0;
-    let totalFromReceiptsAndInstallments = 0;
+    let totalManualRecoveries = 0;
 
     if (primaryProject) {
       totalCost = primaryProject.financialDetails?.totalCost || primaryProject.budget || 0;
@@ -5197,8 +5431,9 @@ const getClientProfile = async (req, res) => {
       advanceReceived = Number(primaryProject.financialDetails?.advanceReceived || 0);
       pending = Number(primaryProject.financialDetails?.remainingAmount || 0);
 
-      // Calculate breakdown for display
+      // Calculate breakdown for display (must match projectFinancialHelper sources)
       const PaymentReceipt = require('../models/PaymentReceipt');
+      const AdminFinance = require('../models/AdminFinance');
       const approvedReceipts = await PaymentReceipt.find({
         project: primaryProject._id,
         status: 'approved'
@@ -5210,20 +5445,47 @@ const getClientProfile = async (req, res) => {
       const installmentTotals = calculateInstallmentTotals(primaryProject.installmentPlan || []);
       paidInstallmentAmount = Number(installmentTotals.paid || 0);
 
-      // Calculate totals for display
-      totalFromReceiptsAndInstallments = totalApprovedPayments + paidInstallmentAmount;
-      // Treat the approved receipts as the "approved advance" portion
-      initialAdvance = totalApprovedPayments;
+      // Admin manual recoveries (same source as projectFinancialHelper)
+      const manualRecoveries = await AdminFinance.aggregate([
+        {
+          $match: {
+            recordType: 'transaction',
+            transactionType: 'incoming',
+            status: { $ne: 'cancelled' },
+            project: primaryProject._id,
+            'metadata.sourceType': 'adminManualRecovery'
+          }
+        },
+        { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+      ]);
+      totalManualRecoveries = manualRecoveries[0]?.totalAmount || 0;
 
-      // Save project to persist the recalculated financials
+      // Persist recalculated financials via direct update (bypasses save validation e.g. projectManager)
       try {
-        await primaryProject.save();
+        await Project.findByIdAndUpdate(primaryProject._id, {
+          $set: {
+            'financialDetails.advanceReceived': primaryProject.financialDetails.advanceReceived,
+            'financialDetails.remainingAmount': primaryProject.financialDetails.remainingAmount
+          }
+        });
       } catch (updateError) {
         console.error('Error saving project financials in getClientProfile:', updateError);
         // Continue with calculated values even if save fails
       }
 
-      workProgress = primaryProject.progress || 0;
+      // Calculate real progress from milestones (same as clientProjectController)
+      const Milestone = require('../models/Milestone');
+      const milestones = await Milestone.find({ project: primaryProject._id });
+      const totalMilestones = milestones.length;
+      const completedMilestones = milestones.filter(m => m.status === 'completed').length;
+      if (primaryProject.status === 'completed') {
+        workProgress = 100;
+      } else {
+        workProgress = totalMilestones > 0
+          ? Math.round((completedMilestones / totalMilestones) * 100)
+          : (primaryProject.progress || 0);
+      }
+      workProgress = Math.min(100, Math.max(0, Number(workProgress) || 0));
       status = primaryProject.status || 'N/A';
 
       // Format project type - use category first, then fall back to legacy projectType
@@ -5285,11 +5547,11 @@ const getClientProfile = async (req, res) => {
           totalCost,
           advanceReceived,
           pending,
-          // Detailed breakdown for better clarity
+          // Detailed breakdown (matches projectFinancialHelper sources)
           breakdown: {
-            initialAdvance: initialAdvance,
             fromReceipts: totalApprovedPayments,
             fromInstallments: paidInstallmentAmount,
+            fromAdminRecoveries: totalManualRecoveries,
             totalPaid: advanceReceived
           }
         },
@@ -6536,6 +6798,8 @@ module.exports = {
   // alias export for new route path
   getDashboardStats: getSalesDashboardStats,
   getMonthlyConversions,
+  getMonthlySalesHistory,
+  getMonthlyIncentiveHistory,
   getMyLeads,
   getLeadsByStatus,
   getChannelPartnerLeads,

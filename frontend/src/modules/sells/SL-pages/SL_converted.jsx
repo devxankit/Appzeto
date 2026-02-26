@@ -117,6 +117,7 @@ const SL_converted = () => {
       )
 
       const projectsByClientId = {}
+      const clientInfoByClientId = {}
       try {
         const profiles = await Promise.all(
           clientIds.map(id =>
@@ -125,8 +126,16 @@ const SL_converted = () => {
         )
         profiles.forEach((res, idx) => {
           const cid = clientIds[idx]
-          if (res?.success && Array.isArray(res.data?.allProjects)) {
-            projectsByClientId[cid] = res.data.allProjects
+          if (res?.success) {
+            if (Array.isArray(res.data?.allProjects)) {
+              projectsByClientId[cid] = res.data.allProjects
+            }
+            if (res.data?.client) {
+              clientInfoByClientId[cid] = {
+                name: res.data.client.name,
+                companyName: res.data.client.company || res.data.client.companyName
+              }
+            }
           }
         })
       } catch (e) {
@@ -141,9 +150,11 @@ const SL_converted = () => {
         const allProjects = clientId && projectsByClientId[clientId]
           ? projectsByClientId[clientId]
           : (lead.project ? [lead.project] : [])
+        const clientInfo = clientId ? clientInfoByClientId[clientId] : null
         return {
           ...lead,
-          __allProjects: allProjects
+          __allProjects: allProjects,
+          __clientInfo: clientInfo
         }
       })
 
@@ -269,7 +280,9 @@ const SL_converted = () => {
   const MobileClientCard = ({ clientGroup, onAddProject }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const { baseLead, projects } = clientGroup
-    const categoryInfo = getCategoryInfo(baseLead.category)
+    // For admin-linked clients (no lead), baseLead.category is missing; use project category as fallback
+    const categorySource = baseLead.category || baseLead.project?.category || projects[0]?.project?.category
+    const categoryInfo = getCategoryInfo(categorySource)
 
     const displayName = clientGroup.name
     const displayBusiness = clientGroup.businessName
@@ -651,8 +664,9 @@ const SL_converted = () => {
                   const clientId = getClientIdForItem(lead)
                   if (!clientId) continue
                   if (!groupsMap.has(clientId)) {
-                    const displayName = lead.leadProfile?.name || lead.name || 'Unknown'
-                    const displayBusiness = lead.leadProfile?.businessName || lead.company || 'No company'
+                    const clientInfo = lead.__clientInfo
+                    const displayName = lead.leadProfile?.name || lead.name || clientInfo?.name || lead.convertedClient?.name || 'Unknown'
+                    const displayBusiness = lead.leadProfile?.businessName || lead.company || lead.convertedClient?.companyName || clientInfo?.companyName || 'No company'
                     const phone =
                       lead.phone ||
                       lead.convertedClient?.phoneNumber ||

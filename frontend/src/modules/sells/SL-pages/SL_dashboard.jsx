@@ -194,6 +194,13 @@ const SL_dashboard = () => {
   })
   const [heroStatsLoading, setHeroStatsLoading] = useState(true)
   const [showAllTargetsModal, setShowAllTargetsModal] = useState(false)
+  const [showMonthlySalesHistoryModal, setShowMonthlySalesHistoryModal] = useState(false)
+  const [monthlySalesHistory, setMonthlySalesHistory] = useState({ items: [], totalSales: 0, bestMonth: null })
+  const [monthlySalesHistoryLoading, setMonthlySalesHistoryLoading] = useState(false)
+  const [monthlySalesHistoryMonths, setMonthlySalesHistoryMonths] = useState(12) // 0 = all (120 months)
+  const [showMonthlyIncentiveHistoryModal, setShowMonthlyIncentiveHistoryModal] = useState(false)
+  const [monthlyIncentiveHistory, setMonthlyIncentiveHistory] = useState({ periods: [], totalAmount: 0 })
+  const [monthlyIncentiveHistoryLoading, setMonthlyIncentiveHistoryLoading] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -349,6 +356,67 @@ const SL_dashboard = () => {
     load()
     return () => { active = false }
   }, [])
+
+  // Load monthly sales history when modal opens or months filter changes
+  useEffect(() => {
+    if (!showMonthlySalesHistoryModal) return
+    let cancelled = false
+    const load = async () => {
+      setMonthlySalesHistoryLoading(true)
+      try {
+        const res = await salesAnalyticsService.getMonthlySalesHistory({ months: monthlySalesHistoryMonths })
+        if (cancelled) return
+        if (res?.success && res?.data) {
+          setMonthlySalesHistory({
+            items: res.data.items || [],
+            totalSales: res.data.totalSales || 0,
+            bestMonth: res.data.bestMonth || null
+          })
+        } else {
+          setMonthlySalesHistory({ items: [], totalSales: 0, bestMonth: null })
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load monthly sales history:', err)
+          setMonthlySalesHistory({ items: [], totalSales: 0, bestMonth: null })
+        }
+      } finally {
+        if (!cancelled) setMonthlySalesHistoryLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [showMonthlySalesHistoryModal, monthlySalesHistoryMonths])
+
+  // Load monthly incentive history when incentive modal opens
+  useEffect(() => {
+    if (!showMonthlyIncentiveHistoryModal) return
+    let cancelled = false
+    const load = async () => {
+      setMonthlyIncentiveHistoryLoading(true)
+      try {
+        const res = await salesAnalyticsService.getMonthlyIncentiveHistory({ periods: 12 })
+        if (cancelled) return
+        if (res?.success && res?.data) {
+          setMonthlyIncentiveHistory({
+            periods: res.data.periods || [],
+            totalAmount: res.data.totalAmount || 0
+          })
+        } else {
+          setMonthlyIncentiveHistory({ periods: [], totalAmount: 0 })
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load monthly incentive history:', err)
+          setMonthlyIncentiveHistory({ periods: [], totalAmount: 0 })
+        }
+      } finally {
+        if (!cancelled) setMonthlyIncentiveHistoryLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [showMonthlyIncentiveHistoryModal])
 
   // Sparkline data for sales trends
   const salesTrendData = [2.1, 2.3, 2.5, 2.2, 2.8, 2.6, 2.9, 2.7, 2.85]
@@ -512,14 +580,16 @@ const SL_dashboard = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
-                className="grid grid-cols-2 gap-3 mb-5"
+                className="grid grid-cols-2 gap-3 mb-1"
               >
                 <motion.div
                   whileHover={{ scale: 1.01, y: -1 }}
-                  className={`bg-white/60 backdrop-blur-sm rounded-lg p-3 border transition-all duration-300 shadow-md ${isInDangerZone
+                  onClick={() => setShowMonthlySalesHistoryModal(true)}
+                  className={`bg-white/60 backdrop-blur-sm rounded-lg p-3 border transition-all duration-300 shadow-md cursor-pointer ${isInDangerZone
                       ? 'border-red-300/50 hover:border-red-400/70'
                       : 'border-teal-300/50 hover:border-teal-400/70'
                     }`}
+                  title="Click to view monthly sales history"
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <p className={`text-xs font-semibold ${isInDangerZone ? 'text-red-800' : 'text-teal-800'}`}>Monthly Sales</p>
@@ -559,46 +629,11 @@ const SL_dashboard = () => {
                       <FaStar className="text-white text-[10px]" />
                     </div>
                   </div>
-                  <p className="text-lg font-bold text-gray-900 mb-0.5">₹{heroStats.target.toLocaleString()}</p>
-                  {heroStats.allTargets && heroStats.allTargets.length > 0 && heroStats.targetNumber && (() => {
-                    const activeTargetData = heroStats.allTargets.find(t => t.targetNumber === heroStats.targetNumber);
-                    if (activeTargetData) {
-                      const targetReward = activeTargetData.reward || 0;
-                      const isAchieved = activeTargetData.isAchieved;
-                      const deadline = activeTargetData.deadline ? new Date(activeTargetData.deadline) : null;
-                      const now = new Date();
-                      const daysLeft = deadline ? Math.ceil((deadline - now) / (1000 * 60 * 60 * 24)) : null;
-                      return (
-                        <div className="space-y-0.5">
-                          {isAchieved ? (
-                            <p className="text-[10px] font-bold text-green-600 flex items-center gap-1">
-                              <FaCheckCircle className="text-[8px]" /> Target Achieved
-                            </p>
-                          ) : (
-                            targetReward > 0 && (
-                              <p className="text-[10px] font-semibold text-blue-600">Next Reward: ₹{targetReward.toLocaleString('en-IN')}</p>
-                            )
-                          )}
-                          {heroStats.reward > 0 && (
-                            <p className="text-[10px] font-bold text-emerald-600">Total Rewards: ₹{heroStats.reward.toLocaleString('en-IN')}</p>
-                          )}
-                          {deadline && (
-                            <p className="text-[10px] text-emerald-600 leading-tight">
-                              {deadline.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              {!isAchieved && daysLeft >= 0 && (
-                                <span className={`ml-1 font-semibold ${daysLeft <= 7 ? 'text-red-600' : 'text-emerald-600'}`}>
-                                  ({daysLeft}d)
-                                </span>
-                              )}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
+                  <p className="text-lg font-bold text-gray-900">₹{heroStats.target.toLocaleString()}</p>
                 </motion.div>
               </motion.div>
+
+              {/* Sales-month window info moved into Monthly Sales History modal for clarity */}
 
               {/* Enhanced Progress Section */}
               <motion.div
@@ -743,10 +778,12 @@ const SL_dashboard = () => {
 
                 <motion.div
                   whileHover={{ scale: 1.05 }}
-                  className="bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-violet-300/50 text-center hover:border-violet-400/70 transition-all duration-300 shadow-xl"
+                  onClick={() => setShowMonthlyIncentiveHistoryModal(true)}
+                  className="bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-violet-300/50 text-center hover:border-violet-400/70 transition-all duration-300 shadow-xl cursor-pointer"
                   style={{
                     boxShadow: '0 8px 25px -5px rgba(139, 92, 246, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
                   }}
+                  title="Click to view monthly incentive history"
                 >
                   <p className="text-violet-800 text-sm mb-1.5 font-semibold">Monthly Incentive</p>
                   <p className="text-gray-900 text-lg font-bold">₹{heroStats.monthlyIncentive.toLocaleString()}</p>
@@ -1340,68 +1377,60 @@ const SL_dashboard = () => {
                           </div>
                         </div>
 
-                        {/* Row 2: Amount + Reward + Deadline */}
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
-                          <div className="flex flex-wrap items-baseline gap-2 sm:gap-3">
+                        {/* Compact details: amount, reward, deadline, progress */}
+                        <div className="space-y-2">
+                          {/* Amount + reward in one row */}
+                          <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-baseline gap-1.5">
                               <FaRupeeSign className="text-emerald-600 text-base sm:text-lg mt-0.5 flex-shrink-0" />
                               <span className="text-xl sm:text-2xl font-bold text-emerald-800 tracking-tight">
                                 {target.amount.toLocaleString('en-IN')}
                               </span>
-                              <span className="text-xs text-gray-500">target</span>
                             </div>
-                            <div className={`flex items-baseline gap-1 text-sm font-semibold px-2 py-0.5 rounded-md ${target.reward > 0 ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
-                              <FaRupeeSign className={target.reward > 0 ? 'text-green-600' : 'text-gray-400'} />
-                              <span>{(target.reward || 0).toLocaleString('en-IN')}</span>
-                              <span className={`text-xs font-medium ${target.reward > 0 ? 'text-green-600' : 'text-gray-500'}`}>reward</span>
-                            </div>
+                            {target.reward > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
+                                <FaStar className="text-emerald-500 text-[10px]" />
+                                Reward: ₹{target.reward.toLocaleString('en-IN')}
+                              </span>
+                            )}
                           </div>
-                          <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 w-fit ${daysLeft <= 7 && !isAchieved ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+
+                          {/* Deadline row */}
+                          <div className="flex items-center gap-2 text-[11px] sm:text-xs text-gray-600">
                             <FaClock className="text-[10px] sm:text-xs flex-shrink-0 opacity-80" />
-                            <span className="text-[11px] sm:text-xs font-medium">
-                              {deadline.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            <span>
+                              {deadline.toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric'
+                              })}
                             </span>
                             {!isAchieved && daysLeft >= 0 && (
-                              <span className={`text-[10px] font-semibold ${daysLeft <= 7 ? 'text-red-600' : 'text-gray-500'}`}>
+                              <span className={daysLeft <= 7 ? 'font-semibold text-red-600' : 'text-gray-500'}>
                                 · {daysLeft}d left
                               </span>
                             )}
                           </div>
-                        </div>
 
-                        {!isAchieved && (
-                          <div className="mt-3 pt-3 border-t border-gray-200/60">
-                            <div className="flex justify-between items-center mb-1.5">
+                          {/* Progress mini section */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center">
                               <span className="text-[10px] sm:text-xs text-gray-500 font-medium">Progress</span>
                               <span className="text-[10px] sm:text-xs font-bold text-gray-800">{target.progress}%</span>
                             </div>
-                            <div className="relative w-full bg-gray-200/80 rounded-full h-2 overflow-hidden">
+                            <div className="relative w-full bg-gray-200/80 rounded-full h-1.5 overflow-hidden">
                               <motion.div
                                 initial={{ width: 0 }}
                                 animate={{ width: `${target.progress}%` }}
                                 transition={{ duration: 0.8, delay: 0.2 }}
-                                className={`h-2 rounded-full ${isActive ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' : 'bg-gray-400'
-                                  }`}
+                                className={`h-1.5 rounded-full ${isActive ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' : 'bg-gray-400'}`}
                               />
                             </div>
-                            <p className="text-[10px] sm:text-xs text-gray-500 mt-1.5">
+                            <p className="text-[10px] sm:text-xs text-gray-500">
                               ₹{heroStats.monthlySales.toLocaleString('en-IN')} of ₹{target.amount.toLocaleString('en-IN')}
                             </p>
                           </div>
-                        )}
-
-                        {target.reward > 0 && target.isAchieved && (
-                          <div className="mt-3 flex items-center gap-2 text-[10px] sm:text-xs font-medium bg-emerald-50 text-emerald-800 rounded-lg px-2.5 py-2 border border-emerald-200/60">
-                            <FaCheckCircle className="text-emerald-500 flex-shrink-0" />
-                            <span>Target Reward Achieved: ₹{target.reward.toLocaleString('en-IN')}</span>
-                          </div>
-                        )}
-                        {target.reward > 0 && !target.isAchieved && !target.isDeadlinePassed && (
-                          <div className="mt-3 flex items-center gap-2 text-[10px] sm:text-xs font-medium bg-blue-50 text-blue-800 rounded-lg px-2.5 py-2 border border-blue-200/60">
-                            <FaStar className="text-blue-500 flex-shrink-0" />
-                            <span>Target Reward: ₹{target.reward.toLocaleString('en-IN')}</span>
-                          </div>
-                        )}
+                        </div>
                       </div>
                     </motion.div>
                   );
@@ -1411,6 +1440,272 @@ const SL_dashboard = () => {
               <div className="mt-4 sm:mt-6 flex justify-end">
                 <button
                   onClick={() => setShowAllTargetsModal(false)}
+                  className="px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-semibold touch-manipulation"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Monthly Sales History Modal */}
+      <AnimatePresence>
+        {showMonthlySalesHistoryModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4"
+            onClick={() => setShowMonthlySalesHistoryModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-4 sm:p-5 md:p-6 max-w-2xl w-full max-h-[88vh] sm:max-h-[90vh] overflow-hidden flex flex-col shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 mb-4 sm:mb-6 flex-shrink-0">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <FaChartLine className="text-teal-600" />
+                    Monthly Sales History
+                  </h3>
+                  <p className="text-gray-600 text-xs sm:text-sm mt-0.5 sm:mt-1">
+                    View your sales across previous months. Only approved first payments are counted, based on the current sales-month window (e.g. 10th–10th set in Sales Month settings).
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowMonthlySalesHistoryModal(false)}
+                  className="flex-shrink-0 text-gray-400 hover:text-gray-600 p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors touch-manipulation"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Filter */}
+              <div className="flex flex-wrap items-center gap-3 mb-4 flex-shrink-0">
+                <label className="text-sm font-medium text-gray-700">Show last</label>
+                <select
+                  value={monthlySalesHistoryMonths}
+                  onChange={(e) => setMonthlySalesHistoryMonths(Number(e.target.value))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                >
+                  <option value={0}>All months</option>
+                  <option value={6}>6 months</option>
+                  <option value={12}>12 months</option>
+                  <option value={18}>18 months</option>
+                  <option value={24}>24 months</option>
+                </select>
+              </div>
+
+              {/* Summary cards */}
+              {(monthlySalesHistory.totalSales > 0 || monthlySalesHistory.bestMonth) && (
+                <div className="grid grid-cols-2 gap-2 mb-3 flex-shrink-0 text-xs sm:text-sm">
+                  <div className="bg-gradient-to-r from-teal-500 to-teal-600 rounded-lg px-3 py-2 text-white shadow-md">
+                    <p className="text-teal-100 text-[10px] font-medium uppercase tracking-wider mb-0.5">
+                      Total (selected period)
+                    </p>
+                    <p className="text-base sm:text-lg font-bold">
+                      ₹{monthlySalesHistory.totalSales.toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  {monthlySalesHistory.bestMonth && monthlySalesHistory.bestMonth.sales > 0 && (
+                    <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg px-3 py-2 text-white shadow-md">
+                      <p className="text-emerald-100 text-[10px] font-medium uppercase tracking-wider mb-0.5">
+                        Best Month
+                      </p>
+                      <p className="text-xs sm:text-sm font-semibold">
+                        {monthlySalesHistory.bestMonth.monthLabel}
+                      </p>
+                      <p className="text-xs sm:text-sm text-emerald-100">
+                        ₹{monthlySalesHistory.bestMonth.sales.toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Table */}
+              <div className="flex-1 min-h-0 overflow-y-auto border border-gray-200 rounded-lg">
+                {monthlySalesHistoryLoading ? (
+                  <div className="p-8 flex flex-col items-center justify-center text-gray-500">
+                    <div className="w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full animate-spin mb-3" />
+                    <p className="text-sm">Loading sales history...</p>
+                  </div>
+                ) : monthlySalesHistory.items.length === 0 ? (
+                  <div className="p-8 flex flex-col items-center justify-center text-gray-500">
+                    <FaChartLine className="h-12 w-12 mb-3 text-gray-300" />
+                    <p className="text-sm font-medium text-gray-700">No sales data for this period</p>
+                    <p className="text-xs mt-1">Sales will appear here once you convert clients with approved projects</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-semibold text-gray-700">Month</th>
+                        <th className="px-4 py-3 text-right font-semibold text-gray-700">Sales</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {[...monthlySalesHistory.items].reverse().map((item) => (
+                        <tr key={item.key} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-gray-900 font-medium">{item.monthLabel}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-teal-700">₹{item.sales.toLocaleString('en-IN')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div className="mt-4 sm:mt-6 flex justify-end flex-shrink-0">
+                <button
+                  onClick={() => setShowMonthlySalesHistoryModal(false)}
+                  className="px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-semibold touch-manipulation"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Monthly Incentive History Modal */}
+      <AnimatePresence>
+        {showMonthlyIncentiveHistoryModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4"
+            onClick={() => setShowMonthlyIncentiveHistoryModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-4 sm:p-5 md:p-6 max-w-2xl w-full max-h-[88vh] sm:max-h-[90vh] overflow-hidden flex flex-col shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 mb-4 sm:mb-6 flex-shrink-0">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <FaChartLine className="text-violet-600" />
+                    Monthly Incentive History
+                  </h3>
+                  <p className="text-gray-600 text-xs sm:text-sm mt-0.5 sm:mt-1">
+                    Incentives grouped by your custom sales-month window. Shows awarded date, amount, and status (paid or unpaid).
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowMonthlyIncentiveHistoryModal(false)}
+                  className="flex-shrink-0 text-gray-400 hover:text-gray-600 p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors touch-manipulation"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto border border-gray-200 rounded-lg">
+                {monthlyIncentiveHistoryLoading ? (
+                  <div className="p-8 flex flex-col items-center justify-center text-gray-500">
+                    <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mb-3" />
+                    <p className="text-sm">Loading incentive history...</p>
+                  </div>
+                ) : monthlyIncentiveHistory.periods.length === 0 ? (
+                  <div className="p-8 flex flex-col items-center justify-center text-gray-500">
+                    <FaChartLine className="h-12 w-12 mb-3 text-gray-300" />
+                    <p className="text-sm font-medium text-gray-700">No incentive data yet</p>
+                    <p className="text-xs mt-1">Incentives will appear once you earn conversion-based incentives.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-200">
+                    {[...monthlyIncentiveHistory.periods].reverse().map((period) => (
+                      <div key={period.key} className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                              {period.label}
+                            </p>
+                            <p className="text-[11px] text-gray-500">
+                              Total incentive: ₹{period.totalAmount.toLocaleString('en-IN')}
+                            </p>
+                          </div>
+                        </div>
+                        {period.incentives.length === 0 ? (
+                          <p className="text-[11px] text-gray-500 mt-1">
+                            No incentives in this period.
+                          </p>
+                        ) : (
+                          <table className="w-full text-[11px] sm:text-xs mt-2">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 py-2 text-left font-semibold text-gray-700">Date</th>
+                                <th className="px-3 py-2 text-left font-semibold text-gray-700">Client / Project</th>
+                                <th className="px-3 py-2 text-right font-semibold text-gray-700">Amount</th>
+                                <th className="px-3 py-2 text-left font-semibold text-gray-700">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {period.incentives.map((inc) => {
+                                const date = inc.dateAwarded ? new Date(inc.dateAwarded) : null
+                                const paid = inc.status === 'paid'
+                                const statusLabel = paid ? 'Paid' : inc.status === 'approved' ? 'Approved' : 'Pending'
+                                const statusClass =
+                                  paid
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : inc.status === 'approved'
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                      : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                return (
+                                  <tr key={inc.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-3 py-2 text-gray-800">
+                                      {date
+                                        ? date.toLocaleDateString('en-IN', {
+                                          day: 'numeric',
+                                          month: 'short',
+                                          year: 'numeric'
+                                        })
+                                        : '—'}
+                                    </td>
+                                    <td className="px-3 py-2 text-gray-700">
+                                      <div className="flex flex-col">
+                                        <span className="font-medium">
+                                          {inc.clientName || 'Client'}
+                                        </span>
+                                        {inc.projectName && (
+                                          <span className="text-[10px] text-gray-500">
+                                            {inc.projectName}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-2 text-right font-semibold text-violet-700">
+                                      ₹{Number(inc.amount || 0).toLocaleString('en-IN')}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusClass}`}>
+                                        {statusLabel}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 sm:mt-6 flex justify-end flex-shrink-0">
+                <button
+                  onClick={() => setShowMonthlyIncentiveHistoryModal(false)}
                   className="px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-semibold touch-manipulation"
                 >
                   Close

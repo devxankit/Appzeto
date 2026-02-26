@@ -15,6 +15,18 @@ const getMonthlyConversions = async (params = {}) => {
   return apiRequest(url, { method: 'GET' });
 };
 
+const getMonthlySalesHistory = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const url = `/sales/analytics/monthly-sales-history${query ? `?${query}` : ''}`;
+  return apiRequest(url, { method: 'GET' });
+};
+
+const getMonthlyIncentiveHistory = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const url = `/sales/analytics/incentives/history${query ? `?${query}` : ''}`;
+  return apiRequest(url, { method: 'GET' });
+};
+
 const getTileCardStats = async () => {
   const url = `/sales/dashboard/tile-stats`;
   return apiRequest(url, { method: 'GET' });
@@ -36,6 +48,8 @@ const getLeaderboard = async (params = {}) => {
 export default {
   getDashboardStats,
   getMonthlyConversions,
+  getMonthlySalesHistory,
+  getMonthlyIncentiveHistory,
   getTileCardStats,
   getDashboardHeroStats,
   getLeaderboard

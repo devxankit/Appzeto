@@ -1638,6 +1638,57 @@ const getTeamPerformance = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get global sales month configuration for sales targets & incentives
+// @route   GET /api/admin/sales/month-range
+// @access  Private (Admin/HR only)
+const { getSalesMonthConfig, updateSalesMonthConfig } = require('../utils/salesMonthConfig');
+
+const getSalesMonthRangeConfig = asyncHandler(async (req, res) => {
+  const config = await getSalesMonthConfig();
+
+  res.status(200).json({
+    success: true,
+    data: {
+      salesMonthStartDay: config.salesMonthStartDay,
+      salesMonthEndDay: config.salesMonthEndDay,
+      timezone: config.timezone,
+    },
+  });
+});
+
+// @desc    Update global sales month configuration for sales targets & incentives
+// @route   PUT /api/admin/sales/month-range
+// @access  Private (Admin/HR only)
+const updateSalesMonthRangeConfig = asyncHandler(async (req, res, next) => {
+  const { salesMonthStartDay, salesMonthEndDay } = req.body || {};
+
+  if (salesMonthStartDay === undefined || salesMonthStartDay === null) {
+    return next(new ErrorResponse('salesMonthStartDay is required', 400));
+  }
+
+  const start = Number(salesMonthStartDay);
+  const end = salesMonthEndDay === undefined || salesMonthEndDay === null ? 0 : Number(salesMonthEndDay);
+
+  if (!Number.isInteger(start) || start < 1 || start > 31) {
+    return next(new ErrorResponse('salesMonthStartDay must be an integer between 1 and 31', 400));
+  }
+
+  if (!Number.isInteger(end) || end < 0 || end > 31) {
+    return next(new ErrorResponse('salesMonthEndDay must be an integer between 0 and 31', 400));
+  }
+
+  const updated = await updateSalesMonthConfig({
+    salesMonthStartDay: start,
+    salesMonthEndDay: end,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Sales month configuration updated successfully',
+    data: updated,
+  });
+});
+
 // Helper function to calculate performance score based on revenue
 // Performance is now based on revenue generated from converting clients
 const calculatePerformanceScore = (convertedValue) => {
@@ -1732,5 +1783,9 @@ module.exports = {
   getSalesOverview,
   getCategoryAnalytics,
   getCategoryFinancialDetails,
-  getTeamPerformance
+  getTeamPerformance,
+
+  // Sales month configuration
+  getSalesMonthRangeConfig,
+  updateSalesMonthRangeConfig
 };

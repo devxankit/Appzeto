@@ -395,7 +395,7 @@ const SalesProjectConversionDialog = ({
                   <option value="">Select account</option>
                   {accounts.map(account => (
                     <option key={account._id || account.id} value={account._id || account.id}>
-                      {account.name} {account.bankName ? `- ${account.bankName}` : ''}
+                      {account.accountName || account.name || 'Account'}
                     </option>
                   ))}
                 </select>

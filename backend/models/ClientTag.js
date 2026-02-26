@@ -33,8 +33,7 @@ const clientTagSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for better performance
+// Index for better performance (name already has index from unique: true)
 clientTagSchema.index({ isActive: 1 });
-clientTagSchema.index({ name: 1 });
 
 module.exports = mongoose.model('ClientTag', clientTagSchema);
