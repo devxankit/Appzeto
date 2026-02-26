@@ -395,7 +395,7 @@ const createPaymentReceipt = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Account not found or inactive' });
     }
 
-    // Create receipt
+    // Create receipt (pending approval)
     const receipt = await PaymentReceipt.create({
       client: client._id,
       project: project._id,
@@ -407,11 +407,6 @@ const createPaymentReceipt = async (req, res) => {
       createdBy: salesId,
       status: 'pending'
     });
-
-    // Optimistically update remainingAmount immediately
-    const newRemainingAmount = Math.max(0, currentRemaining - amountValue);
-    project.financialDetails.remainingAmount = newRemainingAmount;
-    await project.save();
 
     // Create approval request for admin
     try {

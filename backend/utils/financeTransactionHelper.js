@@ -3,7 +3,71 @@ const AdminFinance = require('../models/AdminFinance');
 /**
  * Finance Transaction Helper Utility
  * Provides helper functions for creating finance transactions with duplicate prevention
+ * and centralized invariants.
  */
+
+// Central definition of allowed finance source types.
+// IMPORTANT: When adding a new sourceType anywhere in the codebase,
+// first add it here and then update any aggregations that rely on sourceType
+// (e.g. finance statistics that use $nin filters).
+const FINANCE_SOURCE_TYPES = Object.freeze({
+  PAYMENT: 'payment',
+  PAYMENT_RECEIPT: 'paymentReceipt',
+  PROJECT_INSTALLMENT: 'projectInstallment',
+  ADMIN_MANUAL_RECOVERY: 'adminManualRecovery',
+  PROJECT_CONVERSION: 'project_conversion',
+  INCENTIVE: 'incentive',
+  REWARD: 'reward',
+  PM_REWARD: 'pmReward',
+  EXPENSE_ENTRY: 'expenseEntry',
+  SALARY: 'salary',
+  ALLOWANCE: 'allowance',
+  OTHER: 'other'
+});
+
+/**
+ * Normalize and validate metadata for AdminFinance transactions.
+ * - Ensures a consistent sourceType value when provided.
+ * - Attaches a createdAt timestamp (used by existing code).
+ * - Logs warnings for unknown or inconsistent combinations, without throwing,
+ *   so existing behavior is preserved while still surfacing potential issues.
+ *
+ * NOTE: This function is intentionally lenient to avoid breaking current flows.
+ * For stricter behavior in the future, we can upgrade some warnings to errors
+ * in non-production environments.
+ */
+const normalizeFinanceMetadata = (metadata = {}) => {
+  const normalized = { ...(metadata || {}) };
+
+  // Always attach a metadata.createdAt field (existing behavior relied on this)
+  // but don't overwrite one that was explicitly set.
+  if (!normalized.createdAt) {
+    normalized.createdAt = new Date();
+  }
+
+  if (!normalized.sourceType) {
+    // No sourceType: allow, but if there is a sourceId this is suspicious.
+    if (normalized.sourceId) {
+      console.warn(
+        '[financeTransactionHelper] metadata has sourceId but no sourceType. ' +
+        'This may lead to ambiguous aggregations. ' +
+        `sourceId=${normalized.sourceId}`
+      );
+    }
+    return normalized;
+  }
+
+  const allowedValues = Object.values(FINANCE_SOURCE_TYPES);
+  if (!allowedValues.includes(normalized.sourceType)) {
+    console.warn(
+      '[financeTransactionHelper] Unknown metadata.sourceType encountered:',
+      normalized.sourceType,
+      '- please add it to FINANCE_SOURCE_TYPES and update finance aggregations if needed.'
+    );
+  }
+
+  return normalized;
+};
 
 /**
  * Check if a transaction already exists for a given source
@@ -66,11 +130,13 @@ const createIncomingTransaction = async (options) => {
     throw new Error('Missing required fields: amount, category, transactionDate, createdBy');
   }
 
+  const normalizedMetadata = normalizeFinanceMetadata(metadata);
+
   // Check for duplicate if metadata has source info
-  if (checkDuplicate && metadata.sourceType && metadata.sourceId) {
+  if (checkDuplicate && normalizedMetadata.sourceType && normalizedMetadata.sourceId) {
     const existing = await findExistingTransaction({
-      sourceType: metadata.sourceType,
-      sourceId: metadata.sourceId
+      sourceType: normalizedMetadata.sourceType,
+      sourceId: normalizedMetadata.sourceId
     });
 
     if (existing) {
@@ -88,10 +154,7 @@ const createIncomingTransaction = async (options) => {
     createdBy,
     status: 'completed',
     description: description || '',
-    metadata: {
-      ...metadata,
-      createdAt: new Date()
-    }
+    metadata: normalizedMetadata
   };
 
   if (client) transactionData.client = client;
@@ -141,11 +204,13 @@ const createOutgoingTransaction = async (options) => {
     throw new Error('Missing required fields: amount, category, transactionDate, createdBy');
   }
 
+  const normalizedMetadata = normalizeFinanceMetadata(metadata);
+
   // Check for duplicate if metadata has source info
-  if (checkDuplicate && metadata.sourceType && metadata.sourceId) {
+  if (checkDuplicate && normalizedMetadata.sourceType && normalizedMetadata.sourceId) {
     const existing = await findExistingTransaction({
-      sourceType: metadata.sourceType,
-      sourceId: metadata.sourceId
+      sourceType: normalizedMetadata.sourceType,
+      sourceId: normalizedMetadata.sourceId
     });
 
     if (existing) {
@@ -163,10 +228,7 @@ const createOutgoingTransaction = async (options) => {
     createdBy,
     status: 'completed',
     description: description || '',
-    metadata: {
-      ...metadata,
-      createdAt: new Date()
-    }
+    metadata: normalizedMetadata
   };
 
   if (employee) transactionData.employee = employee;
@@ -221,6 +283,7 @@ module.exports = {
   findExistingTransaction,
   createIncomingTransaction,
   createOutgoingTransaction,
-  cancelTransactionForSource
+  cancelTransactionForSource,
+  FINANCE_SOURCE_TYPES
 };
 
