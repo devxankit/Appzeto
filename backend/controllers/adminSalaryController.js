@@ -194,9 +194,9 @@ const calculatePersonalTargetRewardForMonth = async (salesEmployeeId, month) => 
 // @access  Private (Admin/HR)
 exports.setEmployeeSalary = asyncHandler(async (req, res) => {
   const { userType, employeeId } = req.params;
-  const { fixedSalary } = req.body;
+  const { fixedSalary, effectiveFromMonth } = req.body;
 
-  if (!fixedSalary || fixedSalary < 0) {
+  if (fixedSalary === undefined || fixedSalary === null) {
     return res.status(400).json({
       success: false,
       message: 'Valid fixed salary amount is required'
@@ -221,7 +221,7 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
 
   // Update fixed salary (ensure number for Mongoose)
   const amount = Number(fixedSalary);
-  if (isNaN(amount) || amount < 0) {
+  if (isNaN(amount) || amount <= 0) {
     return res.status(400).json({
       success: false,
       message: 'Valid fixed salary amount is required'
@@ -230,23 +230,30 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
   employee.fixedSalary = amount;
   await employee.save();
 
-  // Create salary records starting from the month AFTER joining through current + 36 months (3 years ahead)
-  // Mark-paid auto-creates next month, so records extend indefinitely until admin deletes
   const joiningDate = employee.joiningDate || new Date();
   const joinDate = new Date(joiningDate);
   const now = new Date();
-  // Example: joins on 5-Feb -> first salary should be 5-Mar (not Feb)
-  const startMonth = joinDate.getFullYear() * 12 + joinDate.getMonth() + 1;
-  const endMonth = now.getFullYear() * 12 + now.getMonth() + 36;
-  const months = [];
-  for (let m = startMonth; m <= endMonth; m++) {
-    const y = Math.floor(m / 12);
-    const mo = (m % 12) + 1;
-    months.push(`${y}-${String(mo).padStart(2, '0')}`);
+  // Month indices for iteration (year * 12 + monthIndex where monthIndex is 0–11)
+  const joinMonthIndex = joinDate.getFullYear() * 12 + joinDate.getMonth();
+  const currentMonthIndex = now.getFullYear() * 12 + now.getMonth();
+
+  // Determine the first month for which to generate salary records.
+  // - Default: month AFTER joining.
+  // - If effectiveFromMonth is provided, it must not be earlier than joining month.
+  let startIndex = joinMonthIndex + 1;
+  if (effectiveFromMonth && /^\d{4}-\d{2}$/.test(effectiveFromMonth)) {
+    const [effYear, effMonth] = effectiveFromMonth.split('-').map(n => parseInt(n, 10));
+    if (!isNaN(effYear) && !isNaN(effMonth)) {
+      const effIndex = effYear * 12 + (effMonth - 1);
+      if (effIndex >= joinMonthIndex) {
+        startIndex = Math.max(startIndex, effIndex);
+      }
+    }
   }
   const paymentDay = new Date(joiningDate).getDate();
 
-  for (const month of months) {
+  // Helper to create or update a salary record for a given month string
+  const upsertSalaryForMonth = async (month, source = 'set-salary') => {
     const paymentDate = calculatePaymentDate(joiningDate, month);
 
     // Calculate incentiveAmount and rewardAmount (team + personal target rewards) for sales team
@@ -287,6 +294,7 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
         paymentDate,
         paymentDay,
         status: 'pending',
+        source,
         incentiveAmount,
         incentiveStatus: 'pending',
         rewardAmount,
@@ -298,6 +306,21 @@ exports.setEmployeeSalary = asyncHandler(async (req, res) => {
         new: true
       }
     );
+  };
+
+  // Seed only the first two months for this employee (start month + next month).
+  // After this, each time a month is marked as paid, the next month is auto-created
+  // by updateSalaryRecord, so records continue indefinitely until admin deletes them.
+  const seedMonths = [];
+  for (let offset = 0; offset < 2; offset++) {
+    const index = startIndex + offset;
+    const y = Math.floor(index / 12);
+    const mo = (index % 12) + 1;
+    seedMonths.push(`${y}-${String(mo).padStart(2, '0')}`);
+  }
+
+  for (const month of seedMonths) {
+    await upsertSalaryForMonth(month, 'set-salary');
   }
 
   res.json({
@@ -390,7 +413,9 @@ exports.getSalaryRecords = asyncHandler(async (req, res) => {
           totalReward = rewards.reduce((sum, r) => sum + (r.amount || 0), 0);
         }
 
-        if (Math.abs((salary.rewardAmount || 0) - totalReward) > 0.01 && totalReward > 0) {
+        // Always sync rewardAmount to underlying rewards, even when they become 0,
+        // so salary records don't keep stale reward values.
+        if (Math.abs((salary.rewardAmount || 0) - totalReward) > 0.01) {
           salary.rewardAmount = totalReward;
           await salary.save();
         }
@@ -439,6 +464,65 @@ exports.getEmployeesWithSalary = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: ids.map(id => id.toString())
+  });
+});
+
+// @desc    Get list of employees who have salary set, with basic details
+//          (source of truth = Salary collection, not just fixedSalary on employee)
+// @route   GET /api/admin/users/salary/employees
+// @access  Private (Admin/HR/Accountant)
+exports.getEmployeesWithSalaryDetails = asyncHandler(async (req, res) => {
+  // Group salary records by employee to find first month, first createdAt, and latest fixedSalary
+  const aggregates = await Salary.aggregate([
+    {
+      $group: {
+        _id: { employeeId: '$employeeId', employeeModel: '$employeeModel' },
+        firstMonth: { $min: '$month' },
+        firstCreatedAt: { $min: '$createdAt' },
+        lastUpdatedAt: { $max: '$updatedAt' },
+        latestFixedSalary: { $last: '$fixedSalary' }
+      }
+    }
+  ]);
+
+  const results = await Promise.all(
+    aggregates.map(async (agg) => {
+      const { employeeId, employeeModel } = agg._id;
+      const employee = await getEmployee(employeeId, employeeModel);
+      if (!employee) {
+        return null;
+      }
+
+      const role =
+        employee.role ||
+        (employeeModel === 'Sales'
+          ? 'sales'
+          : employeeModel === 'PM'
+          ? 'project-manager'
+          : employeeModel === 'Admin'
+          ? 'hr'
+          : 'employee');
+
+      return {
+        id: employee._id.toString(),
+        name: employee.name,
+        department: employee.department || 'unknown',
+        role,
+        employeeModel,
+        fixedSalary: typeof employee.fixedSalary === 'number' && employee.fixedSalary > 0
+          ? employee.fixedSalary
+          : agg.latestFixedSalary || 0,
+        joiningDate: employee.joiningDate || null,
+        salaryFirstMonth: agg.firstMonth || null,
+        salaryFirstCreatedAt: agg.firstCreatedAt || null,
+        salaryLastUpdatedAt: agg.lastUpdatedAt || null
+      };
+    })
+  );
+
+  res.json({
+    success: true,
+    data: results.filter(Boolean)
   });
 });
 
@@ -672,6 +756,7 @@ exports.updateSalaryRecord = asyncHandler(async (req, res) => {
                 paymentDate: nextPayDate,
                 paymentDay: new Date(joiningDate).getDate(),
                 status: 'pending',
+                source: 'auto-next-month',
                 createdBy: req.admin.id
               });
             }
@@ -834,7 +919,7 @@ exports.generateMonthlySalaries = asyncHandler(async (req, res) => {
       month
     });
 
-    // Calculate incentiveAmount and rewardAmount (team target reward) for sales team
+    // Calculate incentiveAmount and rewardAmount (team + personal target rewards) for sales team
     let incentiveAmount = 0;
     let rewardAmount = 0;
     if (emp.modelType === 'Sales') {
@@ -844,7 +929,9 @@ exports.generateMonthlySalaries = asyncHandler(async (req, res) => {
           currentBalance: { $gt: 0 }
         });
         incentiveAmount = incentives.reduce((sum, inc) => sum + (inc.currentBalance || 0), 0);
-        rewardAmount = await calculateTeamTargetRewardForMonth(emp._id, month);
+        const teamTargetReward = await calculateTeamTargetRewardForMonth(emp._id, month);
+        const personalTargetReward = await calculatePersonalTargetRewardForMonth(emp._id, month);
+        rewardAmount = teamTargetReward + personalTargetReward;
       } catch (error) {
         console.error(`Error calculating incentive/reward for employee ${emp._id}:`, error);
       }
@@ -885,6 +972,7 @@ exports.generateMonthlySalaries = asyncHandler(async (req, res) => {
         paymentDate,
         paymentDay,
         status: 'pending',
+        source: 'bulk-generate',
         incentiveAmount,
         incentiveStatus: 'pending',
         rewardAmount,
@@ -943,7 +1031,7 @@ exports.getEmployeeSalaryHistory = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Delete salary record (admin can delete any record, including paid)
+// @desc    Delete all salary records for an employee (remove from salary system)
 // @route   DELETE /api/admin/salary/:id
 // @access  Private (Admin/HR)
 exports.deleteSalaryRecord = asyncHandler(async (req, res) => {
@@ -956,12 +1044,28 @@ exports.deleteSalaryRecord = asyncHandler(async (req, res) => {
     });
   }
 
-  // Admin has full power to delete any salary record (paid or pending, past or future)
-  await Salary.findByIdAndDelete(salary._id);
+  // Delete ALL salary records for this employee/model combination.
+  // This effectively removes the employee from the salary system until salary is set again.
+  await Salary.deleteMany({
+    employeeId: salary.employeeId,
+    employeeModel: salary.employeeModel
+  });
+
+  // Also clear fixedSalary on the underlying employee document so they are
+  // removed from "Employees With Salary Set" lists until salary is configured again.
+  try {
+    const employee = await getEmployee(salary.employeeId, salary.employeeModel);
+    if (employee && typeof employee.fixedSalary !== 'undefined') {
+      employee.fixedSalary = 0;
+      await employee.save();
+    }
+  } catch (error) {
+    console.error('Error clearing fixedSalary for employee after deleting salary records:', error);
+  }
 
   res.json({
     success: true,
-    message: 'Salary record deleted successfully'
+    message: 'All salary records for this employee have been deleted successfully'
   });
 });
 

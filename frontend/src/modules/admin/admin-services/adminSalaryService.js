@@ -3,12 +3,24 @@
 import { apiRequest } from './baseApiService'
 
 // Set employee fixed salary
-const setEmployeeSalary = async (userType, employeeId, fixedSalary) => {
+// fixedSalaryOrPayload can be:
+// - number (fixedSalary only)
+// - object { fixedSalary, effectiveFromMonth }
+const setEmployeeSalary = async (userType, employeeId, fixedSalaryOrPayload) => {
+  const payload = typeof fixedSalaryOrPayload === 'number'
+    ? { fixedSalary: fixedSalaryOrPayload }
+    : fixedSalaryOrPayload;
   const res = await apiRequest(`/admin/users/salary/set/${userType}/${employeeId}`, {
     method: 'PUT',
-    body: JSON.stringify({ fixedSalary })
+    body: JSON.stringify(payload)
   })
   return res
+}
+
+// Get detailed list of employees who have salary set
+const getEmployeesWithSalaryDetails = async () => {
+  const res = await apiRequest('/admin/users/salary/employees', { method: 'GET' })
+  return res?.data || []
 }
 
 // Get employee IDs who already have salary set (for Set salary dropdown)
@@ -91,6 +103,7 @@ const updateRewardPayment = async (id, data) => {
 export const adminSalaryService = {
   setEmployeeSalary,
   getEmployeesWithSalary,
+  getEmployeesWithSalaryDetails,
   getSalaryRecords,
   getSalaryRecord,
   updateSalaryRecord,

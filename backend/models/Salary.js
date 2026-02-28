@@ -106,6 +106,14 @@ const salarySchema = new mongoose.Schema({
     type: Date
   },
   
+  // Source of this salary record (for audit/UX)
+  // e.g. 'set-salary', 'auto-next-month', 'bulk-generate', 'manual'
+  source: {
+    type: String,
+    trim: true,
+    default: 'set-salary'
+  },
+  
   // Audit
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,

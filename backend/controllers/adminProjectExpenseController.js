@@ -125,8 +125,12 @@ const getAllProjectExpenses = asyncHandler(async (req, res, next) => {
       }
     });
 
-    // Sort by expenseDate descending
-    allExpenses.sort((a, b) => new Date(b.expenseDate) - new Date(a.expenseDate));
+    // Sort by createdAt descending (newest first), then expenseDate
+    allExpenses.sort((a, b) => {
+      const byCreated = new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+      if (byCreated !== 0) return byCreated;
+      return new Date(b.expenseDate || 0) - new Date(a.expenseDate || 0);
+    });
 
     // Apply pagination
     const total = allExpenses.length;
@@ -219,8 +223,12 @@ const getProjectExpenses = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // Sort by expenseDate descending
-  expenses.sort((a, b) => new Date(b.expenseDate) - new Date(a.expenseDate));
+  // Sort by createdAt descending (newest first), then expenseDate
+  expenses.sort((a, b) => {
+    const byCreated = new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    if (byCreated !== 0) return byCreated;
+    return new Date(b.expenseDate || 0) - new Date(a.expenseDate || 0);
+  });
 
   // Apply pagination
   const skip = (parseInt(page) - 1) * parseInt(limit);

@@ -2,6 +2,8 @@ const express = require('express');
 const {
   getAllProjects,
   getProjectById,
+  getProjectMilestones,
+  getMilestoneTasks,
   createProject,
   updateProject,
   updateProjectCost,
@@ -30,6 +32,8 @@ router.get('/statistics', getProjectStatistics);
 router.get('/management-statistics', getProjectManagementStatistics);
 router.get('/pending', getPendingProjects);
 router.get('/pms-for-assignment', getPMsForAssignment);
+router.get('/:id/milestones/:milestoneId/tasks', getMilestoneTasks);
+router.get('/:id/milestones', getProjectMilestones);
 router.get('/:id', getProjectById);
 router.post('/', createProject);
 router.post('/pending/:id/assign-pm', assignPMToPendingProject);

@@ -17,6 +17,7 @@ const {
   getSalaryRecords,
   getSalaryRecord,
   getEmployeesWithSalary,
+  getEmployeesWithSalaryDetails,
   updateSalaryRecord,
   generateMonthlySalaries,
   getEmployeeSalaryHistory,
@@ -63,6 +64,7 @@ router.get('/attendance', getAttendance);
 router.post('/salary/generate/:month', protect, authorize('admin', 'hr', 'accountant'), generateMonthlySalaries);
 router.get('/salary/generate/:month', protect, authorize('admin', 'hr', 'accountant'), generateMonthlySalaries);
 router.get('/salary/employee-ids', protect, authorize('admin', 'hr', 'accountant'), getEmployeesWithSalary);
+router.get('/salary/employees', protect, authorize('admin', 'hr', 'accountant'), getEmployeesWithSalaryDetails);
 router.get('/salary/employee/:userType/:employeeId', protect, authorize('admin', 'hr', 'accountant'), getEmployeeSalaryHistory);
 router.put('/salary/set/:userType/:employeeId', protect, authorize('admin', 'hr', 'accountant'), setEmployeeSalary);
 router.put('/salary/:id/incentive', protect, authorize('admin', 'hr', 'accountant'), updateIncentivePayment);

@@ -287,11 +287,6 @@ class AdminUserService {
       }
     }
 
-    // Document validation
-    if (!isEdit && !userData.document) {
-      errors.push('Document upload is required');
-    }
-
     return errors;
   }
 

@@ -99,6 +99,12 @@ const Admin_project_management = () => {
   const [selectedPM, setSelectedPM] = useState('')
   const [showCostEditModal, setShowCostEditModal] = useState(false)
   const [showCostHistoryModal, setShowCostHistoryModal] = useState(false)
+  const [showMilestoneTasksModal, setShowMilestoneTasksModal] = useState(false)
+  const [milestoneTasksProject, setMilestoneTasksProject] = useState(null)
+  const [milestoneTasksData, setMilestoneTasksData] = useState({ milestones: [], tasksByMilestone: {} })
+  const [milestoneTasksLoading, setMilestoneTasksLoading] = useState(false)
+  const [expandedMilestoneId, setExpandedMilestoneId] = useState(null)
+  const [loadingMilestoneId, setLoadingMilestoneId] = useState(null)
   const [costEditData, setCostEditData] = useState({ newCost: '', reason: '' })
   const [costEditError, setCostEditError] = useState('')
   const [showInstallmentModal, setShowInstallmentModal] = useState(false)
@@ -1043,7 +1049,9 @@ const Admin_project_management = () => {
   }
 
   const getStatusColor = (status) => {
-    switch (status) {
+    if (!status) return 'bg-gray-100 text-gray-800 border-gray-200'
+    const s = String(status).toLowerCase()
+    switch (s) {
       case 'active': return 'bg-green-100 text-green-800 border-green-200'
       case 'in-progress': return 'bg-blue-100 text-blue-800 border-blue-200'
       case 'completed': return 'bg-emerald-100 text-emerald-800 border-emerald-200'
@@ -1052,6 +1060,9 @@ const Admin_project_management = () => {
       case 'overdue': return 'bg-red-100 text-red-800 border-red-200'
       case 'inactive': return 'bg-gray-100 text-gray-800 border-gray-200'
       case 'on-leave': return 'bg-orange-100 text-orange-800 border-orange-200'
+      case 'pending': return 'bg-amber-100 text-amber-800 border-amber-200'
+      case 'testing': return 'bg-purple-100 text-purple-800 border-purple-200'
+      case 'cancelled': return 'bg-gray-100 text-gray-600 border-gray-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
@@ -1399,6 +1410,51 @@ const projectFinancialSummary =
     }
     
     setShowEditModal(true)
+  }
+
+  const handleOpenMilestoneTasksModal = async (project) => {
+    const projectId = project._id || project.id
+    if (!projectId) return
+    setMilestoneTasksProject(project)
+    setShowMilestoneTasksModal(true)
+    setExpandedMilestoneId(null)
+    setMilestoneTasksData({ milestones: [], tasksByMilestone: {} })
+    setMilestoneTasksLoading(true)
+    try {
+      const response = await adminProjectService.getProjectMilestones(projectId)
+      if (response.success && response.data) {
+        setMilestoneTasksData(prev => ({ ...prev, milestones: response.data }))
+      }
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to load milestones', variant: 'destructive' })
+    } finally {
+      setMilestoneTasksLoading(false)
+    }
+  }
+
+  const handleToggleMilestoneTasks = async (milestoneId) => {
+    const projectId = milestoneTasksProject?._id || milestoneTasksProject?.id
+    if (!projectId || !milestoneId) return
+    if (expandedMilestoneId === milestoneId) {
+      setExpandedMilestoneId(null)
+      setLoadingMilestoneId(null)
+      return
+    }
+    setLoadingMilestoneId(milestoneId)
+    try {
+      const response = await adminProjectService.getMilestoneTasks(projectId, milestoneId)
+      if (response.success && response.data) {
+        setMilestoneTasksData(prev => ({
+          ...prev,
+          tasksByMilestone: { ...prev.tasksByMilestone, [milestoneId]: response.data }
+        }))
+        setExpandedMilestoneId(milestoneId)
+      }
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to load tasks', variant: 'destructive' })
+    } finally {
+      setLoadingMilestoneId(null)
+    }
   }
 
   const handleView = (item, type) => {
@@ -2756,7 +2812,7 @@ function getFinancialSummary(project) {
                     {filteredData.length > 0 ? (
                       <div className="p-2 lg:p-4">
                         <div className="overflow-x-auto -mx-2 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
-                          <table className="w-full min-w-[900px] border-collapse text-xs">
+                          <table className="w-full min-w-[1000px] border-collapse text-xs">
                             <thead>
                               <tr className="border-b border-gray-200 bg-gray-50">
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[160px]">Project Name</th>
@@ -3109,7 +3165,7 @@ function getFinancialSummary(project) {
                     {paginatedData.length > 0 ? (
                       <div className="p-2 lg:p-4">
                         <div className="overflow-x-auto -mx-2 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
-                          <table className="w-full min-w-[900px] border-collapse text-xs">
+                          <table className="w-full min-w-[1000px] border-collapse text-xs">
                             <thead>
                               <tr className="border-b border-gray-200 bg-gray-50">
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[160px]">Project Name</th>
@@ -3117,6 +3173,7 @@ function getFinancialSummary(project) {
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">PM</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Status</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Progress</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Milestones</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px] hidden md:table-cell">Due Date</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px] hidden md:table-cell">Team</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Total Cost</th>
@@ -3171,6 +3228,16 @@ function getFinancialSummary(project) {
                                           ></div>
                                         </div>
                                       </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <button
+                                        onClick={() => handleOpenMilestoneTasksModal(project)}
+                                        className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold cursor-pointer transition-colors"
+                                        title="View milestones & tasks"
+                                      >
+                                        <FiTarget className="h-3 w-3" />
+                                        {project.milestoneCount ?? 0}
+                                      </button>
                                     </td>
                                     <td className="py-2 px-2 hidden md:table-cell">
                                       <div className="flex items-center space-x-1 text-xs text-gray-600">
@@ -3462,7 +3529,7 @@ function getFinancialSummary(project) {
                     {paginatedData.length > 0 ? (
                       <div className="p-2 lg:p-4">
                         <div className="overflow-x-auto -mx-2 lg:mx-0" style={{ WebkitOverflowScrolling: 'touch' }}>
-                          <table className="w-full min-w-[750px] border-collapse text-xs">
+                          <table className="w-full min-w-[1000px] border-collapse text-xs">
                             <thead>
                               <tr className="border-b border-gray-200 bg-gray-50">
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[160px]">Project Name</th>
@@ -3470,6 +3537,7 @@ function getFinancialSummary(project) {
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">PM</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px]">Priority</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Progress</th>
+                                <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px]">Milestones</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[90px] hidden md:table-cell">Completed</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[80px] hidden md:table-cell">Team</th>
                                 <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-700 min-w-[100px]">Total Cost</th>
@@ -3526,6 +3594,16 @@ function getFinancialSummary(project) {
                                           ></div>
                                         </div>
                                       </div>
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <button
+                                        onClick={() => handleOpenMilestoneTasksModal(project)}
+                                        className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold cursor-pointer transition-colors"
+                                        title="View milestones & tasks"
+                                      >
+                                        <FiTarget className="h-3 w-3" />
+                                        {project.milestoneCount ?? 0}
+                                      </button>
                                     </td>
                                     <td className="py-2 px-2 hidden md:table-cell">
                                       <div className="flex items-center space-x-1 text-xs text-gray-600">
@@ -5216,6 +5294,113 @@ function getFinancialSummary(project) {
                   <FiEdit3 className="h-4 w-4" />
                   <span>Edit</span>
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Milestones & Tasks Modal - Nested view */}
+        {showMilestoneTasksModal && milestoneTasksProject && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={() => setShowMilestoneTasksModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[85vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-5 border-b border-gray-200">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <FiTarget className="h-5 w-5 text-indigo-600" />
+                    Milestones & Tasks
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-0.5">{milestoneTasksProject.name}</p>
+                </div>
+                <button
+                  onClick={() => setShowMilestoneTasksModal(false)}
+                  className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                >
+                  <FiX className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5">
+                {milestoneTasksLoading && milestoneTasksData.milestones.length === 0 ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loading size="md" />
+                  </div>
+                ) : milestoneTasksData.milestones.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <FiTarget className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>No milestones yet for this project.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-0">
+                    {milestoneTasksData.milestones.map((milestone) => (
+                      <div key={milestone._id} className="border border-gray-200 rounded-lg overflow-hidden mb-2">
+                        <div className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-medium text-gray-500">#{milestone.sequence || '-'}</span>
+                            <span className="font-semibold text-gray-900">{milestone.title}</span>
+                            <span className={`inline-flex px-2 py-0.5 text-xs rounded-full ${getStatusColor(milestone.status)}`}>
+                              {milestone.status}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleToggleMilestoneTasks(milestone._id)}
+                            disabled={milestone.taskCount === 0}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-violet-100 text-violet-700 hover:bg-violet-200 text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Click to view tasks"
+                          >
+                            <FiCheckSquare className="h-3.5 w-3.5" />
+                            {milestone.taskCount ?? 0} tasks
+                            {expandedMilestoneId === milestone._id ? (
+                              <ChevronDown className="h-3.5 w-3.5 rotate-180" />
+                            ) : (
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        </div>
+                        {expandedMilestoneId === milestone._id && (
+                          <div className="border-t border-gray-200 bg-white">
+                            {loadingMilestoneId === milestone._id ? (
+                              <div className="p-4 flex justify-center">
+                                <Loading size="sm" />
+                              </div>
+                            ) : (milestoneTasksData.tasksByMilestone[milestone._id] || []).length === 0 ? (
+                              <div className="p-4 text-sm text-gray-500 text-center">No tasks in this milestone.</div>
+                            ) : (
+                              <ul className="divide-y divide-gray-100">
+                                {(milestoneTasksData.tasksByMilestone[milestone._id] || []).map((task) => (
+                                  <li key={task._id} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium text-gray-900">{task.title}</span>
+                                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${getStatusColor(task.status)}`}>
+                                        {task.status}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                      {task.priority && (
+                                        <span className="px-1.5 py-0.5 bg-gray-100 rounded">{task.priority}</span>
+                                      )}
+                                      {task.dueDate && <span>{formatDate(task.dueDate)}</span>}
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>

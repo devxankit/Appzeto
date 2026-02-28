@@ -255,6 +255,12 @@ const getAllProjects = asyncHandler(async (req, res, next) => {
       const milestones = await Milestone.find({ project: project._id });
       const completedMilestones = milestones.filter(m => m.status === 'completed').length;
       
+      // Milestone status breakdown
+      const milestoneStats = milestones.reduce((acc, m) => {
+        acc[m.status] = (acc[m.status] || 0) + 1;
+        return acc;
+      }, {});
+
       // For completed projects, always set progress to 100%
       let progress;
       if (project.status === 'completed') {
@@ -264,8 +270,13 @@ const getAllProjects = asyncHandler(async (req, res, next) => {
           Math.round((completedMilestones / milestones.length) * 100) : (project.progress || 0);
       }
 
-      // Get task count
-      const taskCount = await Task.countDocuments({ project: project._id });
+      // Get task count and status breakdown
+      const tasks = await Task.find({ project: project._id });
+      const taskCount = tasks.length;
+      const taskStats = tasks.reduce((acc, t) => {
+        acc[t.status] = (acc[t.status] || 0) + 1;
+        return acc;
+      }, {});
 
       // Calculate team size from assignedTeam
       const teamSize = project.assignedTeam?.length || 0;
@@ -301,7 +312,9 @@ const getAllProjects = asyncHandler(async (req, res, next) => {
         ...projectObj,
         progress,
         milestoneCount: milestones.length,
+        milestoneStats,
         taskCount,
+        taskStats,
         teamSize,
         duration,
         daysRemaining,
@@ -358,6 +371,62 @@ const getProjectById = asyncHandler(async (req, res, next) => {
   res.json({
     success: true,
     data: project
+  });
+});
+
+// @desc    Get project milestones with task counts (Admin view)
+// @route   GET /api/admin/projects/:id/milestones
+// @access  Admin only
+const getProjectMilestones = asyncHandler(async (req, res, next) => {
+  const project = await Project.findById(req.params.id);
+  if (!project) {
+    return next(new ErrorResponse('Project not found', 404));
+  }
+
+  const milestones = await Milestone.find({ project: project._id })
+    .sort({ sequence: 1 })
+    .select('title description sequence dueDate status priority progress');
+
+  const milestonesWithTaskCount = await Promise.all(
+    milestones.map(async (m) => {
+      const taskCount = await Task.countDocuments({ milestone: m._id });
+      const mObj = m.toObject();
+      mObj.taskCount = taskCount;
+      return mObj;
+    })
+  );
+
+  res.json({
+    success: true,
+    data: milestonesWithTaskCount
+  });
+});
+
+// @desc    Get milestone tasks (Admin view)
+// @route   GET /api/admin/projects/:id/milestones/:milestoneId/tasks
+// @access  Admin only
+const getMilestoneTasks = asyncHandler(async (req, res, next) => {
+  const { id: projectId, milestoneId } = req.params;
+
+  const milestone = await Milestone.findOne({
+    _id: milestoneId,
+    project: projectId
+  })
+    .populate('tasks', 'title status priority dueDate assignedTo')
+    .lean();
+
+  if (!milestone) {
+    return next(new ErrorResponse('Milestone not found', 404));
+  }
+
+  const tasks = await Task.find({ milestone: milestoneId })
+    .populate('assignedTo', 'name email position')
+    .sort({ createdAt: 1 })
+    .lean();
+
+  res.json({
+    success: true,
+    data: tasks
   });
 });
 
@@ -1511,6 +1580,8 @@ const deleteProjectInstallment = asyncHandler(async (req, res, next) => {
 module.exports = {
   getAllProjects,
   getProjectById,
+  getProjectMilestones,
+  getMilestoneTasks,
   createProject,
   updateProject,
   updateProjectCost,

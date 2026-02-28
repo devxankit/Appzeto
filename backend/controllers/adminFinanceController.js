@@ -236,7 +236,7 @@ const getTransactions = asyncHandler(async (req, res, next) => {
     })
     .populate('account', 'accountName bankName accountNumber')
     .populate('createdBy', 'name email')
-    .sort({ transactionDate: -1, createdAt: -1 })
+    .sort({ createdAt: -1, transactionDate: -1 })
     .skip(skip)
     .limit(parseInt(limit));
 
@@ -1500,7 +1500,7 @@ const getExpenses = asyncHandler(async (req, res, next) => {
         select: 'name email',
         strictPopulate: false
       })
-      .sort({ transactionDate: -1, createdAt: -1 })
+      .sort({ createdAt: -1, transactionDate: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
@@ -2179,7 +2179,7 @@ const getPendingRecovery = asyncHandler(async (req, res, next) => {
     .populate('client', 'name companyName convertedBy')
     .populate('submittedBy', 'name')
     .select('name status progress financialDetails submittedBy client')
-    .sort({ 'financialDetails.remainingAmount': -1 })
+    .sort({ createdAt: -1, 'financialDetails.remainingAmount': -1 })
     .lean();
 
   const data = projects.map((p) => {
@@ -2233,7 +2233,7 @@ const getGstProjects = asyncHandler(async (req, res, next) => {
     .populate('submittedBy', 'name')
     .populate('projectManager', 'name')
     .select('name status progress financialDetails submittedBy client projectManager dueDate')
-    .sort({ 'financialDetails.remainingAmount': -1, createdAt: -1 })
+    .sort({ createdAt: -1, 'financialDetails.remainingAmount': -1 })
     .lean();
 
   const data = projects.map((p) => {

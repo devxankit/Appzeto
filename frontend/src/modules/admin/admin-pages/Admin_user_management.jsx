@@ -2096,7 +2096,7 @@ const Admin_user_management = () => {
                   className="space-y-2"
                 >
                   <label className="text-sm font-semibold text-gray-700 flex items-center">
-                    Document <span className="text-red-500 ml-1">*</span>
+                    Document (optional)
                   </label>
                   <CloudinaryUpload
                     onUploadSuccess={(uploadData) => {

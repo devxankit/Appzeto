@@ -105,6 +105,28 @@ class AdminProjectService {
     }
   }
 
+  // Get project milestones with task counts
+  async getProjectMilestones(projectId) {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/milestones`);
+      return response;
+    } catch (error) {
+      console.error('Error fetching project milestones:', error);
+      throw error;
+    }
+  }
+
+  // Get milestone tasks
+  async getMilestoneTasks(projectId, milestoneId) {
+    try {
+      const response = await apiRequest(`${API_BASE_URL}/${projectId}/milestones/${milestoneId}/tasks`);
+      return response;
+    } catch (error) {
+      console.error('Error fetching milestone tasks:', error);
+      throw error;
+    }
+  }
+
   // Create new project
   async createProject(projectData) {
     try {

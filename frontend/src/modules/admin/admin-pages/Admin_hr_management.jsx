@@ -135,6 +135,7 @@ const Admin_hr_management = () => {
   // Salary states
   const [salaryData, setSalaryData] = useState([])
   const [selectedSalaryMonth, setSelectedSalaryMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [salaryMonthView, setSalaryMonthView] = useState('current') // 'current' | 'next'
   const [selectedSalaryDepartment, setSelectedSalaryDepartment] = useState('all')
   const [selectedSalaryWeek, setSelectedSalaryWeek] = useState('all')
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState('all')
@@ -170,9 +171,13 @@ const Admin_hr_management = () => {
   const [salaryToDelete, setSalaryToDelete] = useState(null)
   const [newEmployeeSalaryData, setNewEmployeeSalaryData] = useState({
     employeeId: '',
-    salary: ''
+    salary: '',
+    effectiveFromMonth: new Date().toISOString().slice(0, 7)
   })
   const [employeesWithSalaryIds, setEmployeesWithSalaryIds] = useState([])
+  const [employeesWithSalaryDetails, setEmployeesWithSalaryDetails] = useState([])
+  const [showEmployeesWithSalaryModal, setShowEmployeesWithSalaryModal] = useState(false)
+  const [loadingEmployeesWithSalary, setLoadingEmployeesWithSalary] = useState(false)
   const [editSalaryData, setEditSalaryData] = useState({
     basicSalary: ''
   })
@@ -1593,12 +1598,6 @@ const Admin_hr_management = () => {
       return
     }
 
-    // Validation for document field
-    if (!formData.document) {
-      addToast({ type: 'error', message: 'Please upload a document' })
-      return
-    }
-
     // Allow creation/update of Employee, Sales, Project Manager, PEM, Accountant, HR
     if (!['employee', 'sales', 'project-manager', 'pem', 'accountant', 'hr'].includes(formData.role)) {
       addToast({ type: 'error', message: 'Please select a valid role' })
@@ -1945,13 +1944,15 @@ const Admin_hr_management = () => {
 
   // Load salary data from backend (fetch only - no auto-generation)
   // Records are created by: Set salary (creates 4 months), Mark paid (creates next month), or "Generate for month" button
-  const loadSalaryData = async (month) => {
+  // Optional second arg overrides department/status (e.g. when called from Refresh to avoid stale closure)
+  const loadSalaryData = async (month, opts = {}) => {
+    const department = opts.department !== undefined ? opts.department : selectedSalaryDepartment
+    const status = opts.status !== undefined ? opts.status : selectedPaymentStatus
     try {
-      // Fetch salary records for the month
       const res = await adminSalaryService.getSalaryRecords({
         month,
-        department: selectedSalaryDepartment !== 'all' ? selectedSalaryDepartment : undefined,
-        status: selectedPaymentStatus !== 'all' ? selectedPaymentStatus : undefined
+        department: department && department !== 'all' ? department : undefined,
+        status: status && status !== 'all' ? status : undefined
       })
 
       // Transform backend data to frontend format (normalize employeeId to string for history API)
@@ -1976,7 +1977,8 @@ const Admin_hr_management = () => {
         rewardAmount: record.rewardAmount || 0,
         rewardStatus: record.rewardStatus || 'pending',
         rewardPaidDate: record.rewardPaidDate ? new Date(record.rewardPaidDate) : null,
-        employeeModel: record.employeeModel
+        employeeModel: record.employeeModel,
+        source: record.source || ''
       }))
 
       setSalaryData(transformedData)
@@ -2019,13 +2021,16 @@ const Admin_hr_management = () => {
     }
   }
 
-  // Load salary when month/department/status changes
+  // Load salary when filters or tab change
   useEffect(() => {
     if (activeTab === 'salary') {
-      loadSalaryData(selectedSalaryMonth)
+      loadSalaryData(selectedSalaryMonth, {
+        department: selectedSalaryDepartment,
+        status: selectedPaymentStatus
+      })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSalaryMonth, selectedSalaryDepartment, selectedPaymentStatus, activeTab])
+  }, [selectedSalaryDepartment, selectedPaymentStatus, activeTab])
 
   // Load employee IDs who already have salary when Set salary modal opens
   useEffect(() => {
@@ -2384,8 +2389,22 @@ const Admin_hr_management = () => {
     setShowAddEmployeeSalaryModal(true)
     setNewEmployeeSalaryData({
       employeeId: '',
-      salary: ''
+      salary: '',
+      effectiveFromMonth: new Date().toISOString().slice(0, 7)
     })
+  }
+
+  const loadEmployeesWithSalaryDetails = async () => {
+    try {
+      setLoadingEmployeesWithSalary(true)
+      const data = await adminSalaryService.getEmployeesWithSalaryDetails()
+      setEmployeesWithSalaryDetails(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error loading employees with salary details:', error)
+      addToast({ type: 'error', message: error?.message || 'Failed to load employees with salary' })
+    } finally {
+      setLoadingEmployeesWithSalary(false)
+    }
   }
 
   const handleSaveNewEmployeeSalary = async () => {
@@ -2431,7 +2450,11 @@ const Admin_hr_management = () => {
       }
 
       // Set employee fixed salary (this will auto-generate salary records)
-      await adminSalaryService.setEmployeeSalary(userType, employeeId, fixedSalary)
+      const payload = { fixedSalary }
+      if (newEmployeeSalaryData.effectiveFromMonth) {
+        payload.effectiveFromMonth = newEmployeeSalaryData.effectiveFromMonth
+      }
+      await adminSalaryService.setEmployeeSalary(userType, employeeId, payload)
       
       addToast({ type: 'success', message: `Fixed salary set to ₹${fixedSalary.toLocaleString()} for ${selectedEmployee.name}` })
       
@@ -2533,9 +2556,6 @@ const Admin_hr_management = () => {
       history.data?.forEach(item => {
         const itemMonth = item.month
         const itemMonthDate = new Date(itemMonth + '-01')
-        
-        // Filter: Only show current month and previous months (not future months)
-        if (itemMonth > currentMonth) return
         
         // Filter: If joining date is available, only show records from joining date onwards
         if (joiningDate) {
@@ -3370,82 +3390,230 @@ const Admin_hr_management = () => {
                   className="space-y-6"
                 >
                   {/* Header Section */}
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">Salary Management</h2>
-                  <p className="text-gray-600 mt-1">Manage employee salaries and track payment status</p>
-                </div>
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                  {/* Filters Section */}
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-2 shadow-sm">
-                      <Calendar className="h-4 w-4 text-gray-500" />
-                      <input
-                        type="month"
-                        value={selectedSalaryMonth}
-                        onChange={(e) => setSelectedSalaryMonth(e.target.value)}
-                        className="text-sm font-medium text-gray-700 bg-transparent border-none outline-none focus:ring-0"
-                      />
-                    </div>
-                    
-                    <Combobox
-                      options={[
-                        { value: 'all', label: 'All Departments', icon: Users },
-                        { value: 'nodejs', label: 'Node.js', icon: Code },
-                        { value: 'flutter', label: 'Flutter', icon: Code },
-                        { value: 'web', label: 'Web', icon: Code },
-                        { value: 'management', label: 'Management', icon: Shield },
-                        { value: 'sales', label: 'Sales', icon: TrendingUp }
-                      ]}
-                      value={selectedSalaryDepartment}
-                      onChange={(value) => setSelectedSalaryDepartment(value)}
-                      placeholder="Department"
-                      className="w-44 h-10 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 bg-white shadow-sm"
-                    />
-                    
-                    <Combobox
-                      options={getWeekOptions()}
-                      value={selectedSalaryWeek}
-                      onChange={(value) => setSelectedSalaryWeek(value)}
-                      placeholder="Week"
-                      className="w-40 h-10 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 bg-white shadow-sm"
-                    />
-                    
-                    <Combobox
-                      options={[
-                        { value: 'all', label: 'All Status', icon: Clock },
-                        { value: 'pending', label: 'Pending', icon: Clock },
-                        { value: 'paid', label: 'Paid', icon: CheckCircle2 },
-                        { value: 'overdue', label: 'Overdue', icon: AlertTriangle }
-                      ]}
-                      value={selectedPaymentStatus}
-                      onChange={(value) => setSelectedPaymentStatus(value)}
-                      placeholder="Status"
-                      className="w-36 h-10 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 bg-white shadow-sm"
-                    />
-                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 shadow-sm">
+                    <div className="p-4 lg:p-5 flex flex-col gap-4">
+                      {/* Top row: title + actions */}
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className="h-11 w-11 rounded-2xl bg-emerald-600/10 flex items-center justify-center border border-emerald-600/20">
+                            <Banknote className="h-5 w-5 text-emerald-700" />
+                          </div>
+                          <div className="min-w-0">
+                            <h2 className="text-xl lg:text-2xl font-bold text-gray-900 leading-tight">Salary Management</h2>
+                            <p className="text-sm text-gray-600 mt-1">
+                              Manage salaries, payouts, and exports with clear monthly controls.
+                            </p>
+                          </div>
+                        </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex items-center gap-3">
-                  <Button
-                    onClick={() => setShowAddEmployeeSalaryModal(true)}
-                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 font-semibold"
-                  >
-                    <Banknote className="h-5 w-5" />
-                    Set Employee Salary
-                  </Button>
-                    <Button
-                      onClick={() => loadSalaryData(selectedSalaryMonth)}
-                      variant="outline"
-                      className="px-4 py-3 rounded-xl flex items-center gap-2 border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 transition-all duration-200"
-                      title="Refresh salary data"
-                    >
-                      <RefreshCw className="h-5 w-5" />
-                      Refresh
-                    </Button>
+                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                          <div className="inline-flex rounded-full bg-white/80 border border-gray-200 p-1 text-[11px] font-semibold text-gray-600 shadow-sm">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setSalaryMonthView('current')
+                                const now = new Date()
+                                const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+                                setSelectedSalaryMonth(monthStr)
+                                await loadSalaryData(monthStr, {
+                                  department: selectedSalaryDepartment,
+                                  status: selectedPaymentStatus
+                                })
+                              }}
+                              className={`px-3 py-1 rounded-full transition-all ${
+                                salaryMonthView === 'current'
+                                  ? 'bg-gray-900 text-white shadow-sm'
+                                  : 'text-gray-600 hover:bg-gray-100'
+                              }`}
+                            >
+                              Current
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setSalaryMonthView('next')
+                                const now = new Date()
+                                const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+                                const monthStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`
+                                setSelectedSalaryMonth(monthStr)
+                                await loadSalaryData(monthStr, {
+                                  department: selectedSalaryDepartment,
+                                  status: selectedPaymentStatus
+                                })
+                              }}
+                              className={`px-3 py-1 rounded-full transition-all ${
+                                salaryMonthView === 'next'
+                                  ? 'bg-gray-900 text-white shadow-sm'
+                                  : 'text-gray-600 hover:bg-gray-100'
+                              }`}
+                            >
+                              Next
+                            </button>
+                          </div>
+
+                          <Button
+                            onClick={() => setShowAddEmployeeSalaryModal(true)}
+                            className="h-10 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white flex items-center gap-2 shadow-md hover:shadow-lg transition-all duration-200 text-sm font-semibold"
+                          >
+                            <Banknote className="h-4 w-4" />
+                            Set Salary
+                          </Button>
+
+                          <Button
+                            onClick={async () => {
+                              setShowEmployeesWithSalaryModal(true)
+                              await loadEmployeesWithSalaryDetails()
+                            }}
+                            variant="outline"
+                            className="h-10 px-4 rounded-xl flex items-center gap-2 border-2 border-gray-300 hover:border-indigo-500 hover:bg-indigo-50 transition-all duration-200 text-sm"
+                          >
+                            <Users className="h-4 w-4" />
+                            Employees
+                          </Button>
+
+                          <Button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await loadSalaryData(selectedSalaryMonth, {
+                                  department: selectedSalaryDepartment,
+                                  status: selectedPaymentStatus
+                                })
+                                addToast({ type: 'success', message: 'Salary data refreshed' })
+                              } catch (_) {
+                                // loadSalaryData already shows error toast
+                              }
+                            }}
+                            variant="outline"
+                            className="h-10 px-3.5 rounded-xl flex items-center gap-2 border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 text-sm"
+                            title="Refresh salary data"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            <span className="hidden sm:inline">Refresh</span>
+                          </Button>
+
+                          <Button
+                            onClick={() => {
+                              const records = getFilteredSalaryData()
+                              if (!records.length) {
+                                addToast({ type: 'info', message: 'No salary records to export for selected filters' })
+                                return
+                              }
+                              const headers = ['Employee Name', 'Department', 'Role', 'Month', 'Salary', 'Incentive', 'Reward', 'Total', 'Status', 'Payment Date', 'Paid Date', 'Source']
+                              const rows = records.map(r => {
+                                const isSalesEmployee = r.employeeModel === 'Sales'
+                                const totalAmount = (r.fixedSalary || 0) + (isSalesEmployee ? (r.incentiveAmount || 0) : 0) + (r.rewardAmount || 0)
+                                return [
+                                  r.employeeName,
+                                  r.department || '',
+                                  r.role || '',
+                                  r.month || '',
+                                  r.fixedSalary || 0,
+                                  isSalesEmployee ? (r.incentiveAmount || 0) : 0,
+                                  r.rewardAmount || 0,
+                                  totalAmount,
+                                  r.status || '',
+                                  r.paymentDate ? new Date(r.paymentDate).toISOString() : '',
+                                  r.paidDate ? new Date(r.paidDate).toISOString() : '',
+                                  r.source || ''
+                                ]
+                              })
+                              const csvContent = [headers, ...rows].map(row =>
+                                row.map(value => {
+                                  if (value === null || value === undefined) return ''
+                                  const str = String(value)
+                                  if (/[",\n]/.test(str)) {
+                                    return `"${str.replace(/"/g, '""')}"`
+                                  }
+                                  return str
+                                }).join(',')
+                              ).join('\n')
+                              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+                              const url = URL.createObjectURL(blob)
+                              const link = document.createElement('a')
+                              link.href = url
+                              link.setAttribute('download', `salary-${selectedSalaryMonth}.csv`)
+                              document.body.appendChild(link)
+                              link.click()
+                              document.body.removeChild(link)
+                              URL.revokeObjectURL(url)
+                            }}
+                            variant="outline"
+                            className="h-10 px-3.5 rounded-xl flex items-center gap-2 border-2 border-gray-300 hover:border-emerald-500 hover:bg-emerald-50 transition-all duration-200 text-sm"
+                            title="Export salary data as CSV"
+                          >
+                            <Download className="h-4 w-4" />
+                            <span className="hidden sm:inline">Export</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Bottom row: filters */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                        <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 px-3 h-10 shadow-sm">
+                          <Calendar className="h-4 w-4 text-gray-500" />
+                          <input
+                            type="month"
+                            value={selectedSalaryMonth}
+                            onChange={async (e) => {
+                              const value = e.target.value
+                              setSelectedSalaryMonth(value)
+                              await loadSalaryData(value, {
+                                department: selectedSalaryDepartment,
+                                status: selectedPaymentStatus
+                              })
+                            }}
+                            className="w-full text-sm font-medium text-gray-700 bg-transparent border-none outline-none focus:ring-0"
+                          />
+                        </div>
+
+                        <Combobox
+                          options={[
+                            { value: 'all', label: 'All Departments', icon: Users },
+                            ...departmentFilterOptions.map(dept => {
+                              const d = dept.toLowerCase()
+                              const icon =
+                                d.includes('sales')
+                                  ? TrendingUp
+                                  : d.includes('manage') || d.includes('lead')
+                                  ? Shield
+                                  : Code
+                              return {
+                                value: dept,
+                                label: dept,
+                                icon
+                              }
+                            })
+                          ]}
+                          value={selectedSalaryDepartment}
+                          onChange={(value) => setSelectedSalaryDepartment(value)}
+                          placeholder="Department"
+                          className="w-full h-10 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 bg-white shadow-sm"
+                        />
+
+                        <Combobox
+                          options={getWeekOptions()}
+                          value={selectedSalaryWeek}
+                          onChange={(value) => setSelectedSalaryWeek(value)}
+                          placeholder="Week"
+                          className="w-full h-10 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 bg-white shadow-sm"
+                        />
+
+                        <Combobox
+                          options={[
+                            { value: 'all', label: 'All Status', icon: Clock },
+                            { value: 'pending', label: 'Pending', icon: Clock },
+                            { value: 'paid', label: 'Paid', icon: CheckCircle2 },
+                            { value: 'overdue', label: 'Overdue', icon: AlertTriangle }
+                          ]}
+                          value={selectedPaymentStatus}
+                          onChange={(value) => setSelectedPaymentStatus(value)}
+                          placeholder="Status"
+                          className="w-full h-10 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 bg-white shadow-sm"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
 
               {/* Salary Statistics Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
@@ -3563,12 +3731,13 @@ const Admin_hr_management = () => {
                           <th className="text-left py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[90px]">Department</th>
                           <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[90px]">Salary</th>
                           {getFilteredSalaryData().some(r => r.employeeModel === 'Sales') && (
-                          <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[90px]">Incentive</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[90px]" title="Sum of outstanding incentives for this sales employee at payment time">Incentive</th>
                           )}
-                          <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[85px]">Reward</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[85px]" title="Combined team and personal target rewards (or Dev/PM rewards)">Reward</th>
                           <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[95px]">Total</th>
                           <th className="text-center py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[95px]">Status</th>
                           <th className="text-center py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[80px]">Due Date</th>
+                          <th className="text-left py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[110px]">Created Via</th>
                           <th className="text-right py-3 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider w-[200px]">Actions</th>
                         </tr>
                       </thead>
@@ -3582,11 +3751,24 @@ const Admin_hr_management = () => {
                           let recordMonth = record.month || ''
                           if (!recordMonth && record.paymentDate) recordMonth = new Date(record.paymentDate).toISOString().slice(0, 7)
                           if (!recordMonth) recordMonth = selectedSalaryMonth
-                          const currentMonthStr = new Date().toISOString().slice(0, 7)
-                          const canEdit = record.status !== 'paid' || recordMonth > currentMonthStr || selectedSalaryMonth > currentMonthStr
+                          const canEdit = record.status !== 'paid'
                           const isSalesEmployee = record.employeeModel === 'Sales'
                           const totalAmount = (record.fixedSalary || 0) + (isSalesEmployee ? (record.incentiveAmount || 0) : 0) + (record.rewardAmount || 0)
                           const isPaid = record.status === 'paid'
+                          const sourceLabel = (() => {
+                            switch (record.source) {
+                              case 'set-salary-current':
+                                return 'Set salary (current)'
+                              case 'set-salary':
+                                return 'Set salary'
+                              case 'auto-next-month':
+                                return 'Auto next month'
+                              case 'bulk-generate':
+                                return 'Bulk generate'
+                              default:
+                                return record.source || 'Manual/Unknown'
+                            }
+                          })()
                           return (
                             <tr key={index} className={`transition-colors ${
                               isPaid ? 'bg-gray-200/70 hover:bg-gray-300/70 text-gray-600' : isOverdue ? 'bg-red-50/40 hover:bg-red-50/60' : isDueSoon ? 'bg-amber-50/40 hover:bg-amber-50/60' : 'bg-white hover:bg-gray-50/50'
@@ -3620,6 +3802,11 @@ const Admin_hr_management = () => {
                                 </div>
                               </td>
                               <td className="py-3 px-3 text-center text-gray-600 tabular-nums">{paymentDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</td>
+                              <td className="py-3 px-3 text-left text-gray-600 text-[11px]">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700" title={`This record was created via: ${sourceLabel}`}>
+                                  {sourceLabel}
+                                </span>
+                              </td>
                               <td className="py-3 px-3">
                                 <div className="flex items-center justify-end gap-1 flex-wrap">
                                   <button onClick={() => { setSelectedSalaryDetails(record); setShowSalaryDetailsModal(true) }} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 hover:text-blue-600 transition-colors" title="View details"><Eye className="h-4 w-4" /></button>
@@ -4406,7 +4593,7 @@ const Admin_hr_management = () => {
                   className="space-y-2"
                 >
                   <label className="text-sm font-semibold text-gray-700 flex items-center">
-                    Document <span className="text-red-500 ml-1">*</span>
+                    Document (optional)
                   </label>
                   <CloudinaryUpload
                     onUploadSuccess={(uploadData) => {
@@ -6307,10 +6494,10 @@ const Admin_hr_management = () => {
                       </label>
                       <Combobox
                         options={(() => {
-                          // Use employee IDs who already have salary (from API + current salaryData as fallback)
+                          // Use employee IDs who already have salary (from API only).
+                          // Backend returns distinct employeeIds that have ANY salary record.
                           const idsFromApi = (employeesWithSalaryIds || []).map(id => String(id))
-                          const idsFromData = (salaryData || []).map(r => r.employeeId?.toString()).filter(Boolean)
-                          const employeesWithSalary = new Set([...idsFromApi, ...idsFromData])
+                          const employeesWithSalary = new Set(idsFromApi)
                           
                           // Employees, sales, PMs, and HR can have salary set
                           const salaryEligibleRoles = ['employee', 'sales', 'project-manager', 'hr']
@@ -6318,6 +6505,7 @@ const Admin_hr_management = () => {
                             .filter(user => salaryEligibleRoles.includes(user.role))
                             .filter(user => {
                               const userIdStr = (user._id || user.id || user.employeeId)?.toString()
+                              // Only show employees who do NOT already have any salary records
                               return userIdStr && !employeesWithSalary.has(userIdStr)
                             })
                             .map(user => ({
@@ -6350,6 +6538,22 @@ const Admin_hr_management = () => {
                       />
                     </div>
 
+                    {/* Salary Start Month */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700 flex items-center">
+                        Salary Start Month <span className="text-gray-400 ml-1 text-xs">(default: current month)</span>
+                      </label>
+                      <input
+                        type="month"
+                        value={newEmployeeSalaryData.effectiveFromMonth}
+                        onChange={(e) => handleNewEmployeeSalaryInputChange('effectiveFromMonth', e.target.value)}
+                        className="w-full h-12 px-4 text-sm border-2 border-gray-200 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200"
+                      />
+                      <p className="text-[11px] text-gray-500">
+                        This is the first month from which recurring salary records will be generated. It cannot be earlier than the employee&apos;s joining month.
+                      </p>
+                    </div>
+
                     {/* Form Actions */}
                     <div className="flex gap-3 pt-4">
                       <Button
@@ -6369,6 +6573,113 @@ const Admin_hr_management = () => {
                       </Button>
                     </div>
                   </form>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Employees With Salary Modal */}
+            {showEmployeesWithSalaryModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={() => setShowEmployeesWithSalaryModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white rounded-2xl shadow-xl max-w-4xl w-full"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-white rounded-t-2xl flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold mb-1">Employees With Salary Set</h3>
+                      <p className="text-purple-100 text-sm">View all employees for whom a fixed salary has been configured</p>
+                    </div>
+                    <button
+                      onClick={() => setShowEmployeesWithSalaryModal(false)}
+                      className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="p-6">
+                    {loadingEmployeesWithSalary ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loading />
+                      </div>
+                    ) : employeesWithSalaryDetails.length === 0 ? (
+                      <div className="py-10 text-center">
+                        <Banknote className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                        <p className="text-sm font-medium text-gray-700">No employees have salary set yet.</p>
+                        <p className="text-xs text-gray-500 mt-1">Use &quot;Set Employee Salary&quot; to configure fixed salary for employees.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto max-h-[420px]">
+                        <table className="w-full min-w-[720px] text-xs border-collapse">
+                          <thead>
+                            <tr className="border-b border-gray-200 bg-gray-50">
+                              <th className="text-left py-2 px-3 font-semibold text-gray-700 uppercase tracking-wider">Employee</th>
+                              <th className="text-left py-2 px-3 font-semibold text-gray-700 uppercase tracking-wider">Department</th>
+                              <th className="text-left py-2 px-3 font-semibold text-gray-700 uppercase tracking-wider">Role</th>
+                              <th className="text-right py-2 px-3 font-semibold text-gray-700 uppercase tracking-wider">Fixed Salary</th>
+                              <th className="text-center py-2 px-3 font-semibold text-gray-700 uppercase tracking-wider">Joining Date</th>
+                              <th className="text-center py-2 px-3 font-semibold text-gray-700 uppercase tracking-wider">First Salary Month</th>
+                              <th className="text-center py-2 px-3 font-semibold text-gray-700 uppercase tracking-wider">Salary Set On</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {employeesWithSalaryDetails.map((emp, index) => (
+                              <tr key={emp.id || index} className="hover:bg-gray-50 transition-colors">
+                                <td className="py-2 px-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                                      {emp.name?.charAt(0)?.toUpperCase() || '?'}
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="font-semibold text-gray-900 text-xs">{emp.name}</span>
+                                      <span className="text-[11px] text-gray-500 capitalize">{emp.employeeModel?.toLowerCase()}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-2 px-3 text-xs text-gray-700">{emp.department || '—'}</td>
+                                <td className="py-2 px-3 text-xs text-gray-700 capitalize">{emp.role || '—'}</td>
+                                <td className="py-2 px-3 text-right text-xs font-semibold text-green-700 tabular-nums">
+                                  {formatCurrency(emp.fixedSalary || 0)}
+                                </td>
+                                <td className="py-2 px-3 text-center text-[11px] text-gray-600">
+                                  {emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                </td>
+                                <td className="py-2 px-3 text-center text-[11px] text-gray-600">
+                                  {emp.salaryFirstMonth || '—'}
+                                </td>
+                                <td className="py-2 px-3 text-center text-[11px] text-gray-600">
+                                  {emp.salaryFirstCreatedAt
+                                    ? new Date(emp.salaryFirstCreatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                                    : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end pt-4 mt-4 border-t border-gray-200">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowEmployeesWithSalaryModal(false)}
+                        className="h-10 rounded-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-xs px-4"
+                      >
+                        Close
+                      </Button>
+                    </div>
+                  </div>
                 </motion.div>
               </motion.div>
             )}
