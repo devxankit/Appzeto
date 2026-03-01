@@ -2666,10 +2666,10 @@ const Admin_hr_management = () => {
     { value: 'on-leave', label: 'On Leave', icon: Clock }
   ]
 
-  // Get admin data to check role (accountant has same power as admin on this page)
+  // Get admin data to check role - HR and Accountant have same power as admin on their panels
   const adminData = adminStorage.get()
   const isHR = adminData?.role === 'hr'
-  const isFullAccessOnPage = adminData?.role === 'admin' || adminData?.role === 'accountant'
+  const isFullAccessOnPage = adminData?.role === 'admin' || adminData?.role === 'accountant' || adminData?.role === 'hr'
 
   if (loading) {
     return (
