@@ -229,7 +229,10 @@ const Admin_project_management = () => {
     startDate: formatDateForInput(new Date()),
     dueDate: '',
     totalCost: '',
-    attachments: []
+    attachments: [],
+    includeProjectExpenses: false,
+    projectExpenseReservedAmount: '',
+    projectExpenseRequirements: ''
   })
   const [projectForm, setProjectForm] = useState(() => getDefaultProjectForm())
   const [projectFormErrors, setProjectFormErrors] = useState({})
@@ -1172,7 +1175,7 @@ const Admin_project_management = () => {
                          item.clientContact?.toLowerCase().includes(searchLower) ||
                          item.companyName?.toLowerCase().includes(searchLower) ||
                          item.clientEmail?.toLowerCase().includes(searchLower) ||
-                         item.submittedBy?.toLowerCase().includes(searchLower) ||
+                         (typeof item.submittedBy === 'string' && item.submittedBy.toLowerCase().includes(searchLower)) ||
                          (typeof item.submittedBy === 'object' && item.submittedBy?.name?.toLowerCase().includes(searchLower))
     
     // Priority/Status filter
@@ -1385,7 +1388,10 @@ const projectFinancialSummary =
         startDate: formatDateForInput(item.startDate || item.createdAt),
         dueDate: formatDateForInput(item.dueDate),
         totalCost: totalCostValue,
-        attachments: item.attachments || []
+        attachments: item.attachments || [],
+        includeProjectExpenses: item.expenseConfig?.included || false,
+        projectExpenseReservedAmount: (item.expenseConfig?.reservedAmount != null ? Number(item.expenseConfig.reservedAmount) : 0).toString(),
+        projectExpenseRequirements: item.expenseConfig?.requirementsNotes || ''
       })
       setProjectFormErrors({})
       setCreateModalError(null)
@@ -2128,6 +2134,24 @@ function getFinancialSummary(project) {
       }
     }
 
+      // Prepare expense configuration (light validation)
+      let expenseConfig = undefined
+      const reservedRaw = projectForm.projectExpenseReservedAmount
+      const reservedAmount =
+        reservedRaw !== '' && reservedRaw !== null && reservedRaw !== undefined
+          ? Number(reservedRaw)
+          : 0
+      const includeProjectExpenses = !!projectForm.includeProjectExpenses
+      const requirementsNotes = (projectForm.projectExpenseRequirements || '').trim()
+
+      if (!Number.isNaN(reservedAmount) && reservedAmount >= 0 && (includeProjectExpenses || reservedAmount > 0 || requirementsNotes)) {
+        expenseConfig = {
+          included: includeProjectExpenses,
+          reservedAmount,
+          requirementsNotes
+        }
+      }
+
       const payload = {
         name: projectForm.name.trim(),
         description: projectForm.description.trim(),
@@ -2147,6 +2171,7 @@ function getFinancialSummary(project) {
           includeGST: false,
           remainingAmount: totalCostValue
         },
+        ...(expenseConfig ? { expenseConfig } : {}),
         attachments: projectForm.attachments.map(att => ({
           public_id: att.public_id || att.id,
           secure_url: att.secure_url || att.url,
@@ -2236,6 +2261,24 @@ function getFinancialSummary(project) {
         }
       }
       
+      // Prepare expense configuration (light validation)
+      let expenseConfig = undefined
+      const reservedRaw = projectForm.projectExpenseReservedAmount
+      const reservedAmount =
+        reservedRaw !== '' && reservedRaw !== null && reservedRaw !== undefined
+          ? Number(reservedRaw)
+          : 0
+      const includeProjectExpenses = !!projectForm.includeProjectExpenses
+      const requirementsNotes = (projectForm.projectExpenseRequirements || '').trim()
+
+      if (!Number.isNaN(reservedAmount) && reservedAmount >= 0 && (includeProjectExpenses || reservedAmount > 0 || requirementsNotes)) {
+        expenseConfig = {
+          included: includeProjectExpenses,
+          reservedAmount,
+          requirementsNotes
+        }
+      }
+
       const payload = {
         name: projectForm.name.trim(),
         description: projectForm.description.trim(),
@@ -2255,6 +2298,7 @@ function getFinancialSummary(project) {
           includeGST: selectedItem.financialDetails?.includeGST || false,
           remainingAmount: totalCostValue - (selectedItem.financialDetails?.advanceReceived || 0)
         },
+        ...(expenseConfig ? { expenseConfig } : {}),
         attachments: projectForm.attachments.map(att => ({
           public_id: att.public_id || att.id,
           secure_url: att.secure_url || att.url,
@@ -4410,6 +4454,75 @@ function getFinancialSummary(project) {
                             <p className="mt-1 text-xs text-red-500">{projectFormErrors.totalCost}</p>
                           )}
                         </div>
+                      </div>
+
+                      {/* Project Expenses Configuration (Admin) */}
+                      <div className="mt-4 border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-3">
+                        <h3 className="text-sm font-semibold text-gray-800">Project Expenses (Optional)</h3>
+                        <p className="text-xs text-gray-500">
+                          Configure whether this project includes a purchasing budget for expenses (e.g. domain, server, hosting).
+                          This is for visibility for PEM and does not change payment or recovery calculations.
+                        </p>
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Expense handling</label>
+                          <select
+                            value={projectForm.includeProjectExpenses ? 'included' : 'excluded'}
+                            onChange={(e) =>
+                              setProjectForm(prev => ({
+                                ...prev,
+                                includeProjectExpenses: e.target.value === 'included'
+                              }))
+                            }
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary text-sm"
+                          >
+                            <option value="included">Included in project (company will purchase)</option>
+                            <option value="excluded">Excluded – client will purchase directly</option>
+                          </select>
+                        </div>
+
+                        {projectForm.includeProjectExpenses && (
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mt-1">
+                            <div>
+                              <label className="mb-2 block text-sm font-medium text-gray-700">
+                                Reserved amount for project expenses
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={projectForm.projectExpenseReservedAmount}
+                                onChange={(e) =>
+                                  setProjectForm(prev => ({
+                                    ...prev,
+                                    projectExpenseReservedAmount: e.target.value
+                                  }))
+                                }
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary text-sm"
+                                placeholder="Optional budget for expenses (part of total cost)"
+                              />
+                              <p className="mt-1 text-xs text-gray-500">
+                                Optional. If set, PEM will see this as the max budget for purchases on this project.
+                              </p>
+                            </div>
+                            <div>
+                              <label className="mb-2 block text-sm font-medium text-gray-700">
+                                Expense requirements (optional)
+                              </label>
+                              <textarea
+                                rows={3}
+                                value={projectForm.projectExpenseRequirements}
+                                onChange={(e) =>
+                                  setProjectForm(prev => ({
+                                    ...prev,
+                                    projectExpenseRequirements: e.target.value
+                                  }))
+                                }
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-primary text-sm resize-none"
+                                placeholder="Describe expected expenses for this project"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

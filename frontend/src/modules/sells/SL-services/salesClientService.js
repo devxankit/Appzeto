@@ -153,6 +153,16 @@ export const createProjectForClient = async (clientId, projectData) => {
     if (projectData.clientDateOfBirth) formData.append('clientDateOfBirth', projectData.clientDateOfBirth);
     formData.append('description', projectData.description || '');
     formData.append('screenshot', projectData.screenshot);
+    // Project expense configuration
+    if (typeof projectData.includeProjectExpenses !== 'undefined') {
+      formData.append('includeProjectExpenses', projectData.includeProjectExpenses ? 'true' : 'false');
+    }
+    if (typeof projectData.projectExpenseReservedAmount !== 'undefined' && projectData.projectExpenseReservedAmount !== null && projectData.projectExpenseReservedAmount !== '') {
+      formData.append('projectExpenseReservedAmount', projectData.projectExpenseReservedAmount);
+    }
+    if (typeof projectData.projectExpenseRequirements === 'string' && projectData.projectExpenseRequirements.trim()) {
+      formData.append('projectExpenseRequirements', projectData.projectExpenseRequirements.trim());
+    }
 
     const response = await fetch(apiUrl, {
       method: 'POST',

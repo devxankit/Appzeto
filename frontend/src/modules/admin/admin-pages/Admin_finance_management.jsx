@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import * as XLSX from 'xlsx'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
@@ -2043,48 +2043,54 @@ const Admin_finance_management = () => {
                 </motion.div>
               )}
 
-              {/* Statistics Breakdown Modal - Paper/Sheet style */}
-              {showBreakdownModal && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
-                  onClick={() => setShowBreakdownModal(false)}
-                >
-                  <motion.div
-                    initial={{ scale: 0.95, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="bg-amber-50/95 max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-lg shadow-2xl border border-amber-200/80"
-                    style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.8)' }}
-                  >
-                    {/* Paper header */}
-                    <div className="sticky top-0 z-10 bg-amber-50/98 border-b border-amber-200/80 px-6 py-4 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <FiBarChart className="h-5 w-5 text-amber-700" />
-                        <h2 className="text-lg font-semibold text-amber-900">Finance Statistics — How Cards Are Calculated</h2>
+              {/* Statistics Breakdown Sheet - How it's calculated */}
+              <AnimatePresence>
+                {showBreakdownModal && (
+                  <>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm"
+                      onClick={() => setShowBreakdownModal(false)}
+                      aria-hidden="true"
+                    />
+                    <motion.div
+                      initial={{ x: '100%' }}
+                      animate={{ x: 0 }}
+                      exit={{ x: '100%' }}
+                      transition={{ type: 'tween', duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                      className="fixed right-0 top-0 z-[70] h-full w-full max-w-xl bg-white shadow-2xl overflow-y-auto border-l border-gray-200"
+                      style={{ boxShadow: '-4px 0 20px rgba(0,0,0,0.1)' }}
+                    >
+                      {/* Sheet header */}
+                      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FiBarChart className="h-5 w-5 text-blue-600" />
+                          <h2 className="text-lg font-semibold text-gray-900">Finance Guide — How Cards Are Calculated</h2>
+                        </div>
+                        <button
+                          onClick={() => setShowBreakdownModal(false)}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                          <FiX className="h-5 w-5 text-gray-600" />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => setShowBreakdownModal(false)}
-                        className="p-2 hover:bg-amber-100 rounded-lg transition-colors"
-                      >
-                        <FiX className="h-5 w-5 text-amber-700" />
-                      </button>
-                    </div>
 
-                    <div className="px-6 py-5 space-y-6 text-amber-900/90">
-                      <p className="text-sm text-amber-800/80">All metrics respect the selected date range. Sources are mutually exclusive to prevent double-counting.</p>
+                      <div className="px-6 py-5 space-y-6 text-sm text-gray-900">
+                      <p className="text-gray-700">All metrics respect the selected date range. Sources are mutually exclusive to prevent double-counting.</p>
 
                       {/* Revenue section */}
                       <section>
-                        <h3 className="text-base font-semibold text-amber-900 mb-3 pb-2 border-b border-amber-300/60">Revenue (Incoming)</h3>
+                        <h3 className="text-base font-semibold text-gray-900 mb-3 pb-2 border-b border-gray-200">Revenue (Incoming)</h3>
                         <div className="space-y-2 text-sm">
-                          <div className="bg-white/60 rounded p-3 border border-amber-200/50">
-                            <p className="font-medium text-amber-800">Total Revenue</p>
-                            <p className="text-amber-700 mt-1">= Completed Payments + Approved Payment Receipts + Paid Installments + Other Incoming Transactions</p>
-                            <p className="text-xs text-amber-600 mt-2">(Payment receipts & installments are excluded from &quot;Other&quot; to avoid double-counting.)</p>
+                          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                            <p className="font-medium text-gray-900">Total Revenue</p>
+                            <p className="text-gray-700 mt-1">= Completed Payments + Approved Payment Receipts + Paid Installments + Other Incoming Transactions</p>
+                            <p className="text-xs text-gray-600 mt-2">(Payment receipts & installments are excluded from &quot;Other&quot; to avoid double-counting.)</p>
                           </div>
-                          <ul className="list-disc list-inside space-y-1 text-amber-700 ml-2">
+                          <ul className="list-disc list-inside space-y-1 text-gray-700 ml-2">
                             <li><strong>Completed Payments</strong> — Payment model, paid in period</li>
                             <li><strong>Payment Receipts</strong> — Approved receipts (verifiedAt in period)</li>
                             <li><strong>Paid Installments</strong> — Project installment plans, paid in period</li>
@@ -2095,13 +2101,13 @@ const Admin_finance_management = () => {
 
                       {/* Expenses section */}
                       <section>
-                        <h3 className="text-base font-semibold text-amber-900 mb-3 pb-2 border-b border-amber-300/60">Expenses (Outgoing)</h3>
+                        <h3 className="text-base font-semibold text-gray-900 mb-3 pb-2 border-b border-gray-200">Expenses (Outgoing)</h3>
                         <div className="space-y-2 text-sm">
-                          <div className="bg-white/60 rounded p-3 border border-amber-200/50">
-                            <p className="font-medium text-amber-800">Total Expenses</p>
-                            <p className="text-amber-700 mt-1">= Salaries + Recurring + Incentives + Rewards (incl. PM) + Project Expenses + Other Expenses</p>
+                          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                            <p className="font-medium text-gray-900">Total Expenses</p>
+                            <p className="text-gray-700 mt-1">= Salaries + Recurring + Incentives + Rewards (incl. PM) + Project Expenses + Other Expenses</p>
                           </div>
-                          <ul className="list-disc list-inside space-y-1 text-amber-700 ml-2">
+                          <ul className="list-disc list-inside space-y-1 text-gray-700 ml-2">
                             <li><strong>Salary</strong> — Paid salaries (Salary model, month filter)</li>
                             <li><strong>Recurring</strong> — Paid expense entries (ExpenseEntry, paidDate)</li>
                             <li><strong>Incentives</strong> — Incentive Payment transactions (AdminFinance)</li>
@@ -2114,8 +2120,8 @@ const Admin_finance_management = () => {
 
                       {/* Derived metrics */}
                       <section>
-                        <h3 className="text-base font-semibold text-amber-900 mb-3 pb-2 border-b border-amber-300/60">Derived Metrics</h3>
-                        <ul className="space-y-2 text-sm text-amber-700">
+                        <h3 className="text-base font-semibold text-gray-900 mb-3 pb-2 border-b border-gray-200">Derived Metrics</h3>
+                        <ul className="space-y-2 text-sm text-gray-700">
                           <li><strong>Net Profit</strong> = Total Revenue − Total Expenses</li>
                           <li><strong>Today Earnings</strong> = Today&apos;s payments + receipts + installments + other incoming</li>
                           <li><strong>Today Expenses</strong> = Today&apos;s salaries + recurring + project expenses + incentives + rewards + other</li>
@@ -2128,13 +2134,14 @@ const Admin_finance_management = () => {
 
                       {/* Change percentages */}
                       <section>
-                        <h3 className="text-base font-semibold text-amber-900 mb-3 pb-2 border-b border-amber-300/60">Change Percentages</h3>
-                        <p className="text-sm text-amber-700">When filter is &quot;This Month&quot;: Revenue, Expenses, and Profit % are compared to last month.</p>
+                        <h3 className="text-base font-semibold text-gray-900 mb-3 pb-2 border-b border-gray-200">Change Percentages</h3>
+                        <p className="text-gray-700">When filter is &quot;This Month&quot;: Revenue, Expenses, and Profit % are compared to last month.</p>
                       </section>
                     </div>
                   </motion.div>
-                </motion.div>
+                </>
               )}
+            </AnimatePresence>
             </div>
           </div>
 
@@ -2893,6 +2900,7 @@ const Admin_finance_management = () => {
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[150px]">Project</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Category</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Amount</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[110px]">Paid by</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Vendor</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[130px]">Payment Method</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Date</th>
@@ -2923,6 +2931,17 @@ const Admin_finance_management = () => {
                           <div className="text-sm font-semibold text-red-600">
                             -{formatCurrency(item.amount)}
                           </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          {(() => {
+                            const paidBy = (item.paidBy || 'appzeto').toLowerCase()
+                            const label = paidBy === 'client' ? 'Client' : 'Appzeto'
+                            return (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-medium bg-gray-50 text-gray-700 border border-gray-200">
+                                {label}
+                              </span>
+                            )
+                          })()}
                         </td>
                         <td className="py-3 px-4">
                           <div className="text-sm text-gray-600">

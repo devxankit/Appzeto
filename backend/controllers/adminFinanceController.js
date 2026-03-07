@@ -826,11 +826,21 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   }
 
   // Get all projects with expenses matching the date filter
-  const projectsWithExpenses = await Project.find(projectExpenseDateFilter).select('expenses');
+  // Include expenseConfig.included so we can ignore excluded (PEM-only) project expenses
+  const projectsWithExpenses = await Project.find(projectExpenseDateFilter).select('expenses expenseConfig.included');
 
   // Calculate total project expenses
+  // IMPORTANT: Exclude expenses for projects where expenseConfig.included === false.
+  // Those are PEM-only tracking and should not affect finance statistics.
   let projectExpensesAmount = 0;
   projectsWithExpenses.forEach(project => {
+    const isExcludedProject =
+      project.expenseConfig && project.expenseConfig.included === false;
+
+    if (isExcludedProject) {
+      return;
+    }
+
     if (project.expenses && project.expenses.length > 0) {
       project.expenses.forEach(expense => {
         // Double check individual expense date if filtered
@@ -1018,10 +1028,17 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
   // Today's Project Expenses
   const todayProjectsWithExpenses = await Project.find({
     'expenses.expenseDate': { $gte: todayStart, $lte: todayEnd }
-  }).select('expenses');
+  }).select('expenses expenseConfig.included');
 
   let todayProjectExpensesAmount = 0;
   todayProjectsWithExpenses.forEach(project => {
+    const isExcludedProject =
+      project.expenseConfig && project.expenseConfig.included === false;
+
+    if (isExcludedProject) {
+      return;
+    }
+
     if (project.expenses && project.expenses.length > 0) {
       project.expenses.forEach(expense => {
         const expenseDate = new Date(expense.expenseDate);
@@ -1161,10 +1178,17 @@ const getFinanceStatistics = asyncHandler(async (req, res, next) => {
     // Note: Date filtering is already done in MongoDB query, no need for redundant JavaScript filtering
     const lastMonthProjectsWithExpenses = await Project.find({
       'expenses.expenseDate': { $gte: lastMonthStart, $lte: lastMonthEnd }
-    }).select('expenses');
+    }).select('expenses expenseConfig.included');
 
     let lastMonthProjectExpensesAmount = 0;
     lastMonthProjectsWithExpenses.forEach(project => {
+      const isExcludedProject =
+        project.expenseConfig && project.expenseConfig.included === false;
+
+      if (isExcludedProject) {
+        return;
+      }
+
       if (project.expenses && project.expenses.length > 0) {
         project.expenses.forEach(expense => {
           lastMonthProjectExpensesAmount += expense.amount || 0;

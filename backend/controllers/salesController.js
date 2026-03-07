@@ -4440,15 +4440,24 @@ const convertLeadToClient = async (req, res) => {
       projectData = {
         projectName: req.body.projectName,
         categoryId: req.body.categoryId || req.body.category,
-        projectType: req.body.projectType ? (typeof req.body.projectType === 'string' ? JSON.parse(req.body.projectType) : req.body.projectType) : null, // Legacy support
-        totalCost: req.body.totalCost ? Math.round(Number(String(req.body.totalCost).replace(/,/g, '')) || 0) : 0,
+        projectType: req.body.projectType
+          ? (typeof req.body.projectType === 'string' ? JSON.parse(req.body.projectType) : req.body.projectType)
+          : null, // Legacy support
+        totalCost: req.body.totalCost
+          ? Math.round(Number(String(req.body.totalCost).replace(/,/g, '')) || 0)
+          : 0,
         finishedDays: req.body.finishedDays ? parseInt(req.body.finishedDays) : undefined,
-        advanceReceived: req.body.advanceReceived ? Math.round(Number(String(req.body.advanceReceived).replace(/,/g, '')) || 0) : 0,
+        advanceReceived: req.body.advanceReceived
+          ? Math.round(Number(String(req.body.advanceReceived).replace(/,/g, '')) || 0)
+          : 0,
         advanceAccount: req.body.advanceAccount || undefined,
         includeGST: req.body.includeGST === 'true' || req.body.includeGST === true,
         clientDateOfBirth: req.body.clientDateOfBirth || undefined,
         description: req.body.description || '',
-        conversionDate: req.body.conversionDate || undefined
+        conversionDate: req.body.conversionDate || undefined,
+        includeProjectExpenses: req.body.includeProjectExpenses,
+        projectExpenseReservedAmount: req.body.projectExpenseReservedAmount,
+        projectExpenseRequirements: req.body.projectExpenseRequirements
       };
     }
 
@@ -4458,6 +4467,17 @@ const convertLeadToClient = async (req, res) => {
     const advanceReceived = parseAmount(projectData?.advanceReceived);
     let description = (projectData?.description ?? projectData?.notes ?? '').trim();
     const conversionDateStr = projectData?.conversionDate;
+
+    // Normalize project expense configuration (visibility only)
+    const includeProjectExpenses =
+      projectData?.includeProjectExpenses === true ||
+      projectData?.includeProjectExpenses === 'true';
+    const reservedAmountRaw = projectData?.projectExpenseReservedAmount;
+    const reservedAmount = reservedAmountRaw !== undefined && reservedAmountRaw !== null && reservedAmountRaw !== ''
+      ? parseAmount(reservedAmountRaw)
+      : 0;
+    const projectExpenseRequirements =
+      (projectData?.projectExpenseRequirements || '').toString().trim();
 
     // Validate required financial fields
     if (totalCost <= 0) {
@@ -4484,7 +4504,29 @@ const convertLeadToClient = async (req, res) => {
       });
     }
 
-    projectData = { ...projectData, totalCost, advanceReceived, description };
+    // Validate reserved amount when expenses are included (softly tied to total cost)
+    if (includeProjectExpenses && reservedAmount < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reserved amount for project expenses cannot be negative.'
+      });
+    }
+    if (includeProjectExpenses && reservedAmount > totalCost) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reserved amount for project expenses cannot be greater than total project cost.'
+      });
+    }
+
+    projectData = {
+      ...projectData,
+      totalCost,
+      advanceReceived,
+      description,
+      includeProjectExpenses,
+      projectExpenseReservedAmount: reservedAmount,
+      projectExpenseRequirements
+    };
 
     const { uploadToCloudinary } = require('../services/cloudinaryService');
     const lead = await Lead.findById(id).populate('leadProfile').populate('category');
@@ -4671,6 +4713,11 @@ const convertLeadToClient = async (req, res) => {
         advanceReceived: 0, // Initial advance is 0; will increase only after finance approval
         includeGST,
         remainingAmount
+      },
+      expenseConfig: {
+        included: includeProjectExpenses,
+        reservedAmount,
+        requirementsNotes: projectExpenseRequirements
       }
     };
 
@@ -4862,7 +4909,10 @@ const createProjectForExistingClient = async (req, res) => {
         advanceAccount: req.body.advanceAccount || undefined,
         includeGST: req.body.includeGST === 'true' || req.body.includeGST === true,
         clientDateOfBirth: req.body.clientDateOfBirth || undefined,
-        description: req.body.description || ''
+        description: req.body.description || '',
+        includeProjectExpenses: req.body.includeProjectExpenses,
+        projectExpenseReservedAmount: req.body.projectExpenseReservedAmount,
+        projectExpenseRequirements: req.body.projectExpenseRequirements
       };
     }
 
@@ -4896,7 +4946,39 @@ const createProjectForExistingClient = async (req, res) => {
       });
     }
 
-    projectData = { ...projectData, totalCost, advanceReceived, description };
+    // Normalize project expense configuration (visibility only)
+    const includeProjectExpenses =
+      projectData?.includeProjectExpenses === true ||
+      projectData?.includeProjectExpenses === 'true';
+    const reservedAmountRaw = projectData?.projectExpenseReservedAmount;
+    const reservedAmount = reservedAmountRaw !== undefined && reservedAmountRaw !== null && reservedAmountRaw !== ''
+      ? parseAmount(reservedAmountRaw)
+      : 0;
+    const projectExpenseRequirements =
+      (projectData?.projectExpenseRequirements || '').toString().trim();
+
+    if (includeProjectExpenses && reservedAmount < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reserved amount for project expenses cannot be negative.'
+      });
+    }
+    if (includeProjectExpenses && reservedAmount > totalCost) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reserved amount for project expenses cannot be greater than total project cost.'
+      });
+    }
+
+    projectData = {
+      ...projectData,
+      totalCost,
+      advanceReceived,
+      description,
+      includeProjectExpenses,
+      projectExpenseReservedAmount: reservedAmount,
+      projectExpenseRequirements
+    };
 
     const { uploadToCloudinary } = require('../services/cloudinaryService');
     const Client = require('../models/Client');
@@ -4998,6 +5080,11 @@ const createProjectForExistingClient = async (req, res) => {
         advanceReceived: 0,
         includeGST,
         remainingAmount
+      },
+      expenseConfig: {
+        included: includeProjectExpenses,
+        reservedAmount,
+        requirementsNotes: projectExpenseRequirements
       }
     };
 

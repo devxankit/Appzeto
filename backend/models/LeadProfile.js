@@ -85,6 +85,14 @@ const leadProfileSchema = new mongoose.Schema({
     totalCost: Number,
     advanceReceived: Number,
     includeGST: { type: Boolean, default: false },
+    // Optional project expense configuration captured at conversion time
+    includeProjectExpenses: { type: Boolean, default: false },
+    projectExpenseReservedAmount: { type: Number, min: 0 },
+    projectExpenseRequirements: {
+      type: String,
+      trim: true,
+      maxlength: [2000, 'Expense requirements cannot exceed 2000 characters']
+    },
     paymentScreenshot: {
       public_id: String,
       secure_url: String,

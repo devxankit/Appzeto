@@ -15,6 +15,7 @@ const FINANCE_SOURCE_TYPES = Object.freeze({
   PAYMENT_RECEIPT: 'paymentReceipt',
   PROJECT_INSTALLMENT: 'projectInstallment',
   ADMIN_MANUAL_RECOVERY: 'adminManualRecovery',
+  PROJECT_EXPENSE_CLIENT_PAID: 'projectExpenseClientPaid',
   PROJECT_CONVERSION: 'project_conversion',
   INCENTIVE: 'incentive',
   REWARD: 'reward',

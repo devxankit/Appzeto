@@ -1,4 +1,28 @@
-<!-- b49fdea0-f04a-45ab-9b6a-bab958b81ec8 3983d1c2-0d10-4fc1-b1df-a07232a859f6 -->
+---
+name: Sales Employee Incentive Calculation System Implementation
+overview: ""
+todos:
+  - id: 18cb567f-2cf4-4629-935b-5a9ba6e29777
+    content: Update Incentive model to add conversion-based fields (isConversionBased, projectId, clientId, currentBalance, pendingBalance) and methods for moving pending to current
+    status: pending
+  - id: 28fda3a5-c729-4ac3-8edc-6cea29b2aae2
+    content: Modify convertLeadToClient function to automatically create Incentive record with 50/50 split when lead is converted
+    status: pending
+  - id: f25802bd-5153-4a10-9478-085c19089378
+    content: Add post-save hook in Project model to detect no-dues completion and move pending incentive to current balance proportionally
+    status: pending
+  - id: 220a606c-5ad1-44a9-9d4d-85e607b6c88f
+    content: Update getWalletSummary to calculate from actual Incentive records instead of client count, showing proper current/pending breakdown
+    status: pending
+  - id: 7a140a0a-2a01-440d-9a4c-772e0bbcd0dc
+    content: Create finance transaction recording for incentive payments and monthly summary endpoint for sales incentives
+    status: pending
+  - id: ed9fee1b-9d36-4888-b850-21992542870f
+    content: Add sales incentives filter to Admin Finance Transactions tab and display sales employee information
+    status: pending
+isProject: false
+---
+
 # Sales Employee Incentive Calculation System Implementation
 
 ## Overview
@@ -120,12 +144,3 @@ Implement automatic incentive calculation system where sales employees earn ince
 - Test finance records created correctly
 - Test monthly summaries aggregate properly
 - Edge cases: multiple conversions, partial no-dues, salary payment timing
-
-### To-dos
-
-- [ ] Update Incentive model to add conversion-based fields (isConversionBased, projectId, clientId, currentBalance, pendingBalance) and methods for moving pending to current
-- [ ] Modify convertLeadToClient function to automatically create Incentive record with 50/50 split when lead is converted
-- [ ] Add post-save hook in Project model to detect no-dues completion and move pending incentive to current balance proportionally
-- [ ] Update getWalletSummary to calculate from actual Incentive records instead of client count, showing proper current/pending breakdown
-- [ ] Create finance transaction recording for incentive payments and monthly summary endpoint for sales incentives
-- [ ] Add sales incentives filter to Admin Finance Transactions tab and display sales employee information

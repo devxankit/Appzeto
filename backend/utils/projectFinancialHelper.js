@@ -74,6 +74,26 @@ const recalculateProjectFinancials = async (project, totals) => {
   ]);
   const totalManualRecoveries = manualRecoveries[0]?.totalAmount || 0;
 
+  // Include client-paid project expenses as recoveries (client reimbursed company for expense)
+  const clientPaidExpenseRecoveries = await AdminFinance.aggregate([
+    {
+      $match: {
+        recordType: 'transaction',
+        transactionType: 'incoming',
+        status: { $ne: 'cancelled' },
+        project: project._id,
+        'metadata.sourceType': 'projectExpenseClientPaid'
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalAmount: { $sum: '$amount' }
+      }
+    }
+  ]);
+  const totalClientPaidExpenseRecoveries = clientPaidExpenseRecoveries[0]?.totalAmount || 0;
+
   // Calculate total received from all sources:
   // 1. Approved PaymentReceipts (from PaymentReceipt model)
   // 2. Paid installments (from installmentPlan with status 'paid')
@@ -82,7 +102,11 @@ const recalculateProjectFinancials = async (project, totals) => {
   // Strategy: recompute from actual data sources only, so values don't drift or double-count
   // when recalculations run multiple times.
 
-  const totalReceived = totalApprovedPayments + collectedFromInstallments + totalManualRecoveries;
+  const totalReceived =
+    totalApprovedPayments +
+    collectedFromInstallments +
+    totalManualRecoveries +
+    totalClientPaidExpenseRecoveries;
 
   // Update advanceReceived to reflect current total received
   project.financialDetails.advanceReceived = Math.round(totalReceived);

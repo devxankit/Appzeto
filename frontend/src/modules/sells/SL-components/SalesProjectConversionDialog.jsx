@@ -44,7 +44,10 @@ const SalesProjectConversionDialog = ({
     clientDateOfBirth: '',
     conversionDate: '', // Added for custom conversion date
     description: '',
-    screenshot: null
+    screenshot: null,
+    includeProjectExpenses: false,
+    projectExpenseReservedAmount: '',
+    projectExpenseRequirements: ''
   })
 
   useEffect(() => {
@@ -114,6 +117,19 @@ const SalesProjectConversionDialog = ({
       return
     }
 
+    // Validate project expense reserved amount when expenses are included
+    if (conversionData.includeProjectExpenses) {
+      const reserved = parseAmount(conversionData.projectExpenseReservedAmount)
+      if (reserved < 0) {
+        toast.error('Reserved amount for project expenses cannot be negative')
+        return
+      }
+      if (reserved > baseCost) {
+        toast.error('Reserved amount for project expenses cannot be greater than total project cost')
+        return
+      }
+    }
+
     if (mode === 'fromLead' && !leadId) {
       toast.error('Lead information is missing for conversion')
       return
@@ -140,7 +156,10 @@ const SalesProjectConversionDialog = ({
         clientDateOfBirth: mode === 'fromLead' ? (conversionData.clientDateOfBirth || undefined) : undefined,
         conversionDate: conversionData.conversionDate || undefined,
         description: conversionData.description.trim() || '',
-        screenshot: conversionData.screenshot || null
+        screenshot: conversionData.screenshot || null,
+        includeProjectExpenses: conversionData.includeProjectExpenses || false,
+        projectExpenseReservedAmount: conversionData.projectExpenseReservedAmount || '',
+        projectExpenseRequirements: conversionData.projectExpenseRequirements.trim() || ''
       }
 
       let result
@@ -163,7 +182,10 @@ const SalesProjectConversionDialog = ({
         clientDateOfBirth: '',
         conversionDate: new Date().toISOString().split('T')[0],
         description: '',
-        screenshot: null
+        screenshot: null,
+        includeProjectExpenses: false,
+        projectExpenseReservedAmount: '',
+        projectExpenseRequirements: ''
       })
 
       if (onSuccess) {
@@ -548,6 +570,84 @@ const SalesProjectConversionDialog = ({
                 <span>{isLoading ? 'Saving...' : mode === 'fromLead' ? 'Converted' : 'Create Project'}</span>
               </button>
             </div>
+          </div>
+
+          {/* Project Expenses Configuration */}
+          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-3">
+            <h3 className="text-sm font-semibold text-gray-800">Project Expenses</h3>
+            <p className="text-xs text-gray-500">
+              Choose whether project expenses (e.g. domain, hosting, server) are included inside this project amount
+              or paid directly by the client.
+            </p>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Expense handling</label>
+              <select
+                value={conversionData.includeProjectExpenses ? 'included' : 'excluded'}
+                onChange={(e) =>
+                  setConversionData(prev => ({
+                    ...prev,
+                    includeProjectExpenses: e.target.value === 'included'
+                  }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
+              >
+                <option value="included">Included in project (company will purchase)</option>
+                <option value="excluded">Excluded – client will purchase directly</option>
+              </select>
+            </div>
+
+            {conversionData.includeProjectExpenses && (
+              <div className="space-y-3 mt-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Reserved amount for project expenses
+                  </label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-teal-600">
+                      <FaRupeeSign className="text-sm" />
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={conversionData.projectExpenseReservedAmount}
+                      onChange={(e) =>
+                        setConversionData(prev => ({
+                          ...prev,
+                          projectExpenseReservedAmount: e.target.value
+                        }))
+                      }
+                      placeholder="Amount from total cost reserved for expenses"
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 text-sm"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    This amount is part of the total project cost, not extra. PEM will see this as the purchasing budget.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Expense requirements (optional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={conversionData.projectExpenseRequirements}
+                    onChange={(e) =>
+                      setConversionData(prev => ({
+                        ...prev,
+                        projectExpenseRequirements: e.target.value
+                      }))
+                    }
+                    placeholder="List expected expenses, e.g. domain, hosting, server, email, SSL..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 text-sm resize-none"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    This note will be visible to the Project Expense Manager for planning purchases.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </motion.div>
       </div>

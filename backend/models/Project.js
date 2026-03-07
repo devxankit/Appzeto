@@ -147,6 +147,16 @@ const projectSchema = new mongoose.Schema({
     includeGST: { type: Boolean, default: false },
     remainingAmount: { type: Number, default: 0 }
   },
+  // Project-level expense configuration (for PEM visibility only)
+  expenseConfig: {
+    included: { type: Boolean, default: false },
+    reservedAmount: { type: Number, default: 0, min: 0 },
+    requirementsNotes: {
+      type: String,
+      trim: true,
+      maxlength: [2000, 'Expense requirements cannot exceed 2000 characters']
+    }
+  },
   // Finished days (deadline from sales)
   finishedDays: {
     type: Number,
@@ -250,6 +260,11 @@ const projectSchema = new mongoose.Schema({
       type: Number,
       required: [true, 'Expense amount is required'],
       min: [0, 'Amount cannot be negative']
+    },
+    paidBy: {
+      type: String,
+      enum: ['appzeto', 'client'],
+      default: 'appzeto'
     },
     vendor: {
       type: String,
@@ -465,6 +480,18 @@ projectSchema.methods.createFromLeadConversion = function (leadProfileData, sale
 
     // Set budget from total cost
     this.budget = leadProfileData.conversionData.totalCost || 0;
+
+    // Set expense configuration (visibility only, does not affect financial calculations)
+    if (typeof leadProfileData.conversionData.includeProjectExpenses !== 'undefined' ||
+        typeof leadProfileData.conversionData.projectExpenseReservedAmount !== 'undefined' ||
+        typeof leadProfileData.conversionData.projectExpenseRequirements !== 'undefined') {
+      const reservedAmount = Number(leadProfileData.conversionData.projectExpenseReservedAmount || 0);
+      this.expenseConfig = {
+        included: !!leadProfileData.conversionData.includeProjectExpenses,
+        reservedAmount: Number.isFinite(reservedAmount) && reservedAmount >= 0 ? reservedAmount : 0,
+        requirementsNotes: (leadProfileData.conversionData.projectExpenseRequirements || '').trim()
+      };
+    }
   }
 
   // Set finished days

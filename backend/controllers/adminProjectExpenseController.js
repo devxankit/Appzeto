@@ -2,6 +2,13 @@ const Project = require('../models/Project');
 const AdminFinance = require('../models/AdminFinance');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
+const { recalculateProjectFinancials } = require('../utils/projectFinancialHelper');
+const {
+  createIncomingTransaction,
+  findExistingTransaction,
+  cancelTransactionForSource,
+  FINANCE_SOURCE_TYPES
+} = require('../utils/financeTransactionHelper');
 
 // Note: The 'vendor' field in project expenses stores the client name, not a vendor/provider name.
 // This field is auto-populated from the project's client information if not provided.
@@ -55,7 +62,7 @@ const getAllProjectExpenses = asyncHandler(async (req, res, next) => {
     const projects = await Project.find(projectFilter)
       .populate('client', 'name companyName email')
       .populate('projectManager', 'name email')
-      .select('name client projectManager expenses');
+      .select('name client projectManager expenses expenseConfig.included');
 
     // Flatten expenses with project information
     let allExpenses = [];
@@ -99,11 +106,13 @@ const getAllProjectExpenses = asyncHandler(async (req, res, next) => {
           if (includeExpense) {
             // Ensure project name is included
             const projectName = project.name || project._id?.toString() || 'Unknown Project';
+            const expensesIncluded = project.expenseConfig && project.expenseConfig.included === true;
             allExpenses.push({
               _id: expense._id,
               name: expense.name,
               category: expense.category,
               amount: expense.amount,
+              paidBy: expense.paidBy,
               vendor: expense.vendor,
               paymentMethod: expense.paymentMethod,
               expenseDate: expense.expenseDate,
@@ -118,7 +127,8 @@ const getAllProjectExpenses = asyncHandler(async (req, res, next) => {
                 client: project.client,
                 projectManager: project.projectManager
               },
-              projectName: projectName // Also include as direct field for easier access
+              projectName: projectName, // Also include as direct field for easier access
+              expensesIncluded // true = included project, false = excluded/not specified
             });
           }
         });
@@ -256,6 +266,13 @@ const getProjectExpenses = asyncHandler(async (req, res, next) => {
   });
 });
 
+// Helper to determine if project expenses are excluded from contract
+const isProjectExpensesExcluded = (project) => {
+  if (!project) return false;
+  // When included is false or not set, we treat it as excluded for financial flows
+  return project.expenseConfig && project.expenseConfig.included === false;
+};
+
 // @desc    Create new project expense
 // @route   POST /api/admin/project-expenses
 // @access  Admin only
@@ -273,7 +290,8 @@ const createProjectExpense = asyncHandler(async (req, res, next) => {
     vendor,
     paymentMethod,
     expenseDate,
-    description
+    description,
+    paidBy
   } = req.body;
 
   // Validate required fields
@@ -292,6 +310,12 @@ const createProjectExpense = asyncHandler(async (req, res, next) => {
   const validPaymentMethods = ['Bank Transfer', 'UPI', 'Credit Card', 'Debit Card', 'Cash', 'Cheque', 'Other'];
   if (paymentMethod && !validPaymentMethods.includes(paymentMethod)) {
     return next(new ErrorResponse(`Invalid payment method. Must be one of: ${validPaymentMethods.join(', ')}`, 400));
+  }
+
+  // Validate paidBy
+  const normalizedPaidBy = (paidBy || 'appzeto').toLowerCase();
+  if (!['appzeto', 'client'].includes(normalizedPaidBy)) {
+    return next(new ErrorResponse('Invalid paidBy value. Must be either \"appzeto\" or \"client\"', 400));
   }
 
   try {
@@ -316,14 +340,17 @@ const createProjectExpense = asyncHandler(async (req, res, next) => {
     const expenseName = name ? name.trim() : (category ? `${category.charAt(0).toUpperCase() + category.slice(1)} Expense` : 'Project Expense');
 
     // Create expense object
+    const expenseAmount = parseFloat(amount);
+
     const newExpense = {
       name: expenseName,
       category,
-      amount: parseFloat(amount),
+      amount: expenseAmount,
       vendor: clientName, // vendor field stores client name
       paymentMethod: paymentMethod || 'Bank Transfer',
       expenseDate: new Date(expenseDate),
       description: description ? description.trim() : '',
+      paidBy: normalizedPaidBy,
       createdBy: req.admin._id,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -335,32 +362,92 @@ const createProjectExpense = asyncHandler(async (req, res, next) => {
 
     const savedExpense = project.expenses[project.expenses.length - 1];
 
-    // Create AdminFinance record so expense appears in Transactions and Expenses tabs
-    // (Cards already count project expenses from Project.expenses - we exclude this via metadata.sourceType)
-    try {
-      await AdminFinance.create({
-        recordType: 'transaction',
-        transactionType: 'outgoing',
-        category: category,
-        amount: parseFloat(amount),
-        transactionDate: new Date(expenseDate),
-        createdBy: req.admin._id,
-        status: 'completed',
-        description: description ? description.trim() : `Project expense: ${expenseName}`,
-        vendor: clientName,
-        paymentMethod: paymentMethod || 'Bank Transfer',
-        project: projectId,
-        client: project.client?._id || project.client,
-        metadata: {
-          sourceType: 'projectExpense',
-          sourceId: savedExpense._id.toString(),
-          projectId: projectId.toString(),
-          createdAt: new Date()
+    // If project expenses are excluded, this expense is for PEM tracking only:
+    // do not create any AdminFinance transactions and do not recalculate project financials.
+    if (!isProjectExpensesExcluded(project)) {
+      // Create AdminFinance record so expense appears in Transactions and Expenses tabs
+      // (Cards already count project expenses from Project.expenses - we exclude this via metadata.sourceType)
+      try {
+        await AdminFinance.create({
+          recordType: 'transaction',
+          transactionType: 'outgoing',
+          category: category,
+          amount: parseFloat(amount),
+          transactionDate: new Date(expenseDate),
+          createdBy: req.admin._id,
+          status: 'completed',
+          description: description ? description.trim() : `Project expense: ${expenseName}`,
+          vendor: clientName,
+          paymentMethod: paymentMethod || 'Bank Transfer',
+          project: projectId,
+          client: project.client?._id || project.client,
+          metadata: {
+            sourceType: 'projectExpense',
+            sourceId: savedExpense._id.toString(),
+            projectId: projectId.toString(),
+            createdAt: new Date()
+          }
+        });
+      } catch (financeErr) {
+        console.error('Error creating AdminFinance for project expense:', financeErr);
+        // Don't fail the request - project expense was saved; finance record is for visibility
+      }
+
+      // If client paid this expense, treat it as recovered money.
+      // Create an incoming AdminFinance transaction linked to this expense and recalculate project financials.
+      if (normalizedPaidBy === 'client') {
+        try {
+          await createIncomingTransaction({
+            amount: expenseAmount,
+            category: 'Client-paid Project Expense',
+            transactionDate: new Date(expenseDate),
+            createdBy: req.admin._id,
+            client: project.client?._id || project.client,
+            project: project._id,
+            paymentMethod: paymentMethod || 'Bank Transfer',
+            description: description ? description.trim() : `Client-paid project expense: ${expenseName}`,
+            metadata: {
+              sourceType: FINANCE_SOURCE_TYPES.PROJECT_EXPENSE_CLIENT_PAID,
+              sourceId: savedExpense._id.toString(),
+              projectId: project._id.toString()
+            }
+          });
+
+          await recalculateProjectFinancials(project);
+          await project.save();
+        } catch (clientPaidErr) {
+          console.error('Error creating recovery for client-paid project expense:', clientPaidErr);
+
+          // Best-effort rollback: remove the expense and linked finance records so totals don't drift.
+          try {
+            project.expenses = project.expenses.filter((e) => e._id.toString() !== savedExpense._id.toString());
+            project.markModified('expenses');
+            await project.save();
+          } catch (rollbackErr) {
+            console.error('Rollback failed after client-paid project expense error:', rollbackErr);
+          }
+
+          try {
+            await AdminFinance.deleteOne({
+              recordType: 'transaction',
+              'metadata.sourceType': 'projectExpense',
+              'metadata.sourceId': savedExpense._id.toString()
+            });
+          } catch (rollbackFinanceErr) {
+            console.error('Rollback failed removing outgoing AdminFinance:', rollbackFinanceErr);
+          }
+
+          await cancelTransactionForSource(
+            {
+              sourceType: FINANCE_SOURCE_TYPES.PROJECT_EXPENSE_CLIENT_PAID,
+              sourceId: savedExpense._id.toString()
+            },
+            'delete'
+          );
+
+          return next(new ErrorResponse('Failed to record client-paid recovery for this expense', 500));
         }
-      });
-    } catch (financeErr) {
-      console.error('Error creating AdminFinance for project expense:', financeErr);
-      // Don't fail the request - project expense was saved; finance record is for visibility
+      }
     }
 
     // Populate the expense with admin info
@@ -407,7 +494,8 @@ const updateProjectExpense = asyncHandler(async (req, res, next) => {
     vendor,
     paymentMethod,
     expenseDate,
-    description
+    description,
+    paidBy
   } = req.body;
 
   try {
@@ -460,7 +548,14 @@ const updateProjectExpense = asyncHandler(async (req, res, next) => {
     }
     if (expenseDate !== undefined) expense.expenseDate = new Date(expenseDate);
     if (description !== undefined) expense.description = description.trim();
-    
+    if (paidBy !== undefined) {
+      const normalizedPaidBy = String(paidBy).toLowerCase();
+      if (!['appzeto', 'client'].includes(normalizedPaidBy)) {
+        return next(new ErrorResponse('Invalid paidBy value. Must be either \"appzeto\" or \"client\"', 400));
+      }
+      expense.paidBy = normalizedPaidBy;
+    }
+
     expense.updatedBy = req.admin._id;
     expense.updatedAt = new Date();
 
@@ -468,24 +563,82 @@ const updateProjectExpense = asyncHandler(async (req, res, next) => {
     project.markModified('expenses');
     await project.save();
 
-    // Sync AdminFinance record if it exists
-    try {
-      const financeRecord = await AdminFinance.findOne({
-        recordType: 'transaction',
-        'metadata.sourceType': 'projectExpense',
-        'metadata.sourceId': id
-      });
-      if (financeRecord) {
-        financeRecord.amount = expense.amount;
-        financeRecord.category = expense.category;
-        financeRecord.transactionDate = expense.expenseDate;
-        financeRecord.vendor = expense.vendor;
-        financeRecord.paymentMethod = expense.paymentMethod;
-        financeRecord.description = expense.description || `Project expense: ${expense.name}`;
-        await financeRecord.save();
+    // For projects where expenses are excluded from contract, skip all AdminFinance updates
+    // and financial recalculation – these expenses are PEM-only.
+    if (!isProjectExpensesExcluded(project)) {
+      // Sync AdminFinance record if it exists
+      try {
+        const financeRecord = await AdminFinance.findOne({
+          recordType: 'transaction',
+          'metadata.sourceType': 'projectExpense',
+          'metadata.sourceId': id
+        });
+        if (financeRecord) {
+          financeRecord.amount = expense.amount;
+          financeRecord.category = expense.category;
+          financeRecord.transactionDate = expense.expenseDate;
+          financeRecord.vendor = expense.vendor;
+          financeRecord.paymentMethod = expense.paymentMethod;
+          financeRecord.description = expense.description || `Project expense: ${expense.name}`;
+          await financeRecord.save();
+        }
+      } catch (financeErr) {
+        console.error('Error syncing AdminFinance for project expense update:', financeErr);
       }
-    } catch (financeErr) {
-      console.error('Error syncing AdminFinance for project expense update:', financeErr);
+
+      // Sync client-paid recovery transaction and recalculate project financials
+      try {
+        const sourceType = FINANCE_SOURCE_TYPES.PROJECT_EXPENSE_CLIENT_PAID;
+        const sourceId = id.toString();
+        const normalizedExpensePaidBy = (expense.paidBy || 'appzeto').toLowerCase();
+
+        if (normalizedExpensePaidBy === 'client') {
+          const existing = await findExistingTransaction({ sourceType, sourceId });
+          if (!existing) {
+            await createIncomingTransaction({
+              amount: Number(expense.amount || 0),
+              category: 'Client-paid Project Expense',
+              transactionDate: expense.expenseDate || new Date(),
+              createdBy: req.admin._id,
+              client: project.client?._id || project.client,
+              project: project._id,
+              paymentMethod: expense.paymentMethod || 'Bank Transfer',
+              description: expense.description || `Client-paid project expense: ${expense.name}`,
+              metadata: {
+                sourceType,
+                sourceId,
+                projectId: project._id.toString()
+              }
+            });
+          } else {
+            existing.amount = Number(expense.amount || 0);
+            existing.category = 'Client-paid Project Expense';
+            existing.transactionDate = expense.expenseDate || existing.transactionDate || new Date();
+            existing.paymentMethod = expense.paymentMethod || existing.paymentMethod;
+            existing.description = expense.description || `Client-paid project expense: ${expense.name}`;
+            existing.client = project.client?._id || project.client;
+            existing.project = project._id;
+            existing.status = 'completed';
+            existing.transactionType = 'incoming';
+            existing.recordType = 'transaction';
+            existing.metadata = {
+              ...(existing.metadata || {}),
+              sourceType,
+              sourceId,
+              projectId: project._id.toString()
+            };
+            await existing.save();
+          }
+        } else {
+          await cancelTransactionForSource({ sourceType, sourceId }, 'delete');
+        }
+
+        await recalculateProjectFinancials(project);
+        await project.save();
+      } catch (recalcErr) {
+        console.error('Error syncing client-paid recovery or recalculating project financials:', recalcErr);
+        // Don't fail: expense update is saved; next recalculation trigger will correct totals.
+      }
     }
 
     // Populate updatedBy
@@ -534,15 +687,31 @@ const deleteProjectExpense = asyncHandler(async (req, res, next) => {
       return next(new ErrorResponse('Project expense not found', 404));
     }
 
-    // Remove linked AdminFinance record so it doesn't appear in Transactions/Expenses
-    try {
-      await AdminFinance.deleteOne({
-        recordType: 'transaction',
-        'metadata.sourceType': 'projectExpense',
-        'metadata.sourceId': id
-      });
-    } catch (financeErr) {
-      console.error('Error removing AdminFinance for deleted project expense:', financeErr);
+    // Find the expense being deleted
+    const expense = project.expenses.id(id);
+
+    // For projects where expenses are excluded, there are no linked AdminFinance
+    // transactions to clean up and no financial recalculation needed.
+    if (!isProjectExpensesExcluded(project)) {
+      // Remove linked incoming recovery (if any) for client-paid expenses
+      await cancelTransactionForSource(
+        {
+          sourceType: FINANCE_SOURCE_TYPES.PROJECT_EXPENSE_CLIENT_PAID,
+          sourceId: id
+        },
+        'delete'
+      );
+
+      // Remove linked AdminFinance record so it doesn't appear in Transactions/Expenses
+      try {
+        await AdminFinance.deleteOne({
+          recordType: 'transaction',
+          'metadata.sourceType': 'projectExpense',
+          'metadata.sourceId': id
+        });
+      } catch (financeErr) {
+        console.error('Error removing AdminFinance for deleted project expense:', financeErr);
+      }
     }
 
     // Filter out the expense to delete
@@ -551,6 +720,16 @@ const deleteProjectExpense = asyncHandler(async (req, res, next) => {
     });
     project.markModified('expenses');
     await project.save();
+
+    // Recalculate project financials after removing recovery source
+    if (!isProjectExpensesExcluded(project)) {
+      try {
+        await recalculateProjectFinancials(project);
+        await project.save();
+      } catch (recalcErr) {
+        console.error('Error recalculating project financials after deleting project expense:', recalcErr);
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -577,14 +756,20 @@ const getProjectExpenseStats = asyncHandler(async (req, res, next) => {
       if (endDate) dateFilter['expenses.expenseDate'].$lte = new Date(endDate);
     }
 
-    // Get all projects with expenses
-    const projects = await Project.find(dateFilter).select('expenses');
+    // Get all projects with expenses (include expenseConfig.included for included/excluded split)
+    const projects = await Project.find(dateFilter).select('expenses expenseConfig.included');
 
-    // Calculate totals
+    // Calculate totals (overall + split by included/excluded)
     let totalExpenses = 0;
+    let totalExpensesIncluded = 0;
+    let totalExpensesExcluded = 0;
     let totalProjects = new Set();
     let monthlyExpenses = 0;
+    let monthlyExpensesIncluded = 0;
+    let monthlyExpensesExcluded = 0;
     let todayExpenses = 0;
+    let todayExpensesIncluded = 0;
+    let todayExpensesExcluded = 0;
     const categoryBreakdown = {};
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -592,6 +777,7 @@ const getProjectExpenseStats = asyncHandler(async (req, res, next) => {
 
     projects.forEach(project => {
       if (project.expenses && project.expenses.length > 0) {
+        const isIncluded = project.expenseConfig && project.expenseConfig.included === true;
         let projectHasExpenses = false;
         project.expenses.forEach(expense => {
           // Apply date filter if provided
@@ -606,23 +792,38 @@ const getProjectExpenseStats = asyncHandler(async (req, res, next) => {
           const expenseAmount = expense.amount || 0;
 
           totalExpenses += expenseAmount;
+          if (isIncluded) {
+            totalExpensesIncluded += expenseAmount;
+          } else {
+            totalExpensesExcluded += expenseAmount;
+          }
           projectHasExpenses = true;
-          
+
           // Monthly expenses (current month)
           if (expenseDate >= startOfMonth) {
             monthlyExpenses += expenseAmount;
+            if (isIncluded) {
+              monthlyExpensesIncluded += expenseAmount;
+            } else {
+              monthlyExpensesExcluded += expenseAmount;
+            }
           }
-          
+
           // Today's expenses
           if (expenseDate >= startOfToday) {
             todayExpenses += expenseAmount;
+            if (isIncluded) {
+              todayExpensesIncluded += expenseAmount;
+            } else {
+              todayExpensesExcluded += expenseAmount;
+            }
           }
-          
+
           // Category breakdown
           const cat = expense.category || 'other';
           categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + expenseAmount;
         });
-        
+
         if (projectHasExpenses) {
           totalProjects.add(project._id.toString());
         }
@@ -633,9 +834,15 @@ const getProjectExpenseStats = asyncHandler(async (req, res, next) => {
       success: true,
       data: {
         totalExpenses,
+        totalExpensesIncluded,
+        totalExpensesExcluded,
         totalProjects: totalProjects.size,
         monthlyExpenses,
+        monthlyExpensesIncluded,
+        monthlyExpensesExcluded,
         todayExpenses,
+        todayExpensesIncluded,
+        todayExpensesExcluded,
         categoryBreakdown
       }
     });

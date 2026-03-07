@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import Admin_navbar from '../admin-components/Admin_navbar'
 import Admin_sidebar from '../admin-components/Admin_sidebar'
 import Loading from '../../../components/ui/loading'
@@ -27,7 +27,8 @@ import {
   FiKey,
   FiLock,
   FiGlobe,
-  FiServer
+  FiServer,
+  FiBook
 } from 'react-icons/fi'
 import { IndianRupee } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
@@ -59,6 +60,7 @@ const Admin_project_expenses_management = () => {
     category: '',
     amount: '',
     vendor: '',
+    paidBy: 'appzeto',
     paymentMethod: 'Bank Transfer',
     expenseDate: new Date().toISOString().split('T')[0],
     description: ''
@@ -85,7 +87,11 @@ const Admin_project_expenses_management = () => {
   const [creatingCategory, setCreatingCategory] = useState(false)
   const [updatingCategory, setUpdatingCategory] = useState(false)
   const [deletingCategory, setDeletingCategory] = useState(false)
-  const [activeSection, setActiveSection] = useState('expenses') // 'expenses', 'categories', or 'credentials'
+  const [activeSection, setActiveSection] = useState('projects') // 'projects', 'expenses', 'categories', or 'credentials'
+  const [projectStatusFilter, setProjectStatusFilter] = useState('all') // for Projects tab
+  const [projectInclusionFilter, setProjectInclusionFilter] = useState('all') // for Projects tab
+  const [projectSearch, setProjectSearch] = useState('') // for Projects tab
+  const [allProjectsForPem, setAllProjectsForPem] = useState([]) // full projects list for Projects tab
   
   // Credentials management state
   const [credentials, setCredentials] = useState([])
@@ -112,16 +118,25 @@ const Admin_project_expenses_management = () => {
   const [expenseProjectSearchTerm, setExpenseProjectSearchTerm] = useState('')
   const projectDropdownRef = useRef(null)
   const expenseProjectDropdownRef = useRef(null)
+  const [expenseInclusionFilter, setExpenseInclusionFilter] = useState('all') // all | included | excluded
 
   // Statistics state
   const [statistics, setStatistics] = useState({
     totalExpenses: 0,
+    totalExpensesIncluded: 0,
+    totalExpensesExcluded: 0,
     totalProjects: 0,
     categoryBreakdown: {},
     monthlyExpenses: 0,
-    todayExpenses: 0
+    monthlyExpensesIncluded: 0,
+    monthlyExpensesExcluded: 0,
+    todayExpenses: 0,
+    todayExpensesIncluded: 0,
+    todayExpensesExcluded: 0
   })
   const [statisticsLoading, setStatisticsLoading] = useState(false)
+  const [projectViewModalProject, setProjectViewModalProject] = useState(null)
+  const [showPemGuideSheet, setShowPemGuideSheet] = useState(false)
 
   // Format currency
   const formatCurrency = (amount) => {
@@ -194,10 +209,16 @@ const Admin_project_expenses_management = () => {
       if (response && response.success && response.data) {
         setStatistics({
           totalExpenses: response.data.totalExpenses || 0,
+          totalExpensesIncluded: response.data.totalExpensesIncluded ?? response.data.totalExpenses,
+          totalExpensesExcluded: response.data.totalExpensesExcluded ?? 0,
           totalProjects: response.data.totalProjects || 0,
           categoryBreakdown: response.data.categoryBreakdown || {},
           monthlyExpenses: response.data.monthlyExpenses || 0,
-          todayExpenses: response.data.todayExpenses || 0
+          monthlyExpensesIncluded: response.data.monthlyExpensesIncluded ?? response.data.monthlyExpenses,
+          monthlyExpensesExcluded: response.data.monthlyExpensesExcluded ?? 0,
+          todayExpenses: response.data.todayExpenses || 0,
+          todayExpensesIncluded: response.data.todayExpensesIncluded ?? response.data.todayExpenses,
+          todayExpensesExcluded: response.data.todayExpensesExcluded ?? 0
         })
       }
     } catch (err) {
@@ -247,7 +268,8 @@ const Admin_project_expenses_management = () => {
             value: project._id || project.id,
             label: project.name || 'Unnamed Project',
             client: project.client || null,
-            clientName: clientName
+            clientName: clientName,
+            expenseConfig: project.expenseConfig || null
           }
         }))
       } else {
@@ -274,7 +296,8 @@ const Admin_project_expenses_management = () => {
               value: project._id || project.id,
               label: project.name || 'Unnamed Project',
               client: project.client || null,
-              clientName: clientName
+              clientName: clientName,
+              expenseConfig: project.expenseConfig || null
             }
           }))
         }
@@ -282,6 +305,30 @@ const Admin_project_expenses_management = () => {
     } catch (err) {
       console.error('Error fetching projects:', err)
       toast.error('Failed to load projects')
+    }
+  }
+
+  // Fetch full projects list for Projects tab (all projects)
+  const fetchAllProjectsForPem = async () => {
+    try {
+      const { apiRequest } = await import('../admin-services/baseApiService')
+
+      // Fetch all projects with a reasonably high limit; can be extended with pagination later if needed
+      const queryParams = new URLSearchParams()
+      queryParams.append('limit', '1000')
+
+      const response = await apiRequest(`/admin/projects?${queryParams.toString()}`)
+
+      if (response && response.success && Array.isArray(response.data)) {
+        setAllProjectsForPem(response.data)
+      } else {
+        console.error('Failed to fetch all projects for PEM:', response)
+        setAllProjectsForPem([])
+      }
+    } catch (err) {
+      console.error('Error fetching all projects for PEM:', err)
+      // Do not toast here every time to avoid noise; main flows still work without this list
+      setAllProjectsForPem([])
     }
   }
 
@@ -306,6 +353,67 @@ const Admin_project_expenses_management = () => {
     
     return ''
   }
+
+  // Computed summaries: reserved, spent, available per project (for display only)
+  const projectExpenseSummaries = useMemo(() => {
+    const summaries = {}
+
+    // Seed summaries from projectsList (used by Expenses tab dropdown)
+    projectsList.forEach((p) => {
+      const id = p?.value ? String(p.value) : ''
+      if (!id) return
+      const cfg = p.expenseConfig || {}
+      const reserved = Number(cfg.reservedAmount || 0) || 0
+      summaries[id] = {
+        reservedAmount: reserved,
+        spentAmount: 0,
+        availableBalance: reserved,
+        hasBudget: reserved > 0
+      }
+    })
+
+    // Also seed from allProjectsForPem (Projects tab - may include inactive projects)
+    allProjectsForPem.forEach((project) => {
+      const id = project?._id || project?.id
+      if (!id) return
+      const key = String(id)
+      const cfg = project.expenseConfig || {}
+      const reserved = Number(cfg.reservedAmount || 0) || 0
+      if (!summaries[key]) {
+        summaries[key] = {
+          reservedAmount: reserved,
+          spentAmount: 0,
+          availableBalance: reserved,
+          hasBudget: reserved > 0
+        }
+      } else if (reserved > 0 && summaries[key].reservedAmount === 0) {
+        // Prefer non-zero reserved from full projects list when dropdown data has none
+        summaries[key].reservedAmount = reserved
+        summaries[key].availableBalance = reserved - summaries[key].spentAmount
+        summaries[key].hasBudget = reserved > 0
+      }
+    })
+
+    // Add spent amounts from current expenses list
+    projectExpenses.forEach((expense) => {
+      const id = extractProjectId(expense)
+      if (!id) return
+      const amount = Number(expense.amount || 0) || 0
+      if (!summaries[id]) {
+        // Project has expenses but no reserved budget configured
+        summaries[id] = {
+          reservedAmount: 0,
+          spentAmount: 0,
+          availableBalance: 0,
+          hasBudget: false
+        }
+      }
+      summaries[id].spentAmount += amount
+      summaries[id].availableBalance = summaries[id].reservedAmount - summaries[id].spentAmount
+    })
+
+    return summaries
+  }, [projectsList, allProjectsForPem, projectExpenses])
 
   // Handle project selection change to auto-fill client
   const handleProjectChange = async (projectId) => {
@@ -353,10 +461,34 @@ const Admin_project_expenses_management = () => {
       category: '',
       amount: '',
       vendor: '',
+      paidBy: 'appzeto',
       paymentMethod: 'Bank Transfer',
       expenseDate: new Date().toISOString().split('T')[0],
       description: ''
     })
+    setProjectExpenseModalMode('create')
+    setSelectedProjectExpense(null)
+    setShowProjectExpenseModal(true)
+  }
+
+  // Open expense modal scoped to a specific project (used from Projects tab)
+  const openExpenseModalForProject = (project) => {
+    if (!project) return
+    const id = String(project._id || project.id)
+    if (!id) return
+    // Reset form with selected project
+    setProjectExpenseFormData({
+      projectId: id,
+      category: '',
+      amount: '',
+      vendor: '',
+      paidBy: 'appzeto',
+      paymentMethod: 'Bank Transfer',
+      expenseDate: new Date().toISOString().split('T')[0],
+      description: ''
+    })
+    // Auto-fill client/vendor name for this project
+    handleProjectChange(id)
     setProjectExpenseModalMode('create')
     setSelectedProjectExpense(null)
     setShowProjectExpenseModal(true)
@@ -389,6 +521,7 @@ const Admin_project_expenses_management = () => {
       category: expense.category || '',
       amount: amountValue,
       vendor: expense.vendor || '',
+      paidBy: (expense.paidBy || 'appzeto'),
       paymentMethod: expense.paymentMethod || 'Bank Transfer',
       expenseDate: expenseDateValue,
       description: expense.description || ''
@@ -425,6 +558,7 @@ const Admin_project_expenses_management = () => {
       category: expense.category || '',
       amount: amountValue,
       vendor: expense.vendor || '',
+      paidBy: (expense.paidBy || 'appzeto'),
       paymentMethod: expense.paymentMethod || 'Bank Transfer',
       expenseDate: expenseDateValue,
       description: expense.description || ''
@@ -464,7 +598,8 @@ const Admin_project_expenses_management = () => {
     // Validation
     if (!projectExpenseFormData.projectId || 
         !projectExpenseFormData.category || !projectExpenseFormData.amount || 
-        !projectExpenseFormData.expenseDate) {
+        !projectExpenseFormData.expenseDate ||
+        !projectExpenseFormData.paidBy) {
       toast.error('Please fill in all required fields')
       return
     }
@@ -496,6 +631,7 @@ const Admin_project_expenses_management = () => {
           category: '',
           amount: '',
           vendor: '',
+          paidBy: 'appzeto',
           paymentMethod: 'Bank Transfer',
           expenseDate: new Date().toISOString().split('T')[0],
           description: ''
@@ -660,15 +796,24 @@ const Admin_project_expenses_management = () => {
 
   // Filter projects for expense form dropdown
   const filteredProjectsForExpense = useMemo(() => {
+    let list = projectsList
+
+    // Apply include/exclude filter
+    if (expenseInclusionFilter === 'included') {
+      list = list.filter(p => p.expenseConfig?.included)
+    } else if (expenseInclusionFilter === 'excluded') {
+      list = list.filter(p => !p.expenseConfig?.included)
+    }
+
     if (!expenseProjectSearchTerm.trim()) {
-      return projectsList
+      return list
     }
     const searchLower = expenseProjectSearchTerm.toLowerCase()
-    return projectsList.filter(project => 
+    return list.filter(project =>
       project.label?.toLowerCase().includes(searchLower) ||
       project.clientName?.toLowerCase().includes(searchLower)
     )
-  }, [projectsList, expenseProjectSearchTerm])
+  }, [projectsList, expenseProjectSearchTerm, expenseInclusionFilter])
 
   // Fetch credentials
   const fetchCredentials = async () => {
@@ -890,6 +1035,7 @@ const Admin_project_expenses_management = () => {
     fetchProjectExpenses()
     fetchStatistics()
     fetchProjectsList()
+    fetchAllProjectsForPem()
     fetchCategories()
     if (activeSection === 'credentials') {
       fetchCredentials()
@@ -948,6 +1094,13 @@ const Admin_project_expenses_management = () => {
             </div>
             <div className="flex items-center space-x-3">
               <button
+                onClick={() => setShowPemGuideSheet(true)}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 border border-blue-200 transition-colors duration-200"
+              >
+                <FiBook className="text-sm" />
+                <span>Guide</span>
+              </button>
+              <button
                 onClick={() => {
                   fetchProjectExpenses()
                   fetchStatistics()
@@ -973,6 +1126,17 @@ const Admin_project_expenses_management = () => {
           {/* Section Tabs */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <nav className="flex space-x-8 px-6">
+              <button
+                onClick={() => setActiveSection('projects')}
+                className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  activeSection === 'projects'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FiFileText className="h-4 w-4" />
+                <span>Projects</span>
+              </button>
               <button
                 onClick={() => setActiveSection('expenses')}
                 className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
@@ -1012,93 +1176,456 @@ const Admin_project_expenses_management = () => {
           </div>
 
           {/* Content based on active section */}
+          {activeSection === 'projects' && (
+            <>
+              {/* Projects Tab: high-level project expense overview */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4 overflow-hidden">
+                <div className="px-4 sm:px-5 py-4 sm:py-5">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                      <h2 className="text-base font-semibold text-gray-900">Projects</h2>
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        Overview of expense inclusion, reserved budget, spending, and remaining balance
+                      </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                      <div className="relative flex-1 sm:max-w-[200px] min-w-0">
+                        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 shrink-0" />
+                        <input
+                          type="text"
+                          value={projectSearch}
+                          onChange={(e) => setProjectSearch(e.target.value)}
+                          placeholder="Search projects or clients..."
+                          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-colors"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-medium text-gray-500 uppercase tracking-wider shrink-0">
+                            Inclusion
+                          </label>
+                          <select
+                            value={projectInclusionFilter}
+                            onChange={(e) => setProjectInclusionFilter(e.target.value)}
+                            className="text-sm border border-gray-300 rounded-lg px-3 py-2 pr-8 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 min-w-[140px]"
+                          >
+                            <option value="all">All</option>
+                            <option value="included">Included</option>
+                            <option value="excluded">Excluded / Not specified</option>
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-medium text-gray-500 uppercase tracking-wider shrink-0">
+                            Status
+                          </label>
+                          <select
+                            value={projectStatusFilter}
+                            onChange={(e) => setProjectStatusFilter(e.target.value)}
+                            className="text-sm border border-gray-300 rounded-lg px-3 py-2 pr-8 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 min-w-[140px]"
+                          >
+                            <option value="all">All</option>
+                            <option value="active">Active</option>
+                            <option value="pending-assignment">Pending</option>
+                            <option value="completed">Completed</option>
+                            <option value="on-hold">On hold</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Projects list */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="min-w-full overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Project
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Client
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Expenses
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Reserved
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Spent
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Left
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {allProjectsForPem
+                        .filter((project) => {
+                          // Inclusion filter
+                          const included = !!project.expenseConfig?.included
+                          if (projectInclusionFilter === 'included' && !included) return false
+                          if (projectInclusionFilter === 'excluded' && included) return false
+
+                          // Status filter
+                          if (projectStatusFilter !== 'all') {
+                            if ((project.status || '') !== projectStatusFilter) return false
+                          }
+
+                          // Search filter
+                          if (projectSearch.trim()) {
+                            const q = projectSearch.toLowerCase()
+                            const name = (project.name || '').toLowerCase()
+                            const clientName =
+                              typeof project.client === 'object'
+                                ? (project.client.companyName || project.client.name || '').toLowerCase()
+                                : String(project.client || '').toLowerCase()
+                            return name.includes(q) || clientName.includes(q)
+                          }
+
+                          return true
+                        })
+                        .map((project) => {
+                          const id = String(project._id || project.id)
+                          const summary = projectExpenseSummaries[id] || {
+                            reservedAmount: 0,
+                            spentAmount: 0,
+                            availableBalance: 0,
+                            hasBudget: false
+                          }
+                          const cfg = project.expenseConfig || {}
+                          const reserved = summary.reservedAmount
+                          const spent = summary.spentAmount
+                          const available = summary.availableBalance
+                          const hasIncludedFlag = Object.prototype.hasOwnProperty.call(cfg, 'included')
+                          const included = !!cfg.included
+
+                          let inclusionLabel
+                          if (hasIncludedFlag && included) {
+                            inclusionLabel = 'Included'
+                          } else if (hasIncludedFlag && !included) {
+                            inclusionLabel = 'Excluded'
+                          } else {
+                            inclusionLabel = 'Excluded / Not specified'
+                          }
+
+                          const inclusionClass =
+                            hasIncludedFlag && included
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              : 'bg-gray-50 text-gray-600 border border-gray-200'
+
+                          const status = project.status || 'unknown'
+
+                          return (
+                            <tr key={id}>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-gray-900 truncate">
+                                    {project.name || 'Unnamed Project'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className="text-sm text-gray-700">
+                                  {typeof project.client === 'object'
+                                    ? project.client.companyName || project.client.name || 'N/A'
+                                    : project.client || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-50 text-gray-700 border border-gray-200">
+                                  {status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${inclusionClass}`}>
+                                  {inclusionLabel}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-right">
+                                <span className="text-sm text-gray-900">
+                                  {reserved > 0 ? formatCurrency(reserved) : '—'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-right">
+                                <span className="text-sm text-gray-900">
+                                  {spent > 0 ? formatCurrency(spent) : '—'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-right">
+                                <span
+                                  className={`text-sm font-semibold ${
+                                    available < 0 ? 'text-red-600' : available > 0 ? 'text-emerald-700' : 'text-gray-700'
+                                  }`}
+                                >
+                                  {reserved > 0 || spent > 0 ? formatCurrency(available) : '—'}
+                                  {available < 0 && ' (Over)'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-right">
+                                <div className="flex items-center justify-end space-x-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setProjectViewModalProject(project)}
+                                    className="text-gray-400 hover:text-primary p-1.5 rounded hover:bg-primary/10 transition-all"
+                                    aria-label="View project details"
+                                    title="View project details"
+                                  >
+                                    <FiEye className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openExpenseModalForProject(project)}
+                                    className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-all"
+                                    aria-label="Add expense"
+                                    title="Add expense"
+                                  >
+                                    <FiPlus className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCredentialFormData((prev) => ({
+                                        ...prev,
+                                        projectId: id
+                                      }))
+                                      setShowCredentialModal(true)
+                                    }}
+                                    className="text-gray-400 hover:text-indigo-600 p-1.5 rounded hover:bg-indigo-50 transition-all"
+                                    aria-label="Add credentials"
+                                    title="Add credentials"
+                                  >
+                                    <FiKey className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      {allProjectsForPem.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="px-4 py-6 text-center text-sm text-gray-500">
+                            No projects found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Project view modal */}
+              {projectViewModalProject && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {projectViewModalProject.name || 'Project details'}
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Expense configuration and requirements for this project.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setProjectViewModalProject(null)}
+                        className="p-2 rounded-full hover:bg-gray-100"
+                        aria-label="Close"
+                      >
+                        <FiX className="h-4 w-4 text-gray-600" />
+                      </button>
+                    </div>
+                    <div className="px-5 py-4 space-y-3 text-sm text-gray-700">
+                      {(() => {
+                        const p = projectViewModalProject
+                        const clientObj = typeof p.client === 'object' ? p.client : null
+                        const id = String(p._id || p.id)
+                        const summary = projectExpenseSummaries[id] || {
+                          reservedAmount: 0,
+                          spentAmount: 0,
+                          availableBalance: 0,
+                          hasBudget: false
+                        }
+                        const cfg = p.expenseConfig || {}
+                        const reserved = summary.reservedAmount
+                        const spent = summary.spentAmount
+                        const available = summary.availableBalance
+                        const included = !!cfg.included
+
+                        return (
+                          <>
+                            <div>
+                              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                Project
+                              </h4>
+                              <p className="mt-0.5 text-gray-900">
+                                {p.name || 'Unnamed Project'}
+                              </p>
+                              <p className="mt-0.5 text-xs text-gray-500">
+                                Status: {p.status || 'unknown'}
+                              </p>
+                              <p className="mt-0.5 text-xs text-gray-500">
+                                Client:{' '}
+                                {typeof p.client === 'object'
+                                  ? p.client.companyName || p.client.name || 'N/A'
+                                  : p.client || 'N/A'}
+                              </p>
+                              {clientObj && (clientObj.email || clientObj.phoneNumber || clientObj.phone || clientObj.mobile) && (
+                                <div className="mt-1 space-y-0.5 text-xs text-gray-500">
+                                  {clientObj.email && (
+                                    <p>
+                                      Email:{' '}
+                                      <span className="text-gray-800">
+                                        {clientObj.email}
+                                      </span>
+                                    </p>
+                                  )}
+                                  {(clientObj.phoneNumber || clientObj.phone || clientObj.mobile) && (
+                                    <p>
+                                      Contact:{' '}
+                                      <span className="text-gray-800">
+                                        {clientObj.phoneNumber || clientObj.phone || clientObj.mobile}
+                                      </span>
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                Expense configuration
+                              </h4>
+                              <p className="mt-0.5 text-sm">
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                    included
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                      : 'bg-gray-50 text-gray-600 border border-gray-200'
+                                  }`}
+                                >
+                                  {included ? 'Included in project' : 'Excluded / Not specified'}
+                                </span>
+                              </p>
+                              <p className="mt-1 text-xs text-gray-600">
+                                Reserved:{' '}
+                                <span className="font-semibold text-gray-900">
+                                  {reserved > 0 ? formatCurrency(reserved) : 'No budget set'}
+                                </span>
+                              </p>
+                              <p className="mt-0.5 text-xs text-gray-600">
+                                Spent:{' '}
+                                <span className="font-semibold text-gray-900">
+                                  {spent > 0 ? formatCurrency(spent) : formatCurrency(0)}
+                                </span>
+                              </p>
+                              <p className="mt-0.5 text-xs text-gray-600">
+                                Available:{' '}
+                                <span
+                                  className={`font-semibold ${
+                                    available < 0
+                                      ? 'text-red-600'
+                                      : available > 0
+                                      ? 'text-emerald-700'
+                                      : 'text-gray-900'
+                                  }`}
+                                >
+                                  {formatCurrency(available)}
+                                  {available < 0 && ' (Over budget)'}
+                                </span>
+                              </p>
+                              {!included && (
+                                <p className="mt-1 text-[11px] text-amber-700">
+                                  This project&apos;s expenses are{' '}
+                                  <span className="font-semibold">excluded from the contract</span>.
+                                  Purchases you add here are for Project Expense Management tracking
+                                  only and do{' '}
+                                  <span className="font-semibold">not create any transactions</span>{' '}
+                                  or change the client&apos;s pending amount.
+                                </p>
+                              )}
+                            </div>
+
+                            {cfg.requirementsNotes && cfg.requirementsNotes.trim() && (
+                              <div>
+                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                  Expense requirements
+                                </h4>
+                                <p className="mt-1 text-sm whitespace-pre-wrap">
+                                  {cfg.requirementsNotes}
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
           {activeSection === 'expenses' && (
             <>
-          {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-            >
-              <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-red-700">Total Expenses</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <p className="text-2xl font-bold text-red-800">
-                      {statisticsLoading ? '...' : formatCurrency(statistics.totalExpenses)}
-                    </p>
-                    <IndianRupee className="h-8 w-8 text-red-400" />
-                  </div>
-                </CardContent>
+          {/* Statistics Cards - separate Included/Excluded, compact to fit one line */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }}>
+              <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200 p-3">
+                <p className="text-[10px] font-medium text-emerald-700 uppercase tracking-wide">Total Incl</p>
+                <p className="text-lg font-bold text-emerald-800 mt-0.5">{statisticsLoading ? '...' : formatCurrency(statistics.totalExpensesIncluded)}</p>
               </Card>
             </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.2 }}
-            >
-              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-blue-700">Total Projects</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <p className="text-2xl font-bold text-blue-800">
-                      {statisticsLoading ? '...' : statistics.totalProjects}
-                    </p>
-                    <FiFileText className="h-8 w-8 text-blue-400" />
-                  </div>
-                </CardContent>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+              <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200 p-3">
+                <p className="text-[10px] font-medium text-gray-600 uppercase tracking-wide">Total Excl</p>
+                <p className="text-lg font-bold text-gray-800 mt-0.5">{statisticsLoading ? '...' : formatCurrency(statistics.totalExpensesExcluded)}</p>
               </Card>
             </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.3 }}
-            >
-              <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-green-700">Monthly Expenses</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <p className="text-2xl font-bold text-green-800">
-                      {statisticsLoading ? '...' : formatCurrency(statistics.monthlyExpenses)}
-                    </p>
-                    <FiCalendar className="h-8 w-8 text-green-400" />
-                  </div>
-                </CardContent>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.15 }}>
+              <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200 p-3">
+                <p className="text-[10px] font-medium text-emerald-700 uppercase tracking-wide">Monthly Incl</p>
+                <p className="text-lg font-bold text-emerald-800 mt-0.5">{statisticsLoading ? '...' : formatCurrency(statistics.monthlyExpensesIncluded)}</p>
               </Card>
             </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.4 }}
-            >
-              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-purple-700">Today's Expenses</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <p className="text-2xl font-bold text-purple-800">
-                      {statisticsLoading ? '...' : formatCurrency(statistics.todayExpenses)}
-                    </p>
-                    <FiTrendingDown className="h-8 w-8 text-purple-400" />
-                  </div>
-                </CardContent>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+              <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200 p-3">
+                <p className="text-[10px] font-medium text-gray-600 uppercase tracking-wide">Monthly Excl</p>
+                <p className="text-lg font-bold text-gray-800 mt-0.5">{statisticsLoading ? '...' : formatCurrency(statistics.monthlyExpensesExcluded)}</p>
+              </Card>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.25 }}>
+              <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200 p-3">
+                <p className="text-[10px] font-medium text-emerald-700 uppercase tracking-wide">Today Incl</p>
+                <p className="text-lg font-bold text-emerald-800 mt-0.5">{statisticsLoading ? '...' : formatCurrency(statistics.todayExpensesIncluded)}</p>
+              </Card>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.3 }}>
+              <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200 p-3">
+                <p className="text-[10px] font-medium text-gray-600 uppercase tracking-wide">Today Excl</p>
+                <p className="text-lg font-bold text-gray-800 mt-0.5">{statisticsLoading ? '...' : formatCurrency(statistics.todayExpensesExcluded)}</p>
+              </Card>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.35 }}>
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 p-3">
+                <p className="text-[10px] font-medium text-blue-700 uppercase tracking-wide">Total Projects</p>
+                <p className="text-lg font-bold text-blue-800 mt-0.5">{statisticsLoading ? '...' : statistics.totalProjects}</p>
               </Card>
             </motion.div>
           </div>
 
           {/* Search and Filter */}
-          <div className="mb-6 flex flex-col sm:flex-row gap-4">
+          <div className="mb-6 mt-6 flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
@@ -1158,8 +1685,10 @@ const Admin_project_expenses_management = () => {
                   <thead>
                     <tr className="border-b border-gray-200 bg-gray-50">
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[150px]">Project</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[95px]">Incl/Excl</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Category</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Amount</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[110px]">Paid by</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Client</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[130px]">Payment Method</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Date</th>
@@ -1182,6 +1711,17 @@ const Admin_project_expenses_management = () => {
                           </div>
                         </td>
                         <td className="py-3 px-4">
+                          {item.expensesIncluded === true ? (
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100" title="Included project - creates AdminFinance transactions">
+                              Included
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-gray-50 text-gray-600 border border-gray-200" title="Excluded / Not specified - PEM tracking only, no transactions">
+                              Excluded
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
                           <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
                             {item.category || 'N/A'}
                           </span>
@@ -1190,6 +1730,17 @@ const Admin_project_expenses_management = () => {
                           <div className="text-sm font-semibold text-red-600">
                             -{formatCurrency(item.amount)}
                           </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          {(() => {
+                            const paidBy = (item.paidBy || 'appzeto').toLowerCase()
+                            const label = paidBy === 'client' ? 'Client' : 'Appzeto'
+                            return (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-medium bg-gray-50 text-gray-700 border border-gray-200">
+                                {label}
+                              </span>
+                            )
+                          })()}
                         </td>
                         <td className="py-3 px-4">
                           <div className="text-sm text-gray-600">
@@ -1278,223 +1829,7 @@ const Admin_project_expenses_management = () => {
             </div>
           )}
 
-          {/* Project Expense Modal */}
-          {showProjectExpenseModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900">
-                    {projectExpenseModalMode === 'create' ? 'Add New Project Expense' : 
-                     projectExpenseModalMode === 'edit' ? 'Edit Project Expense' : 
-                     'View Project Expense'}
-                  </h3>
-                  <button
-                    onClick={() => setShowProjectExpenseModal(false)}
-                    className="p-2 hover:bg-gray-100 rounded-full"
-                  >
-                    <FiX className="h-5 w-5" />
-                  </button>
-                </div>
-
-                <form onSubmit={(e) => { 
-                  e.preventDefault(); 
-                  if (projectExpenseModalMode !== 'view') {
-                    handleSaveProjectExpense(); 
-                  }
-                }} className="space-y-4">
-                  <div className="relative" ref={expenseProjectDropdownRef}>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Project *</label>
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => !(projectExpenseModalMode === 'view') && setShowExpenseProjectDropdown(!showExpenseProjectDropdown)}
-                        disabled={projectExpenseModalMode === 'view'}
-                        className="w-full px-4 py-3 text-left border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white flex items-center justify-between hover:border-gray-400 transition-colors disabled:bg-gray-50 disabled:cursor-not-allowed"
-                      >
-                        <span className={projectExpenseFormData.projectId ? 'text-gray-900' : 'text-gray-500'}>
-                          {projectExpenseFormData.projectId 
-                            ? projectsList.find(p => String(p.value) === String(projectExpenseFormData.projectId))?.label || 'Select Project'
-                            : 'Select Project'}
-                        </span>
-                        <FiFilter className={`h-4 w-4 text-gray-400 transition-transform ${showExpenseProjectDropdown ? 'rotate-180' : ''}`} />
-                      </button>
-                      {showExpenseProjectDropdown && projectExpenseModalMode !== 'view' && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-64 overflow-hidden">
-                          <div className="p-2 border-b border-gray-200 bg-gray-50">
-                            <div className="relative">
-                              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                              <input
-                                type="text"
-                                placeholder="Search projects..."
-                                value={expenseProjectSearchTerm}
-                                onChange={(e) => setExpenseProjectSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                                onClick={(e) => e.stopPropagation()}
-                                autoFocus
-                              />
-                            </div>
-                          </div>
-                          <div className="max-h-48 overflow-y-auto">
-                            {filteredProjectsForExpense.length > 0 ? (
-                              filteredProjectsForExpense.map(project => (
-                                <button
-                                  key={project.value}
-                                  type="button"
-                                  onClick={() => {
-                                    handleProjectChange(String(project.value))
-                                    setShowExpenseProjectDropdown(false)
-                                    setExpenseProjectSearchTerm('')
-                                  }}
-                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 ${
-                                    String(projectExpenseFormData.projectId) === String(project.value) ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-900'
-                                  }`}
-                                >
-                                  <div className="font-medium">{project.label}</div>
-                                  {project.clientName && (
-                                    <div className="text-xs text-gray-500 mt-0.5">{project.clientName}</div>
-                                  )}
-                                </button>
-                              ))
-                            ) : (
-                              <div className="px-4 py-3 text-sm text-gray-500 text-center">No projects found</div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-                    <select
-                      value={projectExpenseFormData.category}
-                      onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, category: e.target.value})}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                      disabled={projectExpenseModalMode === 'view'}
-                    >
-                      <option value="">Select category</option>
-                      {categories.map(cat => (
-                        <option key={cat._id || cat.id} value={cat.name}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Amount *</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={projectExpenseFormData.amount}
-                        onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, amount: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter amount"
-                        required
-                        disabled={projectExpenseModalMode === 'view'}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Expense Date *</label>
-                      <input
-                        type="date"
-                        value={projectExpenseFormData.expenseDate}
-                        onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, expenseDate: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        required
-                        disabled={projectExpenseModalMode === 'view'}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Client</label>
-                      <input
-                        type="text"
-                        value={projectExpenseFormData.vendor}
-                        onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, vendor: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Client name"
-                        disabled={projectExpenseModalMode === 'view'}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method *</label>
-                      <select
-                        value={projectExpenseFormData.paymentMethod}
-                        onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, paymentMethod: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        required
-                        disabled={projectExpenseModalMode === 'view'}
-                      >
-                        <option value="Bank Transfer">Bank Transfer</option>
-                        <option value="UPI">UPI</option>
-                        <option value="Credit Card">Credit Card</option>
-                        <option value="Debit Card">Debit Card</option>
-                        <option value="Cash">Cash</option>
-                        <option value="Cheque">Cheque</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                    <textarea
-                      value={projectExpenseFormData.description}
-                      onChange={(e) => setProjectExpenseFormData({...projectExpenseFormData, description: e.target.value})}
-                      rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter additional notes or description"
-                      disabled={projectExpenseModalMode === 'view'}
-                    />
-                  </div>
-
-                  {projectExpenseModalMode !== 'view' && (
-                    <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
-                      <button
-                        type="button"
-                        onClick={() => setShowProjectExpenseModal(false)}
-                        className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
-                      >
-                        <FiPlus className="h-4 w-4" />
-                        <span>{projectExpenseModalMode === 'create' ? 'Add Project Expense' : 'Update Project Expense'}</span>
-                      </button>
-                    </div>
-                  )}
-                  {projectExpenseModalMode === 'view' && (
-                    <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
-                      <button
-                        type="button"
-                        onClick={() => setShowProjectExpenseModal(false)}
-                        className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        Close
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleEditProjectExpense(selectedProjectExpense)}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
-                      >
-                        <FiEdit className="h-4 w-4" />
-                        <span>Edit</span>
-                      </button>
-                    </div>
-                  )}
-                </form>
-              </div>
-            </div>
-          )}
+          {/* Project Expense Modal (moved outside expenses tab) */}
 
           {/* Delete Project Expense Confirmation Modal */}
           {showDeleteProjectExpenseModal && projectExpenseToDelete && (
@@ -1801,6 +2136,395 @@ const Admin_project_expenses_management = () => {
             </div>
           )}
 
+          {/* Global Project Expense Modal (available from all tabs) */}
+          {showProjectExpenseModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">
+                    {projectExpenseModalMode === 'create'
+                      ? 'Add New Project Expense'
+                      : projectExpenseModalMode === 'edit'
+                        ? 'Edit Project Expense'
+                        : 'View Project Expense'}
+                  </h3>
+                  <button
+                    onClick={() => setShowProjectExpenseModal(false)}
+                    className="p-2 hover:bg-gray-100 rounded-full"
+                  >
+                    <FiX className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {/* Project budget/spent/available summary for selected project */}
+                {projectExpenseFormData.projectId && (
+                  <div className="mb-4 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-700">
+                    {(() => {
+                      const summary =
+                        projectExpenseSummaries[String(projectExpenseFormData.projectId)] || null
+                      const selectedProjectMeta = projectsList.find(
+                        (p) => String(p.value) === String(projectExpenseFormData.projectId)
+                      )
+                      const isExcluded =
+                        selectedProjectMeta &&
+                        selectedProjectMeta.expenseConfig &&
+                        !selectedProjectMeta.expenseConfig.included
+
+                      if (!summary || summary.reservedAmount <= 0) {
+                        return (
+                          <div className="space-y-1">
+                            <p>
+                              No reserved expense budget set for this project. Expenses will still
+                              be recorded normally.
+                            </p>
+                            {isExcluded && (
+                              <p className="mt-1 text-[11px] text-amber-700">
+                                This project is configured as{' '}
+                                <span className="font-semibold">
+                                  expenses excluded (client pays)
+                                </span>
+                                . Purchases added here are tracked only inside Project Expense
+                                Management and do{' '}
+                                <span className="font-semibold">not create any transactions</span> in
+                                the finance system or change the client&apos;s pending amount.
+                              </p>
+                            )}
+                          </div>
+                        )
+                      }
+
+                      const { reservedAmount, spentAmount, availableBalance } = summary
+                      return (
+                        <div className="space-y-1">
+                          <p>
+                            Budget:{' '}
+                            <span className="font-semibold text-gray-900">
+                              {formatCurrency(reservedAmount)}
+                            </span>{' '}
+                            • Spent:{' '}
+                            <span className="font-semibold text-gray-900">
+                              {formatCurrency(spentAmount)}
+                            </span>{' '}
+                            • Available:{' '}
+                            <span
+                              className={`font-semibold ${
+                                availableBalance < 0 ? 'text-red-600' : 'text-emerald-700'
+                              }`}
+                            >
+                              {formatCurrency(availableBalance)}
+                              {availableBalance < 0 && ' (Over budget)'}
+                            </span>
+                          </p>
+                          {isExcluded && (
+                            <p className="mt-1 text-[11px] text-amber-700">
+                              This project is configured as{' '}
+                              <span className="font-semibold">
+                                expenses excluded (client pays)
+                              </span>
+                              . Purchases added here are tracked only inside Project Expense
+                              Management and do{' '}
+                              <span className="font-semibold">not create any transactions</span> in
+                              the finance system or change the client&apos;s pending amount.
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    if (projectExpenseModalMode !== 'view') {
+                      handleSaveProjectExpense()
+                    }
+                  }}
+                  className="space-y-4"
+                >
+                  <div className="relative" ref={expenseProjectDropdownRef}>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Project *
+                    </label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          !(projectExpenseModalMode === 'view') &&
+                          setShowExpenseProjectDropdown(!showExpenseProjectDropdown)
+                        }
+                        disabled={projectExpenseModalMode === 'view'}
+                        className="w-full px-4 py-3 text-left border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white flex items-center justify-between hover:border-gray-400 transition-colors disabled:bg-gray-50 disabled:cursor-not-allowed"
+                      >
+                        <span
+                          className={
+                            projectExpenseFormData.projectId ? 'text-gray-900' : 'text-gray-500'
+                          }
+                        >
+                          {projectExpenseFormData.projectId
+                            ? projectsList.find(
+                                (p) =>
+                                  String(p.value) === String(projectExpenseFormData.projectId)
+                              )?.label || 'Select Project'
+                            : 'Select Project'}
+                        </span>
+                        <FiFilter
+                          className={`h-4 w-4 text-gray-400 transition-transform ${
+                            showExpenseProjectDropdown ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+                      {showExpenseProjectDropdown && projectExpenseModalMode !== 'view' && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-64 overflow-hidden">
+                          <div className="p-2 border-b border-gray-200 bg-gray-50">
+                            <div className="relative">
+                              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                              <input
+                                type="text"
+                                placeholder="Search projects..."
+                                value={expenseProjectSearchTerm}
+                                onChange={(e) => setExpenseProjectSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                onClick={(e) => e.stopPropagation()}
+                                autoFocus
+                              />
+                            </div>
+                          </div>
+                          <div className="max-h-48 overflow-y-auto">
+                            {filteredProjectsForExpense.length > 0 ? (
+                              filteredProjectsForExpense.map((project) => (
+                                <button
+                                  key={project.value}
+                                  type="button"
+                                  onClick={() => {
+                                    handleProjectChange(String(project.value))
+                                    setShowExpenseProjectDropdown(false)
+                                    setExpenseProjectSearchTerm('')
+                                  }}
+                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 ${
+                                    String(projectExpenseFormData.projectId) ===
+                                    String(project.value)
+                                      ? 'bg-blue-50 text-blue-600 font-medium'
+                                      : 'text-gray-900'
+                                  }`}
+                                >
+                                  <div className="font-medium">{project.label}</div>
+                                  {project.clientName && (
+                                    <div className="text-xs text-gray-500 mt-0.5">
+                                      {project.clientName}
+                                    </div>
+                                  )}
+                                </button>
+                              ))
+                            ) : (
+                              <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                                No projects found
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Category *
+                    </label>
+                    <select
+                      value={projectExpenseFormData.category}
+                      onChange={(e) =>
+                        setProjectExpenseFormData({
+                          ...projectExpenseFormData,
+                          category: e.target.value
+                        })
+                      }
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required
+                      disabled={projectExpenseModalMode === 'view'}
+                    >
+                      <option value="">Select category</option>
+                      {categories.map((cat) => (
+                        <option key={cat._id || cat.id} value={cat.name}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amount *
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={projectExpenseFormData.amount}
+                        onChange={(e) =>
+                          setProjectExpenseFormData({
+                            ...projectExpenseFormData,
+                            amount: e.target.value
+                          })
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Enter amount"
+                        required
+                        disabled={projectExpenseModalMode === 'view'}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Expense Date *
+                      </label>
+                      <input
+                        type="date"
+                        value={projectExpenseFormData.expenseDate}
+                        onChange={(e) =>
+                          setProjectExpenseFormData({
+                            ...projectExpenseFormData,
+                            expenseDate: e.target.value
+                          })
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
+                        disabled={projectExpenseModalMode === 'view'}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Paid by *
+                      </label>
+                      <select
+                        value={projectExpenseFormData.paidBy}
+                        onChange={(e) =>
+                          setProjectExpenseFormData({
+                            ...projectExpenseFormData,
+                            paidBy: e.target.value
+                          })
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
+                        disabled={projectExpenseModalMode === 'view'}
+                      >
+                        <option value="appzeto">Paid by Appzeto</option>
+                        <option value="client">Paid by Client</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Client
+                      </label>
+                      <input
+                        type="text"
+                        value={projectExpenseFormData.vendor}
+                        onChange={(e) =>
+                          setProjectExpenseFormData({
+                            ...projectExpenseFormData,
+                            vendor: e.target.value
+                          })
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Client name"
+                        disabled
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Payment Method *
+                      </label>
+                      <select
+                        value={projectExpenseFormData.paymentMethod}
+                        onChange={(e) =>
+                          setProjectExpenseFormData({
+                            ...projectExpenseFormData,
+                            paymentMethod: e.target.value
+                          })
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
+                        disabled={projectExpenseModalMode === 'view'}
+                      >
+                        <option value="Bank Transfer">Bank Transfer</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Credit Card">Credit Card</option>
+                        <option value="Debit Card">Debit Card</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Cheque">Cheque</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      value={projectExpenseFormData.description}
+                      onChange={(e) =>
+                        setProjectExpenseFormData({
+                          ...projectExpenseFormData,
+                          description: e.target.value
+                        })
+                      }
+                      rows={3}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter additional notes or description"
+                      disabled={projectExpenseModalMode === 'view'}
+                    />
+                  </div>
+
+                  {projectExpenseModalMode !== 'view' && (
+                    <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => setShowProjectExpenseModal(false)}
+                        className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                      >
+                        <FiPlus className="h-4 w-4" />
+                        <span>
+                          {projectExpenseModalMode === 'create'
+                            ? 'Add Project Expense'
+                            : 'Update Project Expense'}
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                  {projectExpenseModalMode === 'view' && (
+                    <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => setShowProjectExpenseModal(false)}
+                        className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        Close
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEditProjectExpense(selectedProjectExpense)}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                      >
+                        <FiEdit className="h-4 w-4" />
+                        <span>Edit</span>
+                      </button>
+                    </div>
+                  )}
+                </form>
+              </div>
+            </div>
+          )}
+
           {/* Project Credentials Section */}
           {activeSection === 'credentials' && (
             <div className="space-y-6">
@@ -2003,8 +2727,12 @@ const Admin_project_expenses_management = () => {
                         className="w-full px-4 py-3 text-left border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white flex items-center justify-between hover:border-gray-400 transition-colors"
                       >
                         <span className={credentialFormData.projectId ? 'text-gray-900' : 'text-gray-500'}>
-                          {credentialFormData.projectId 
-                            ? projectsWithExpenses.find(p => (p._id || p.id) === credentialFormData.projectId)?.name || 'Select Project'
+                          {credentialFormData.projectId
+                            ? (
+                                projectsWithExpenses.find(p => (p._id || p.id) === credentialFormData.projectId)?.name ||
+                                allProjectsForPem.find(p => String(p._id || p.id) === String(credentialFormData.projectId))?.name ||
+                                'Select Project'
+                              )
                             : 'Select Project'}
                         </span>
                         <FiFilter className={`h-4 w-4 text-gray-400 transition-transform ${showProjectDropdown ? 'rotate-180' : ''}`} />
@@ -2297,6 +3025,108 @@ const Admin_project_expenses_management = () => {
               </div>
             </div>
           )}
+
+          {/* PEM Guide Sheet */}
+          <AnimatePresence>
+            {showPemGuideSheet && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm"
+                  onClick={() => setShowPemGuideSheet(false)}
+                  aria-hidden="true"
+                />
+                <motion.div
+                  initial={{ x: '100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '100%' }}
+                  transition={{ type: 'tween', duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                  className="fixed right-0 top-0 z-[70] h-full w-full max-w-xl bg-white shadow-2xl overflow-y-auto border-l border-gray-200"
+                >
+                  <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
+                    <div className="flex items-center gap-2">
+                      <FiBook className="h-6 w-6 text-blue-600" />
+                      <h2 className="text-lg font-semibold text-gray-900">PEM User Guide</h2>
+                    </div>
+                    <button
+                      onClick={() => setShowPemGuideSheet(false)}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <FiX className="h-5 w-5 text-gray-600" />
+                    </button>
+                  </div>
+                  <div className="p-6 pb-12 space-y-6 text-sm text-gray-900">
+                  <section>
+                    <h3 className="text-base font-semibold text-gray-900 mb-2">What is PEM?</h3>
+                    <p>
+                      <strong>Project Expenses Management (PEM)</strong> lets you track, add, and manage project expenses. 
+                      You can view projects, their expense inclusion status, budgets, and credentials in one place.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 className="text-base font-semibold text-gray-900 mb-2">Tabs Overview</h3>
+                    <ul className="list-disc pl-5 space-y-1.5">
+                      <li><strong>Projects</strong> — Overview of all projects with expense status, reserved budget, spent amount, and remaining balance. Filter by inclusion status and project status.</li>
+                      <li><strong>Expenses</strong> — Full list of all project expenses. Search, filter by category, add/edit/delete expenses. View stats split by Included vs Excluded.</li>
+                      <li><strong>Categories</strong> — Manage expense categories (Admin only).</li>
+                      <li><strong>Project Credentials</strong> — Store and manage project credentials, login info, and access details.</li>
+                    </ul>
+                  </section>
+
+                  <section>
+                    <h3 className="text-base font-semibold text-gray-900 mb-2">Included vs Excluded Projects</h3>
+                    <p className="mb-2">Projects can be marked as <strong>Included</strong> or <strong>Excluded</strong> for expenses:</p>
+                    <ul className="list-disc pl-5 space-y-1.5">
+                      <li><strong>Included</strong> — Expenses create AdminFinance transactions and affect financial reporting. Reserved budget and remaining balance are calculated.</li>
+                      <li><strong>Excluded</strong> — Expenses are for PEM tracking only. No AdminFinance transactions, no impact on finance reports. Useful for client-billed or out-of-scope projects.</li>
+                    </ul>
+                    <p className="mt-2 text-gray-700">The statistics cards show separate totals for Included and Excluded expenses.</p>
+                  </section>
+
+                  <section>
+                    <h3 className="text-base font-semibold text-gray-900 mb-2">Adding an Expense</h3>
+                    <ol className="list-decimal pl-5 space-y-1.5">
+                      <li>Go to the <strong>Expenses</strong> tab.</li>
+                      <li>Click <strong>Add Project Expense</strong>.</li>
+                      <li>Select project, category, amount, vendor/client, paid by (Appzeto/Client), payment method, date, and description.</li>
+                      <li>For excluded projects, a warning appears — expenses will not create system transactions.</li>
+                      <li>Click Save to create the expense.</li>
+                    </ol>
+                  </section>
+
+                  <section>
+                    <h3 className="text-base font-semibold text-gray-900 mb-2">Statistics Cards</h3>
+                    <p>On the Expenses tab, you see:</p>
+                    <ul className="list-disc pl-5 space-y-1 mt-1.5">
+                      <li><strong>Total Incl / Total Excl</strong> — Total expenses from included vs excluded projects</li>
+                      <li><strong>Monthly Incl / Monthly Excl</strong> — Current month expenses split</li>
+                      <li><strong>Today Incl / Today Excl</strong> — Today's expenses split</li>
+                      <li><strong>Total Projects</strong> — Number of projects with expenses</li>
+                    </ul>
+                  </section>
+
+                  <section>
+                    <h3 className="text-base font-semibold text-gray-900 mb-2">Project Credentials</h3>
+                    <p>Store usernames, passwords, URLs, IPs, and other access info per project. Edit and delete as needed. Useful for handing off access to team members.</p>
+                  </section>
+
+                  <section>
+                    <h3 className="text-base font-semibold text-gray-900 mb-2">Tips</h3>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Use <strong>Refresh</strong> to reload data if something looks stale.</li>
+                      <li>Filter the expense list by category or search by project, client, or category.</li>
+                      <li>View a project's details (Expenses column badge, reserved/spent/remaining) by clicking the eye icon in the Projects tab.</li>
+                    </ul>
+                  </section>
+                </div>
+              </motion.div>
+            </>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
