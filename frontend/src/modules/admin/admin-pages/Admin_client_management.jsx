@@ -5,6 +5,7 @@ import Admin_sidebar from '../admin-components/Admin_sidebar'
 import { adminProjectService } from '../admin-services/adminProjectService'
 import { adminUserService } from '../admin-services/adminUserService'
 import adminClientTagService from '../admin-services/adminClientTagService'
+import adminBannerService from '../admin-services/adminBannerService'
 import { 
   FiSearch,
   FiEdit3,
@@ -16,7 +17,10 @@ import {
   FiPlus,
   FiTag,
   FiX,
-  FiGift
+  FiGift,
+  FiImage,
+  FiChevronUp,
+  FiChevronDown
 } from 'react-icons/fi'
 import { 
   Filter,
@@ -31,6 +35,7 @@ import {
 import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 import Loading from '../../../components/ui/loading'
+import CloudinaryUpload from '../../../components/ui/cloudinary-upload'
 import { useToast } from '../../../contexts/ToastContext'
 
 const formatDate = (date) => {
@@ -63,7 +68,7 @@ const getStatusColor = (status) => {
 const Admin_client_management = () => {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
-  const [activeSection, setActiveSection] = useState('clients') // 'clients' or 'birthdays'
+  const [activeSection, setActiveSection] = useState('clients') // 'clients', 'birthdays', or 'banners'
   const [clients, setClients] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
@@ -118,10 +123,24 @@ const Admin_client_management = () => {
   // Birthdays filter state
   const [birthdayFilter, setBirthdayFilter] = useState('week') // 'today', 'week', 'month'
 
+  // Banners state
+  const [banners, setBanners] = useState([])
+  const [loadingBanners, setLoadingBanners] = useState(false)
+  const [carouselIntervalSeconds, setCarouselIntervalSeconds] = useState(5)
+  const [showDeleteBannerModal, setShowDeleteBannerModal] = useState(false)
+  const [selectedBanner, setSelectedBanner] = useState(null)
+
   // Load tags from backend on mount
   useEffect(() => {
     loadTags()
   }, [])
+
+  // Load banners when switching to Banners tab
+  useEffect(() => {
+    if (activeSection === 'banners') {
+      loadBanners()
+    }
+  }, [activeSection])
 
   const loadTags = async () => {
     setLoadingTags(true)
@@ -135,6 +154,124 @@ const Admin_client_management = () => {
       toast.error('Failed to load tags')
     } finally {
       setLoadingTags(false)
+    }
+  }
+
+  const loadBanners = async () => {
+    setLoadingBanners(true)
+    try {
+      const [bannersRes, settingsRes] = await Promise.all([
+        adminBannerService.getBanners(),
+        adminBannerService.getSettings()
+      ])
+      if (bannersRes.success) {
+        setBanners(bannersRes.data || [])
+      }
+      if (settingsRes.success && settingsRes.data) {
+        setCarouselIntervalSeconds(settingsRes.data.carouselIntervalSeconds ?? 5)
+      }
+    } catch (error) {
+      console.error('Error loading banners:', error)
+      toast.error('Failed to load banners')
+    } finally {
+      setLoadingBanners(false)
+    }
+  }
+
+  const handleBannerUpload = async (uploadData) => {
+    const url = uploadData.secure_url || uploadData.url
+    const publicId = uploadData.public_id || uploadData.publicId
+    if (!url || !publicId) {
+      toast.error('Invalid upload response')
+      return
+    }
+    try {
+      const order = banners.length
+      const response = await adminBannerService.createBanner({ url, publicId, order, isActive: true })
+      if (response.success) {
+        toast.success('Banner uploaded successfully')
+        await loadBanners()
+      } else {
+        toast.error(response.message || 'Failed to add banner')
+      }
+    } catch (error) {
+      console.error('Error creating banner:', error)
+      toast.error(error?.message || 'Failed to add banner')
+    }
+  }
+
+  const handleBannerToggle = async (banner) => {
+    try {
+      const response = await adminBannerService.updateBanner(banner._id || banner.id, {
+        isActive: !banner.isActive
+      })
+      if (response.success) {
+        toast.success(banner.isActive ? 'Banner deactivated' : 'Banner activated')
+        await loadBanners()
+      } else {
+        toast.error(response.message || 'Failed to update banner')
+      }
+    } catch (error) {
+      console.error('Error updating banner:', error)
+      toast.error(error?.message || 'Failed to update banner')
+    }
+  }
+
+  const handleBannerReorder = async (banner, direction) => {
+    const index = banners.findIndex(b => (b._id || b.id) === (banner._id || banner.id))
+    if (index === -1) return
+    const newIndex = direction === 'up' ? index - 1 : index + 1
+    if (newIndex < 0 || newIndex >= banners.length) return
+
+    const reordered = [...banners]
+    const [removed] = reordered.splice(index, 1)
+    reordered.splice(newIndex, 0, removed)
+
+    try {
+      const updates = reordered.map((b, i) =>
+        adminBannerService.updateBanner(b._id || b.id, { order: i })
+      )
+      await Promise.all(updates)
+      setBanners(reordered.map((b, i) => ({ ...b, order: i })))
+      toast.success('Order updated')
+    } catch (error) {
+      console.error('Error reordering:', error)
+      toast.error(error?.message || 'Failed to reorder')
+    }
+  }
+
+  const handleBannerDelete = (banner) => {
+    setSelectedBanner(banner)
+    setShowDeleteBannerModal(true)
+  }
+
+  const confirmBannerDelete = async () => {
+    if (!selectedBanner) return
+    try {
+      const response = await adminBannerService.deleteBanner(selectedBanner._id || selectedBanner.id)
+      if (response.success) {
+        toast.success('Banner deleted')
+        setShowDeleteBannerModal(false)
+        setSelectedBanner(null)
+        await loadBanners()
+      } else {
+        toast.error(response.message || 'Failed to delete banner')
+      }
+    } catch (error) {
+      console.error('Error deleting banner:', error)
+      toast.error(error?.message || 'Failed to delete banner')
+    }
+  }
+
+  const handleCarouselIntervalSave = async () => {
+    const value = Math.min(30, Math.max(3, Number(carouselIntervalSeconds)))
+    setCarouselIntervalSeconds(value)
+    try {
+      await adminBannerService.updateSettings({ carouselIntervalSeconds: value })
+      toast.success('Carousel speed updated')
+    } catch (error) {
+      console.error('Error updating settings:', error)
+      toast.error(error?.message || 'Failed to update settings')
     }
   }
 
@@ -821,6 +958,17 @@ const Admin_client_management = () => {
                 <FiGift className="h-4 w-4" />
                 <span>Birthdays</span>
               </button>
+              <button
+                onClick={() => setActiveSection('banners')}
+                className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  activeSection === 'banners'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FiImage className="h-4 w-4" />
+                <span>Banners</span>
+              </button>
             </nav>
           </div>
 
@@ -1261,8 +1409,151 @@ const Admin_client_management = () => {
               </CardContent>
             </div>
           )}
+
+          {activeSection === 'banners' && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
+                      Client Dashboard Banners
+                    </CardTitle>
+                    <p className="text-sm text-gray-600 mt-1">Upload and manage banners shown on the client dashboard carousel</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-600">Slide every (sec):</label>
+                      <input
+                        type="number"
+                        min={3}
+                        max={30}
+                        value={carouselIntervalSeconds}
+                        onChange={(e) => setCarouselIntervalSeconds(Number(e.target.value))}
+                        className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+                      />
+                      <Button size="sm" onClick={handleCarouselIntervalSave}>
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-4 lg:p-6 space-y-6">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Upload banner</h4>
+                  <CloudinaryUpload
+                    folder="appzeto/client-banners"
+                    allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
+                    accept=".jpg,.jpeg,.png,.webp"
+                    maxSize={5 * 1024 * 1024}
+                    onUploadSuccess={handleBannerUpload}
+                  />
+                </div>
+
+                {loadingBanners ? (
+                  <div className="flex justify-center py-12">
+                    <Loading />
+                  </div>
+                ) : banners.length > 0 ? (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Banner list</h4>
+                    <div className="space-y-3">
+                      {banners.map((banner, index) => (
+                        <motion.div
+                          key={banner._id || banner.id}
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200"
+                        >
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleBannerReorder(banner, 'up')}
+                              disabled={index === 0}
+                              className="p-1 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <FiChevronUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleBannerReorder(banner, 'down')}
+                              disabled={index === banners.length - 1}
+                              className="p-1 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <FiChevronDown className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <img
+                            src={banner.url}
+                            alt={`Banner ${index + 1}`}
+                            className="h-16 w-auto max-w-[200px] object-cover rounded"
+                          />
+                          <span className="text-sm text-gray-500">{index + 1}</span>
+                          <button
+                            onClick={() => handleBannerToggle(banner)}
+                            className={`px-3 py-1 rounded text-xs font-medium ${
+                              banner.isActive
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-200 text-gray-600'
+                            }`}
+                          >
+                            {banner.isActive ? 'Active' : 'Inactive'}
+                          </button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleBannerDelete(banner)}
+                          >
+                            <FiTrash2 className="h-4 w-4" />
+                          </Button>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <FiImage className="h-8 w-8 text-blue-500" />
+                    </div>
+                    <p className="text-gray-600">No banners yet. Upload an image above to add one.</p>
+                  </div>
+                )}
+              </CardContent>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Delete Banner Modal */}
+      <AnimatePresence>
+        {showDeleteBannerModal && selectedBanner && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowDeleteBannerModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full"
+            >
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete banner</h3>
+              <p className="text-gray-600 mb-6">Are you sure you want to delete this banner? This will remove it from Cloudinary.</p>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setShowDeleteBannerModal(false)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={confirmBannerDelete}>
+                  Delete
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Edit Modal */}
       <AnimatePresence>

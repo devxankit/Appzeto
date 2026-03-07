@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Client_navbar from '../../DEV-components/Client_navbar'
 import { clientProjectService, clientAnalyticsService, socketService } from '../../DEV-services'
 import clientRequestService from '../../DEV-services/clientRequestService'
+import clientBannerService from '../../DEV-services/clientBannerService'
 import { useToast } from '../../../../contexts/ToastContext'
 import { 
   FiFolder, 
@@ -41,6 +42,9 @@ const Client_dashboard = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [showAllActivities, setShowAllActivities] = useState(false)
+  const [banners, setBanners] = useState([])
+  const [carouselIntervalSeconds, setCarouselIntervalSeconds] = useState(5)
+  const [currentSlide, setCurrentSlide] = useState(0)
   const [dashboardData, setDashboardData] = useState({
     statistics: {
       projects: {
@@ -78,6 +82,15 @@ const Client_dashboard = () => {
     }
   }, [])
 
+  // Carousel auto-advance
+  useEffect(() => {
+    if (banners.length <= 1) return
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % banners.length)
+    }, (carouselIntervalSeconds || 5) * 1000)
+    return () => clearInterval(interval)
+  }, [banners.length, carouselIntervalSeconds])
+
   const setupWebSocket = () => {
     const token = localStorage.getItem('clientToken')
     if (!token) {
@@ -106,11 +119,12 @@ const Client_dashboard = () => {
       setLoading(true)
       setError(null)
       
-      // Load client project statistics, recent projects, and incoming requests
-      const [clientStatsResponse, projectsResponse, requestsResponse] = await Promise.all([
+      // Load client project statistics, recent projects, incoming requests, and banners
+      const [clientStatsResponse, projectsResponse, requestsResponse, bannersData] = await Promise.all([
         clientAnalyticsService.getClientProjectStats(),
         clientProjectService.getProjectsByClient(null, { limit: 5 }),
-        clientRequestService.getRequests({ direction: 'incoming', limit: 5 }).catch(() => ({ data: [] }))
+        clientRequestService.getRequests({ direction: 'incoming', limit: 5 }).catch(() => ({ data: [] })),
+        clientBannerService.getActiveBanners()
       ])
       
       // Handle response structure from backend
@@ -123,6 +137,9 @@ const Client_dashboard = () => {
       const requestsList = Array.isArray(requestsResponse?.data) 
         ? requestsResponse.data 
         : (Array.isArray(requestsResponse) ? requestsResponse : [])
+      setBanners(bannersData?.banners || [])
+      setCarouselIntervalSeconds(bannersData?.carouselIntervalSeconds ?? 5)
+
       const recentRequests = requestsList.map(r => ({
         id: r._id || r.id,
         title: r.title,
@@ -327,12 +344,45 @@ const Client_dashboard = () => {
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
           {/* Client Banner */}
           <div className="mb-6 md:mb-8">
-            <div className="w-full rounded-xl overflow-hidden shadow-sm">
-              <img 
-                src={new URL('../../../../assets/images/client_banner.png', import.meta.url).href}
-                alt="Welcome to Appzeto" 
-                className="w-full h-auto object-cover"
-              />
+            <div className="w-full rounded-xl overflow-hidden shadow-sm relative">
+              {banners.length > 0 ? (
+                <>
+                  <AnimatePresence mode="wait">
+                    <motion.img
+                      key={currentSlide}
+                      src={banners[currentSlide]?.url}
+                      alt={`Banner ${currentSlide + 1}`}
+                      className="w-full h-auto object-cover"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                    />
+                  </AnimatePresence>
+                  {banners.length > 1 && (
+                    <>
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                        {banners.map((_, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => setCurrentSlide(idx)}
+                            className={`w-2 h-2 rounded-full transition-colors ${
+                              idx === currentSlide ? 'bg-white' : 'bg-white/50 hover:bg-white/80'
+                            }`}
+                            aria-label={`Go to slide ${idx + 1}`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <img
+                  src={new URL('../../../../assets/images/client_banner.png', import.meta.url).href}
+                  alt="Welcome to Appzeto"
+                  className="w-full h-auto object-cover"
+                />
+              )}
             </div>
           </div>
 

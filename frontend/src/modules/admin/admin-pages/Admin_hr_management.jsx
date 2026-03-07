@@ -308,6 +308,33 @@ const Admin_hr_management = () => {
     return Array.from(unique).sort()
   }, [allUsers])
 
+  // Salary department options: Admin roles use employee.role (hr, accountant, pem) in Salary; others use department.
+  // Include hr/accountant/pem/admin explicitly since they don't match allUsers display depts (HR, Finance, Management).
+  const salaryDepartmentOptions = React.useMemo(() => {
+    const adminDepts = [
+      { value: 'hr', label: 'HR' },
+      { value: 'accountant', label: 'Accountant' },
+      { value: 'pem', label: 'PEM' },
+      { value: 'admin', label: 'Admin' }
+    ]
+    const otherDepts = departmentFilterOptions
+      .filter(d => !['HR', 'Finance'].includes(d))
+      .map(dept => {
+        const d = dept.toLowerCase()
+        const icon = d.includes('sales') ? TrendingUp : d.includes('manage') || d.includes('lead') ? Shield : Code
+        return { value: dept, label: dept, icon }
+      })
+    return [
+      { value: 'all', label: 'All Departments', icon: Users },
+      ...adminDepts.map(({ value, label }) => {
+        const d = value.toLowerCase()
+        const icon = d === 'hr' ? Shield : d === 'accountant' ? Calculator : d === 'pem' ? ClipboardList : Shield
+        return { value, label, icon }
+      }),
+      ...otherDepts
+    ]
+  }, [departmentFilterOptions])
+
   const loadData = async () => {
     setLoading(true)
     try {
@@ -1948,11 +1975,13 @@ const Admin_hr_management = () => {
   const loadSalaryData = async (month, opts = {}) => {
     const department = opts.department !== undefined ? opts.department : selectedSalaryDepartment
     const status = opts.status !== undefined ? opts.status : selectedPaymentStatus
+    // Backend only supports status 'pending'|'paid'. Overdue is computed client-side from pending records.
+    const apiStatus = (status && status !== 'all' && status !== 'overdue') ? status : (status === 'overdue' ? 'pending' : undefined)
     try {
       const res = await adminSalaryService.getSalaryRecords({
         month,
         department: department && department !== 'all' ? department : undefined,
-        status: status && status !== 'all' ? status : undefined
+        status: apiStatus
       })
 
       // Transform backend data to frontend format (normalize employeeId to string for history API)
@@ -2043,7 +2072,19 @@ const Admin_hr_management = () => {
 
   const getFilteredSalaryData = () => {
     let filtered = [...salaryData]
-    
+
+    // Overdue: filter client-side (backend has no 'overdue' status; it's computed from pending + past due date)
+    if (selectedPaymentStatus === 'overdue') {
+      const now = new Date()
+      now.setHours(0, 0, 0, 0)
+      filtered = filtered.filter(record => {
+        if (record.status === 'paid') return false
+        const paymentDate = new Date(record.paymentDate || record.createdAt)
+        paymentDate.setHours(0, 0, 0, 0)
+        return paymentDate < now
+      })
+    }
+
     if (selectedSalaryWeek !== 'all') {
       const weekNum = parseInt(selectedSalaryWeek)
       filtered = filtered.filter(record => {
@@ -2425,10 +2466,10 @@ const Admin_hr_management = () => {
       return
     }
 
-    // Backend only supports Employee, Sales, PM — not HR/accountant/PEM
-    const salaryEligibleRoles = ['employee', 'sales', 'project-manager', 'hr']
+    // Backend supports Employee, Sales, PM, HR, Accountant, PEM
+    const salaryEligibleRoles = ['employee', 'sales', 'project-manager', 'hr', 'accountant', 'pem']
     if (!salaryEligibleRoles.includes(selectedEmployee.role)) {
-      addToast({ type: 'error', message: 'Salary can only be set for employees, sales team, project managers, and HR.' })
+      addToast({ type: 'error', message: 'Salary can only be set for employees, sales team, project managers, HR, accountants, and PEM.' })
       return
     }
 
@@ -2439,10 +2480,10 @@ const Admin_hr_management = () => {
     }
 
     try {
-      // Map role to API userType (backend expects: employee, sales, pm, admin for HR)
+      // Map role to API userType (backend: employee, sales, pm, admin for HR/accountant/PEM)
       const userType = selectedEmployee.role === 'project-manager' ? 'pm' : 
                       selectedEmployee.role === 'sales' ? 'sales' : 
-                      selectedEmployee.role === 'hr' ? 'admin' : 'employee'
+                      ['hr', 'accountant', 'pem', 'admin'].includes(selectedEmployee.role) ? 'admin' : 'employee'
       const employeeId = (selectedEmployee._id || selectedEmployee.id || selectedEmployee.employeeId)?.toString()
       if (!employeeId) {
         addToast({ type: 'error', message: 'Invalid employee ID' })
@@ -2511,12 +2552,12 @@ const Admin_hr_management = () => {
     try {
       setLoadingHistory(true)
       
-      // Determine user type from record (backend: employee, sales, pm, admin for HR)
+      // Determine user type from record (backend: employee, sales, pm, admin for HR/accountant/PEM)
       // Fallback to employeeModel if role is missing (e.g. Salary doc structure)
       const role = record.role || (record.employeeModel === 'Sales' ? 'sales' : record.employeeModel === 'PM' ? 'project-manager' : record.employeeModel === 'Admin' ? 'hr' : 'employee')
       const userType = role === 'project-manager' ? 'pm' : 
                       role === 'sales' ? 'sales' : 
-                      role === 'hr' ? 'admin' : 'employee'
+                      ['hr', 'accountant', 'pem', 'admin'].includes(role) ? 'admin' : 'employee'
       
       const employeeId = normalizeEmployeeId(record.employeeId)
       if (!employeeId) {
@@ -3568,23 +3609,7 @@ const Admin_hr_management = () => {
                         </div>
 
                         <Combobox
-                          options={[
-                            { value: 'all', label: 'All Departments', icon: Users },
-                            ...departmentFilterOptions.map(dept => {
-                              const d = dept.toLowerCase()
-                              const icon =
-                                d.includes('sales')
-                                  ? TrendingUp
-                                  : d.includes('manage') || d.includes('lead')
-                                  ? Shield
-                                  : Code
-                              return {
-                                value: dept,
-                                label: dept,
-                                icon
-                              }
-                            })
-                          ]}
+                          options={salaryDepartmentOptions}
                           value={selectedSalaryDepartment}
                           onChange={(value) => setSelectedSalaryDepartment(value)}
                           placeholder="Department"
@@ -5358,8 +5383,8 @@ const Admin_hr_management = () => {
                           </div>
                         )}
 
-                        {/* Reward Payment Record - Sales & Dev */}
-                        {(selectedSalaryDetails.department === 'sales' || ['nodejs', 'flutter', 'web', 'full-stack', 'app'].includes(selectedSalaryDetails.department)) && (
+                        {/* Reward Payment Record - Sales, Employee (Dev), PM - all can have rewards */}
+                        {(selectedSalaryDetails.employeeModel === 'Sales' || selectedSalaryDetails.employeeModel === 'Employee' || selectedSalaryDetails.employeeModel === 'PM') && (
                           <div className="flex justify-between items-center py-2">
                             <div>
                               <span className="font-medium text-gray-700">Reward Payment:</span>
@@ -6499,8 +6524,8 @@ const Admin_hr_management = () => {
                           const idsFromApi = (employeesWithSalaryIds || []).map(id => String(id))
                           const employeesWithSalary = new Set(idsFromApi)
                           
-                          // Employees, sales, PMs, and HR can have salary set
-                          const salaryEligibleRoles = ['employee', 'sales', 'project-manager', 'hr']
+                          // Employees, sales, PMs, HR, Accountant, PEM can have salary set
+                          const salaryEligibleRoles = ['employee', 'sales', 'project-manager', 'hr', 'accountant', 'pem']
                           return allUsers
                             .filter(user => salaryEligibleRoles.includes(user.role))
                             .filter(user => {

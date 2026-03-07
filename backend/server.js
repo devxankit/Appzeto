@@ -47,6 +47,7 @@ const adminRewardRoutes = require('./routes/adminRewardRoutes');
 const adminNoticeRoutes = require('./routes/adminNoticeRoutes');
 const adminBackupRoutes = require('./routes/adminBackupRoutes');
 const adminClientTagRoutes = require('./routes/adminClientTagRoutes');
+const adminClientBannerRoutes = require('./routes/adminClientBannerRoutes');
 const channelPartnerRoutes = require('./routes/channelPartnerRoutes');
 const quotationRoutes = require('./routes/quotationRoutes');
 const employeeProjectRoutes = require('./routes/employeeProjectRoutes');
@@ -60,6 +61,7 @@ const clientPaymentRoutes = require('./routes/clientPaymentRoutes');
 const clientWalletRoutes = require('./routes/clientWalletRoutes');
 const clientNotificationRoutes = require('./routes/clientNotificationRoutes');
 const clientExploreRoutes = require('./routes/clientExploreRoutes');
+const clientBannerRoutes = require('./routes/clientBannerRoutes');
 const requestRoutes = require('./routes/requestRoutes');
 const cpRoutes = require('./routes/cpRoutes');
 const fcmTokenRoutes = require('./routes/fcmTokenRoutes');
@@ -232,12 +234,21 @@ app.use('/api/admin/rewards', adminRewardRoutes);
 app.use('/api/admin/notices', adminNoticeRoutes);
 app.use('/api/admin/backup', adminBackupRoutes);
 app.use('/api/admin/client-tags', adminClientTagRoutes);
+app.use('/api/admin/client-banners', adminClientBannerRoutes);
 app.use('/api/admin/channel-partners', channelPartnerRoutes);
 app.use('/api/admin/quotations', quotationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/pm', pmRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/employee', employeeRoutes);
+// Client-specific routes (must come before /api/client to avoid prefix capture)
+app.use('/api/client/projects', clientProjectRoutes);
+app.use('/api/client/milestones', clientMilestoneRoutes);
+app.use('/api/client/payments', clientPaymentRoutes);
+app.use('/api/client/wallet', clientWalletRoutes);
+app.use('/api/client/notifications', clientNotificationRoutes);
+app.use('/api/client/explore', clientExploreRoutes);
+app.use('/api/client/banners', clientBannerRoutes);
 app.use('/api/client', clientRoutes);
 app.use('/api/channel-partner', cpAuthRoutes);
 app.use('/api/cp', cpRoutes);
@@ -256,12 +267,21 @@ app.use('/admin/rewards', adminRewardRoutes);
 app.use('/admin/notices', adminNoticeRoutes);
 app.use('/admin/backup', adminBackupRoutes);
 app.use('/admin/client-tags', adminClientTagRoutes);
+app.use('/admin/client-banners', adminClientBannerRoutes);
 app.use('/admin/channel-partners', channelPartnerRoutes);
 app.use('/admin/quotations', quotationRoutes);
 app.use('/admin', adminRoutes);
 app.use('/pm', pmRoutes);
 app.use('/sales', salesRoutes);
 app.use('/employee', employeeRoutes);
+// Client-specific routes (must come before /client)
+app.use('/client/projects', clientProjectRoutes);
+app.use('/client/milestones', clientMilestoneRoutes);
+app.use('/client/payments', clientPaymentRoutes);
+app.use('/client/wallet', clientWalletRoutes);
+app.use('/client/notifications', clientNotificationRoutes);
+app.use('/client/explore', clientExploreRoutes);
+app.use('/client/banners', clientBannerRoutes);
 app.use('/client', clientRoutes);
 app.use('/channel-partner', cpAuthRoutes);
 app.use('/cp', cpRoutes);
@@ -297,13 +317,7 @@ app.use('/api/employee/analytics', employeeAnalyticsRoutes);
 app.use('/api/employee/milestones', employeeMilestoneRoutes);
 app.use('/api/employee/notifications', employeeNotificationRoutes);
 
-// Client routes
-app.use('/api/client/projects', clientProjectRoutes);
-app.use('/api/client/milestones', clientMilestoneRoutes);
-app.use('/api/client/payments', clientPaymentRoutes);
-app.use('/api/client/wallet', clientWalletRoutes);
-app.use('/api/client/notifications', clientNotificationRoutes);
-app.use('/api/client/explore', clientExploreRoutes);
+// Client routes (already registered above with /api prefix)
 
 // Role-specific API routes without /api prefix (for reverse proxy compatibility)
 // Admin routes already registered above (before adminRoutes)
@@ -314,13 +328,7 @@ app.use('/employee/analytics', employeeAnalyticsRoutes);
 app.use('/employee/milestones', employeeMilestoneRoutes);
 app.use('/employee/notifications', employeeNotificationRoutes);
 
-// Client routes
-app.use('/client/projects', clientProjectRoutes);
-app.use('/client/milestones', clientMilestoneRoutes);
-app.use('/client/payments', clientPaymentRoutes);
-app.use('/client/wallet', clientWalletRoutes);
-app.use('/client/notifications', clientNotificationRoutes);
-app.use('/client/explore', clientExploreRoutes);
+// Client routes (already registered above)
 
 // API routes documentation
 app.get('/api', (req, res) => {

@@ -42,7 +42,7 @@ const calculatePaymentDate = (joiningDate, month) => {
   return new Date(parseInt(year), parseInt(monthNum) - 1, paymentDay);
 };
 
-// Helper: Get employee model type from user type (admin/hr for HR salary)
+// Helper: Get employee model type from user type (admin/hr/accountant/pem for Admin salary)
 const getEmployeeModelType = (userType) => {
   switch (userType) {
     case 'employee':
@@ -54,6 +54,8 @@ const getEmployeeModelType = (userType) => {
       return 'PM';
     case 'admin':
     case 'hr':
+    case 'accountant':
+    case 'pem':
       return 'Admin';
     default:
       return null;
@@ -506,7 +508,7 @@ exports.getEmployeesWithSalaryDetails = asyncHandler(async (req, res) => {
       return {
         id: employee._id.toString(),
         name: employee.name,
-        department: employee.department || 'unknown',
+        department: employeeModel === 'Admin' ? (employee.role || 'HR') : (employee.department || 'unknown'),
         role,
         employeeModel,
         fixedSalary: typeof employee.fixedSalary === 'number' && employee.fixedSalary > 0
@@ -960,12 +962,13 @@ exports.generateMonthlySalaries = asyncHandler(async (req, res) => {
       }
     } else {
       // Create new record - map modelType to role for Salary schema
-      const role = emp.modelType === 'Sales' ? 'sales' : emp.modelType === 'PM' ? 'project-manager' : emp.role || 'employee'
+      const role = emp.modelType === 'Sales' ? 'sales' : emp.modelType === 'PM' ? 'project-manager' : emp.role || 'employee';
+      const dept = emp.modelType === 'Admin' ? (emp.role || 'HR') : (emp.department || 'unknown');
       await Salary.create({
         employeeId: emp._id,
         employeeModel: emp.modelType,
         employeeName: emp.name,
-        department: emp.department || 'unknown',
+        department: dept,
         role,
         month,
         fixedSalary: emp.fixedSalary,
