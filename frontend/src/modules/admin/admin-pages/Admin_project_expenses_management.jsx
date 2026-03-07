@@ -1692,7 +1692,6 @@ const Admin_project_expenses_management = () => {
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Client</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[130px]">Payment Method</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[120px]">Date</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 min-w-[200px]">Description</th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 min-w-[150px]">Actions</th>
                     </tr>
                   </thead>
@@ -1755,11 +1754,6 @@ const Admin_project_expenses_management = () => {
                         <td className="py-3 px-4">
                           <div className="text-sm text-gray-600">
                             {formatDate(item.expenseDate || item.date || item.createdAt)}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="text-sm text-gray-600 max-w-[200px] truncate" title={item.description || ''}>
-                            {item.description || 'N/A'}
                           </div>
                         </td>
                         <td className="py-3 px-4">
