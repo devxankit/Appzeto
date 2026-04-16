@@ -1064,7 +1064,7 @@ const Admin_notice_board = () => {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
+                className="overflow-visible"
               >
                 <Card className="border-2 border-amber-200 shadow-lg bg-white overflow-visible">
                   <CardHeader className="bg-amber-50 border-b border-amber-100 py-4">
@@ -1073,7 +1073,7 @@ const Admin_notice_board = () => {
                       <span>Direct Push Notification</span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-6">
+                  <CardContent className="p-6 overflow-visible">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       {/* Left Side: Message Details */}
                       <div className="space-y-4">
@@ -1143,7 +1143,7 @@ const Admin_notice_board = () => {
                         {pushFormData.targetType === 'specific' && (
                           <motion.div 
                             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                            className="space-y-2 relative z-10" // Added relative z-10 to ensure combobox dropdown is visible
+                            className="space-y-2 relative z-20" // Increased z-index to ensure combobox dropdown is visible above other elements
                           >
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Select Users ({pushFormData.recipients.length})</label>
                             <div className="flex gap-2">
@@ -1151,6 +1151,7 @@ const Admin_notice_board = () => {
                                 <Combobox
                                   placeholder={fetchingUsers ? "Loading users..." : "Search and add users..."}
                                   disabled={fetchingUsers}
+                                  searchable={true}
                                   options={allUsers
                                     .filter(u => !pushFormData.recipients.some(r => r.id === u._id))
                                     .map(u => ({ 
