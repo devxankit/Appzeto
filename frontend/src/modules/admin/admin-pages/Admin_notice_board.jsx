@@ -34,8 +34,9 @@ import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Combobox } from '../../../components/ui/combobox'
 import Loading from '../../../components/ui/loading'
-import { adminNoticeService } from '../admin-services'
+import { adminNoticeService, adminUserService } from '../admin-services'
 import { useToast } from '../../../contexts/ToastContext'
+import { FiSend } from 'react-icons/fi'
 
 const Admin_notice_board = () => {
   const { toast } = useToast()
@@ -75,6 +76,84 @@ const Admin_notice_board = () => {
     attachments: [],
     isPinned: false
   })
+
+  // Push Notification State
+  const [pushFormData, setPushFormData] = useState({
+    title: '',
+    message: '',
+    targetType: 'all',
+    role: 'sales',
+    recipients: [] // Array of { id, type, name }
+  })
+  const [pushLoading, setPushLoading] = useState(false)
+  const [allUsers, setAllUsers] = useState([])
+  const [fetchingUsers, setFetchingUsers] = useState(false)
+  const [showPushSection, setShowPushSection] = useState(false)
+
+  // Fetch all users for manual selection
+  const fetchAllUsers = useCallback(async () => {
+    try {
+      setFetchingUsers(true)
+      const response = await adminUserService.getAllUsers({ limit: 1000 })
+      if (response.success && response.data) {
+        setAllUsers(response.data)
+      }
+    } catch (error) {
+      console.error('Error fetching users for push:', error)
+      toast.error('Failed to fetch user list')
+    } finally {
+      setFetchingUsers(false)
+    }
+  }, [toast])
+
+  useEffect(() => {
+    if (showPushSection && allUsers.length === 0) {
+      fetchAllUsers()
+    }
+  }, [showPushSection, allUsers.length, fetchAllUsers])
+
+  const handleSendPushNotification = async () => {
+    if (!pushFormData.message || !pushFormData.message.trim()) {
+      toast.error('Please enter a message')
+      return
+    }
+
+    if (pushFormData.targetType === 'specific' && pushFormData.recipients.length === 0) {
+      toast.error('Please select at least one recipient')
+      return
+    }
+
+    try {
+      setPushLoading(true)
+      const payload = {
+        title: pushFormData.title,
+        message: pushFormData.message,
+        targetType: pushFormData.targetType,
+        role: pushFormData.role,
+        recipients: pushFormData.recipients.map(r => ({ id: r.id, type: r.type }))
+      }
+
+      const response = await adminNoticeService.sendDirectPushNotification(payload)
+      if (response.success) {
+        toast.success(response.message || 'Push notification sent successfully')
+        setPushFormData({
+          title: '',
+          message: '',
+          targetType: 'all',
+          role: 'sales',
+          recipients: []
+        })
+        setShowPushSection(false)
+      } else {
+        toast.error(response.message || 'Failed to send notification')
+      }
+    } catch (error) {
+      console.error('Error sending push:', error)
+      toast.error(error.message || 'Failed to send push notification')
+    } finally {
+      setPushLoading(false)
+    }
+  }
 
   // Fetch statistics (memoized to prevent unnecessary calls)
   const fetchStatistics = useCallback(async () => {
@@ -957,6 +1036,17 @@ const Admin_notice_board = () => {
                   <span className="text-xs sm:text-sm font-semibold">Showing: {filteredNotices.length}</span>
                 </div>
                 <Button
+                  onClick={() => setShowPushSection(!showPushSection)}
+                  className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl flex items-center justify-center space-x-2 text-sm transition-all ${
+                    showPushSection 
+                      ? 'bg-amber-100 text-amber-700 border-amber-300 border hover:bg-amber-200' 
+                      : 'bg-amber-500 hover:bg-amber-600 text-white'
+                  }`}
+                >
+                  <FiBell className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span>{showPushSection ? 'Hide Push' : 'Send Push'}</span>
+                </Button>
+                <Button
                   onClick={handleCreateNotice}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl flex items-center justify-center space-x-2 text-sm"
                 >
@@ -966,6 +1056,180 @@ const Admin_notice_board = () => {
               </div>
             </div>
           </motion.div>
+
+          {/* Direct Push Notification Section */}
+          <AnimatePresence>
+            {showPushSection && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <Card className="border-2 border-amber-200 shadow-lg bg-white overflow-visible">
+                  <CardHeader className="bg-amber-50 border-b border-amber-100 py-4">
+                    <CardTitle className="text-lg font-bold text-amber-800 flex items-center space-x-2">
+                      <FiBell className="h-5 w-5" />
+                      <span>Direct Push Notification</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Left Side: Message Details */}
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Notification Title (Optional)</label>
+                          <input
+                            type="text"
+                            placeholder="Enter notification title..."
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all outline-none"
+                            value={pushFormData.title}
+                            onChange={(e) => setPushFormData({ ...pushFormData, title: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Notification Message</label>
+                          <textarea
+                            placeholder="Enter the push message details here..."
+                            rows={4}
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 transition-all outline-none resize-none"
+                            value={pushFormData.message}
+                            onChange={(e) => setPushFormData({ ...pushFormData, message: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Right Side: Audience Targeting */}
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Target Audience</label>
+                            <div className="flex flex-wrap gap-2">
+                              {['all', 'role', 'specific'].map((type) => (
+                                <button
+                                  key={type}
+                                  onClick={() => setPushFormData({ ...pushFormData, targetType: type })}
+                                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                                    pushFormData.targetType === type
+                                      ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-200'
+                                      : 'bg-white text-gray-600 border-gray-200 hover:border-amber-300'
+                                  }`}
+                                >
+                                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {pushFormData.targetType === 'role' && (
+                            <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">Select Role</label>
+                              <Combobox
+                                  options={[
+                                    { value: 'admin', label: 'Admin Only' },
+                                    { value: 'sales', label: 'Sales Team' },
+                                    { value: 'developer', label: 'Development Team' },
+                                    { value: 'pm', label: 'Project Managers' },
+                                    { value: 'hr', label: 'HR Team' }
+                                  ]}
+                                value={pushFormData.role}
+                                onChange={(val) => setPushFormData({ ...pushFormData, role: val })}
+                                className="w-full"
+                              />
+                            </motion.div>
+                          )}
+                        </div>
+
+                        {pushFormData.targetType === 'specific' && (
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                            className="space-y-2 relative z-10" // Added relative z-10 to ensure combobox dropdown is visible
+                          >
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Select Users ({pushFormData.recipients.length})</label>
+                            <div className="flex gap-2">
+                              <div className="flex-1">
+                                <Combobox
+                                  placeholder={fetchingUsers ? "Loading users..." : "Search and add users..."}
+                                  disabled={fetchingUsers}
+                                  options={allUsers
+                                    .filter(u => !pushFormData.recipients.some(r => r.id === u._id))
+                                    .map(u => ({ 
+                                      value: u._id, 
+                                      label: `${u.name} (${u.userType || u.role})`,
+                                      data: u 
+                                    }))
+                                  }
+                                  value=""
+                                  onChange={(id) => {
+                                    const user = allUsers.find(u => u._id === id)
+                                    if (user) {
+                                      setPushFormData({
+                                        ...pushFormData,
+                                        recipients: [...pushFormData.recipients, { id: user._id, type: user.userType || user.role, name: user.name }]
+                                      })
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            
+                            {/* Selected Recipients Chips */}
+                            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border border-gray-100 rounded-lg bg-gray-50/50">
+                              {pushFormData.recipients.map((rec) => (
+                                <span 
+                                  key={rec.id}
+                                  className="inline-flex items-center bg-white border border-gray-200 px-3 py-1 rounded-full text-xs font-medium text-gray-700"
+                                >
+                                  {rec.name}
+                                  <button 
+                                    onClick={() => setPushFormData({
+                                      ...pushFormData,
+                                      recipients: pushFormData.recipients.filter(r => r.id !== rec.id)
+                                    })}
+                                    className="ml-2 text-gray-400 hover:text-red-500"
+                                  >
+                                    <FiX className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              ))}
+                              {pushFormData.recipients.length === 0 && (
+                                <span className="text-gray-400 text-xs italic">No recipients selected yet...</span>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+
+                        <div className="pt-4 flex justify-end items-center space-x-4 border-t border-gray-100 mt-4">
+                          <p className="text-xs text-gray-500 italic flex-1">
+                            Notifications will be sent to both web and mobile app users instantly.
+                          </p>
+                          <Button
+                            variant="outline"
+                            onClick={() => setShowPushSection(false)}
+                            className="bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 px-6"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={handleSendPushNotification}
+                            disabled={pushLoading}
+                            className="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3 rounded-xl flex items-center space-x-2 shadow-lg shadow-amber-200 overflow-hidden"
+                          >
+                            {pushLoading ? (
+                              <FiRefreshCw className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <FiSend className="h-4 w-4" />
+                            )}
+                            <span>{pushLoading ? 'Sending...' : 'Send Push Notification'}</span>
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Search & Tabs */}
           <motion.div 

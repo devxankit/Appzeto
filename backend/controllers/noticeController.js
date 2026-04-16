@@ -1,7 +1,15 @@
 const Notice = require('../models/Notice');
+const Admin = require('../models/Admin');
+const PM = require('../models/PM');
+const Sales = require('../models/Sales');
+const Employee = require('../models/Employee');
+const Client = require('../models/Client');
+const ChannelPartner = require('../models/ChannelPartner');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudinary');
 const asyncHandler = require('../middlewares/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
+const { sendPushNotification } = require('../services/firebaseAdmin');
+const { getUserModel, removeFCMTokensGlobally } = require('../utils/userHelper');
 
 // @desc    Create new notice
 // @route   POST /api/admin/notices
@@ -825,6 +833,138 @@ const getPublishedNoticesForEmployee = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Send direct push notification
+// @route   POST /api/admin/notices/push
+// @access  Admin only
+const sendDirectPushNotification = asyncHandler(async (req, res, next) => {
+  const { title, message, targetType, role, recipients } = req.body;
+
+  if (!message || !message.trim()) {
+    return next(new ErrorResponse('Message is required', 400));
+  }
+
+  const notificationTitle = title || 'New Notification';
+  const payload = {
+    title: notificationTitle,
+    body: message,
+    data: {
+      type: 'direct_push',
+      click_action: 'FLUTTER_NOTIFICATION_CLICK',
+      timestamp: new Date().toISOString()
+    }
+  };
+
+  let allTokens = [];
+
+  try {
+    if (targetType === 'all') {
+      // Collect from all collections
+      const models = [Admin, PM, Sales, Employee, Client, ChannelPartner];
+      for (const Model of models) {
+        const users = await Model.find({ isActive: true }).select('fcmTokens fcmTokenMobile');
+        users.forEach(u => {
+          if (u.fcmTokens) allTokens.push(...u.fcmTokens);
+          if (u.fcmTokenMobile) allTokens.push(...u.fcmTokenMobile);
+        });
+      }
+    } else if (targetType === 'role') {
+      // Collect by role
+      if (role === 'sales') {
+        // Collect from BOTH Sales collection and Employee collection (team: sales)
+        const salesModelUsers = await Sales.find({ isActive: true }).select('fcmTokens fcmTokenMobile');
+        const employeeSalesUsers = await Employee.find({ isActive: true, team: 'sales' }).select('fcmTokens fcmTokenMobile');
+        
+        const combinedSales = [...salesModelUsers, ...employeeSalesUsers];
+        combinedSales.forEach(u => {
+          if (u.fcmTokens) allTokens.push(...u.fcmTokens);
+          if (u.fcmTokenMobile) allTokens.push(...u.fcmTokenMobile);
+        });
+
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[Push] Targeted Sales: Found ${salesModelUsers.length} in Sales model, ${employeeSalesUsers.length} in Employee model.`);
+        }
+      } else if (role === 'developer') {
+        const users = await Employee.find({ isActive: true, team: 'developer' }).select('fcmTokens fcmTokenMobile');
+        users.forEach(u => {
+          if (u.fcmTokens) allTokens.push(...u.fcmTokens);
+          if (u.fcmTokenMobile) allTokens.push(...u.fcmTokenMobile);
+        });
+      } else if (role === 'pm') {
+        // Collect from PM collection
+        const users = await PM.find({ isActive: true }).select('fcmTokens fcmTokenMobile');
+        users.forEach(u => {
+          if (u.fcmTokens) allTokens.push(...u.fcmTokens);
+          if (u.fcmTokenMobile) allTokens.push(...u.fcmTokenMobile);
+        });
+      } else if (role === 'admin') {
+        // Collect from ALL Admins
+        const users = await Admin.find({ isActive: true }).select('fcmTokens fcmTokenMobile');
+        users.forEach(u => {
+          if (u.fcmTokens) allTokens.push(...u.fcmTokens);
+          if (u.fcmTokenMobile) allTokens.push(...u.fcmTokenMobile);
+        });
+      } else if (role === 'hr') {
+        const users = await Admin.find({ isActive: true, role: 'hr' }).select('fcmTokens fcmTokenMobile');
+        users.forEach(u => {
+          if (u.fcmTokens) allTokens.push(...u.fcmTokens);
+          if (u.fcmTokenMobile) allTokens.push(...u.fcmTokenMobile);
+        });
+      }
+    } else if (targetType === 'specific' && Array.isArray(recipients)) {
+      // recipients is array of { id, type }
+      for (const rec of recipients) {
+        const Model = getUserModel(rec.type);
+        if (Model) {
+          const user = await Model.findById(rec.id).select('fcmTokens fcmTokenMobile');
+          if (user) {
+            if (user.fcmTokens) allTokens.push(...user.fcmTokens);
+            if (user.fcmTokenMobile) allTokens.push(...user.fcmTokenMobile);
+          }
+        }
+      }
+    }
+
+    // Filter out empty/null tokens and remove duplicates
+    const initialCount = allTokens.length;
+    const uniqueTokens = [...new Set(allTokens.filter(t => t && t.trim() !== ''))];
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[Push] Initial tokens collected: ${initialCount}, Unique non-empty: ${uniqueTokens.length}`);
+    }
+
+    if (uniqueTokens.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No active fcm tokens found for the selected audience.',
+        sentCount: 0
+      });
+    }
+
+    // Send push notification
+    const response = await sendPushNotification(uniqueTokens, payload);
+
+    // Handle invalid tokens - remove them globally from all collections
+    if (response.invalidTokens && response.invalidTokens.length > 0) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(`[Push] Detected ${response.invalidTokens.length} invalid tokens during broadcast.`);
+      }
+      // Don't await - run in background to not block response
+      removeFCMTokensGlobally(response.invalidTokens).catch(err => {
+        console.error('[FCM] Error in background pruning:', err.message);
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Push notification sent successfully to ${response.successCount} tokens.`,
+      data: response
+    });
+  } catch (error) {
+    console.error('Error in sendDirectPushNotification:', error);
+    return next(new ErrorResponse(`Failed to send push notification: ${error.message}`, 500));
+  }
+});
+
 module.exports = {
   createNotice,
   getAllNotices,
@@ -836,6 +976,7 @@ module.exports = {
   incrementNoticeViews,
   getPublishedNoticesForSales,
   getPublishedNoticesForPM,
-  getPublishedNoticesForEmployee
+  getPublishedNoticesForEmployee,
+  sendDirectPushNotification
 };
 

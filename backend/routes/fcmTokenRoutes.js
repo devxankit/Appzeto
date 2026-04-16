@@ -4,7 +4,13 @@ const { protect } = require('../middlewares/auth');
 const { sendPushNotification, isInitialized } = require('../services/firebaseAdmin');
 const { sendNotificationToUser } = require('../utils/pushNotificationHelper');
 
-const { getUserModel } = require('../utils/userHelper');
+const { getUserModel, findUserAndModelById, removeFCMTokensGlobally } = require('../utils/userHelper');
+const Admin = require('../models/Admin');
+const PM = require('../models/PM');
+const Sales = require('../models/Sales');
+const Employee = require('../models/Employee');
+const Client = require('../models/Client');
+const ChannelPartner = require('../models/ChannelPartner');
 
 // @route   POST /api/fcm-tokens/save
 // @desc    Save FCM token for authenticated user
@@ -32,7 +38,13 @@ router.post('/save', protect, async (req, res) => {
 
     // Get user model
     const UserModel = getUserModel(userType);
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[FCM] Saving ${platform} token for: ID=${userId}, Type=${userType}, Model=${UserModel?.modelName || 'Unknown'}`);
+    }
+
     if (!UserModel) {
+      console.error(`[FCM] Model not found for userType: ${userType}`);
       return res.status(400).json({
         success: false,
         message: 'Invalid user type'
@@ -43,14 +55,41 @@ router.post('/save', protect, async (req, res) => {
     const tokenField = platform === 'web' ? 'fcmTokens' : 'fcmTokenMobile';
 
     // Atomic update using $addToSet to avoid duplicates
-    const updateResult = await UserModel.updateOne(
+    let updateResult = await UserModel.updateOne(
       { _id: userId },
       { $addToSet: { [tokenField]: token } }
     );
 
-    // Optional: limit the number of tokens to prevent bloated arrays
-    // We do this as a separate step if needed, but for simplicity we'll just keep them for now
-    // as suggested in the implementation plan.
+    // Fallback: If no document was matched, we might have misidentified the user collection
+    if (updateResult.matchedCount === 0) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(`[FCM] Primary update failed for: ID=${userId}, Type=${userType}. Attempting recovery...`);
+      }
+
+      // Deep-search to find the correct model
+      const recovery = await findUserAndModelById(userId);
+
+      if (recovery) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[FCM] Recovery successful! Re-saving for: Model=${recovery.type}`);
+        }
+
+        // Determine correct field for the recovered model
+        const recoveryTokenField = platform === 'web' ? 'fcmTokens' : 'fcmTokenMobile';
+
+        // Perform recovery update
+        updateResult = await recovery.model.updateOne(
+          { _id: userId },
+          { $addToSet: { [recoveryTokenField]: token } }
+        );
+      } else {
+        console.error(`[FCM] Recovery failed! User not found in any collection: ID=${userId}`);
+        return res.status(404).json({
+          success: false,
+          message: 'User record not found to save FCM token'
+        });
+      }
+    }
 
     res.json({
       success: true,
@@ -251,6 +290,38 @@ router.get('/status', protect, async (req, res) => {
       message: 'Failed to get token status',
       error: error.message
     });
+  }
+});
+
+// @route   DELETE /api/fcm-tokens/purge-all
+// @desc    Purge ALL FCM tokens from every user collection (admin only, use after VAPID key rotation)
+// @access  Admin only
+router.delete('/purge-all', protect, async (req, res) => {
+  try {
+    if (req.userType !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+
+    const models = [Admin, PM, Sales, Employee, Client, ChannelPartner];
+    let totalModified = 0;
+
+    await Promise.all(models.map(async (Model) => {
+      const result = await Model.updateMany(
+        {},
+        { $set: { fcmTokens: [], fcmTokenMobile: [] } }
+      );
+      totalModified += result.modifiedCount;
+    }));
+
+    console.log(`[FCM] Admin purged all FCM tokens. Records updated: ${totalModified}`);
+
+    res.json({
+      success: true,
+      message: `All FCM tokens purged. ${totalModified} user records updated. Users will re-register on next login.`
+    });
+  } catch (error) {
+    console.error('Error purging FCM tokens:', error);
+    res.status(500).json({ success: false, message: 'Failed to purge tokens', error: error.message });
   }
 });
 

@@ -1097,6 +1097,8 @@ const Client_project_detail = () => {
     const paidAmount = projectData.project.paidAmount || 0
     const remainingAmount = projectData.project.remainingAmount || 0
     const nextPaymentDue = projectData.project.nextPaymentDue || 0
+    const expenseBudgetReserved = projectData.project.expenseBudgetReserved || 0
+    const expenseBudgetAvailable = projectData.project.expenseBudgetAvailable || 0
     const paymentProgress = totalCost > 0 ? Math.round((paidAmount / totalCost) * 100) : 0
 
     return (
@@ -1120,7 +1122,7 @@ const Client_project_detail = () => {
         </div>
 
         {/* Payment Cards Grid */}
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        <div className={`grid gap-2 sm:gap-3 ${expenseBudgetReserved > 0 ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2'}`}>
           {/* Total Cost */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1187,6 +1189,26 @@ const Client_project_detail = () => {
             <p className="text-sm sm:text-base font-bold text-gray-900">{formatCurrency(nextPaymentDue)}</p>
             <p className="text-xs text-gray-500 mt-1">Upcoming Payment</p>
           </motion.div>
+
+          {/* Purchasing Budget (only when configured) */}
+          {expenseBudgetReserved > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+              whileHover={{ scale: 1.02 }}
+              className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg p-2 sm:p-3 border border-emerald-200 hover:shadow-md transition-all duration-300 col-span-2 sm:col-span-1"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-700 font-medium">Purchasing budget</span>
+                <FiCreditCard className="h-3 w-3 text-emerald-600" />
+              </div>
+              <p className="text-sm sm:text-base font-bold text-gray-900">{formatCurrency(expenseBudgetReserved)}</p>
+              <p className="text-xs text-emerald-700 mt-1">
+                {formatCurrency(expenseBudgetAvailable)} available for project expenses
+              </p>
+            </motion.div>
+          )}
         </div>
       </motion.div>
 

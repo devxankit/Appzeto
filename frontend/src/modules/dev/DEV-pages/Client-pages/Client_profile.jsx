@@ -212,67 +212,89 @@ const Client_profile = () => {
           <div className="space-y-8">
             
             {/* Hero Profile Section */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-primary via-primary-dark to-primary rounded-3xl p-6 md:p-8 shadow-2xl">
-              <div className="absolute inset-0 bg-black/10"></div>
-              <div className="relative z-10">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-center space-x-6 mb-6 md:mb-0">
-                    <div className="relative">
-                      <div className="w-20 h-20 md:w-24 md:h-24 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border-4 border-white/30 shadow-xl">
-                        <span className="text-2xl md:text-3xl font-bold text-white">{profileData.avatar}</span>
-                      </div>
-                    </div>
-                    <div className="text-white">
-                      <h1 className="text-xl md:text-2xl font-bold mb-1">{profileData.fullName}</h1>
-                      <p className="text-base md:text-lg text-white/90 font-medium">{profileData.company}</p>
-                      <p className="text-sm text-white/80">{profileData.industry}</p>
-                      <div className="flex items-center space-x-2 mt-2">
-                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                        <span className="text-sm text-white/90">Active Client</span>
-                      </div>
+            <div className="bg-white rounded-2xl md:rounded-3xl p-5 md:p-6 lg:p-7 shadow-sm border border-gray-100">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5 md:gap-6">
+                <div className="flex items-center gap-4 md:gap-6">
+                  <div className="relative">
+                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-teal-500 via-teal-600 to-emerald-500 flex items-center justify-center shadow-md">
+                      <span className="text-xl md:text-2xl font-bold text-white">{profileData.avatar}</span>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <button 
-                      onClick={() => {
-                        if (isEditing) {
-                          if (originalProfile) {
-                            setProfileData({
-                              ...originalProfile,
-                              address: { ...(originalProfile.address || {}) }
-                            })
-                          }
-                          setIsEditing(false)
-                        } else {
-                          setProfileData((prev) => ({
-                            ...prev,
-                            company: prev.company === 'Not specified' ? '' : prev.company,
-                            industry: prev.industry === 'Not specified' ? '' : prev.industry,
-                            location: prev.location === 'Not specified' ? '' : prev.location
-                          }))
-                          setIsEditing(true)
-                        }
-                      }} 
-                      className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl ${
-                        isEditing 
-                          ? 'bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm' 
-                          : 'bg-white text-primary hover:bg-gray-50'
-                      }`}
-                    >
-                      {isEditing ? <X className="h-5 w-5" /> : <User className="h-5 w-5" />}
-                      <span>{isEditing ? 'Cancel' : 'Edit Profile'}</span>
-                    </button>
-                    
-                    <button 
-                      onClick={handleLogout}
-                      disabled={loggingOut}
-                      className="inline-flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <LogOut className="h-5 w-5" />
-                      <span>{loggingOut ? 'Logging out...' : 'Logout'}</span>
-                    </button>
+                  <div>
+                    <h1 className="text-lg md:text-2xl font-bold text-gray-900 mb-0.5 md:mb-1">{profileData.fullName}</h1>
+                    <p className="text-sm md:text-base font-medium text-gray-800">{profileData.company}</p>
+                    <p className="text-xs md:text-sm text-gray-500">{profileData.industry}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        <span className="text-[11px] font-medium text-emerald-700">Active client</span>
+                      </span>
+                      <span className="hidden md:inline text-xs text-gray-400">
+                        Since {new Date(profileData.joinDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
                   </div>
                 </div>
+                <div className="flex flex-wrap items-center gap-3 md:gap-4">
+                  <button 
+                    onClick={() => {
+                      if (isEditing) {
+                        if (originalProfile) {
+                          setProfileData({
+                            ...originalProfile,
+                            address: { ...(originalProfile.address || {}) }
+                          })
+                        }
+                        setIsEditing(false)
+                      } else {
+                        setProfileData((prev) => ({
+                          ...prev,
+                          company: prev.company === 'Not specified' ? '' : prev.company,
+                          industry: prev.industry === 'Not specified' ? '' : prev.industry,
+                          location: prev.location === 'Not specified' ? '' : prev.location
+                        }))
+                        setIsEditing(true)
+                      }
+                    }} 
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      isEditing 
+                        ? 'bg-gray-100 text-gray-800 hover:bg-gray-200' 
+                        : 'bg-teal-600 text-white hover:bg-teal-700 shadow-sm hover:shadow-md'
+                    }`}
+                  >
+                    {isEditing ? <X className="h-4 w-4" /> : <User className="h-4 w-4" />}
+                    <span>{isEditing ? 'Cancel' : 'Edit profile'}</span>
+                  </button>
+                  
+                  <button 
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-red-200 text-red-600 hover:bg-red-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>{loggingOut ? 'Logging out...' : 'Logout'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="grid grid-cols-3 gap-3 md:gap-4">
+              <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-gray-100">
+                <p className="text-[11px] md:text-xs font-medium text-gray-500 mb-1">Active projects</p>
+                <p className="text-lg md:text-xl font-bold text-gray-900">{profileData.projectsCount}</p>
+              </div>
+              <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-gray-100">
+                <p className="text-[11px] md:text-xs font-medium text-gray-500 mb-1">Total spent</p>
+                <p className="text-lg md:text-xl font-bold text-gray-900">
+                  {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(profileData.totalSpent || 0)}
+                </p>
+              </div>
+              <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-gray-100">
+                <p className="text-[11px] md:text-xs font-medium text-gray-500 mb-1">Client since</p>
+                <p className="text-sm md:text-base font-semibold text-gray-900">
+                  {new Date(profileData.joinDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                </p>
               </div>
             </div>
 

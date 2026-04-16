@@ -1,7 +1,53 @@
-import { messaging, getToken, onMessage } from '../firebase';
+import { messaging, getToken, onMessage, deleteToken } from '../firebase';
 import { getApiUrl } from '../config/env';
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+
+// Fingerprint of the current VAPID key (last 16 chars) to detect key rotation
+const VAPID_FINGERPRINT = VAPID_KEY ? VAPID_KEY.slice(-16) : '';
+// Token TTL: 30 days in ms
+const FCM_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Check if the cached FCM token is still valid (not expired and VAPID key unchanged).
+ */
+function isCachedTokenValid() {
+  try {
+    const stored = localStorage.getItem('fcm_token_meta');
+    if (!stored) return false;
+    const meta = JSON.parse(stored);
+    if (meta.vapidFingerprint !== VAPID_FINGERPRINT) {
+      console.warn('⚠️ VAPID key changed — FCM token must be refreshed.');
+      return false;
+    }
+    if (Date.now() - meta.registeredAt > FCM_TOKEN_TTL_MS) {
+      console.warn('⚠️ FCM token TTL expired — refreshing.');
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist token metadata to localStorage.
+ */
+function saveCachedTokenMeta(token) {
+  localStorage.setItem('fcm_token_web', token);
+  localStorage.setItem('fcm_token_meta', JSON.stringify({
+    vapidFingerprint: VAPID_FINGERPRINT,
+    registeredAt: Date.now()
+  }));
+}
+
+/**
+ * Clear cached FCM token and metadata.
+ */
+function clearCachedToken() {
+  localStorage.removeItem('fcm_token_web');
+  localStorage.removeItem('fcm_token_meta');
+}
 
 /**
  * Get or register service worker for push notifications.
@@ -48,7 +94,10 @@ async function getFCMToken() {
     }
 
     const registration = await getOrRegisterServiceWorker();
-    await registration.update(); // Update service worker
+    
+    // We remove registration.update() here because manual updates right before getToken
+    // can cause "Failed to access storage" errors in many browsers due to lock contention.
+    // The browser handles service worker updates automatically in the background.
 
     const trimmedVapidKey = VAPID_KEY ? VAPID_KEY.trim() : null;
 
@@ -58,7 +107,7 @@ async function getFCMToken() {
     }
 
     if (import.meta.env.DEV) {
-      console.log('📬 Getting FCM token with VAPID key:', trimmedVapidKey.substring(0, 10) + '...');
+      console.log('📬 Requesting FCM token...');
     }
 
     const token = await getToken(messaging, {
@@ -67,11 +116,23 @@ async function getFCMToken() {
     });
 
     if (token) {
+      if (import.meta.env.DEV) {
+        console.log('✅ FCM token retrieved successfully');
+      }
       return token;
     }
+    
+    console.warn('⚠️ No FCM token returned. User may have blocked notifications.');
     return null;
   } catch (error) {
-    console.error('FCM token error:', error?.message || error);
+    // Detailed error logging to help debug storage issues
+    const errorMessage = error?.message || String(error);
+    console.error('FCM token error:', errorMessage);
+    
+    if (errorMessage.includes('storage')) {
+      console.error('💡 Tip: This error often occurs in Incognito mode or if third-party cookies/storage are blocked.');
+    }
+    
     throw error;
   }
 }
@@ -119,10 +180,15 @@ function getAuthTokenForCurrentContext() {
  */
 async function registerFCMToken(forceUpdate = false) {
   try {
-    // Check if already registered
+    // Check if already registered with a valid (non-expired, same VAPID key) token
     const savedToken = localStorage.getItem('fcm_token_web');
-    if (savedToken && !forceUpdate) {
+    if (savedToken && !forceUpdate && isCachedTokenValid()) {
       return savedToken;
+    }
+
+    // Clear stale token before requesting a new one
+    if (savedToken) {
+      clearCachedToken();
     }
 
     // Request permission
@@ -173,7 +239,7 @@ async function registerFCMToken(forceUpdate = false) {
     }
 
     if (response.ok) {
-      localStorage.setItem('fcm_token_web', token);
+      saveCachedTokenMeta(token);
 
       // Optional: send test notification later so it doesn't feel tied to registration
       setTimeout(() => {
@@ -222,12 +288,28 @@ async function sendTestNotification() {
 async function removeFCMToken() {
   try {
     const token = localStorage.getItem('fcm_token_web');
+    
+    // Always attempt to delete token from Firebase if messaging is initialized
+    if (messaging) {
+      try {
+        await deleteToken(messaging);
+        if (import.meta.env.DEV) {
+          console.log('🗑️ FCM token deleted from Firebase servers');
+        }
+      } catch (err) {
+        console.warn('⚠️ Could not delete token from Firebase (already gone or network error):', err.message);
+      }
+    }
+
     if (!token) {
+      clearCachedToken();
       return;
     }
 
     const authToken = getAuthTokenForCurrentContext();
     if (!authToken) {
+      // Still remove from localStorage if no auth token
+      clearCachedToken();
       return;
     }
 
@@ -244,9 +326,11 @@ async function removeFCMToken() {
       })
     });
 
-    localStorage.removeItem('fcm_token_web');
+    clearCachedToken();
   } catch (error) {
     console.error('FCM token remove failed:', error?.message || error);
+    // Cleanup local storage regardless
+    clearCachedToken();
   }
 }
 
@@ -261,8 +345,8 @@ function setupForegroundNotificationHandler(handler) {
     const notificationBody = payload.notification?.body || payload.data?.body || '';
     const notificationOptions = {
       body: notificationBody,
-      icon: payload.notification?.icon || payload.data?.icon || '/vite.svg',
-      badge: '/vite.svg',
+      icon: payload.notification?.icon || payload.data?.icon || '/logo.png',
+      badge: '/logo.png',
       data: payload.data || {},
       tag: (payload.data?.type || 'default') + '-' + (payload.data?.timestamp || Date.now()),
       requireInteraction: false

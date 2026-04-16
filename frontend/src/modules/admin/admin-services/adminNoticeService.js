@@ -145,6 +145,23 @@ class AdminNoticeService {
       throw error;
     }
   }
+
+  // Send direct push notification
+  async sendDirectPushNotification(pushData) {
+    try {
+      const response = await apiRequest(`/admin/notices/push`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(pushData)
+      });
+      return response;
+    } catch (error) {
+      console.error('Error sending direct push notification:', error);
+      throw error;
+    }
+  }
 }
 
 export default new AdminNoticeService();

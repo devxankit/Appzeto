@@ -75,7 +75,30 @@ const protect = async (req, res, next) => {
             return next();
           }
         } else if (decoded.role === 'employee') {
-          const employee = await Employee.findById(decoded.id);
+          let employee = await Employee.findById(decoded.id);
+          
+          // Fallback: Check Sales if not in Employee collection
+          if (!employee) {
+            employee = await Sales.findById(decoded.id);
+            if (employee && employee.isActive) {
+              req.sales = employee;
+              req.user = employee;
+              req.userType = 'sales';
+              req.user.role = 'sales';
+              return next();
+            }
+            
+            // Fallback: Check PM if not in Employee or Sales
+            employee = await PM.findById(decoded.id);
+            if (employee && employee.isActive) {
+              req.pm = employee;
+              req.user = employee;
+              req.userType = 'project-manager';
+              req.user.role = 'project-manager';
+              return next();
+            }
+          }
+
           if (employee && employee.isActive) {
             req.employee = employee;
             req.user = employee;

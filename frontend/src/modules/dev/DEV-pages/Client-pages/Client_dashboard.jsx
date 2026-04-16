@@ -26,7 +26,9 @@ import {
   FiRefreshCw,
   FiVideo,
   FiSettings,
-  FiLoader
+  FiLoader,
+  FiChevronLeft,
+  FiChevronRight
 } from 'react-icons/fi'
 
 const clampProgress = (p) => Math.min(100, Math.max(0, Number(p) || 0))
@@ -43,8 +45,11 @@ const Client_dashboard = () => {
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [showAllActivities, setShowAllActivities] = useState(false)
   const [banners, setBanners] = useState([])
+  const [bannerLoading, setBannerLoading] = useState(true)
   const [carouselIntervalSeconds, setCarouselIntervalSeconds] = useState(5)
   const [currentSlide, setCurrentSlide] = useState(0)
+  const [bannerDirection, setBannerDirection] = useState(1) // 1 = next (right-to-left), -1 = prev (left-to-right)
+  const [autoPlayEnabled, setAutoPlayEnabled] = useState(true)
   const [dashboardData, setDashboardData] = useState({
     statistics: {
       projects: {
@@ -72,7 +77,7 @@ const Client_dashboard = () => {
     recentActivities: []
   })
 
-  // Load dashboard data
+  // Load dashboard data (stats, projects, requests)
   useEffect(() => {
     loadDashboardData()
     setupWebSocket()
@@ -82,14 +87,106 @@ const Client_dashboard = () => {
     }
   }, [])
 
+  // Load banners separately so they can appear faster
+  useEffect(() => {
+    let isMounted = true
+
+    const loadBanners = async () => {
+      try {
+        const bannersData = await clientBannerService.getActiveBanners()
+        if (!isMounted) return
+        const bannerList = bannersData?.banners || []
+        setBanners(bannerList)
+        setCarouselIntervalSeconds(bannersData?.carouselIntervalSeconds ?? 5)
+      } catch (error) {
+        console.error('Error loading banners:', error)
+      } finally {
+        if (isMounted) {
+          setBannerLoading(false)
+        }
+      }
+    }
+
+    loadBanners()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  // Optimize Cloudinary URL for faster load (smaller size, auto format/quality)
+  const getBannerUrl = (url) => {
+    if (!url || typeof url !== 'string') return url
+    if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
+      return url.replace('/upload/', '/upload/w_1200,q_auto,f_auto,dpr_auto/')
+    }
+    return url
+  }
+
+  const slideVariants = {
+    enter: (direction) => ({
+      x: direction > 0 ? '100%' : '-100%',
+      opacity: 1
+    }),
+    center: {
+      x: 0,
+      opacity: 1
+    },
+    exit: (direction) => ({
+      x: direction > 0 ? '-100%' : '100%',
+      opacity: 1
+    })
+  }
+
   // Carousel auto-advance
   useEffect(() => {
-    if (banners.length <= 1) return
+    if (!autoPlayEnabled || banners.length <= 1) return
     const interval = setInterval(() => {
+      setBannerDirection(1)
       setCurrentSlide((prev) => (prev + 1) % banners.length)
     }, (carouselIntervalSeconds || 5) * 1000)
     return () => clearInterval(interval)
-  }, [banners.length, carouselIntervalSeconds])
+  }, [autoPlayEnabled, banners.length, carouselIntervalSeconds])
+
+  // When auto-play is turned off by user interaction, re-enable it after a grace period
+  useEffect(() => {
+    if (autoPlayEnabled) return
+    const timeout = setTimeout(() => {
+      setAutoPlayEnabled(true)
+    }, (carouselIntervalSeconds || 5) * 1000 * 2) // resume after ~2 cycles of inactivity
+    return () => clearTimeout(timeout)
+  }, [autoPlayEnabled, carouselIntervalSeconds])
+
+  // Preload current and next banner (optimized URLs) when slide or banners change
+  useEffect(() => {
+    if (banners.length === 0) return
+    const currentUrl = getBannerUrl(banners[currentSlide]?.url)
+    const nextIndex = (currentSlide + 1) % banners.length
+    const nextUrl = getBannerUrl(banners[nextIndex]?.url)
+    if (currentUrl) {
+      const img = new Image()
+      img.src = currentUrl
+    }
+    if (nextUrl && nextUrl !== currentUrl) {
+      const img = new Image()
+      img.src = nextUrl
+    }
+  }, [currentSlide, banners])
+
+  // Preload first banner as soon as we have URLs
+  useEffect(() => {
+    if (banners.length === 0) return
+    const url = getBannerUrl(banners[0]?.url)
+    if (!url) return
+    const link = document.createElement('link')
+    link.rel = 'preload'
+    link.as = 'image'
+    link.href = url
+    document.head.appendChild(link)
+    return () => {
+      if (link.parentNode) document.head.removeChild(link)
+    }
+  }, [banners])
 
   const setupWebSocket = () => {
     const token = localStorage.getItem('clientToken')
@@ -119,12 +216,11 @@ const Client_dashboard = () => {
       setLoading(true)
       setError(null)
       
-      // Load client project statistics, recent projects, incoming requests, and banners
-      const [clientStatsResponse, projectsResponse, requestsResponse, bannersData] = await Promise.all([
+      // Load client project statistics, recent projects, and incoming requests
+      const [clientStatsResponse, projectsResponse, requestsResponse] = await Promise.all([
         clientAnalyticsService.getClientProjectStats(),
         clientProjectService.getProjectsByClient(null, { limit: 5 }),
-        clientRequestService.getRequests({ direction: 'incoming', limit: 5 }).catch(() => ({ data: [] })),
-        clientBannerService.getActiveBanners()
+        clientRequestService.getRequests({ direction: 'incoming', limit: 5 }).catch(() => ({ data: [] }))
       ])
       
       // Handle response structure from backend
@@ -137,8 +233,6 @@ const Client_dashboard = () => {
       const requestsList = Array.isArray(requestsResponse?.data) 
         ? requestsResponse.data 
         : (Array.isArray(requestsResponse) ? requestsResponse : [])
-      setBanners(bannersData?.banners || [])
-      setCarouselIntervalSeconds(bannersData?.carouselIntervalSeconds ?? 5)
 
       const recentRequests = requestsList.map(r => ({
         id: r._id || r.id,
@@ -335,6 +429,20 @@ const Client_dashboard = () => {
     setShowConfirmation(false)
   }
 
+  const handlePrevBanner = () => {
+    if (!banners.length) return
+    setAutoPlayEnabled(false)
+    setBannerDirection(-1)
+    setCurrentSlide((prev) => (prev - 1 + banners.length) % banners.length)
+  }
+
+  const handleNextBanner = () => {
+    if (!banners.length) return
+    setAutoPlayEnabled(false)
+    setBannerDirection(1)
+    setCurrentSlide((prev) => (prev + 1) % banners.length)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 md:bg-gray-50">
       <Client_navbar />
@@ -344,28 +452,55 @@ const Client_dashboard = () => {
         <div className="px-4 md:max-w-7xl md:mx-auto md:px-6 lg:px-8">
           {/* Client Banner */}
           <div className="mb-6 md:mb-8">
-            <div className="w-full rounded-xl overflow-hidden shadow-sm relative">
-              {banners.length > 0 ? (
+            <div className="w-full rounded-xl overflow-hidden shadow-sm relative aspect-[16/9]">
+              {bannerLoading ? (
+                <div
+                  className="w-full h-full bg-gray-200 animate-pulse"
+                  aria-hidden="true"
+                />
+              ) : banners.length > 0 ? (
                 <>
-                  <AnimatePresence mode="wait">
+                  <AnimatePresence custom={bannerDirection} initial={false}>
                     <motion.img
                       key={currentSlide}
-                      src={banners[currentSlide]?.url}
+                      src={getBannerUrl(banners[currentSlide]?.url)}
                       alt={`Banner ${currentSlide + 1}`}
-                      className="w-full h-auto object-cover"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.3 }}
+                      className="w-full h-full object-cover"
+                      loading="eager"
+                      fetchPriority="high"
+                      decoding="async"
+                      variants={slideVariants}
+                      custom={bannerDirection}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={{ type: 'tween', duration: 0.45, ease: 'easeInOut' }}
+                      drag="x"
+                      dragConstraints={{ left: 0, right: 0 }}
+                      dragElastic={0.15}
+                      onDragEnd={(_, info) => {
+                        setAutoPlayEnabled(false)
+                        if (info.offset.x < -40) {
+                          handleNextBanner()
+                        } else if (info.offset.x > 40) {
+                          handlePrevBanner()
+                        }
+                      }}
                     />
                   </AnimatePresence>
                   {banners.length > 1 && (
                     <>
+                      {/* Dots */}
                       <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                         {banners.map((_, idx) => (
                           <button
                             key={idx}
-                            onClick={() => setCurrentSlide(idx)}
+                            onClick={() => {
+                              if (idx === currentSlide) return
+                              setAutoPlayEnabled(false)
+                              setBannerDirection(idx > currentSlide ? 1 : -1)
+                              setCurrentSlide(idx)
+                            }}
                             className={`w-2 h-2 rounded-full transition-colors ${
                               idx === currentSlide ? 'bg-white' : 'bg-white/50 hover:bg-white/80'
                             }`}
@@ -373,28 +508,40 @@ const Client_dashboard = () => {
                           />
                         ))}
                       </div>
+                      {/* Arrows */}
+                      <button
+                        type="button"
+                        onClick={handlePrevBanner}
+                        className="hidden sm:flex items-center justify-center absolute left-3 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-black/35 hover:bg-black/55 text-white transition-colors"
+                        aria-label="Previous banner"
+                      >
+                        <FiChevronLeft className="h-5 w-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleNextBanner}
+                        className="hidden sm:flex items-center justify-center absolute right-3 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-black/35 hover:bg-black/55 text-white transition-colors"
+                        aria-label="Next banner"
+                      >
+                        <FiChevronRight className="h-5 w-5" />
+                      </button>
                     </>
                   )}
                 </>
-              ) : (
-                <img
-                  src={new URL('../../../../assets/images/client_banner.png', import.meta.url).href}
-                  alt="Welcome to Appzeto"
-                  className="w-full h-auto object-cover"
-                />
-              )}
+              ) : null}
             </div>
           </div>
 
-          {/* Projects Section - Single Project Card */}
-          <div className="bg-white rounded-2xl md:rounded-lg p-5 md:p-6 shadow-md border border-gray-100 mb-6 md:mb-8">
-            <div className="flex items-center justify-between mb-6">
+          {/* Projects Section - Featured Project */}
+          <div className="mb-6 md:mb-8">
+            <div className="flex items-center justify-between mb-3 md:mb-4">
               <h2 className="text-lg md:text-xl font-semibold text-gray-900">Your Projects</h2>
               <Link 
                 to="/client-projects" 
-                className="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center"
+                className="text-teal-600 hover:text-teal-700 text-xs md:text-sm font-medium flex items-center gap-1.5"
               >
-                View all <FiArrowRight className="ml-1 h-4 w-4" />
+                View all
+                <FiArrowRight className="h-4 w-4" />
               </Link>
             </div>
 
@@ -410,8 +557,8 @@ const Client_dashboard = () => {
                   <div className="sm:hidden">
                     {/* Header */}
                     <div className="flex items-start space-x-3 mb-3">
-                      <div className="p-2 bg-gradient-to-br from-teal-100 to-teal-200 rounded-lg group-hover:from-teal-200 group-hover:to-teal-300 transition-all duration-300 flex-shrink-0">
-                        <FiFolder className="h-4 w-4 text-teal-600" />
+                      <div className="p-2 bg-gradient-to-br from-teal-100 to-teal-200 rounded-xl group-hover:from-teal-200 group-hover:to-teal-300 transition-all duration-300 flex-shrink-0 shadow-sm">
+                        <FiFolder className="h-4 w-4 text-teal-700" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="text-sm font-bold text-gray-900 leading-tight group-hover:text-teal-600 transition-colors duration-300 mb-2">
@@ -439,7 +586,7 @@ const Client_dashboard = () => {
                         <span className="text-xs font-medium text-gray-700">Progress</span>
                         <span className="text-xs font-bold text-gray-900">{clampProgress(project.progress)}%</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                      <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                         <div 
                           className="bg-gradient-to-r from-teal-500 to-teal-600 h-1.5 rounded-full transition-all duration-500 ease-out"
                           style={{ width: `${clampProgress(project.progress)}%` }}
@@ -449,23 +596,23 @@ const Client_dashboard = () => {
 
                     {/* Task Stats */}
                     <div className="grid grid-cols-3 gap-1.5 mb-3">
-                      <div className="bg-gray-50 rounded-md p-2 text-center">
-                        <div className="text-xs font-bold text-gray-900">{project.totalTasks}</div>
-                        <div className="text-xs text-gray-500">Total</div>
+                      <div className="bg-slate-50 rounded-md p-2 text-center border border-slate-100">
+                        <div className="text-[11px] font-semibold text-slate-900">{project.totalTasks}</div>
+                        <div className="text-[10px] text-slate-500">Total</div>
                       </div>
-                      <div className="bg-green-50 rounded-md p-2 text-center">
-                        <div className="text-xs font-bold text-green-600">{project.completedTasks}</div>
-                        <div className="text-xs text-gray-500">Done</div>
+                      <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100">
+                        <div className="text-[11px] font-semibold text-emerald-700">{project.completedTasks}</div>
+                        <div className="text-[10px] text-emerald-600">Done</div>
                       </div>
-                      <div className="bg-orange-50 rounded-md p-2 text-center">
-                        <div className="text-xs font-bold text-orange-600">{project.awaitingClientFeedback}</div>
-                        <div className="text-xs text-gray-500">Awaiting</div>
+                      <div className="bg-amber-50 rounded-md p-2 text-center border border-amber-100">
+                        <div className="text-[11px] font-semibold text-amber-700">{project.awaitingClientFeedback}</div>
+                        <div className="text-[10px] text-amber-600">Awaiting</div>
                       </div>
                     </div>
 
                     {/* Footer */}
                     <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                        <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2">
                         <div className="flex items-center space-x-1 text-gray-500">
                           <FiUsers className="h-3 w-3" />
                           <span className="text-xs font-medium">{project.assignedTeam?.length ?? 0}</span>
@@ -481,7 +628,7 @@ const Client_dashboard = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-xs font-semibold text-gray-700">
+                        <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-700">
                           {(() => {
                             const now = new Date()
                             const dueDate = new Date(project.dueDate)
@@ -491,9 +638,9 @@ const Client_dashboard = () => {
                             if (diffDays < 0) {
                               return `${Math.abs(diffDays)}d overdue`
                             } else if (diffDays === 0) {
-                              return 'Today'
+                              return 'Due today'
                             } else if (diffDays === 1) {
-                              return 'Tomorrow'
+                              return 'Due tomorrow'
                             } else {
                               return `${diffDays}d left`
                             }

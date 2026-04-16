@@ -19,6 +19,7 @@ import {
   FiX,
   FiGift,
   FiImage,
+  FiUpload,
   FiChevronUp,
   FiChevronDown
 } from 'react-icons/fi'
@@ -129,6 +130,9 @@ const Admin_client_management = () => {
   const [carouselIntervalSeconds, setCarouselIntervalSeconds] = useState(5)
   const [showDeleteBannerModal, setShowDeleteBannerModal] = useState(false)
   const [selectedBanner, setSelectedBanner] = useState(null)
+
+  const activeBannerCount = banners.filter(banner => banner.isActive).length
+  const inactiveBannerCount = Math.max(0, banners.length - activeBannerCount)
 
   // Load tags from backend on mount
   useEffect(() => {
@@ -1411,112 +1415,265 @@ const Admin_client_management = () => {
           )}
 
           {activeSection === 'banners' && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <CardHeader className="border-b border-gray-200 p-4 lg:p-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <CardTitle className="text-lg lg:text-xl font-semibold text-gray-900">
+            <div className="bg-gradient-to-br from-slate-50 via-white to-slate-100 rounded-xl shadow-sm border border-slate-200/70">
+              <CardHeader className="border-b border-slate-200/70 px-4 lg:px-6 py-4">
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                  <div className="space-y-1.5">
+                    <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-teal-50 border border-teal-100">
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-teal-600 text-white text-xs font-semibold">
+                        <FiImage className="h-3 w-3" />
+                      </span>
+                      <span className="text-xs font-semibold tracking-wide text-teal-800 uppercase">
+                        Client experience
+                      </span>
+                    </div>
+                    <CardTitle className="text-lg lg:text-xl font-semibold text-slate-900">
                       Client Dashboard Banners
                     </CardTitle>
-                    <p className="text-sm text-gray-600 mt-1">Upload and manage banners shown on the client dashboard carousel</p>
+                    <p className="text-sm text-slate-600 max-w-2xl">
+                      Curate high-impact banners for your client dashboard. Use multiple banners to tell a visual story while keeping the experience clean and consistent.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-gray-600">Slide every (sec):</label>
-                      <input
-                        type="number"
-                        min={3}
-                        max={30}
-                        value={carouselIntervalSeconds}
-                        onChange={(e) => setCarouselIntervalSeconds(Number(e.target.value))}
-                        className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
-                      />
-                      <Button size="sm" onClick={handleCarouselIntervalSave}>
-                        Save
-                      </Button>
+                  <div className="flex flex-col items-stretch sm:items-end gap-3 w-full sm:w-auto">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 border border-slate-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+                        <span className="font-medium">Total</span>
+                        <span className="font-semibold text-slate-900">{banners.length}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 border border-emerald-100">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        <span className="font-medium">Active</span>
+                        <span className="font-semibold text-emerald-800">{activeBannerCount}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-50 border border-slate-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                        <span className="font-medium">Inactive</span>
+                        <span className="font-semibold text-slate-700">{inactiveBannerCount}</span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white/80 border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-semibold text-slate-700">Carousel speed</p>
+                        <p className="text-[11px] text-slate-500">Controls how quickly banners auto-rotate for clients.</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={3}
+                          max={30}
+                          value={carouselIntervalSeconds}
+                          onChange={(e) => setCarouselIntervalSeconds(Number(e.target.value))}
+                          className="w-16 px-2 py-1 border border-slate-300 rounded-md text-xs focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                        />
+                        <span className="text-[11px] text-slate-500">sec</span>
+                        <Button size="sm" onClick={handleCarouselIntervalSave} className="text-xs px-3">
+                          Save
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
               </CardHeader>
 
-              <CardContent className="p-4 lg:p-6 space-y-6">
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Upload banner</h4>
-                  <CloudinaryUpload
-                    folder="appzeto/client-banners"
-                    allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
-                    accept=".jpg,.jpeg,.png,.webp"
-                    maxSize={5 * 1024 * 1024}
-                    onUploadSuccess={handleBannerUpload}
-                  />
-                </div>
+              <CardContent className="px-4 lg:px-6 py-5">
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,2fr)] gap-6">
+                  {/* Left column: Upload + live preview summary */}
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-dashed border-teal-200 bg-teal-50/60 p-4">
+                      <h4 className="text-sm font-semibold text-slate-900 mb-1.5 flex items-center gap-2">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-teal-600 text-white">
+                          <FiUpload className="h-3.5 w-3.5" />
+                        </span>
+                        Upload new banner
+                      </h4>
+                      <p className="text-xs text-slate-600 mb-3">
+                        Use high-quality landscape images. Recommended ratio is 16:9, up to 5&nbsp;MB.
+                      </p>
+                      <CloudinaryUpload
+                        folder="appzeto/client-banners"
+                        allowedTypes={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
+                        accept=".jpg,.jpeg,.png,.webp"
+                        maxSize={5 * 1024 * 1024}
+                        onUploadSuccess={handleBannerUpload}
+                      />
+                    </div>
 
-                {loadingBanners ? (
-                  <div className="flex justify-center py-12">
-                    <Loading />
-                  </div>
-                ) : banners.length > 0 ? (
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-3">Banner list</h4>
-                    <div className="space-y-3">
-                      {banners.map((banner, index) => (
-                        <motion.div
-                          key={banner._id || banner.id}
-                          initial={{ opacity: 0, y: 4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200"
-                        >
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleBannerReorder(banner, 'up')}
-                              disabled={index === 0}
-                              className="p-1 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              <FiChevronUp className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleBannerReorder(banner, 'down')}
-                              disabled={index === banners.length - 1}
-                              className="p-1 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              <FiChevronDown className="h-4 w-4" />
-                            </button>
+                    <div className="hidden lg:block rounded-xl border border-slate-200 bg-white/80 p-3">
+                      <p className="text-xs font-semibold text-slate-800 mb-2">Client preview</p>
+                      <div className="relative w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-[16/9]">
+                        {banners.length > 0 ? (
+                          <>
+                            <img
+                              src={banners[0].url}
+                              alt="Banner preview"
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent px-3 py-2 flex items-center justify-between">
+                              <span className="text-[11px] font-medium text-white">
+                                Showing {activeBannerCount || banners.length} banner{(activeBannerCount || banners.length) !== 1 ? 's' : ''} to clients
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[10px] text-slate-100 bg-black/40 px-2 py-0.5 rounded-full">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                                Auto-rotate every {carouselIntervalSeconds || 5}s
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-500 text-xs">
+                            <FiImage className="h-6 w-6 text-slate-400" />
+                            <p>No banners yet. Clients will see this area once you add a banner.</p>
                           </div>
-                          <img
-                            src={banner.url}
-                            alt={`Banner ${index + 1}`}
-                            className="h-16 w-auto max-w-[200px] object-cover rounded"
-                          />
-                          <span className="text-sm text-gray-500">{index + 1}</span>
-                          <button
-                            onClick={() => handleBannerToggle(banner)}
-                            className={`px-3 py-1 rounded text-xs font-medium ${
-                              banner.isActive
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-gray-200 text-gray-600'
-                            }`}
-                          >
-                            {banner.isActive ? 'Active' : 'Inactive'}
-                          </button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleBannerDelete(banner)}
-                          >
-                            <FiTrash2 className="h-4 w-4" />
-                          </Button>
-                        </motion.div>
-                      ))}
+                        )}
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <FiImage className="h-8 w-8 text-blue-500" />
-                    </div>
-                    <p className="text-gray-600">No banners yet. Upload an image above to add one.</p>
+
+                  {/* Right column: Banner list */}
+                  <div className="space-y-4">
+                    {loadingBanners ? (
+                      <div className="flex justify-center py-12">
+                        <Loading />
+                      </div>
+                    ) : banners.length > 0 ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-semibold text-slate-900">Banner library</h4>
+                          <p className="text-xs text-slate-500">
+                            Drag order with arrows &amp; toggle visibility.
+                          </p>
+                        </div>
+                        <div className="space-y-3">
+                          {banners.map((banner, index) => (
+                            <motion.div
+                              key={banner._id || banner.id || index}
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="group rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
+                            >
+                              <div className="flex flex-col md:flex-row gap-3 md:gap-4 p-3">
+                                <div className="md:w-1/3">
+                                  <div className="relative w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-[16/9]">
+                                    <img
+                                      src={banner.url}
+                                      alt={`Banner ${index + 1}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <div className="absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 text-[10px] text-slate-50">
+                                      <span className="font-semibold">#{index + 1}</span>
+                                      {banner.isActive && (
+                                        <span className="inline-flex items-center gap-1">
+                                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                                          Active
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex-1 flex flex-col justify-between gap-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+                                      <span className="font-semibold text-slate-800">
+                                        Banner {index + 1}
+                                      </span>
+                                      <span className="text-slate-400">•</span>
+                                      <span className="text-slate-500">
+                                        {banner.isActive ? 'Visible to clients' : 'Hidden from clients'}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">
+                                        <span className="text-[10px] text-slate-500">Order</span>
+                                        <span className="text-xs font-semibold text-slate-900">
+                                          {index + 1} / {banners.length}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5">
+                                        <button
+                                          onClick={() => handleBannerReorder(banner, 'up')}
+                                          disabled={index === 0}
+                                          className="p-0.5 rounded-full hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                                          title="Move up"
+                                        >
+                                          <FiChevronUp className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleBannerReorder(banner, 'down')}
+                                          disabled={index === banners.length - 1}
+                                          className="p-0.5 rounded-full hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                                          title="Move down"
+                                        >
+                                          <FiChevronDown className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-dashed border-slate-200 mt-2">
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => handleBannerToggle(banner)}
+                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${
+                                          banner.isActive
+                                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-100'
+                                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                        }`}
+                                      >
+                                        <span
+                                          className={`h-1.5 w-1.5 rounded-full ${
+                                            banner.isActive ? 'bg-emerald-500' : 'bg-slate-400'
+                                          }`}
+                                        />
+                                        {banner.isActive ? 'Active' : 'Inactive'}
+                                      </button>
+                                      <span className="text-[11px] text-slate-500">
+                                        Click to {banner.isActive ? 'deactivate' : 'activate'}.
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-[11px] px-2.5 py-1 h-7 border-slate-200"
+                                        onClick={() => window.open(banner.url, '_blank')}
+                                      >
+                                        Preview full
+                                      </Button>
+                                      <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        className="text-[11px] px-2.5 py-1 h-7"
+                                        onClick={() => handleBannerDelete(banner)}
+                                      >
+                                        <FiTrash2 className="h-3.5 w-3.5 mr-1" />
+                                        Remove
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col lg:flex-row items-center justify-between gap-6 py-8">
+                        <div className="flex-1 text-center lg:text-left space-y-2">
+                          <h4 className="text-sm font-semibold text-slate-900">
+                            No banners yet
+                          </h4>
+                          <p className="text-sm text-slate-500 max-w-md">
+                            Start by uploading your first banner. We recommend using a high-quality hero image that represents your brand or current campaigns.
+                          </p>
+                        </div>
+                        <div className="w-40 h-24 lg:w-52 lg:h-28 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center">
+                          <FiImage className="h-10 w-10 text-slate-300" />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </CardContent>
             </div>
           )}

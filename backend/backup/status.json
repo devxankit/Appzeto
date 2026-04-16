@@ -1,9 +1,9 @@
 {
-  "running": true,
+  "running": false,
   "lastRun": "2026-02-17T20:30:00.292Z",
-  "lastError": null,
+  "lastError": "Backup cancelled by user",
   "lastFileName": null,
-  "step": "starting",
-  "progress": 5,
+  "step": "error",
+  "progress": 0,
   "startedAt": "2026-02-17T20:30:00.292Z"
 }

@@ -174,7 +174,7 @@ const Client_projects = () => {
 
           {/* Overview Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
-            <div className="w-full bg-white rounded-2xl md:rounded-lg p-4 md:p-6 shadow-md border border-gray-100">
+            <div className="w-full bg-white rounded-xl md:rounded-lg p-4 md:p-5 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-2 md:mb-3">
                 <div className="p-2 md:p-3 bg-teal-100 rounded-xl md:rounded-lg">
                   <FiFolder className="h-5 w-5 md:h-6 md:w-6 text-teal-600" />
@@ -185,7 +185,7 @@ const Client_projects = () => {
               <p className="text-xs md:text-sm text-gray-600">Projects</p>
             </div>
 
-            <div className="w-full bg-white rounded-2xl md:rounded-lg p-4 md:p-6 shadow-md border border-gray-100">
+            <div className="w-full bg-white rounded-xl md:rounded-lg p-4 md:p-5 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-2 md:mb-3">
                 <div className="p-2 md:p-3 bg-blue-100 rounded-xl md:rounded-lg">
                   <FiTrendingUp className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
@@ -196,7 +196,7 @@ const Client_projects = () => {
               <p className="text-xs md:text-sm text-gray-600">In Progress</p>
             </div>
 
-            <div className="w-full bg-white rounded-2xl md:rounded-lg p-4 md:p-6 shadow-md border border-gray-100">
+            <div className="w-full bg-white rounded-xl md:rounded-lg p-4 md:p-5 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-2 md:mb-3">
                 <div className="p-2 md:p-3 bg-green-100 rounded-xl md:rounded-lg">
                   <FiCheckSquare className="h-5 w-5 md:h-6 md:w-6 text-green-600" />
@@ -207,7 +207,7 @@ const Client_projects = () => {
               <p className="text-xs md:text-sm text-gray-600">Finished</p>
             </div>
 
-            <div className="w-full bg-white rounded-2xl md:rounded-lg p-4 md:p-6 shadow-md border border-gray-100">
+            <div className="w-full bg-white rounded-xl md:rounded-lg p-4 md:p-5 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-2 md:mb-3">
                 <div className="p-2 md:p-3 bg-orange-100 rounded-xl md:rounded-lg">
                   <FiClock className="h-5 w-5 md:h-6 md:w-6 text-orange-600" />
@@ -239,7 +239,7 @@ const Client_projects = () => {
           </div>
 
           {/* Projects List */}
-          <div className="bg-white rounded-2xl md:rounded-lg shadow-md border border-gray-100">
+          <div className="mb-6 md:mb-8">
             <div className="p-4 md:p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg md:text-xl font-semibold text-gray-900">

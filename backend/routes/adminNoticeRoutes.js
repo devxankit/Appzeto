@@ -8,7 +8,8 @@ const {
   deleteNotice,
   togglePinNotice,
   getNoticeStatistics,
-  incrementNoticeViews
+  incrementNoticeViews,
+  sendDirectPushNotification
 } = require('../controllers/noticeController');
 const { protect, authorize } = require('../middlewares/auth');
 const { upload } = require('../services/cloudinaryService');
@@ -45,6 +46,7 @@ const handleMulterError = (err, req, res, next) => {
 
 // CRUD routes
 router.post('/', upload.single('file'), handleMulterError, createNotice);
+router.post('/push', sendDirectPushNotification);
 router.get('/', getAllNotices);
 router.get('/:id', getNoticeById);
 router.put('/:id', upload.single('file'), handleMulterError, updateNotice);

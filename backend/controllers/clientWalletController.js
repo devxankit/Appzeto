@@ -73,10 +73,10 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
     { total: 0, paid: 0, pending: 0, failed: 0, refunded: 0 }
   );
 
-  // Fetch projects for the client with minimal fields
+  // Fetch projects for the client with minimal fields + expense configuration and expenses
   const projects = await Project.find({ client: clientObjectId })
     .select(
-      'name status dueDate progress financialDetails.totalCost financialDetails.remainingAmount financialDetails.advanceReceived installmentPlan'
+      'name status dueDate progress financialDetails.totalCost financialDetails.remainingAmount financialDetails.advanceReceived installmentPlan expenseConfig expenses'
     )
     .lean();
 
@@ -98,6 +98,9 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
     status: 'approved'
   }).select('project amount').lean();
   
+  let totalExpenseBudgetReserved = 0;
+  let totalExpenseBudgetAvailable = 0;
+
   const projectSummaries = projects.map((project) => {
     const key = project._id.toString();
     const stats = paymentStatsByProject.get(key) || {
@@ -153,6 +156,23 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
     // Calculate remaining amount
     const remainingAmount = Math.max(totalCost - totalPaidAmountForRemaining, 0);
 
+    // Project expense budget (only when included for company purchasing)
+    const expenseIncluded = project.expenseConfig && project.expenseConfig.included === true;
+    const expenseReserved = expenseIncluded ? Number(project.expenseConfig.reservedAmount || 0) || 0 : 0;
+    let expenseSpent = 0;
+    if (expenseIncluded && Array.isArray(project.expenses) && project.expenses.length > 0) {
+      expenseSpent = project.expenses.reduce(
+        (sum, expense) => sum + (Number(expense.amount || 0) || 0),
+        0
+      );
+    }
+    const expenseAvailable = Math.max(expenseReserved - expenseSpent, 0);
+
+    if (expenseReserved > 0) {
+      totalExpenseBudgetReserved += expenseReserved;
+      totalExpenseBudgetAvailable += expenseAvailable;
+    }
+
     return {
       id: project._id,
       name: project.name,
@@ -167,6 +187,10 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
       pendingAmount: stats.pendingAmount,
       refundedAmount: stats.refundedAmount,
       remainingAmount,
+      // Expense budget summary for this project (included expenses only)
+      expenseBudgetReserved: expenseReserved,
+      expenseBudgetSpent: expenseSpent,
+      expenseBudgetAvailable: expenseAvailable,
       installmentPlan: virtualInstallmentPlan,
       installmentSummary: {
         totalInstallments: virtualInstallmentPlan.length,
@@ -220,7 +244,10 @@ const getWalletSummary = asyncHandler(async (req, res, next) => {
         totalRefunded: paymentTotals.refunded,
         totalFailed: paymentTotals.failed,
         totalOutstanding: Math.max(totalProjectCost - totalPaid, 0),
-        totalProjects: projectSummaries.length
+        totalProjects: projectSummaries.length,
+        // Overall project expense purchasing budget (included projects only)
+        totalExpenseReservedBudget: totalExpenseBudgetReserved,
+        totalExpenseAvailableBudget: totalExpenseBudgetAvailable
       },
       projects: projectSummaries
     }

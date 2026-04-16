@@ -30,8 +30,8 @@ messaging.onBackgroundMessage(async (payload) => {
   const notificationBody = payload.notification?.body || payload.data?.body || '';
   const notificationOptions = {
     body: notificationBody,
-    icon: payload.notification?.icon || payload.data?.icon || '/vite.svg',
-    badge: '/vite.svg',
+    icon: payload.notification?.icon || payload.data?.icon || '/logo.png',
+    badge: '/logo.png',
     data: payload.data || {},
     tag: (payload.data?.type || 'default') + '-' + (payload.data?.timestamp || Date.now()),
     requireInteraction: false,

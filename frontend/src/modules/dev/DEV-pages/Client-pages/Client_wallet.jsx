@@ -192,12 +192,17 @@ const Client_wallet = () => {
       0
     )
 
+    const totalExpenseReservedBudget = summary?.totalExpenseReservedBudget || 0
+    const totalExpenseAvailableBudget = summary?.totalExpenseAvailableBudget || 0
+
     return {
       totalPaid,
       totalOutstanding,
       totalCost,
       projectsCount,
-      upcomingAmount
+      upcomingAmount,
+      totalExpenseReservedBudget,
+      totalExpenseAvailableBudget
     }
   }, [summary, projects, upcomingPayments])
 
@@ -547,6 +552,47 @@ const Client_wallet = () => {
                 <p className="text-gray-900 text-xs font-bold">{totals.projectsCount}</p>
               </motion.div>
             </motion.div>
+
+            {/* Purchasing Budget Row */}
+            {(totals.totalExpenseReservedBudget || 0) > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 1.0 }}
+                className="mt-3 grid grid-cols-1 gap-2"
+              >
+                <motion.div 
+                  whileHover={{ scale: 1.02 }}
+                  className="bg-white/70 backdrop-blur-sm rounded-lg p-3 border border-emerald-200/60 hover:border-emerald-300/80 transition-all duration-300 shadow-sm"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-emerald-800 text-xs font-semibold">Project purchasing budget</span>
+                    <span className="text-[10px] text-emerald-700 font-medium">
+                      For company-managed project expenses
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <p className="text-[11px] text-gray-500">Reserved for expenses</p>
+                      <p className="text-gray-900 text-sm font-bold">
+                        {formatCurrency(totals.totalExpenseReservedBudget)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[11px] text-gray-500">Available</p>
+                      <p className={`text-sm font-semibold ${
+                        totals.totalExpenseAvailableBudget < 0
+                          ? 'text-red-600'
+                          : 'text-emerald-700'
+                      }`}>
+                        {formatCurrency(totals.totalExpenseAvailableBudget)}
+                        {totals.totalExpenseAvailableBudget < 0 && ' (Over budget)'}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
           </motion.div>
 
           {/* Transaction Section Header */}
@@ -866,7 +912,7 @@ const Client_wallet = () => {
                       totalCost > 0 ? Math.min((paidAmount / totalCost) * 100, 100) : 0
 
                     return (
-                      <div key={project.id} className="border border-gray-200 rounded-lg p-3">
+                      <div key={project.id} className="border border-gray-200 rounded-lg p-3 space-y-2">
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="font-semibold text-gray-900 text-sm">{project.name}</h4>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
@@ -887,6 +933,23 @@ const Client_wallet = () => {
                           <span>Remaining: {formatCurrency(remainingAmount)}</span>
                           <span>Progress: {Math.round(progress)}%</span>
                         </div>
+
+                        {project.expenseBudgetReserved > 0 && (
+                          <div className="mt-2 flex items-center justify-between bg-teal-50 border border-teal-100 rounded-lg px-2.5 py-1.5">
+                            <div>
+                              <p className="text-[11px] font-semibold text-teal-800">Purchasing budget</p>
+                              <p className="text-[11px] text-teal-700">
+                                {formatCurrency(project.expenseBudgetReserved)}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[11px] text-gray-500">Available</p>
+                              <p className="text-[11px] font-semibold text-emerald-700">
+                                {formatCurrency(project.expenseBudgetAvailable || 0)}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                         {project.installmentSummary && project.installmentSummary.totalInstallments > 0 && (
                           <div className="mt-3 pt-3 border-t border-gray-200">
                             <div className="flex items-center justify-between mb-2">

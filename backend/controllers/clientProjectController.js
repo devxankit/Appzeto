@@ -130,6 +130,30 @@ const getClientProjectById = asyncHandler(async (req, res, next) => {
       : (project.progress || 0);
   }
 
+  // Attach project expense budget summary for client view
+  try {
+    const expenseIncluded =
+      projectObj.expenseConfig && projectObj.expenseConfig.included === true;
+    const expenseReserved = expenseIncluded
+      ? Number(projectObj.expenseConfig.reservedAmount || 0) || 0
+      : 0;
+    let expenseSpent = 0;
+    if (expenseIncluded && Array.isArray(projectObj.expenses) && projectObj.expenses.length > 0) {
+      expenseSpent = projectObj.expenses.reduce(
+        (sum, expense) => sum + (Number(expense.amount || 0) || 0),
+        0
+      );
+    }
+    const expenseAvailable = Math.max(expenseReserved - expenseSpent, 0);
+
+    projectObj.expenseBudgetReserved = expenseReserved;
+    projectObj.expenseBudgetSpent = expenseSpent;
+    projectObj.expenseBudgetAvailable = expenseAvailable;
+    projectObj.expensesIncludedForCompany = expenseIncluded;
+  } catch (e) {
+    console.error('Error attaching expense budget summary in getClientProjectById:', e);
+  }
+
   res.json({
     success: true,
     data: projectObj

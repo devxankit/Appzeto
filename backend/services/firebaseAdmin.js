@@ -9,18 +9,20 @@ function initializeFirebaseAdmin() {
     return;
   }
 
+  let serviceAccount;
+
   try {
     // Option 1: Service Account File Path
     if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
       const serviceAccountPath = path.resolve(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
-      const serviceAccount = require(serviceAccountPath);
+      serviceAccount = require(serviceAccountPath);
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
       });
     }
     // Option 2: Full JSON as Environment Variable (Production - Recommended)
     else if (process.env.FIREBASE_CONFIG) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+      serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
       });
@@ -30,7 +32,7 @@ function initializeFirebaseAdmin() {
       const defaultPath = path.join(__dirname, '../config/firebase-service-account.json');
       try {
         if (require('fs').existsSync(defaultPath)) {
-          const serviceAccount = require(defaultPath);
+          serviceAccount = require(defaultPath);
           admin.initializeApp({
             credential: admin.credential.cert(serviceAccount)
           });
@@ -46,8 +48,10 @@ function initializeFirebaseAdmin() {
 
     initialized = true;
     console.log('✅ Firebase Admin initialized:');
-    console.log(`   - Project ID: ${serviceAccount.project_id}`);
-    console.log(`   - Client Email: ${serviceAccount.client_email}`);
+    if (serviceAccount) {
+      console.log(`   - Project ID: ${serviceAccount.project_id}`);
+      console.log(`   - Client Email: ${serviceAccount.client_email}`);
+    }
   } catch (error) {
     console.error('❌ Firebase Admin init failed:', error.message);
     console.warn('   Push notifications will not work until Firebase is configured.');
@@ -83,20 +87,36 @@ async function sendPushNotification(tokens, payload) {
       };
     }
 
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[Push] Attempting multicast send to ${tokens.length} tokens.`);
+      // Forensic log: Check which project we are actually using
+      const currentProject = admin.app().options.credential?.projectId || 'unknown';
+      console.log(`[Push] Using Project Credentials: ${currentProject}`);
+    }
+
     // Remove duplicates
     const uniqueTokens = [...new Set(tokens)];
 
-    // FCM message.notification only supports: title, body, image. Do NOT use "icon" here (invalid for FCM API).
-    // Simplest possible message payload to isolate the issue
+    // FCM data payload requires ALL values to be strings (FCM v1 API restriction).
+    const rawData = payload.data || {};
+    const stringData = Object.fromEntries(
+      Object.entries(rawData).map(([k, v]) => [k, v == null ? '' : String(v)])
+    );
+
     const message = {
       tokens: uniqueTokens,
       notification: {
         title: payload.title,
         body: payload.body
       },
-      data: payload.data || {},
-      // Essential webpush options
+      data: stringData,
+      // webpush.notification is what browsers actually use for icon/badge.
+      // The top-level notification.icon is ignored on web.
       webpush: {
+        notification: {
+          icon: payload.data?.icon || '/vite.svg',
+          badge: '/vite.svg'
+        },
         fcmOptions: {
           link: payload.data?.link || '/'
         }
