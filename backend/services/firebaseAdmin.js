@@ -105,17 +105,27 @@ async function sendPushNotification(tokens, payload) {
 
     const message = {
       tokens: uniqueTokens,
-      notification: {
+      // NOTE: No top-level 'notification' field here.
+      // The top-level notification field causes Android OS to display the notification
+      // natively (outside the service worker), while onBackgroundMessage ALSO fires and
+      // calls showNotification — resulting in duplicate notifications on mobile.
+      // Desktop Chrome suppresses the auto-display when onBackgroundMessage is registered,
+      // which is why web works fine. Removing it and using webpush.notification instead
+      // means Chrome's push service defers to the service worker on all platforms.
+      data: {
         title: payload.title,
-        body: payload.body
+        body: payload.body,
+        ...stringData,
       },
-      data: stringData,
-      // webpush.notification is what browsers actually use for icon/badge.
-      // The top-level notification.icon is ignored on web.
+      // webpush.notification is used by Chrome's push service (web + mobile PWA).
+      // Chrome respects onBackgroundMessage and does NOT auto-show when the handler
+      // is registered, so there is no duplicate.
       webpush: {
         notification: {
-          icon: payload.data?.icon || '/vite.svg',
-          badge: '/vite.svg'
+          title: payload.title,
+          body: payload.body,
+          icon: payload.data?.icon || '/logo.png',
+          badge: '/logo.png',
         },
         fcmOptions: {
           link: payload.data?.link || '/'
