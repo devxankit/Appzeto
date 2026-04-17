@@ -223,19 +223,40 @@ const getPaymentRecovery = async (req, res) => {
 const getPaymentRecoveryStats = async (req, res) => {
   try {
     const salesId = safeObjectId(req.sales.id);
-    const myClients = await Client.find({ $or: [{ convertedBy: salesId }, { linkedSalesEmployee: salesId }] }).select('_id');
+    
+    // Base condition: clients converted by me OR linked to me, and must be active
+    const clientCondition = { 
+      $and: [
+        { $or: [{ convertedBy: salesId }, { linkedSalesEmployee: salesId }] },
+        { isActive: true }
+      ]
+    };
+    
+    const myClients = await Client.find(clientCondition).select('_id');
     const clientIds = myClients.map(c => c._id);
-    const linkedClients = await Client.find({ linkedSalesEmployee: salesId }).select('_id');
+    
+    // If no active clients found, return zero stats immediately matching the list view behavior
+    if (clientIds.length === 0) {
+      return res.json({ 
+        success: true, 
+        data: { totalDue: 0, overdueCount: 0, overdueAmount: 0 }, 
+        message: 'No receivables found' 
+      });
+    }
+
+    const linkedClients = await Client.find({ linkedSalesEmployee: salesId, isActive: true }).select('_id');
     const linkedClientIds = linkedClients.map(c => c._id.toString());
 
-    const projectQuery = { $or: [{ client: { $in: clientIds } }, { submittedBy: salesId }] };
+    // Strict isolation: only show projects for clients that belong to this sales person.
+    // Removed { submittedBy: salesId } to ensure consistency with the payment recovery list.
     const projects = await Project.find({
-      ...projectQuery,
+      client: { $in: clientIds },
       $or: [
         { 'financialDetails.advanceReceived': { $gt: 0 } },
         { client: { $in: linkedClientIds.map(id => safeObjectId(id)) } }
       ]
     }).select('dueDate financialDetails');
+
     let totalDue = 0, overdueCount = 0, overdueAmount = 0;
     const now = new Date();
     projects.forEach(p => {
@@ -246,6 +267,7 @@ const getPaymentRecoveryStats = async (req, res) => {
         overdueAmount += rem;
       }
     });
+
     res.json({ success: true, data: { totalDue, overdueCount, overdueAmount }, message: 'Stats fetched' });
   } catch (error) {
     console.error('getPaymentRecoveryStats error:', error);
