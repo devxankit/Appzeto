@@ -86,6 +86,7 @@ import Employee_wallet from './modules/dev/DEV-pages/Employee-pages/Employee_wal
 import Employee_notice_board from './modules/dev/DEV-pages/Employee-pages/Employee_notice_board'
 import Employee_my_team from './modules/dev/DEV-pages/Employee-pages/Employee_my_team'
 import Employee_team_management from './modules/dev/DEV-pages/Employee-pages/Employee_team_management'
+import Employee_overload from './modules/dev/DEV-pages/Employee-pages/Employee_overload'
 
 //Client pages start here //
 import Client_dashboard from './modules/dev/DEV-pages/Client-pages/Client_dashboard'
@@ -150,9 +151,11 @@ function App() {
 
     // Setup foreground notification handler
     setupForegroundNotificationHandler((payload) => {
-      if (payload.data?.link) {
-        // Navigate to link
-        window.location.href = payload.data.link;
+      // Notification received in foreground
+      // We don't automatically redirect here because it reloads the app and can be disruptive
+      // The pushNotificationService already shows a system notification or we could show a toast
+      if (import.meta.env.DEV) {
+        console.log('Foreground notification received:', payload);
       }
     });
   }, []);
@@ -475,6 +478,11 @@ function App() {
               <Route path="/employee-team-management" element={
                 <EmployeeProtectedRoute>
                   <Employee_team_management />
+                </EmployeeProtectedRoute>
+              } />
+              <Route path="/employee-overload" element={
+                <EmployeeProtectedRoute>
+                  <Employee_overload />
                 </EmployeeProtectedRoute>
               } />
 

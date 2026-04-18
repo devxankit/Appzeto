@@ -292,6 +292,27 @@ const employeeService = {
     }
   },
 
+  // Overload management
+  async getOverloadStatus() {
+    try {
+      const response = await apiRequest('/employee/overload/status');
+      return response;
+    } catch (error) {
+      throw new Error(`Failed to fetch overload status: ${error.message}`);
+    }
+  },
+
+  async toggleOverload() {
+    try {
+      const response = await apiRequest('/employee/overload/toggle', {
+        method: 'POST'
+      });
+      return response;
+    } catch (error) {
+      throw new Error(error.message || 'Failed to toggle overload status');
+    }
+  },
+
   // My Team (for team leads only)
   async getMyTeam() {
     try {

@@ -778,6 +778,97 @@ const getMilestoneTasks = async (req, res) => {
   }
 };
 
+// @desc    Get overload status of the logged-in employee
+// @route   GET /api/employee/overload/status
+// @access  Employee only
+const getOverloadStatus = asyncHandler(async (req, res, next) => {
+  const Task = require('../models/Task');
+
+  const employee = await Employee.findById(req.user.id).select('isOverloaded overloadedAt name');
+  if (!employee) {
+    return next(new ErrorResponse('Employee not found', 404));
+  }
+
+  // Count active tasks (pending, in-progress, testing)
+  const activeTasks = await Task.countDocuments({
+    assignedTo: req.user.id,
+    status: { $in: ['pending', 'in-progress', 'testing'] }
+  });
+
+  // Auto-deactivate overload if task count is now below 10
+  if (employee.isOverloaded && activeTasks < 10) {
+    employee.isOverloaded = false;
+    employee.overloadedAt = null;
+    await employee.save();
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      isOverloaded: employee.isOverloaded,
+      overloadedAt: employee.overloadedAt,
+      activeTaskCount: activeTasks,
+      canToggleOverload: activeTasks >= 10
+    }
+  });
+});
+
+// @desc    Toggle overload status for the logged-in employee
+// @route   POST /api/employee/overload/toggle
+// @access  Employee only
+const toggleOverload = asyncHandler(async (req, res, next) => {
+  const Task = require('../models/Task');
+
+  const employee = await Employee.findById(req.user.id).select('isOverloaded overloadedAt name');
+  if (!employee) {
+    return next(new ErrorResponse('Employee not found', 404));
+  }
+
+  // Count active tasks
+  const activeTasks = await Task.countDocuments({
+    assignedTo: req.user.id,
+    status: { $in: ['pending', 'in-progress', 'testing'] }
+  });
+
+  if (employee.isOverloaded) {
+    // Turn off overload manually
+    employee.isOverloaded = false;
+    employee.overloadedAt = null;
+    await employee.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Overload status deactivated. You can now receive task assignments.',
+      data: {
+        isOverloaded: false,
+        overloadedAt: null,
+        activeTaskCount: activeTasks,
+        canToggleOverload: activeTasks >= 10
+      }
+    });
+  } else {
+    // Only allow turning on if >= 10 active tasks
+    if (activeTasks < 10) {
+      return next(new ErrorResponse(`You need at least 10 active tasks to activate overload mode. You currently have ${activeTasks}.`, 400));
+    }
+
+    employee.isOverloaded = true;
+    employee.overloadedAt = new Date();
+    await employee.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Overload status activated. TL/PM cannot assign new tasks to you.',
+      data: {
+        isOverloaded: true,
+        overloadedAt: employee.overloadedAt,
+        activeTaskCount: activeTasks,
+        canToggleOverload: true
+      }
+    });
+  }
+});
+
 module.exports = {
   loginEmployee,
   getEmployeeProfile,
@@ -790,5 +881,7 @@ module.exports = {
   getMyTeam,
   getMilestoneById,
   getMilestoneTasks,
-  getRewardProgress
+  getRewardProgress,
+  getOverloadStatus,
+  toggleOverload
 };

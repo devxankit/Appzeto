@@ -30,6 +30,7 @@ const adminAuthService = {
       if (token) {
         clearOtherRoleSessions('admin'); // so refresh doesn't show another role's session
         tokenUtils.set(token);
+        localStorage.setItem('lastActiveRole', 'admin');
         console.log('✅ Auth token stored in localStorage as adminToken');
         console.log('✅ Token preview:', token.substring(0, 30) + '...');
         

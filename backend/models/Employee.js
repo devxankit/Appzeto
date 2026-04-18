@@ -135,6 +135,15 @@ const employeeSchema = new mongoose.Schema({
     totalPointsEarned: { type: Number, default: 0 },
     totalPointsDeducted: { type: Number, default: 0 }
   },
+  // Overload management
+  isOverloaded: {
+    type: Boolean,
+    default: false
+  },
+  overloadedAt: {
+    type: Date,
+    default: null
+  },
   // Team management fields (for developer team leads)
   isTeamLead: {
     type: Boolean,

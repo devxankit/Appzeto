@@ -61,7 +61,7 @@ const createProject = asyncHandler(async (req, res, next) => {
   await project.populate([
     { path: 'client', select: 'name companyName email phoneNumber' },
     { path: 'projectManager', select: 'name email' },
-    { path: 'assignedTeam', select: 'name email position department' }
+    { path: 'assignedTeam', select: 'name email position department isOverloaded' }
   ]);
 
   // Log activity
@@ -142,7 +142,7 @@ const getAllProjects = asyncHandler(async (req, res, next) => {
   const projects = await Project.find(filter)
     .populate('client', 'name companyName email')
     .populate('projectManager', 'name email')
-    .populate('assignedTeam', 'name email position')
+    .populate('assignedTeam', 'name email position isOverloaded')
     .sort(sort)
     .skip(skip)
     .limit(parseInt(limit));
@@ -170,7 +170,7 @@ const getProjectById = asyncHandler(async (req, res, next) => {
     .populate('client', 'name companyName email phoneNumber address')
     .populate('category', 'name color icon')
     .populate('projectManager', 'name email phone')
-    .populate('assignedTeam', 'name email position department')
+    .populate('assignedTeam', 'name email position department isOverloaded')
     .populate({
       path: 'milestones',
       populate: {
@@ -259,7 +259,7 @@ const updateProject = asyncHandler(async (req, res, next) => {
   ).populate([
     { path: 'client', select: 'name companyName email' },
     { path: 'projectManager', select: 'name email' },
-    { path: 'assignedTeam', select: 'name email position' }
+    { path: 'assignedTeam', select: 'name email position isOverloaded' }
   ]);
 
   // Log activity
@@ -348,7 +348,7 @@ const getProjectsByClient = asyncHandler(async (req, res, next) => {
   const projects = await Project.find({ client: clientId })
     .populate('client', 'name companyName email')
     .populate('projectManager', 'name email')
-    .populate('assignedTeam', 'name email position')
+    .populate('assignedTeam', 'name email position isOverloaded')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(parseInt(limit));
@@ -385,7 +385,7 @@ const getProjectsByPM = asyncHandler(async (req, res, next) => {
   const projects = await Project.find({ projectManager: pmId })
     .populate('client', 'name companyName email')
     .populate('projectManager', 'name email')
-    .populate('assignedTeam', 'name email position')
+    .populate('assignedTeam', 'name email position isOverloaded')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(parseInt(limit));
@@ -639,7 +639,7 @@ const getProjectTeamMembers = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
 
   const project = await Project.findById(id)
-    .populate('assignedTeam', 'name email position department employeeId')
+    .populate('assignedTeam', 'name email position department employeeId isOverloaded')
     .populate('projectManager', 'name email')
     .select('assignedTeam name projectManager');
 

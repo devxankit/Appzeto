@@ -11,7 +11,9 @@ const {
   getMyTeam,
   getMilestoneById,
   getMilestoneTasks,
-  getRewardProgress
+  getRewardProgress,
+  getOverloadStatus,
+  toggleOverload
 } = require('../controllers/employeeController');
 const {
   getPublishedNoticesForEmployee,
@@ -42,6 +44,10 @@ router.post('/notices/:id/view', incrementNoticeViews);
 router.get('/wallet/summary', getWalletSummary);
 router.get('/wallet/transactions', getWalletTransactions);
 router.get('/rewards/progress', getRewardProgress);
+
+// Overload routes
+router.get('/overload/status', getOverloadStatus);
+router.post('/overload/toggle', toggleOverload);
 
 // Milestone routes
 router.get('/milestones/:id', getMilestoneById);

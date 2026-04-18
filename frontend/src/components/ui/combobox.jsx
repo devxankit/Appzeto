@@ -51,6 +51,7 @@ const Combobox = ({
   }, []);
 
   const handleSelect = (option) => {
+    if (option.disabled) return;
     onChange(option.value);
     setIsOpen(false);
     setSearchTerm('');
@@ -125,17 +126,24 @@ const Combobox = ({
                     transition={{ delay: index * 0.05 }}
                     type="button"
                     onClick={() => handleSelect(option)}
+                    disabled={option.disabled}
+                    title={option.disabled && option.disabledReason ? option.disabledReason : undefined}
                     className={cn(
                       "flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors duration-150",
-                      "hover:bg-gray-50",
-                      value === option.value && "bg-primary/5 text-primary"
+                      option.disabled
+                        ? "opacity-50 cursor-not-allowed bg-gray-50 text-gray-400"
+                        : "hover:bg-gray-50",
+                      !option.disabled && value === option.value && "bg-primary/5 text-primary"
                     )}
                   >
                     <span className="flex items-center space-x-3">
                       {option.icon && <option.icon className="h-4 w-4" />}
                       <span>{option.label}</span>
+                      {option.disabled && option.disabledReason && (
+                        <span className="ml-2 text-xs text-gray-400 italic">({option.disabledReason})</span>
+                      )}
                     </span>
-                    {value === option.value && (
+                    {!option.disabled && value === option.value && (
                       <Check className="h-4 w-4 text-primary" />
                     )}
                   </motion.button>

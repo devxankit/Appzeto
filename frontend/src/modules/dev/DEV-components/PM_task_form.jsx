@@ -374,7 +374,19 @@ const PM_task_form = ({ isOpen, onClose, onSubmit, milestoneId, projectId, isTea
 
   const projectOptions = (projects || []).map(p => ({ value: toId(p._id) || p._id, label: p.name }))
   const milestoneOptions = (milestones || []).map(m => ({ value: toId(m._id) || m._id, label: m.title }))
-  const teamMemberOptions = (teamMembers || []).map(m => ({ value: toId(m._id) || m._id, label: m.position ? `${m.name} - ${m.position}` : m.name }))
+  const teamMemberOptions = (teamMembers || []).map(m => {
+    const isOverloaded = m.isOverloaded === true
+    let label = m.name
+    if (m.position) label += ` - ${m.position}`
+    if (isOverloaded) label += ' (OVERLOADED)'
+
+    return {
+      value: toId(m._id) || m._id,
+      label: label,
+      disabled: isOverloaded,
+      disabledReason: isOverloaded ? 'Employee is in overload mode' : undefined
+    }
+  })
 
   // Get selected project and milestone names for display
   const selectedProject = (projects || []).find(p => p._id === formData.project)

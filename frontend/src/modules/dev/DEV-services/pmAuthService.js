@@ -16,6 +16,7 @@ export const pmAuthService = {
       if (response.data && response.data.token) {
         clearOtherRoleSessions('pm'); // so refresh doesn't show admin/other role
         tokenUtils.set(response.data.token);
+        localStorage.setItem('lastActiveRole', 'pm');
       }
 
       // Register FCM token after successful login

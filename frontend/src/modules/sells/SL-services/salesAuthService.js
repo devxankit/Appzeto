@@ -16,6 +16,7 @@ export const salesAuthService = {
       if (response.data && response.data.token) {
         clearOtherRoleSessions('sales'); // so refresh doesn't show admin/other role
         tokenUtils.set(response.data.token);
+        localStorage.setItem('lastActiveRole', 'sales');
       }
 
       // Register FCM token after successful login

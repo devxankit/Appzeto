@@ -10,7 +10,8 @@ import {
   FiUsers,
   FiLogOut,
   FiX,
-  FiCreditCard
+  FiCreditCard,
+  FiZap
 } from 'react-icons/fi'
 import { colors, gradients } from '../../../lib/colors'
 import {
@@ -19,7 +20,8 @@ import {
   getStoredEmployeeData,
   storeEmployeeData,
   clearEmployeeData,
-  logoutEmployee
+  logoutEmployee,
+  employeeService
 } from '../DEV-services'
 
 const Employee_sideBar = ({ isOpen, onClose }) => {
@@ -31,6 +33,7 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
     avatar: 'EM'
   })
   const [isTeamLead, setIsTeamLead] = useState(false)
+  const [isOverloaded, setIsOverloaded] = useState(false)
   const [walletSummary, setWalletSummary] = useState({
     monthlySalary: 0,
     monthlyRewards: 0,
@@ -88,9 +91,10 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
           setIsTeamLead(Boolean(storedProfile?.isTeamLead))
         }
 
-        const [profileResponse, walletResponse] = await Promise.allSettled([
+        const [profileResponse, walletResponse, overloadResponse] = await Promise.allSettled([
           getEmployeeProfile?.(),
-          employeeWalletService.getWalletSummary()
+          employeeWalletService.getWalletSummary(),
+          employeeService.getOverloadStatus()
         ])
 
         if (profileResponse.status === 'fulfilled') {
@@ -131,6 +135,13 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
             })
           }
         }
+
+        if (overloadResponse.status === 'fulfilled') {
+          const response = overloadResponse.value
+          if (response?.success && isMounted) {
+            setIsOverloaded(Boolean(response.data?.isOverloaded))
+          }
+        }
       } catch (error) {
         console.error('Error loading sidebar data:', error)
       } finally {
@@ -153,7 +164,8 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
     { path: '/employee-tasks', label: 'Tasks', icon: FiCheckSquare },
     ...(isTeamLead ? [{ path: '/employee-team-management', label: 'Team Management', icon: FiUsers }] : []),
     { path: '/employee-leaderboard', label: 'Leaderboard', icon: FiTrendingUp },
-    { path: '/employee-profile', label: 'Profile', icon: FiUser }
+    { path: '/employee-profile', label: 'Profile', icon: FiUser },
+    { path: '/employee-overload', label: 'Overload Status', icon: FiZap, isOverload: true }
   ]
   const navItems = baseNavItems
 
@@ -253,9 +265,12 @@ const Employee_sideBar = ({ isOpen, onClose }) => {
                   const isActive = location.pathname === item.path
                   return (
                     <motion.div key={item.path} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 + index * 0.05, duration: 0.3, ease: 'easeOut' }}>
-                      <Link to={item.path} onClick={onClose} className={`flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200 ${isActive ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'text-gray-700 hover:bg-gray-50 hover:text-teal-600'}`}>
-                        <IconComponent className={`w-4 h-4 ${isActive ? 'text-teal-600' : 'text-gray-500'}`} />
-                        <span className="font-medium text-sm">{item.label}</span>
+                      <Link to={item.path} onClick={onClose} className={`flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200 ${isActive ? 'bg-teal-50 text-teal-700 border border-teal-200' : item.isOverload && isOverloaded ? 'bg-red-50 text-red-700 border border-red-200' : 'text-gray-700 hover:bg-gray-50 hover:text-teal-600'}`}>
+                        <IconComponent className={`w-4 h-4 ${isActive ? 'text-teal-600' : item.isOverload && isOverloaded ? 'text-red-500' : 'text-gray-500'}`} />
+                        <span className="font-medium text-sm flex-1">{item.label}</span>
+                        {item.isOverload && isOverloaded && (
+                          <span className="text-[10px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full leading-none">ON</span>
+                        )}
                       </Link>
                     </motion.div>
                   )

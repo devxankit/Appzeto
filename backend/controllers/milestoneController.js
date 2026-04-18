@@ -65,7 +65,7 @@ const createMilestone = asyncHandler(async (req, res, next) => {
   // Populate the milestone with related data
   await milestone.populate([
     { path: 'project', select: 'name status' },
-    { path: 'assignedTo', select: 'name email position' }
+    { path: 'assignedTo', select: 'name email position isOverloaded' }
   ]);
 
   // Log activity
@@ -122,13 +122,13 @@ const getMilestonesByProject = asyncHandler(async (req, res, next) => {
 
   const milestones = await Milestone.find({ project: projectId })
     .populate('project', 'name status')
-    .populate('assignedTo', 'name email position')
+    .populate('assignedTo', 'name email position isOverloaded')
     .populate({
       path: 'tasks',
       select: 'title status priority dueDate',
       populate: {
         path: 'assignedTo',
-        select: 'name email'
+        select: 'name email isOverloaded'
       }
     })
     .sort({ sequence: 1 });
@@ -146,12 +146,12 @@ const getMilestonesByProject = asyncHandler(async (req, res, next) => {
 const getMilestoneById = asyncHandler(async (req, res, next) => {
   const milestone = await Milestone.findById(req.params.id)
     .populate('project', 'name status client projectManager assignedTeam')
-    .populate('assignedTo', 'name email position department')
+    .populate('assignedTo', 'name email position department isOverloaded')
     .populate({
       path: 'tasks',
       populate: {
         path: 'assignedTo',
-        select: 'name email position'
+        select: 'name email position isOverloaded'
       }
     });
 
@@ -224,7 +224,7 @@ const updateMilestone = asyncHandler(async (req, res, next) => {
     { new: true, runValidators: true }
   ).populate([
     { path: 'project', select: 'name status' },
-    { path: 'assignedTo', select: 'name email position' }
+    { path: 'assignedTo', select: 'name email position isOverloaded' }
   ]);
 
   // Log activity

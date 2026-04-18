@@ -28,6 +28,20 @@ function isTokenValid(token) {
  * (e.g. when push notification / service worker causes a reload at "/").
  */
 function RootRedirect() {
+  // 1. Check for last active role first to respect the role user just logged into
+  const lastActiveRole = localStorage.getItem('lastActiveRole')
+  if (lastActiveRole) {
+    const roleKey = lastActiveRole === 'sales' ? 'salesToken' : `${lastActiveRole}Token`
+    const roleConfig = TOKEN_KEYS.find(config => config.key === roleKey)
+    if (roleConfig) {
+      const token = localStorage.getItem(roleConfig.key)
+      if (token && isTokenValid(token)) {
+        return <Navigate to={roleConfig.path} replace />
+      }
+    }
+  }
+
+  // 2. Fallback to existing priority loop
   for (const { key, path } of TOKEN_KEYS) {
     const token = localStorage.getItem(key)
     if (token && isTokenValid(token)) {

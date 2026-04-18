@@ -16,6 +16,7 @@ export const employeeAuthService = {
       if (response.data && response.data.token) {
         clearOtherRoleSessions('employee'); // so refresh doesn't show admin/other role
         tokenUtils.set(response.data.token);
+        localStorage.setItem('lastActiveRole', 'employee');
       }
 
       // Register FCM token after successful login

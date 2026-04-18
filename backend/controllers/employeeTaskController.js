@@ -190,6 +190,20 @@ const updateEmployeeTaskStatus = asyncHandler(async (req, res, next) => {
 
   await task.save();
 
+  // Auto-deactivate overload if active task count drops below 10
+  if (['completed', 'cancelled'].includes(status) && previousStatus !== status) {
+    const employee = await Employee.findById(employeeId).select('isOverloaded');
+    if (employee && employee.isOverloaded) {
+      const activeTasks = await Task.countDocuments({
+        assignedTo: employeeId,
+        status: { $in: ['pending', 'in-progress', 'testing'] }
+      });
+      if (activeTasks < 10) {
+        await Employee.findByIdAndUpdate(employeeId, { isOverloaded: false, overloadedAt: null });
+      }
+    }
+  }
+
   // Populate the updated task
   const updatedTask = await Task.findById(task._id)
     .populate('project', 'name status')

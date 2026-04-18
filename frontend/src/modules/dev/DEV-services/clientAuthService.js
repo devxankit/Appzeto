@@ -27,6 +27,7 @@ export const clientAuthService = {
       if (response.data && response.token) {
         clearOtherRoleSessions('client'); // so refresh doesn't show admin/other role
         tokenUtils.set(response.token);
+        localStorage.setItem('lastActiveRole', 'client');
         clientStorage.set(response.data);
       }
 

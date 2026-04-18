@@ -27,6 +27,7 @@ export const cpAuthService = {
       if (response.data && response.token) {
         clearOtherRoleSessions('cp'); // so refresh doesn't show admin/other role
         tokenUtils.set(response.token);
+        localStorage.setItem('lastActiveRole', 'cp');
         cpStorage.set({ ...response.data, loginTime: new Date().toISOString() });
       }
 

@@ -108,7 +108,8 @@ export const teamService = {
           position: employee.position,
           department: employee.department,
           skills: employee.skills || [],
-          experience: employee.experience || 0
+          experience: employee.experience || 0,
+          isOverloaded: employee.isOverloaded || false
         }))
       };
     } catch (error) {
@@ -199,7 +200,8 @@ export const teamService = {
           position: employee.position,
           department: employee.department,
           skills: employee.skills || [],
-          experience: employee.experience || 0
+          experience: employee.experience || 0,
+          isOverloaded: employee.isOverloaded || false
         }))
       };
     } catch (error) {

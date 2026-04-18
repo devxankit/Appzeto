@@ -72,6 +72,20 @@ const createTask = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Milestone does not belong to the specified project', 400));
   }
 
+  // Check if any assigned employee is in overload mode
+  if (assignedTo && assignedTo.length > 0) {
+    const Employee = require('../models/Employee');
+    const overloadedEmployees = await Employee.find({
+      _id: { $in: assignedTo },
+      isOverloaded: true
+    }).select('name');
+
+    if (overloadedEmployees.length > 0) {
+      const names = overloadedEmployees.map(e => e.name).join(', ');
+      return next(new ErrorResponse(`Cannot assign task: ${names} ${overloadedEmployees.length > 1 ? 'are' : 'is'} currently in overload mode and cannot receive new tasks.`, 400));
+    }
+  }
+
   // Create task
   const task = await Task.create({
     title,
@@ -679,6 +693,20 @@ const assignTask = asyncHandler(async (req, res, next) => {
       if (invalidAssignees.length > 0) {
         return next(new ErrorResponse('You can only assign tasks to members of your team', 403));
       }
+    }
+  }
+
+  // Check if any new assignee is in overload mode
+  if (assignedTo && assignedTo.length > 0) {
+    const Employee = require('../models/Employee');
+    const overloadedEmployees = await Employee.find({
+      _id: { $in: assignedTo },
+      isOverloaded: true
+    }).select('name');
+
+    if (overloadedEmployees.length > 0) {
+      const names = overloadedEmployees.map(e => e.name).join(', ');
+      return next(new ErrorResponse(`Cannot assign task: ${names} ${overloadedEmployees.length > 1 ? 'are' : 'is'} currently in overload mode and cannot receive new tasks.`, 400));
     }
   }
 

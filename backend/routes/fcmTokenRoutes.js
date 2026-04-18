@@ -207,7 +207,6 @@ router.post('/test', protect, async (req, res) => {
         body: 'Push notifications are working! You will receive important updates here.',
         data: {
           type: 'test',
-          link: '/',
           timestamp: new Date().toISOString()
         }
       },
