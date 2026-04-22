@@ -12,6 +12,7 @@ import {
   FiGlobe,
   FiCheckCircle,
   FiAlertCircle,
+  FiSlash,
   FiArrowLeft,
   FiX,
   FiTag,
@@ -37,7 +38,31 @@ const LeadDashboard = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
   const dropdownRef = useRef(null)
+  const timerRef = useRef(null)
   
+  const handleLongPress = () => {
+    if (formData.phoneNumber) {
+      navigator.clipboard.writeText(formData.phoneNumber)
+        .then(() => {
+          toast.success('Phone number copied to clipboard')
+        })
+        .catch(err => {
+          console.error('Failed to copy: ', err)
+        })
+    }
+  }
+
+  const startPressTimer = () => {
+    timerRef.current = setTimeout(handleLongPress, 800) // 800ms for long press
+  }
+
+  const cancelPressTimer = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }
+
   // Dashboard statistics state
   const [dashboardStats, setDashboardStats] = useState({
     statusCounts: {
@@ -52,7 +77,8 @@ const LeadDashboard = () => {
       converted: 0,
       lost: 0,
       hot: 0,
-      demo_requested: 0
+      demo_requested: 0,
+      not_interested: 0
     },
     totalLeads: 0
   })
@@ -122,7 +148,8 @@ const LeadDashboard = () => {
           converted: 0,
           lost: 0,
           hot: 0,
-          demo_requested: 0
+          demo_requested: 0,
+          not_interested: 0
         },
         totalLeads: stats.totalLeads || 0
       })
@@ -150,7 +177,8 @@ const LeadDashboard = () => {
           converted: 0,
           lost: 0,
           hot: 0,
-          demo_requested: 0
+          demo_requested: 0,
+          not_interested: 0
         },
         totalLeads: 0
       })
@@ -454,6 +482,21 @@ const LeadDashboard = () => {
             })}
           </div>
 
+          {/* Not Interested Bottom Bar */}
+          <div className="w-full px-2 mb-4">
+            <Link to="/not-interested">
+              <button 
+                className="w-full bg-orange-100 text-orange-800 font-bold py-4 px-6 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center justify-center space-x-2 border border-orange-300/40"
+                style={{
+                  boxShadow: '0 8px 25px -5px rgba(249, 115, 22, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                }}
+              >
+                <FiSlash className="text-xl text-orange-700" />
+                <span className="text-lg">Not Interested {isLoadingStats ? '...' : dashboardStats.statusCounts.not_interested}</span>
+              </button>
+            </Link>
+          </div>
+
           {/* Lost Leads Bottom Bar */}
           <div 
             ref={lostBarRef}
@@ -620,6 +663,26 @@ const LeadDashboard = () => {
                 })}
               </motion.div>
 
+              {/* Not Interested Leads Bottom Bar */}
+              <motion.div 
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 1.0, ease: "easeOut" }}
+                className="mt-6"
+              >
+                <Link to="/not-interested">
+                  <button 
+                    className="w-full bg-orange-100 text-orange-800 font-bold py-4 px-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 flex items-center justify-center space-x-3 border border-orange-300/40"
+                    style={{
+                      boxShadow: '0 8px 259px -5px rgba(249, 115, 22, 0.2), 0 4px 12px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                    }}
+                  >
+                    <FiSlash className="text-2xl text-orange-700" />
+                    <span className="text-xl">Not Interested {isLoadingStats ? '...' : dashboardStats.statusCounts.not_interested}</span>
+                  </button>
+                </Link>
+              </motion.div>
+
               {/* Lost Leads Bottom Bar */}
               <motion.div 
                 initial={{ opacity: 0, y: 30 }}
@@ -698,6 +761,11 @@ const LeadDashboard = () => {
                       name="phoneNumber"
                       value={formData.phoneNumber}
                       onChange={handleInputChange}
+                      onMouseDown={startPressTimer}
+                      onMouseUp={cancelPressTimer}
+                      onMouseLeave={cancelPressTimer}
+                      onTouchStart={startPressTimer}
+                      onTouchEnd={cancelPressTimer}
                       placeholder="Enter 10-digit phone number"
                       maxLength={10}
                       inputMode="numeric"

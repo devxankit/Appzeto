@@ -166,7 +166,8 @@ const SL_connected = () => {
       await salesLeadService.addFollowUp(selectedLeadForFollowup, followUpPayload)
       toast.success('Follow-up scheduled successfully')
       
-      // Refresh dashboard stats
+      // Refresh data and dashboard stats
+      fetchLeads()
       if (window.refreshDashboardStats) {
         window.refreshDashboardStats()
       }
@@ -323,25 +324,37 @@ const SL_connected = () => {
               >
                 <div className="py-1">
                   <button
-                    onClick={() => handleStatusChange(lead._id, 'hot')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleStatusChange(lead._id, 'hot')
+                    }}
                     className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
                   >
                     Mark as Hot
                   </button>
                   <button
-                    onClick={() => handleFollowUp(lead._id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFollowUp(lead._id)
+                    }}
                     className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
                   >
                     Follow Up
                   </button>
                   <button
-                    onClick={() => handleStatusChange(lead._id, 'quotation_sent')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleStatusChange(lead._id, 'quotation_sent')
+                    }}
                     className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
                   >
                     Send Quotation
                   </button>
                   <button
-                    onClick={() => handleStatusChange(lead._id, 'not_interested')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleStatusChange(lead._id, 'not_interested')
+                    }}
                     className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
                   >
                     Not Interested
@@ -469,25 +482,37 @@ const SL_connected = () => {
               >
                 <div className="py-2">
                   <button
-                    onClick={() => handleStatusChange(lead._id, 'hot')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleStatusChange(lead._id, 'hot')
+                    }}
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
                   >
                     Mark as Hot
                   </button>
                   <button
-                    onClick={() => handleFollowUp(lead._id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFollowUp(lead._id)
+                    }}
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200"
                   >
                     Follow Up
                   </button>
                   <button
-                    onClick={() => handleStatusChange(lead._id, 'quotation_sent')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleStatusChange(lead._id, 'quotation_sent')
+                    }}
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
                   >
                     Send Quotation
                   </button>
                   <button
-                    onClick={() => handleStatusChange(lead._id, 'not_interested')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleStatusChange(lead._id, 'not_interested')
+                    }}
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200"
                   >
                     Not Interested

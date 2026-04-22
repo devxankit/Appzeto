@@ -47,6 +47,7 @@ import SL_followup from './modules/sells/SL-pages/SL_followup'
 import SL_quotation_sent from './modules/sells/SL-pages/SL_quotation_sent'
 import SL_demo_sent from './modules/sells/SL-pages/SL_demo_sent'
 import SL_lost from './modules/sells/SL-pages/SL_lost'
+import SL_notInterested from './modules/sells/SL-pages/SL_notInterested'
 import SL_notification from './modules/sells/SL-pages/SL_notification'
 import SL_requests from './modules/sells/SL-pages/SL_requests'
 import SL_notice_board from './modules/sells/SL-pages/SL_notice_board'
@@ -294,6 +295,11 @@ function App() {
               <Route path="/lost" element={
                 <SalesProtectedRoute>
                   <SL_lost />
+                </SalesProtectedRoute>
+              } />
+              <Route path="/not-interested" element={
+                <SalesProtectedRoute>
+                  <SL_notInterested />
                 </SalesProtectedRoute>
               } />
               <Route path="/profile" element={

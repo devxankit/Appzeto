@@ -188,7 +188,7 @@ leadSchema.methods.updateStatus = function (newStatus) {
     'hot': ['connected', 'followup', 'quotation_sent', 'dq_sent', 'app_client', 'web', 'demo_requested', 'converted', 'not_interested', 'lost'],
     'converted': [], // Final state
     'lost': ['connected'], // Can be recovered and connected
-    'not_interested': ['connected'] // Recoverable to connected
+    'not_interested': ['connected', 'lost'] // Recoverable to connected or marked lost
   };
 
   if (!validTransitions[this.status].includes(newStatus)) {

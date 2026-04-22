@@ -24,7 +24,7 @@ const SL_followup = () => {
   const { toast } = useToast()
   
   // State for filters and UI
-  const [selectedFilter, setSelectedFilter] = useState('all')
+  const [selectedFilter, setSelectedFilter] = useState('today')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [selectedStatus, setSelectedStatus] = useState('all') // all, pending, completed
   const [searchTerm, setSearchTerm] = useState('')

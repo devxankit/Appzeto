@@ -3816,7 +3816,7 @@ const updateLeadStatus = async (req, res) => {
       'hot': ['connected', 'followup', 'quotation_sent', 'demo_requested', 'converted', 'not_interested', 'lost'],
       'converted': [],
       'lost': ['connected'],
-      'not_interested': ['connected'],
+      'not_interested': ['connected', 'lost'],
       // Backward compat: existing leads with removed statuses can still transition out
       'dq_sent': ['connected', 'hot', 'quotation_sent', 'demo_requested', 'converted', 'not_interested', 'lost'],
       'app_client': ['connected', 'hot', 'quotation_sent', 'demo_requested', 'converted', 'not_interested', 'lost'],
